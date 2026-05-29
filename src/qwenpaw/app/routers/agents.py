@@ -91,6 +91,16 @@ from ..project_file_query import (
     query_project_file_records,
     scan_project_file_records,
 )
+from copaw.app.routers import project_file_services as copaw_project_file_services
+from copaw.app.routers import project_file_query_services as copaw_project_file_query_services
+from copaw.app.routers import project_file_ops as copaw_project_file_ops
+from copaw.app.routers import project_artifact_normalization_services as copaw_project_artifact_normalization_services
+from copaw.app.routers import project_artifact_workflow_services as copaw_project_artifact_workflow_services
+from copaw.app.routers import project_scaffold_services as copaw_project_scaffold_services
+from copaw.app.routers import project_lifecycle_services as copaw_project_lifecycle_services
+from copaw.app.routers import project_metadata_services as copaw_project_metadata_services
+from copaw.app.routers import project_summary_services as copaw_project_summary_services
+from copaw.app.routers import project_watch_artifact_services as copaw_project_watch_artifact_services
 
 logger = logging.getLogger(__name__)
 
@@ -749,40 +759,22 @@ _PROJECT_ARTIFACT_DISTILL_MODES = {
 
 
 def _normalize_project_artifact_distill_mode(raw_value: Any) -> str:
-    mode = str(raw_value or "").strip().lower()
-    if mode in _PROJECT_ARTIFACT_DISTILL_MODES:
-        return mode
-    return "file_scan"
+    return copaw_project_artifact_normalization_services.normalize_project_artifact_distill_mode(
+        raw_value,
+        artifact_distill_modes=_PROJECT_ARTIFACT_DISTILL_MODES,
+    )
 
 
 def _normalize_project_auto_knowledge_sink(raw_value: Any) -> bool:
-    if isinstance(raw_value, bool):
-        return raw_value
-    if isinstance(raw_value, (int, float)):
-        return bool(raw_value)
-    text = str(raw_value or "").strip().lower()
-    if not text:
-        return True
-    if text in {"1", "true", "yes", "on", "enabled"}:
-        return True
-    if text in {"0", "false", "no", "off", "disabled"}:
-        return False
-    return True
+    return copaw_project_artifact_normalization_services.normalize_project_auto_knowledge_sink(
+        raw_value,
+    )
 
 
 def _normalize_project_agent_knowledge_registered(raw_value: Any) -> bool:
-    if isinstance(raw_value, bool):
-        return raw_value
-    if isinstance(raw_value, (int, float)):
-        return bool(raw_value)
-    text = str(raw_value or "").strip().lower()
-    if not text:
-        return False
-    if text in {"1", "true", "yes", "on", "enabled"}:
-        return True
-    if text in {"0", "false", "no", "off", "disabled"}:
-        return False
-    return False
+    return copaw_project_artifact_normalization_services.normalize_project_agent_knowledge_registered(
+        raw_value,
+    )
 
 
 def _ensure_square_config_initialized() -> None:
@@ -951,29 +943,7 @@ def _clone_square_source(source: AgentsSquareSourceSpec) -> Path:
 
 
 def _parse_markdown_frontmatter(path: Path) -> tuple[dict, str] | None:
-    raw = path.read_text(encoding="utf-8", errors="ignore")
-    if not raw.startswith("---\n"):
-        return None
-    lines = raw.splitlines()
-    end = -1
-    for idx in range(1, len(lines)):
-        if lines[idx].strip() == "---":
-            end = idx
-            break
-    if end == -1:
-        return None
-
-    header = "\n".join(lines[1:end])
-    body = "\n".join(lines[end + 1 :]).strip()
-    try:
-        import yaml
-
-        data = yaml.safe_load(header) or {}
-    except Exception:
-        return None
-    if not isinstance(data, dict):
-        return None
-    return data, body
+    return copaw_project_scaffold_services.parse_markdown_frontmatter(path)
 
 
 def _format_iso_time(ts: float) -> str:
@@ -981,58 +951,40 @@ def _format_iso_time(ts: float) -> str:
 
 
 def _normalize_project_created_time(raw_value: Any) -> str:
-    created_time = str(raw_value or "").strip()
-    if not created_time:
-        return ""
-    try:
-        normalized = datetime.fromisoformat(
-            created_time.replace("Z", "+00:00")
-        )
-    except ValueError:
-        return created_time
-    return normalized.isoformat(timespec="seconds")
+    return copaw_project_artifact_normalization_services.normalize_project_created_time(
+        raw_value,
+    )
 
 
 def _resolve_project_created_time(
     metadata: dict[str, Any], metadata_file: Path
 ) -> str:
-    created_time = _normalize_project_created_time(
-        metadata.get("created_time") or metadata.get("createdAt")
+    return copaw_project_artifact_normalization_services.resolve_project_created_time(
+        metadata,
+        metadata_file,
+        normalize_project_created_time=_normalize_project_created_time,
+        format_iso_time=_format_iso_time,
     )
-    if created_time:
-        return created_time
-
-    stat_result = metadata_file.stat()
-    birthtime = getattr(stat_result, "st_birthtime", 0.0) or 0.0
-    if birthtime > 0:
-        return _format_iso_time(birthtime)
-
-    fallback_ts = min(stat_result.st_ctime, stat_result.st_mtime)
-    return _format_iso_time(fallback_ts)
 
 
 def _safe_project_data_subdir(raw_value: str) -> str:
-    candidate = (raw_value or "").strip() or "output"
-    path = Path(candidate)
-    if path.is_absolute() or ".." in path.parts:
-        return "output"
-    normalized = path.as_posix().strip("/")
-    return normalized or "output"
+    return copaw_project_artifact_normalization_services.safe_project_data_subdir(
+        raw_value,
+    )
 
 
 def _parse_project_tags(raw_tags: Any) -> list[str]:
-    if isinstance(raw_tags, list):
-        return [str(item).strip() for item in raw_tags if str(item).strip()]
-    if isinstance(raw_tags, str):
-        return [item.strip() for item in raw_tags.split(",") if item.strip()]
-    return []
+    return copaw_project_artifact_normalization_services.parse_project_tags(
+        raw_tags,
+    )
 
 
 def _safe_artifact_slug(raw_value: str, fallback: str) -> str:
-    slug = _slugify(raw_value)
-    if not slug or slug == "agent":
-        return fallback
-    return slug
+    return copaw_project_artifact_normalization_services.safe_artifact_slug(
+        raw_value,
+        fallback,
+        slugify=_slugify,
+    )
 
 
 def _build_project_artifact_file_path(
@@ -1040,240 +992,104 @@ def _build_project_artifact_file_path(
     artifact_id: str,
     version: str,
 ) -> str:
-    kind_dir = _PROJECT_ARTIFACT_DIR_BY_KIND.get(kind, "artifacts")
-    artifact_slug = _safe_artifact_slug(artifact_id, f"{kind}-item")
-    version_slug = _safe_artifact_slug(version, "v0-draft")
-    return f"{kind_dir}/{artifact_slug}/{version_slug}.md"
+    return copaw_project_artifact_normalization_services.build_project_artifact_file_path(
+        kind,
+        artifact_id,
+        version,
+        project_artifact_dir_by_kind=_PROJECT_ARTIFACT_DIR_BY_KIND,
+        safe_artifact_slug=_safe_artifact_slug,
+    )
 
 
 def _parse_project_artifact_version_history(
     raw_value: Any,
 ) -> list[dict[str, str]]:
-    if not isinstance(raw_value, list):
-        return []
-
-    history: list[dict[str, str]] = []
-    seen: set[tuple[str, str]] = set()
-    for item in raw_value:
-        version = ""
-        file_path = ""
-        note = ""
-        if isinstance(item, str):
-            version = item.strip()
-        elif isinstance(item, dict):
-            version = str(item.get("version") or "").strip()
-            file_path = str(item.get("file_path") or "").strip()
-            note = str(item.get("note") or "").strip()
-        if not version:
-            continue
-        key = (version, file_path)
-        if key in seen:
-            continue
-        seen.add(key)
-        payload: dict[str, str] = {"version": version}
-        if file_path:
-            payload["file_path"] = file_path
-        if note:
-            payload["note"] = note
-        history.append(payload)
-    return history
+    return copaw_project_artifact_normalization_services.parse_project_artifact_version_history(
+        raw_value,
+    )
 
 
 def _normalize_project_artifact_storage(
     item: ProjectArtifactItem,
     kind: str,
 ) -> ProjectArtifactItem:
-    file_path = (
-        item.artifact_file_path.strip()
-        or _build_project_artifact_file_path(
+    return cast(
+        ProjectArtifactItem,
+        copaw_project_artifact_normalization_services.normalize_project_artifact_storage(
+            item,
             kind,
-            item.id,
-            item.version,
-        )
-    )
-    history = _parse_project_artifact_version_history(item.version_history)
-
-    current_version = item.version.strip() or "v0-draft"
-    current_entry = {
-        "version": current_version,
-        "file_path": file_path,
-    }
-    current_key = (
-        current_entry["version"],
-        current_entry["file_path"],
-    )
-    existing_keys = {
-        (
-            str(entry.get("version") or "").strip(),
-            str(entry.get("file_path") or "").strip(),
-        )
-        for entry in history
-    }
-    if current_key not in existing_keys:
-        history.append(current_entry)
-
-    return item.model_copy(
-        update={
-            "artifact_file_path": file_path,
-            "version_history": history,
-        },
+            build_project_artifact_file_path=_build_project_artifact_file_path,
+            parse_project_artifact_version_history=_parse_project_artifact_version_history,
+        ),
     )
 
 
 def _normalize_project_artifact_profile_storage(
     profile: ProjectArtifactProfile,
 ) -> ProjectArtifactProfile:
-    return ProjectArtifactProfile(
-        skills=[
-            _normalize_project_artifact_storage(item, "skill")
-            for item in profile.skills
-        ],
-        scripts=[
-            _normalize_project_artifact_storage(item, "script")
-            for item in profile.scripts
-        ],
-        flows=[
-            _normalize_project_artifact_storage(item, "flow")
-            for item in profile.flows
-        ],
-        cases=[
-            _normalize_project_artifact_storage(item, "case")
-            for item in profile.cases
-        ],
+    return cast(
+        ProjectArtifactProfile,
+        copaw_project_artifact_normalization_services.normalize_project_artifact_profile_storage(
+            profile,
+            normalize_project_artifact_storage=_normalize_project_artifact_storage,
+            project_artifact_profile_factory=ProjectArtifactProfile,
+        ),
     )
 
 
 def _ensure_project_artifact_layout(project_dir: Path) -> None:
-    for dirname in _PROJECT_PRECREATED_ARTIFACT_DIRS:
-        (project_dir / dirname).mkdir(parents=True, exist_ok=True)
+    copaw_project_artifact_normalization_services.ensure_project_artifact_layout(
+        project_dir,
+        project_precreated_artifact_dirs=_PROJECT_PRECREATED_ARTIFACT_DIRS,
+    )
 
 
 def _normalize_project_artifact_item(
     raw_item: Any,
     kind: str,
 ) -> ProjectArtifactItem | None:
-    if isinstance(raw_item, str):
-        normalized = raw_item.strip()
-        if not normalized:
-            return None
-        return ProjectArtifactItem(id=normalized, name=normalized, kind=kind)
-
-    if not isinstance(raw_item, dict):
-        return None
-
-    item_id = str(raw_item.get("id") or raw_item.get("name") or "").strip()
-    if not item_id:
-        return None
-
-    item_name = str(raw_item.get("name") or item_id).strip() or item_id
-    origin = (
-        str(raw_item.get("origin") or "project-distilled").strip()
-        or "project-distilled"
+    return cast(
+        ProjectArtifactItem | None,
+        copaw_project_artifact_normalization_services.normalize_project_artifact_item(
+            raw_item,
+            kind,
+            project_artifact_item_factory=ProjectArtifactItem,
+            parse_project_artifact_version_history=_parse_project_artifact_version_history,
+            parse_project_tags=_parse_project_tags,
+            normalize_project_artifact_storage=_normalize_project_artifact_storage,
+        ),
     )
-    status = str(raw_item.get("status") or "draft").strip() or "draft"
-    version = str(raw_item.get("version") or "").strip()
-    artifact_file_path = str(raw_item.get("artifact_file_path") or "").strip()
-    version_history = _parse_project_artifact_version_history(
-        raw_item.get("version_history"),
-    )
-    tags = _parse_project_tags(raw_item.get("tags"))
-    derived_from_ids = _parse_project_tags(raw_item.get("derived_from_ids"))
-    distillation_note = str(raw_item.get("distillation_note") or "").strip()
-    market_source_id = (
-        str(raw_item.get("market_source_id") or "").strip() or None
-    )
-    market_item_id = str(raw_item.get("market_item_id") or "").strip() or None
-
-    item = ProjectArtifactItem(
-        id=item_id,
-        name=item_name,
-        kind=kind,
-        origin=origin,
-        status=status,
-        version=version,
-        artifact_file_path=artifact_file_path,
-        version_history=version_history,
-        tags=tags,
-        derived_from_ids=derived_from_ids,
-        distillation_note=distillation_note,
-        market_source_id=market_source_id,
-        market_item_id=market_item_id,
-    )
-    return _normalize_project_artifact_storage(item, kind)
 
 
 def _parse_project_artifact_list(
     raw_value: Any,
     kind: str,
 ) -> list[ProjectArtifactItem]:
-    if raw_value is None:
-        return []
-
-    if isinstance(raw_value, list):
-        raw_list = raw_value
-    elif isinstance(raw_value, str):
-        raw_list = [raw_value]
-    else:
-        return []
-
-    result: list[ProjectArtifactItem] = []
-    seen: set[str] = set()
-    for raw_item in raw_list:
-        normalized = _normalize_project_artifact_item(raw_item, kind)
-        if normalized is None or normalized.id in seen:
-            continue
-        seen.add(normalized.id)
-        result.append(normalized)
-    return result
+    return cast(
+        list[ProjectArtifactItem],
+        copaw_project_artifact_normalization_services.parse_project_artifact_list(
+            raw_value,
+            kind,
+            normalize_project_artifact_item=_normalize_project_artifact_item,
+        ),
+    )
 
 
 def _parse_project_artifact_profile(
     metadata: dict[str, Any],
 ) -> ProjectArtifactProfile:
-    raw_profile = metadata.get("artifact_profile")
-    if not isinstance(raw_profile, dict):
-        raw_profile = metadata.get("artifacts")
-    if not isinstance(raw_profile, dict):
-        raw_profile = {}
-
-    skills_raw = raw_profile.get("skills")
-    if skills_raw is None:
-        skills_raw = raw_profile.get("skill")
-    if skills_raw is None:
-        skills_raw = metadata.get("skills")
-
-    scripts_raw = raw_profile.get("scripts")
-    if scripts_raw is None:
-        scripts_raw = raw_profile.get("script")
-    if scripts_raw is None:
-        scripts_raw = metadata.get("scripts")
-
-    flows_raw = raw_profile.get("flows")
-    if flows_raw is None:
-        flows_raw = raw_profile.get("flow")
-    if flows_raw is None:
-        flows_raw = metadata.get("flows")
-
-    cases_raw = raw_profile.get("cases")
-    if cases_raw is None:
-        cases_raw = raw_profile.get("case")
-    if cases_raw is None:
-        cases_raw = metadata.get("cases")
-
-    return ProjectArtifactProfile(
-        skills=_parse_project_artifact_list(skills_raw, "skill"),
-        scripts=_parse_project_artifact_list(scripts_raw, "script"),
-        flows=_parse_project_artifact_list(flows_raw, "flow"),
-        cases=_parse_project_artifact_list(cases_raw, "case"),
+    return cast(
+        ProjectArtifactProfile,
+        copaw_project_artifact_normalization_services.parse_project_artifact_profile(
+            metadata,
+            parse_project_artifact_list=_parse_project_artifact_list,
+            project_artifact_profile_factory=ProjectArtifactProfile,
+        ),
     )
 
 
 def _first_nonempty_line(text: str) -> str:
-    for line in text.splitlines():
-        stripped = line.strip().lstrip("#").strip()
-        if stripped:
-            return stripped
-    return ""
+    return copaw_project_summary_services.first_nonempty_line(text)
 
 
 def _has_hidden_directory_segment(
@@ -1282,122 +1098,65 @@ def _has_hidden_directory_segment(
     assume_last_segment_is_dir: bool = False,
     allow_managed_hidden_dirs: bool = False,
 ) -> bool:
-    normalized = str(rel_path or "").replace("\\", "/").strip("/")
-    if not normalized:
-        return False
-    segments = [segment for segment in normalized.split("/") if segment]
-    if not segments:
-        return False
-    last_index = len(segments) - 1
-    for index, segment in enumerate(segments):
-        if not segment.startswith("."):
-            continue
-        if allow_managed_hidden_dirs and segment in _PROJECT_MANAGED_VISIBLE_HIDDEN_DIRS:
-            continue
-        if index < last_index or assume_last_segment_is_dir:
-            return True
-    return False
+    return copaw_project_file_query_services.has_hidden_directory_segment(
+        rel_path,
+        assume_last_segment_is_dir=assume_last_segment_is_dir,
+        allow_managed_hidden_dirs=allow_managed_hidden_dirs,
+        project_managed_visible_hidden_dirs=_PROJECT_MANAGED_VISIBLE_HIDDEN_DIRS,
+    )
 
 
 def _iter_project_metadata_files(project_dir: Path):
-    for rel_path in _PROJECT_METADATA_RELATIVE_PATHS:
-        candidate = project_dir / rel_path
-        if candidate.is_file():
-            yield candidate
+    yield from copaw_project_scaffold_services.iter_project_metadata_files(
+        project_dir=project_dir,
+        project_metadata_relative_paths=_PROJECT_METADATA_RELATIVE_PATHS,
+    )
 
 
 def _default_project_metadata_file(project_dir: Path) -> Path:
-    return project_dir / _PROJECT_METADATA_RELATIVE_PATHS[0]
+    return copaw_project_scaffold_services.default_project_metadata_file(
+        project_dir=project_dir,
+        project_metadata_relative_paths=_PROJECT_METADATA_RELATIVE_PATHS,
+    )
 
 
 def _load_project_summary(project_dir: Path) -> ProjectSummary | None:
-    metadata_file, metadata, body = read_project_metadata_with_body(project_dir)
-    if metadata_file is None:
-        return None
-
-    data_subdir = _safe_project_data_subdir(
-        str(metadata.get("data_dir") or metadata.get("dataDir") or "output"),
-    )
-    project_id = (
-        str(metadata.get("id") or project_dir.name).strip() or project_dir.name
-    )
-    project_name = (
-        str(metadata.get("name") or project_dir.name).strip()
-        or project_dir.name
-    )
-    description = str(
-        metadata.get("description") or _first_nonempty_line(body)
-    ).strip()
-    status = str(metadata.get("status") or "active").strip() or "active"
-    tags = _parse_project_tags(metadata.get("tags"))
-    artifact_distill_mode = _normalize_project_artifact_distill_mode(
-        metadata.get("artifact_distill_mode") or metadata.get("distill_mode"),
-    )
-    artifact_profile = _parse_project_artifact_profile(metadata)
-    project_auto_knowledge_sink = _normalize_project_auto_knowledge_sink(
-        metadata.get("project_auto_knowledge_sink"),
-    )
-    project_agent_knowledge_registered = _normalize_project_agent_knowledge_registered(
-        metadata.get("project_agent_knowledge_registered"),
-    )
-    file_monitoring_state = normalize_project_file_monitoring_state(
-        metadata.get("file_monitoring_state"),
-    )
-    preferred_workspace_chat_id = str(
-        metadata.get("preferred_workspace_chat_id")
-        or metadata.get("preferred_workspace_chat")
-        or "",
-    ).strip()
-    created_time = _resolve_project_created_time(metadata, metadata_file)
-    updated_time = _format_iso_time(metadata_file.stat().st_mtime)
-
-    return ProjectSummary(
-        id=project_id,
-        name=project_name,
-        description=description,
-        status=status,
-        workspace_dir=str(project_dir),
-        data_dir=str(project_dir / data_subdir),
-        metadata_file=str(metadata_file),
-        tags=tags,
-        artifact_distill_mode=artifact_distill_mode,
-        artifact_profile=artifact_profile,
-        project_auto_knowledge_sink=project_auto_knowledge_sink,
-        project_agent_knowledge_registered=project_agent_knowledge_registered,
-        file_monitoring_state=file_monitoring_state,
-        preferred_workspace_chat_id=preferred_workspace_chat_id,
-        created_time=created_time,
-        updated_time=updated_time,
+    return cast(
+        ProjectSummary | None,
+        copaw_project_summary_services.load_project_summary(
+            project_dir=project_dir,
+            read_project_metadata_with_body=read_project_metadata_with_body,
+            safe_project_data_subdir=_safe_project_data_subdir,
+            first_nonempty_line=_first_nonempty_line,
+            parse_project_tags=_parse_project_tags,
+            normalize_project_artifact_distill_mode=_normalize_project_artifact_distill_mode,
+            parse_project_artifact_profile=_parse_project_artifact_profile,
+            normalize_project_auto_knowledge_sink=_normalize_project_auto_knowledge_sink,
+            normalize_project_agent_knowledge_registered=_normalize_project_agent_knowledge_registered,
+            normalize_project_file_monitoring_state=normalize_project_file_monitoring_state,
+            resolve_project_created_time=_resolve_project_created_time,
+            format_iso_time=_format_iso_time,
+            project_summary_factory=ProjectSummary,
+        ),
     )
 
 
 def _list_agent_projects(workspace_dir: Path) -> list[ProjectSummary]:
-    projects_dir = workspace_dir / _PROJECTS_DIRNAME
-    if not projects_dir.exists() or not projects_dir.is_dir():
-        return []
-
-    projects: list[ProjectSummary] = []
-    for project_dir in sorted(
-        projects_dir.iterdir(), key=lambda item: item.name.lower()
-    ):
-        if not project_dir.is_dir():
-            continue
-        summary = _load_project_summary(project_dir)
-        if summary is not None:
-            projects.append(summary)
-    return projects
+    return cast(
+        list[ProjectSummary],
+        copaw_project_summary_services.list_agent_projects(
+            workspace_dir=workspace_dir,
+            projects_dirname=_PROJECTS_DIRNAME,
+            load_project_summary=_load_project_summary,
+        ),
+    )
 
 
 def _ensure_projects_layout(workspace_dir: Path) -> None:
-    projects_dir = workspace_dir / _PROJECTS_DIRNAME
-    projects_dir.mkdir(parents=True, exist_ok=True)
-    readme_path = projects_dir / "README.md"
-    if readme_path.exists():
-        return
-
-    readme_path.write_text(
-        _load_project_template_text("projects/README.md"),
-        encoding="utf-8",
+    copaw_project_summary_services.ensure_projects_layout(
+        workspace_dir=workspace_dir,
+        projects_dirname=_PROJECTS_DIRNAME,
+        load_project_template_text=_load_project_template_text,
     )
 
 
@@ -1405,124 +1164,26 @@ def _load_project_template_text(
     relative_path: str,
     replacements: dict[str, str] | None = None,
 ) -> str:
-    content: str | None = None
-
-    candidate_paths = [relative_path]
-    alias_path = _PROJECT_TEMPLATE_PATH_ALIASES.get(relative_path)
-    if alias_path and alias_path not in candidate_paths:
-        candidate_paths.append(alias_path)
-
-    for package_name in ("qwenpaw", "copaw"):
-        if content is not None:
-            break
-        for candidate in candidate_paths:
-            try:
-                template_resource = importlib.resources.files(package_name).joinpath(
-                    "app"
-                ).joinpath("project_templates")
-                for part in candidate.split("/"):
-                    template_resource = template_resource.joinpath(part)
-                if template_resource.is_file():
-                    content = template_resource.read_text(encoding="utf-8")
-                    break
-            except Exception:
-                continue
-
-    if content is None:
-        for candidate in candidate_paths:
-            template_path = _PROJECT_TEMPLATES_DIR / candidate
-            if template_path.is_file():
-                content = template_path.read_text(encoding="utf-8")
-                break
-
-    if content is None:
-        content = _DEFAULT_PROJECT_TEMPLATES.get(relative_path)
-        if content is None:
-            raise FileNotFoundError(
-                f"Project template not found: {relative_path}"
-            )
-        logger.warning(
-            "Project template missing from package and source tree; using builtin fallback: %s",
-            relative_path,
-        )
-
-    for key, value in (replacements or {}).items():
-        content = content.replace(f"{{{{{key}}}}}", value)
-    return content
+    return copaw_project_scaffold_services.load_project_template_text(
+        relative_path=relative_path,
+        replacements=replacements,
+        project_template_path_aliases=_PROJECT_TEMPLATE_PATH_ALIASES,
+        project_templates_dir=_PROJECT_TEMPLATES_DIR,
+        default_project_templates=_DEFAULT_PROJECT_TEMPLATES,
+        logger=logger,
+    )
 
 
 def _scaffold_project_governance_files(
     project_dir: Path,
     data_subdir: str,
 ) -> None:
-    """Create default governance files for new projects.
-
-    Files are created only when missing, so callers can safely re-run this.
-    """
-
-    agent_config_dir = project_dir / _PROJECT_AGENT_CONFIG_DIR
-    agent_config_dir.mkdir(parents=True, exist_ok=True)
-
-    agents_md = agent_config_dir / "AGENTS.md"
-    if not agents_md.exists():
-        agents_md.write_text(
-            _load_project_template_text(
-                "project/AGENTS.md",
-                {"DATA_DIR": data_subdir},
-            ),
-            encoding="utf-8",
-        )
-
-    plan_md = agent_config_dir / "PLAN.md"
-    if not plan_md.exists():
-        plan_md.write_text(
-            "# Project Plan\n\n"
-            "Track milestones, risks, and next actions here.\n",
-            encoding="utf-8",
-        )
-
-    scripts_readme = project_dir / ".scripts" / "README.md"
-    scripts_readme.parent.mkdir(parents=True, exist_ok=True)
-    if not scripts_readme.exists():
-        scripts_readme.write_text(
-            _load_project_template_text("project/.scripts/README.md"),
-            encoding="utf-8",
-        )
-
-    templates_readme = project_dir / ".pipelines" / "templates" / "README.md"
-    if not templates_readme.exists():
-        templates_readme.write_text(
-            _load_project_template_text(
-                "project/.pipelines/templates/README.md",
-            ),
-            encoding="utf-8",
-        )
-
-    runs_readme = project_dir / ".pipelines" / "runs" / "README.md"
-    runs_readme.parent.mkdir(parents=True, exist_ok=True)
-    if not runs_readme.exists():
-        runs_readme.write_text(
-            _load_project_template_text(
-                "project/.pipelines/runs/README.md",
-            ),
-            encoding="utf-8",
-        )
-
-    skill_md = (
-        project_dir
-        / ".skills"
-        / "project-artifact-governor"
-        / "SKILL.md"
+    copaw_project_scaffold_services.scaffold_project_governance_files(
+        project_dir=project_dir,
+        data_subdir=data_subdir,
+        project_agent_config_dir=_PROJECT_AGENT_CONFIG_DIR,
+        load_project_template_text=_load_project_template_text,
     )
-    skill_md.parent.mkdir(parents=True, exist_ok=True)
-    if not skill_md.exists():
-        skill_md.write_text(
-            _load_project_template_text(
-                "project/.skills/project-artifact-governor/SKILL.md",
-                {"DATA_DIR": data_subdir},
-            ),
-            encoding="utf-8",
-        )
 
 
 def _copy_builtin_pipeline_template_to_project(project_dir: Path) -> None:
@@ -1532,56 +1193,19 @@ def _copy_builtin_pipeline_template_to_project(project_dir: Path) -> None:
     Idempotent: skips the copy when the file already exists with the same
     version; overwrites silently when the bundled version is newer.
     """
-    templates_dir = project_dir / ".pipelines" / "templates"
-    templates_dir.mkdir(parents=True, exist_ok=True)
-
-    try:
-        source_doc = _load_builtin_pipeline_doc()
-    except Exception:
-        return  # silently skip if the source JSON is missing
-
-    template_id = str(source_doc.get("id") or "").strip()
-    if not template_id:
-        return
-
-    target_path = templates_dir / f"{template_id}.json"
-    new_version = str(source_doc.get("version") or "").strip()
-
-    if target_path.exists():
-        try:
-            existing = json.loads(target_path.read_text(encoding="utf-8"))
-            existing_version = str(existing.get("version") or "").strip()
-            if existing_version == new_version:
-                return  # already up to date
-        except Exception:
-            pass  # corrupt or unreadable — overwrite below
-
-    target_path.write_text(
-        json.dumps(source_doc, ensure_ascii=False, indent=2) + "\n",
-        encoding="utf-8",
+    copaw_project_scaffold_services.copy_builtin_pipeline_template_to_project(
+        project_dir=project_dir,
+        load_builtin_pipeline_doc=_load_builtin_pipeline_doc,
     )
 
 
 def _resolve_project_dir(workspace_dir: Path, project_id: str) -> Path:
-    projects_dir = workspace_dir / _PROJECTS_DIRNAME
-    if not projects_dir.exists() or not projects_dir.is_dir():
-        raise HTTPException(
-            status_code=404, detail="Projects directory not found"
-        )
-
-    for project_dir in sorted(
-        projects_dir.iterdir(), key=lambda item: item.name.lower()
-    ):
-        if not project_dir.is_dir():
-            continue
-        summary = _load_project_summary(project_dir)
-        if summary is None:
-            continue
-        if summary.id == project_id or project_dir.name == project_id:
-            return project_dir
-
-    raise HTTPException(
-        status_code=404, detail=f"Project '{project_id}' not found"
+    return copaw_project_scaffold_services.resolve_project_dir(
+        workspace_dir=workspace_dir,
+        project_id=project_id,
+        projects_dirname=_PROJECTS_DIRNAME,
+        load_project_summary=_load_project_summary,
+        http_exception_factory=HTTPException,
     )
 
 
@@ -1605,29 +1229,26 @@ def _resolve_agent_workspace_dir(agent_id: str) -> Path:
 def _read_project_frontmatter_with_body(
     metadata_file: Path,
 ) -> tuple[dict[str, Any], str]:
-    project_dir = metadata_file.parent
-    if project_dir.name == ".agent":
-        project_dir = project_dir.parent
-    resolved_file, metadata, body = read_project_metadata_with_body(project_dir)
-    if resolved_file is not None:
-        return metadata, body
-    if metadata_file.exists():
-        return {}, metadata_file.read_text(encoding="utf-8", errors="ignore")
-    return {}, ""
+    return copaw_project_scaffold_services.read_project_frontmatter_with_body(
+        metadata_file=metadata_file,
+        read_project_metadata_with_body=read_project_metadata_with_body,
+    )
 
 
 def _get_project_artifact_profile(
     workspace_dir: Path,
     project_id: str,
 ) -> ProjectArtifactProfile:
-    project_dir = _resolve_project_dir(workspace_dir, project_id)
-    summary = _load_project_summary(project_dir)
-    if summary is None:
-        raise HTTPException(
-            status_code=404,
-            detail=f"Project '{project_id}' metadata not found",
-        )
-    return summary.artifact_profile
+    return cast(
+        ProjectArtifactProfile,
+        copaw_project_metadata_services.get_project_artifact_profile(
+            workspace_dir=workspace_dir,
+            project_id=project_id,
+            resolve_project_dir=_resolve_project_dir,
+            load_project_summary=_load_project_summary,
+            http_exception_factory=HTTPException,
+        ),
+    )
 
 
 def _update_project_artifact_profile(
@@ -1635,31 +1256,21 @@ def _update_project_artifact_profile(
     project_id: str,
     profile: ProjectArtifactProfile,
 ) -> ProjectSummary:
-    project_dir = _resolve_project_dir(workspace_dir, project_id)
-    summary = _load_project_summary(project_dir)
-    if summary is None:
-        raise HTTPException(
-            status_code=404,
-            detail=f"Project '{project_id}' metadata not found",
-        )
-
-    metadata_file = Path(summary.metadata_file)
-    metadata, body = _read_project_frontmatter_with_body(metadata_file)
-    normalized_profile = _normalize_project_artifact_profile_storage(profile)
-    _ensure_project_artifact_layout(project_dir)
-    metadata["artifact_profile"] = normalized_profile.model_dump(
-        mode="json",
-        exclude_none=True,
+    return cast(
+        ProjectSummary,
+        copaw_project_metadata_services.update_project_artifact_profile(
+            workspace_dir=workspace_dir,
+            project_id=project_id,
+            profile=profile,
+            resolve_project_dir=_resolve_project_dir,
+            load_project_summary=_load_project_summary,
+            read_project_frontmatter_with_body=_read_project_frontmatter_with_body,
+            normalize_project_artifact_profile_storage=_normalize_project_artifact_profile_storage,
+            ensure_project_artifact_layout=_ensure_project_artifact_layout,
+            write_project_frontmatter=_write_project_frontmatter,
+            http_exception_factory=HTTPException,
+        ),
     )
-    _write_project_frontmatter(metadata_file, metadata, body)
-
-    updated = _load_project_summary(project_dir)
-    if updated is None:
-        raise HTTPException(
-            status_code=500,
-            detail="Failed to load updated project summary",
-        )
-    return updated
 
 
 def _update_project_artifact_distill_mode(
@@ -1667,30 +1278,20 @@ def _update_project_artifact_distill_mode(
     project_id: str,
     artifact_distill_mode: str,
 ) -> ProjectSummary:
-    project_dir = _resolve_project_dir(workspace_dir, project_id)
-    summary = _load_project_summary(project_dir)
-    if summary is None:
-        raise HTTPException(
-            status_code=404,
-            detail=f"Project '{project_id}' metadata not found",
-        )
-
-    metadata_file = Path(summary.metadata_file)
-    metadata, body = _read_project_frontmatter_with_body(metadata_file)
-    metadata[
-        "artifact_distill_mode"
-    ] = _normalize_project_artifact_distill_mode(
-        artifact_distill_mode,
+    return cast(
+        ProjectSummary,
+        copaw_project_metadata_services.update_project_artifact_distill_mode(
+            workspace_dir=workspace_dir,
+            project_id=project_id,
+            artifact_distill_mode=artifact_distill_mode,
+            resolve_project_dir=_resolve_project_dir,
+            load_project_summary=_load_project_summary,
+            read_project_frontmatter_with_body=_read_project_frontmatter_with_body,
+            normalize_project_artifact_distill_mode=_normalize_project_artifact_distill_mode,
+            write_project_frontmatter=_write_project_frontmatter,
+            http_exception_factory=HTTPException,
+        ),
     )
-    _write_project_frontmatter(metadata_file, metadata, body)
-
-    updated = _load_project_summary(project_dir)
-    if updated is None:
-        raise HTTPException(
-            status_code=500,
-            detail="Failed to load updated project summary",
-        )
-    return updated
 
 
 def _update_project_workspace_chat_binding(
@@ -1698,28 +1299,19 @@ def _update_project_workspace_chat_binding(
     project_id: str,
     preferred_workspace_chat_id: str,
 ) -> ProjectSummary:
-    project_dir = _resolve_project_dir(workspace_dir, project_id)
-    summary = _load_project_summary(project_dir)
-    if summary is None:
-        raise HTTPException(
-            status_code=404,
-            detail=f"Project '{project_id}' metadata not found",
-        )
-
-    metadata_file = Path(summary.metadata_file)
-    metadata, body = _read_project_frontmatter_with_body(metadata_file)
-    metadata["preferred_workspace_chat_id"] = (
-        preferred_workspace_chat_id.strip()
+    return cast(
+        ProjectSummary,
+        copaw_project_metadata_services.update_project_workspace_chat_binding(
+            workspace_dir=workspace_dir,
+            project_id=project_id,
+            preferred_workspace_chat_id=preferred_workspace_chat_id,
+            resolve_project_dir=_resolve_project_dir,
+            load_project_summary=_load_project_summary,
+            read_project_frontmatter_with_body=_read_project_frontmatter_with_body,
+            write_project_metadata=write_project_metadata,
+            http_exception_factory=HTTPException,
+        ),
     )
-    write_project_metadata(metadata_file, metadata, body)
-
-    updated = _load_project_summary(project_dir)
-    if updated is None:
-        raise HTTPException(
-            status_code=500,
-            detail="Failed to load updated project summary",
-        )
-    return updated
 
 
 def _update_project_auto_knowledge_sink(
@@ -1727,26 +1319,19 @@ def _update_project_auto_knowledge_sink(
     project_id: str,
     project_auto_knowledge_sink: bool,
 ) -> ProjectSummary:
-    project_dir = _resolve_project_dir(workspace_dir, project_id)
-    summary = _load_project_summary(project_dir)
-    if summary is None:
-        raise HTTPException(
-            status_code=404,
-            detail=f"Project '{project_id}' metadata not found",
-        )
-
-    metadata_file = Path(summary.metadata_file)
-    metadata, body = _read_project_frontmatter_with_body(metadata_file)
-    metadata["project_auto_knowledge_sink"] = bool(project_auto_knowledge_sink)
-    write_project_metadata(metadata_file, metadata, body)
-
-    updated = _load_project_summary(project_dir)
-    if updated is None:
-        raise HTTPException(
-            status_code=500,
-            detail="Failed to load updated project summary",
-        )
-    return updated
+    return cast(
+        ProjectSummary,
+        copaw_project_metadata_services.update_project_auto_knowledge_sink(
+            workspace_dir=workspace_dir,
+            project_id=project_id,
+            project_auto_knowledge_sink=project_auto_knowledge_sink,
+            resolve_project_dir=_resolve_project_dir,
+            load_project_summary=_load_project_summary,
+            read_project_frontmatter_with_body=_read_project_frontmatter_with_body,
+            write_project_metadata=write_project_metadata,
+            http_exception_factory=HTTPException,
+        ),
+    )
 
 
 def _sync_project_agent_knowledge_registration(
@@ -1754,32 +1339,14 @@ def _sync_project_agent_knowledge_registration(
     *,
     enabled: bool,
 ) -> None:
-    config = load_config()
-    changed = False
-
-    if enabled:
-        _, changed = ensure_project_source_registered(
-            config.knowledge,
-            project_id=summary.id,
-            project_name=summary.name,
-            project_workspace_dir=summary.workspace_dir,
-            persist=None,
-        )
-    else:
-        expected_source = build_project_source_spec(
-            project_id=summary.id,
-            project_name=summary.name,
-            project_workspace_dir=summary.workspace_dir,
-        )
-        filtered_sources = [
-            source for source in config.knowledge.sources if source.id != expected_source.id
-        ]
-        if len(filtered_sources) != len(config.knowledge.sources):
-            config.knowledge.sources = filtered_sources
-            changed = True
-
-    if changed:
-        save_config(config)
+    copaw_project_metadata_services.sync_project_agent_knowledge_registration(
+        summary=summary,
+        enabled=enabled,
+        load_config=load_config,
+        ensure_project_source_registered=ensure_project_source_registered,
+        build_project_source_spec=build_project_source_spec,
+        save_config=save_config,
+    )
 
 
 def _update_project_agent_knowledge_registration(
@@ -1787,29 +1354,20 @@ def _update_project_agent_knowledge_registration(
     project_id: str,
     project_agent_knowledge_registered: bool,
 ) -> ProjectSummary:
-    project_dir = _resolve_project_dir(workspace_dir, project_id)
-    summary = _load_project_summary(project_dir)
-    if summary is None:
-        raise HTTPException(
-            status_code=404,
-            detail=f"Project '{project_id}' metadata not found",
-        )
-
-    enabled = bool(project_agent_knowledge_registered)
-    _sync_project_agent_knowledge_registration(summary, enabled=enabled)
-
-    metadata_file = Path(summary.metadata_file)
-    metadata, body = _read_project_frontmatter_with_body(metadata_file)
-    metadata["project_agent_knowledge_registered"] = enabled
-    write_project_metadata(metadata_file, metadata, body)
-
-    updated = _load_project_summary(project_dir)
-    if updated is None:
-        raise HTTPException(
-            status_code=500,
-            detail="Failed to load updated project summary",
-        )
-    return updated
+    return cast(
+        ProjectSummary,
+        copaw_project_metadata_services.update_project_agent_knowledge_registration(
+            workspace_dir=workspace_dir,
+            project_id=project_id,
+            project_agent_knowledge_registered=project_agent_knowledge_registered,
+            resolve_project_dir=_resolve_project_dir,
+            load_project_summary=_load_project_summary,
+            sync_project_agent_knowledge_registration=lambda summary, enabled: _sync_project_agent_knowledge_registration(summary, enabled=enabled),
+            read_project_frontmatter_with_body=_read_project_frontmatter_with_body,
+            write_project_metadata=write_project_metadata,
+            http_exception_factory=HTTPException,
+        ),
+    )
 
 
 def _maybe_start_project_auto_knowledge_sync(
@@ -1819,50 +1377,23 @@ def _maybe_start_project_auto_knowledge_sync(
     *,
     trigger: str,
 ) -> dict[str, Any] | None:
-    workspace_dir = Path(str(getattr(workspace, "workspace_dir", "") or "")).resolve()
-    if not workspace_dir.exists():
-        return None
-
-    project_dir = _resolve_project_dir(workspace_dir, project_id)
-    summary = _load_project_summary(project_dir)
-    if (
-        summary is None
-        or not summary.project_auto_knowledge_sink
-        or not summary.project_agent_knowledge_registered
-        or summary.file_monitoring_state != PROJECT_FILE_MONITORING_ACTIVE
-    ):
-        return None
-
-    config = load_config()
-    knowledge_config = config.knowledge.model_copy(deep=True)
-    setattr(knowledge_config, "nlp", config.nlp.model_copy(deep=True))
-    if not knowledge_config.enabled or not bool(getattr(knowledge_config, "memify_enabled", False)):
-        return None
-
-    source = build_project_source_spec(
-        project_id=project_id,
-        project_name=summary.name or project_id,
-        project_workspace_dir=str(project_dir),
-    )
-    running_config = (
-        getattr(getattr(workspace, "config", None), "running", None)
-        or config.agents.running
-    )
-    manager = ProjectKnowledgePipelineManager(
-        workspace_dir,
-        knowledge_dirname=f"projects/{project_id}/.knowledge",
-    )
-    return manager.start_sync(
-        project_id=project_id,
-        config=knowledge_config,
-        running_config=running_config,
-        source=source,
-        trigger=(trigger or "project_upload").strip() or "project_upload",
-        changed_paths=changed_paths,
-        auto_enabled=True,
-        force=False,
-        debounce_seconds=DEFAULT_PROJECT_PIPELINE_DEBOUNCE_SECONDS,
-        cooldown_seconds=DEFAULT_PROJECT_PIPELINE_COOLDOWN_SECONDS,
+    return cast(
+        dict[str, Any] | None,
+        copaw_project_metadata_services.maybe_start_project_auto_knowledge_sync(
+            workspace=workspace,
+            project_id=project_id,
+            changed_paths=changed_paths,
+            trigger=trigger,
+            project_file_monitoring_active=PROJECT_FILE_MONITORING_ACTIVE,
+            default_trigger="project_upload",
+            default_project_pipeline_debounce_seconds=DEFAULT_PROJECT_PIPELINE_DEBOUNCE_SECONDS,
+            default_project_pipeline_cooldown_seconds=DEFAULT_PROJECT_PIPELINE_COOLDOWN_SECONDS,
+            resolve_project_dir=_resolve_project_dir,
+            load_project_summary=_load_project_summary,
+            load_config=load_config,
+            build_project_source_spec=build_project_source_spec,
+            project_knowledge_pipeline_manager_factory=ProjectKnowledgePipelineManager,
+        ),
     )
 
 
@@ -1871,31 +1402,10 @@ def _build_promoted_skill_markdown(
     project_id: str,
     source_body: str,
 ) -> str:
-    skill_name = item.name.strip() or item.id
-    description = item.distillation_note.strip() or (
-        f"Promoted from project '{project_id}' skill artifact '{item.id}'."
-    )
-    version = item.version.strip() or "v0-draft"
-    tags = [*item.tags, "project-promoted", f"project:{project_id}"]
-    deduped_tags = [tag for tag in dict.fromkeys(tags) if tag]
-    tags_text = ", ".join(deduped_tags)
-    source_text = source_body.strip()
-    if not source_text:
-        source_text = item.distillation_note.strip()
-    source_block = source_text or "No additional project notes provided."
-    return (
-        "---\n"
-        f"name: {skill_name}\n"
-        f"description: {description}\n"
-        f"version: {version}\n"
-        f"tags: [{tags_text}]\n"
-        "---\n\n"
-        "## Origin\n"
-        f"- project_id: {project_id}\n"
-        f"- artifact_id: {item.id}\n"
-        f"- source_path: {item.artifact_file_path}\n\n"
-        "## Distilled Skill\n\n"
-        f"{source_block}\n"
+    return copaw_project_artifact_workflow_services.build_promoted_skill_markdown(
+        item,
+        project_id,
+        source_body,
     )
 
 
@@ -1904,80 +1414,13 @@ def _extract_project_conversation_skill_candidates(
     limit: int = 50,
     run_id: str | None = None,
 ) -> list[dict[str, str]]:
-    runs_dir = project_dir / ".pipelines" / "runs"
-    if not runs_dir.exists() or not runs_dir.is_dir():
-        return []
-
-    candidates: list[dict[str, str]] = []
-    seen_ids: set[str] = set()
-    expected_run_id = str(run_id or "").strip().lower()
-
-    for run_dir in sorted(
-        runs_dir.iterdir(), key=lambda item: item.name.lower()
-    ):
-        if not run_dir.is_dir():
-            continue
-        manifest_file = run_dir / "run_manifest.json"
-        if not manifest_file.exists() or not manifest_file.is_file():
-            continue
-        try:
-            raw_doc = json.loads(manifest_file.read_text(encoding="utf-8"))
-        except Exception:
-            continue
-        if not isinstance(raw_doc, dict):
-            continue
-
-        run_id = (
-            str(raw_doc.get("run_id") or run_dir.name).strip() or run_dir.name
-        )
-        if expected_run_id and run_id.lower() != expected_run_id:
-            continue
-        events = raw_doc.get("collaboration_events") or []
-        if not isinstance(events, list):
-            continue
-
-        for event in events:
-            if not isinstance(event, dict):
-                continue
-            event_name = str(event.get("event") or "").strip().lower()
-            if event_name not in {"step.completed", "run.completed"}:
-                continue
-
-            message = str(event.get("message") or "").strip()
-            if not message:
-                continue
-
-            step_id = (
-                str(event.get("step_id") or event_name).strip() or event_name
-            )
-            artifact_id = _safe_artifact_slug(
-                f"{run_id}-{step_id}",
-                f"skill-{generate_short_agent_id()}",
-            )
-            if artifact_id in seen_ids:
-                continue
-            seen_ids.add(artifact_id)
-
-            name_seed = message.split(".")[0].strip() or message
-            name_tokens = [token for token in name_seed.split() if token]
-            if len(name_tokens) > 8:
-                name_seed = " ".join(name_tokens[:8])
-
-            rel_manifest_path = manifest_file.resolve().relative_to(
-                project_dir.resolve()
-            )
-            candidates.append(
-                {
-                    "id": artifact_id,
-                    "name": name_seed,
-                    "note": f"[{run_id}] {message}",
-                    "source_path": rel_manifest_path.as_posix(),
-                },
-            )
-            if len(candidates) >= limit:
-                return candidates
-
-    return candidates
+    return copaw_project_artifact_workflow_services.extract_project_conversation_skill_candidates(
+        project_dir,
+        safe_artifact_slug=_safe_artifact_slug,
+        generate_short_agent_id=generate_short_agent_id,
+        limit=limit,
+        run_id=run_id,
+    )
 
 
 def _auto_distill_project_skills_to_draft(
@@ -1985,156 +1428,27 @@ def _auto_distill_project_skills_to_draft(
     project_id: str,
     run_id: str | None = None,
 ) -> DistillProjectSkillsDraftResponse:
-    project_dir = _resolve_project_dir(workspace_dir, project_id)
-    summary = _load_project_summary(project_dir)
-    if summary is None:
-        raise HTTPException(
-            status_code=404,
-            detail=f"Project '{project_id}' metadata not found",
-        )
-
-    metadata_file = Path(summary.metadata_file)
-    metadata, content_body = _read_project_frontmatter_with_body(metadata_file)
-    profile = _parse_project_artifact_profile(metadata)
-    existing_ids = {item.id for item in profile.skills}
-
-    drafted_ids: list[str] = []
-    skipped_count = 0
-
-    if summary.artifact_distill_mode == "conversation_evidence":
-        candidates = _extract_project_conversation_skill_candidates(
-            project_dir,
+    return cast(
+        DistillProjectSkillsDraftResponse,
+        copaw_project_artifact_workflow_services.auto_distill_project_skills_to_draft(
+            workspace_dir=workspace_dir,
+            project_id=project_id,
             run_id=run_id,
-        )
-        for candidate in candidates:
-            artifact_id = candidate["id"]
-            if artifact_id in existing_ids:
-                skipped_count += 1
-                continue
-
-            profile.skills.append(
-                ProjectArtifactItem(
-                    id=artifact_id,
-                    name=candidate["name"],
-                    kind="skill",
-                    origin="project-distilled",
-                    status="draft",
-                    version="v0-draft",
-                    artifact_file_path=candidate["source_path"],
-                    tags=["auto-draft", "conversation-evidence"],
-                    derived_from_ids=[],
-                    distillation_note=candidate["note"],
-                    market_source_id=None,
-                    market_item_id=None,
-                ),
-            )
-            existing_ids.add(artifact_id)
-            drafted_ids.append(artifact_id)
-    else:
-        skills_dir = project_dir / ".skills"
-        if not skills_dir.exists() or not skills_dir.is_dir():
-            return DistillProjectSkillsDraftResponse(
-                drafted_count=0,
-                skipped_count=0,
-                drafted_ids=[],
-                artifact_distill_mode=summary.artifact_distill_mode,
-                project=summary,
-            )
-
-        for md_file in sorted(
-            skills_dir.rglob("*.md"), key=lambda item: item.as_posix()
-        ):
-            if not md_file.is_file():
-                continue
-            rel_path = (
-                md_file.resolve().relative_to(project_dir.resolve()).as_posix()
-            )
-            if rel_path.lower().endswith("/skill.md"):
-                # Skip skill market packaging files that may appear in nested folders.
-                skipped_count += 1
-                continue
-
-            artifact_seed = (
-                md_file.relative_to(skills_dir).with_suffix("").as_posix()
-            )
-            artifact_id = _safe_artifact_slug(
-                artifact_seed.replace("/", "-"),
-                f"skill-{generate_short_agent_id()}",
-            )
-            if artifact_id in existing_ids:
-                skipped_count += 1
-                continue
-
-            raw_text = read_text_file_with_encoding_fallback(md_file)
-            lines = [
-                line.strip() for line in raw_text.splitlines() if line.strip()
-            ]
-            heading = next(
-                (
-                    line.lstrip("#").strip()
-                    for line in lines
-                    if line.startswith("#")
-                ),
-                "",
-            )
-            name = (
-                heading
-                or md_file.stem.replace("-", " ").replace("_", " ").strip()
-            )
-            if not name:
-                name = artifact_id
-
-            note_lines: list[str] = []
-            for line in lines:
-                if line.startswith("#"):
-                    continue
-                note_lines.append(line)
-                if len(" ".join(note_lines)) >= 240:
-                    break
-            distillation_note = " ".join(note_lines).strip() or (
-                f"Auto drafted from {rel_path}."
-            )
-
-            profile.skills.append(
-                ProjectArtifactItem(
-                    id=artifact_id,
-                    name=name,
-                    kind="skill",
-                    origin="project-distilled",
-                    status="draft",
-                    version="v0-draft",
-                    artifact_file_path=rel_path,
-                    tags=["auto-draft"],
-                    derived_from_ids=[],
-                    distillation_note=distillation_note,
-                    market_source_id=None,
-                    market_item_id=None,
-                ),
-            )
-            existing_ids.add(artifact_id)
-            drafted_ids.append(artifact_id)
-
-    normalized_profile = _normalize_project_artifact_profile_storage(profile)
-    _ensure_project_artifact_layout(project_dir)
-    metadata["artifact_profile"] = normalized_profile.model_dump(
-        mode="json",
-        exclude_none=True,
-    )
-    _write_project_frontmatter(metadata_file, metadata, content_body)
-
-    updated_summary = _load_project_summary(project_dir)
-    if updated_summary is None:
-        raise HTTPException(
-            status_code=500,
-            detail="Failed to load project after auto distillation",
-        )
-
-    return DistillProjectSkillsDraftResponse(
-        drafted_count=len(drafted_ids),
-        skipped_count=skipped_count,
-        drafted_ids=drafted_ids,
-        artifact_distill_mode=updated_summary.artifact_distill_mode,
-        project=updated_summary,
+            resolve_project_dir=_resolve_project_dir,
+            load_project_summary=_load_project_summary,
+            read_project_frontmatter_with_body=_read_project_frontmatter_with_body,
+            parse_project_artifact_profile=_parse_project_artifact_profile,
+            extract_project_conversation_skill_candidates=lambda project_dir, run_id: _extract_project_conversation_skill_candidates(project_dir, run_id=run_id),
+            safe_artifact_slug=_safe_artifact_slug,
+            generate_short_agent_id=generate_short_agent_id,
+            read_text_file_with_encoding_fallback=read_text_file_with_encoding_fallback,
+            project_artifact_item_factory=ProjectArtifactItem,
+            normalize_project_artifact_profile_storage=_normalize_project_artifact_profile_storage,
+            ensure_project_artifact_layout=_ensure_project_artifact_layout,
+            write_project_frontmatter=_write_project_frontmatter,
+            distill_project_skills_draft_response_factory=DistillProjectSkillsDraftResponse,
+            http_exception_factory=HTTPException,
+        ),
     )
 
 
@@ -2143,72 +1457,21 @@ def _confirm_project_skill_stable(
     project_id: str,
     artifact_id: str,
 ) -> ConfirmProjectSkillStableResponse:
-    project_dir = _resolve_project_dir(workspace_dir, project_id)
-    summary = _load_project_summary(project_dir)
-    if summary is None:
-        raise HTTPException(
-            status_code=404,
-            detail=f"Project '{project_id}' metadata not found",
-        )
-
-    skill_item = next(
-        (
-            item
-            for item in summary.artifact_profile.skills
-            if item.id == artifact_id
+    return cast(
+        ConfirmProjectSkillStableResponse,
+        copaw_project_artifact_workflow_services.confirm_project_skill_stable(
+            workspace_dir=workspace_dir,
+            project_id=project_id,
+            artifact_id=artifact_id,
+            resolve_project_dir=_resolve_project_dir,
+            load_project_summary=_load_project_summary,
+            read_project_frontmatter_with_body=_read_project_frontmatter_with_body,
+            parse_project_artifact_profile=_parse_project_artifact_profile,
+            normalize_project_artifact_storage=_normalize_project_artifact_storage,
+            write_project_frontmatter=_write_project_frontmatter,
+            confirm_project_skill_stable_response_factory=ConfirmProjectSkillStableResponse,
+            http_exception_factory=HTTPException,
         ),
-        None,
-    )
-    if skill_item is None:
-        raise HTTPException(
-            status_code=404,
-            detail=f"Skill artifact '{artifact_id}' not found in project",
-        )
-
-    metadata_file = Path(summary.metadata_file)
-    metadata, content_body = _read_project_frontmatter_with_body(metadata_file)
-    normalized_profile = _parse_project_artifact_profile(metadata)
-    for idx, item in enumerate(normalized_profile.skills):
-        if item.id != artifact_id:
-            continue
-        normalized_profile.skills[idx] = _normalize_project_artifact_storage(
-            item.model_copy(update={"status": "stable"}),
-            "skill",
-        )
-        break
-
-    metadata["artifact_profile"] = normalized_profile.model_dump(
-        mode="json",
-        exclude_none=True,
-    )
-    _write_project_frontmatter(metadata_file, metadata, content_body)
-
-    updated_summary = _load_project_summary(project_dir)
-    if updated_summary is None:
-        raise HTTPException(
-            status_code=500,
-            detail="Failed to load project after confirming stable",
-        )
-
-    confirmed_item = next(
-        (
-            item
-            for item in updated_summary.artifact_profile.skills
-            if item.id == artifact_id
-        ),
-        None,
-    )
-    if confirmed_item is None:
-        raise HTTPException(
-            status_code=500,
-            detail="Failed to read updated skill artifact",
-        )
-
-    return ConfirmProjectSkillStableResponse(
-        confirmed=True,
-        artifact_id=artifact_id,
-        status=confirmed_item.status,
-        project=updated_summary,
     )
 
 
@@ -2218,160 +1481,68 @@ def _promote_project_skill_to_agent(
     artifact_id: str,
     body: PromoteProjectArtifactRequest,
 ) -> PromoteProjectArtifactResponse:
-    project_dir = _resolve_project_dir(workspace_dir, project_id)
-    summary = _load_project_summary(project_dir)
-    if summary is None:
-        raise HTTPException(
-            status_code=404,
-            detail=f"Project '{project_id}' metadata not found",
-        )
+    def _enable_promoted_skill(workspace_path: Path, skill_dir_name: str) -> None:
+        from ...agents.skills_manager import reconcile_workspace_manifest
 
-    skill_item = next(
-        (
-            item
-            for item in summary.artifact_profile.skills
-            if item.id == artifact_id
-        ),
-        None,
-    )
-    if skill_item is None:
-        raise HTTPException(
-            status_code=404,
-            detail=f"Skill artifact '{artifact_id}' not found in project",
-        )
-    if (skill_item.status or "").strip().lower() != "stable":
-        raise HTTPException(
-            status_code=400,
-            detail=(
-                "Only stable skill artifacts can be promoted. "
-                f"Current status: '{skill_item.status or 'draft'}'."
-            ),
-        )
-
-    skill_dir_name = _safe_artifact_slug(
-        body.target_name or skill_item.id,
-        f"skill-{generate_short_agent_id()}",
-    )
-    target_skill_dir = workspace_dir / "skills" / skill_dir_name
-    target_skill_md = target_skill_dir / "SKILL.md"
-    if target_skill_dir.exists() and not body.overwrite:
-        raise HTTPException(
-            status_code=409,
-            detail=(
-                f"Target skill '{skill_dir_name}' already exists. "
-                "Set overwrite=true to replace it."
-            ),
-        )
-
-    source_body = ""
-    source_path = skill_item.artifact_file_path.strip()
-    if source_path:
-        source_file = (project_dir / source_path).resolve()
-        try:
-            source_file.relative_to(project_dir.resolve())
-        except ValueError:
-            source_file = project_dir / ".skills" / f"{skill_item.id}.md"
-        if source_file.exists() and source_file.is_file():
-            source_body = source_file.read_text(
+        manifest = reconcile_workspace_manifest(workspace_path)
+        entry = manifest.get("skills", {}).get(skill_dir_name)
+        if isinstance(entry, dict):
+            entry["enabled"] = True
+            manifest_path = workspace_path / "skill.json"
+            manifest_path.write_text(
+                json.dumps(manifest, ensure_ascii=False, indent=2) + "\n",
                 encoding="utf-8",
-                errors="ignore",
             )
 
-    target_skill_dir.mkdir(parents=True, exist_ok=True)
-    promoted_md = _build_promoted_skill_markdown(
-        skill_item,
-        project_id,
-        source_body,
-    )
-    target_skill_md.write_text(promoted_md, encoding="utf-8")
-
-    if body.enable:
-        try:
-            from ...agents.skills_manager import reconcile_workspace_manifest
-
-            manifest = reconcile_workspace_manifest(workspace_dir)
-            entry = manifest.get("skills", {}).get(skill_dir_name)
-            if isinstance(entry, dict):
-                entry["enabled"] = True
-                manifest_path = workspace_dir / "skill.json"
-                manifest_path.write_text(
-                    json.dumps(manifest, ensure_ascii=False, indent=2) + "\n",
-                    encoding="utf-8",
-                )
-        except Exception as exc:  # pragma: no cover - best effort enable
-            logger.warning("Failed to auto-enable promoted skill: %s", exc)
-
-    metadata_file = Path(summary.metadata_file)
-    metadata, content_body = _read_project_frontmatter_with_body(metadata_file)
-    normalized_profile = _parse_project_artifact_profile(metadata)
-    for idx, item in enumerate(normalized_profile.skills):
-        if item.id != artifact_id:
-            continue
-        updated_item = item.model_copy(
-            update={
-                "origin": "project-promoted",
-                "market_item_id": skill_dir_name,
-            },
-        )
-        normalized_profile.skills[idx] = _normalize_project_artifact_storage(
-            updated_item,
-            "skill",
-        )
-        break
-    metadata["artifact_profile"] = normalized_profile.model_dump(
-        mode="json",
-        exclude_none=True,
-    )
-    _write_project_frontmatter(metadata_file, metadata, content_body)
-
-    updated_summary = _load_project_summary(project_dir)
-    if updated_summary is None:
-        raise HTTPException(
-            status_code=500,
-            detail="Failed to load project after promote",
-        )
-
-    return PromoteProjectArtifactResponse(
-        promoted=True,
-        artifact_kind="skill",
-        artifact_id=artifact_id,
-        target_name=skill_dir_name,
-        target_path=str(target_skill_md),
-        project=updated_summary,
+    return cast(
+        PromoteProjectArtifactResponse,
+        copaw_project_artifact_workflow_services.promote_project_skill_to_agent(
+            workspace_dir=workspace_dir,
+            project_id=project_id,
+            artifact_id=artifact_id,
+            body=body,
+            resolve_project_dir=_resolve_project_dir,
+            load_project_summary=_load_project_summary,
+            safe_artifact_slug=_safe_artifact_slug,
+            generate_short_agent_id=generate_short_agent_id,
+            build_promoted_skill_markdown=_build_promoted_skill_markdown,
+            enable_promoted_skill=_enable_promoted_skill,
+            warn_enable_promoted_skill=lambda exc: logger.warning(
+                "Failed to auto-enable promoted skill: %s", exc
+            ),
+            read_project_frontmatter_with_body=_read_project_frontmatter_with_body,
+            parse_project_artifact_profile=_parse_project_artifact_profile,
+            normalize_project_artifact_storage=_normalize_project_artifact_storage,
+            write_project_frontmatter=_write_project_frontmatter,
+            promote_project_artifact_response_factory=PromoteProjectArtifactResponse,
+            http_exception_factory=HTTPException,
+        ),
     )
 
 
 def _build_unique_project_id(workspace_dir: Path, base_id: str) -> str:
-    projects = _list_agent_projects(workspace_dir)
-    existing = {item.id for item in projects}
-    candidate = _slugify(base_id).replace("agent", "project")
-    if candidate not in existing:
-        return candidate
-    index = 2
-    while f"{candidate}-{index}" in existing:
-        index += 1
-    return f"{candidate}-{index}"
+    return copaw_project_scaffold_services.build_unique_project_id(
+        workspace_dir=workspace_dir,
+        base_id=base_id,
+        list_agent_projects=_list_agent_projects,
+        slugify=_slugify,
+    )
 
 
 def _build_random_project_id(workspace_dir: Path) -> str:
-    projects = _list_agent_projects(workspace_dir)
-    existing = {item.id for item in projects}
-    while True:
-        candidate = f"project-{generate_short_agent_id()}"
-        if candidate not in existing:
-            return candidate
+    return copaw_project_scaffold_services.build_random_project_id(
+        workspace_dir=workspace_dir,
+        list_agent_projects=_list_agent_projects,
+        generate_short_agent_id=generate_short_agent_id,
+    )
 
 
 def _build_unique_project_name(workspace_dir: Path, base_name: str) -> str:
-    projects = _list_agent_projects(workspace_dir)
-    existing = {item.name for item in projects}
-    name = (base_name or "").strip() or "Project Clone"
-    if name not in existing:
-        return name
-    index = 2
-    while f"{name} ({index})" in existing:
-        index += 1
-    return f"{name} ({index})"
+    return copaw_project_scaffold_services.build_unique_project_name(
+        workspace_dir=workspace_dir,
+        base_name=base_name,
+        list_agent_projects=_list_agent_projects,
+    )
 
 
 def _write_project_frontmatter(
@@ -2379,7 +1550,12 @@ def _write_project_frontmatter(
     metadata: dict[str, Any],
     body: str,
 ) -> None:
-    write_project_metadata(metadata_file, metadata, body)
+    copaw_project_scaffold_services.write_project_frontmatter(
+        metadata_file=metadata_file,
+        metadata=metadata,
+        body=body,
+        write_project_metadata=write_project_metadata,
+    )
 
 
 def _clone_project(
@@ -2387,495 +1563,214 @@ def _clone_project(
     source_project_id: str,
     body: CloneProjectRequest,
 ) -> ProjectSummary:
-    source_dir = _resolve_project_dir(workspace_dir, source_project_id)
-    source_summary = _load_project_summary(source_dir)
-    if source_summary is None:
-        raise HTTPException(
-            status_code=404,
-            detail=f"Project '{source_project_id}' metadata not found",
-        )
-
-    cloned_id_seed = body.target_id or f"{source_summary.id}-clone"
-    cloned_id = _build_unique_project_id(workspace_dir, cloned_id_seed)
-    cloned_name_seed = body.target_name or f"{source_summary.name} (Clone)"
-    cloned_name = _build_unique_project_name(workspace_dir, cloned_name_seed)
-
-    projects_dir = workspace_dir / _PROJECTS_DIRNAME
-    projects_dir.mkdir(parents=True, exist_ok=True)
-    target_dir = projects_dir / cloned_id
-    shutil.copytree(source_dir, target_dir)
-
-    if not body.include_pipeline_runs:
-        runs_dir = target_dir / "pipelines" / "runs"
-        if runs_dir.exists() and runs_dir.is_dir():
-            shutil.rmtree(runs_dir)
-
-    _ensure_project_artifact_layout(target_dir)
-
-    metadata_file = next(
-        _iter_project_metadata_files(target_dir),
-        _default_project_metadata_file(target_dir),
+    return cast(
+        ProjectSummary,
+        copaw_project_lifecycle_services.clone_project(
+            workspace_dir=workspace_dir,
+            source_project_id=source_project_id,
+            body=body,
+            projects_dirname=_PROJECTS_DIRNAME,
+            resolve_project_dir=_resolve_project_dir,
+            load_project_summary=_load_project_summary,
+            build_unique_project_id=_build_unique_project_id,
+            build_unique_project_name=_build_unique_project_name,
+            ensure_project_artifact_layout=_ensure_project_artifact_layout,
+            iter_project_metadata_files=_iter_project_metadata_files,
+            default_project_metadata_file=_default_project_metadata_file,
+            parse_markdown_frontmatter=_parse_markdown_frontmatter,
+            parse_project_tags=_parse_project_tags,
+            format_iso_time=_format_iso_time,
+            write_project_frontmatter=_write_project_frontmatter,
+            record_project_realtime_paths=record_project_realtime_paths,
+            http_exception_factory=HTTPException,
+        ),
     )
-
-    parsed = _parse_markdown_frontmatter(metadata_file)
-    metadata: dict[str, Any] = {}
-    content_body = ""
-    if parsed is not None:
-        metadata, content_body = parsed
-    elif metadata_file.exists():
-        content_body = metadata_file.read_text(
-            encoding="utf-8", errors="ignore"
-        )
-
-    metadata["id"] = cloned_id
-    metadata["name"] = cloned_name
-    metadata["created_time"] = _format_iso_time(time.time())
-    metadata["workspacePath"] = str(target_dir.resolve())
-    tags = _parse_project_tags(metadata.get("tags"))
-    if "cloned" not in tags:
-        tags.append("cloned")
-    metadata["tags"] = tags
-    _write_project_frontmatter(metadata_file, metadata, content_body)
-    record_project_realtime_paths(
-        None,
-        [path for path in target_dir.rglob("*") if path.is_file()],
-    )
-
-    summary = _load_project_summary(target_dir)
-    if summary is None:
-        raise HTTPException(
-            status_code=500, detail="Failed to load cloned project summary"
-        )
-    return summary
 
 
 def _create_project(
     workspace_dir: Path,
     body: CreateProjectRequest,
 ) -> ProjectSummary:
-    _ensure_projects_layout(workspace_dir)
-
-    project_name_seed = (body.name or "").strip() or "New Project"
-    project_name = _build_unique_project_name(workspace_dir, project_name_seed)
-    if (body.id or "").strip():
-        project_id_seed = body.id or "project"
-        project_id = _build_unique_project_id(workspace_dir, project_id_seed)
-    else:
-        project_id = _build_random_project_id(workspace_dir)
-
-    projects_dir = workspace_dir / _PROJECTS_DIRNAME
-    project_dir = projects_dir / project_id
-    project_dir.mkdir(parents=True, exist_ok=False)
-
-    data_subdir = _safe_project_data_subdir(body.data_dir)
-    (project_dir / ".pipelines" / "templates").mkdir(
-        parents=True, exist_ok=True
-    )
-    _ensure_project_artifact_layout(project_dir)
-
-    metadata_file = _default_project_metadata_file(project_dir)
-    metadata_file.parent.mkdir(parents=True, exist_ok=True)
-    normalized_profile = _normalize_project_artifact_profile_storage(
-        body.artifact_profile,
-    )
-    metadata = {
-        "id": project_id,
-        "name": project_name,
-        "description": (body.description or "").strip(),
-        "status": (body.status or "active").strip() or "active",
-        "created_time": _format_iso_time(time.time()),
-        "workspacePath": str(project_dir.resolve()),
-        "data_dir": data_subdir,
-        "tags": [item.strip() for item in body.tags if str(item).strip()],
-        "artifact_distill_mode": _normalize_project_artifact_distill_mode(
-            body.artifact_distill_mode,
+    return cast(
+        ProjectSummary,
+        copaw_project_lifecycle_services.create_project(
+            workspace_dir=workspace_dir,
+            body=body,
+            projects_dirname=_PROJECTS_DIRNAME,
+            project_file_monitoring_idle=PROJECT_FILE_MONITORING_IDLE,
+            ensure_projects_layout=_ensure_projects_layout,
+            build_unique_project_name=_build_unique_project_name,
+            build_unique_project_id=_build_unique_project_id,
+            build_random_project_id=_build_random_project_id,
+            safe_project_data_subdir=_safe_project_data_subdir,
+            ensure_project_artifact_layout=_ensure_project_artifact_layout,
+            default_project_metadata_file=_default_project_metadata_file,
+            normalize_project_artifact_profile_storage=_normalize_project_artifact_profile_storage,
+            normalize_project_artifact_distill_mode=_normalize_project_artifact_distill_mode,
+            format_iso_time=_format_iso_time,
+            write_project_frontmatter=_write_project_frontmatter,
+            scaffold_project_governance_files=_scaffold_project_governance_files,
+            copy_builtin_pipeline_template_to_project=_copy_builtin_pipeline_template_to_project,
+            load_project_summary=_load_project_summary,
+            http_exception_factory=HTTPException,
         ),
-        "project_auto_knowledge_sink": bool(body.project_auto_knowledge_sink),
-        "project_agent_knowledge_registered": bool(
-            body.project_agent_knowledge_registered,
-        ),
-        "file_monitoring_state": PROJECT_FILE_MONITORING_IDLE,
-        "artifact_profile": normalized_profile.model_dump(
-            mode="json",
-            exclude_none=True,
-        ),
-    }
-    body_text = (body.description or "").strip() or (
-        f"# {project_name}\n\n"
-        "## Goal\n\nDescribe the project goal here.\n\n"
-        "## Status\n\nActive.\n\n"
-        "## Notes\n\nKey decisions, constraints, and context go here.\n"
     )
-    _write_project_frontmatter(metadata_file, metadata, body_text)
-    _scaffold_project_governance_files(project_dir, data_subdir)
-    _copy_builtin_pipeline_template_to_project(project_dir)
-
-    summary = _load_project_summary(project_dir)
-    if summary is None:
-        raise HTTPException(
-            status_code=500, detail="Failed to load created project summary"
-        )
-    return summary
 
 
 def _delete_project(
     workspace_dir: Path, project_id: str
 ) -> DeleteProjectResponse:
-    project_dir = _resolve_project_dir(workspace_dir, project_id)
-    shutil.rmtree(project_dir)
-    return DeleteProjectResponse(success=True, project_id=project_id)
+    return cast(
+        DeleteProjectResponse,
+        copaw_project_lifecycle_services.delete_project(
+            workspace_dir=workspace_dir,
+            project_id=project_id,
+            resolve_project_dir=_resolve_project_dir,
+            delete_project_response_factory=DeleteProjectResponse,
+        ),
+    )
 
 
 def _is_safe_relative_path(rel_path: str) -> bool:
-    if not rel_path:
-        return False
-    candidate = Path(rel_path)
-    if candidate.is_absolute() or ".." in candidate.parts:
-        return False
-    return True
+    return copaw_project_file_query_services.is_safe_relative_path(rel_path)
 
 
 def _rewrite_original_to_data_path(rel_path: str) -> str | None:
-    normalized = rel_path.strip().replace("\\", "/")
-    if not normalized.startswith("original/"):
-        return None
-    remainder = normalized[len("original/") :]
-    if not remainder:
-        return None
-    return f"data/{remainder}"
+    return copaw_project_file_query_services.rewrite_original_to_data_path(rel_path)
 
 
 def _normalize_project_tree_dir_path(raw_value: str) -> str:
-    candidate = str(raw_value or "").strip().replace("\\", "/")
-    if not candidate or candidate == ".":
-        return ""
-    normalized = Path(candidate).as_posix().strip("/")
-    if normalized == ".":
-        return ""
-    return normalized
+    return copaw_project_file_query_services.normalize_project_tree_dir_path(raw_value)
 
 
 def _is_visible_project_tree_path(rel_path: str) -> bool:
-    if not rel_path:
-        return True
-    normalized = str(rel_path or "").strip().replace("\\", "/")
-    parts = Path(rel_path).parts
-    if any(part in _PROJECT_TREE_IGNORED_NAMES for part in parts):
-        return False
-    return True
+    return copaw_project_file_query_services.is_visible_project_tree_path(
+        rel_path,
+        project_tree_ignored_names=_PROJECT_TREE_IGNORED_NAMES,
+    )
 
 
 def _count_visible_project_tree_children(target_dir: Path) -> int:
-    count = 0
-    for child in target_dir.iterdir():
-        candidate = f"{child.name}/" if child.is_dir() else child.name
-        if not _is_visible_project_tree_path(candidate):
-            continue
-        count += 1
-    return count
+    return copaw_project_file_query_services.count_visible_project_tree_children(
+        target_dir,
+        is_visible_project_tree_path=_is_visible_project_tree_path,
+    )
 
 
 def _count_visible_project_tree_direct_files(target_dir: Path) -> int:
-    count = 0
-    try:
-        for path in target_dir.iterdir():
-            if not path.is_file():
-                continue
-            rel_path = path.relative_to(target_dir).as_posix()
-            if not _is_visible_project_tree_path(rel_path):
-                continue
-            count += 1
-    except OSError:
-        return 0
-    return count
+    return copaw_project_file_query_services.count_visible_project_tree_direct_files(
+        target_dir,
+        is_visible_project_tree_path=_is_visible_project_tree_path,
+    )
 
 
 def _has_visible_project_tree_child_directories(target_dir: Path) -> bool:
-    try:
-        for path in target_dir.iterdir():
-            if not path.is_dir():
-                continue
-            rel_path = path.relative_to(target_dir).as_posix()
-            if not _is_visible_project_tree_path(rel_path):
-                continue
-            return True
-    except OSError:
-        return False
-    return False
+    return copaw_project_file_query_services.has_visible_project_tree_child_directories(
+        target_dir,
+        is_visible_project_tree_path=_is_visible_project_tree_path,
+    )
 
 
 def _list_project_file_tree_nodes(
     project_dir: Path,
     dir_path: str = "",
 ) -> list[ProjectFileTreeNode]:
-    project_root = project_dir.resolve()
-    normalized_dir_path = _normalize_project_tree_dir_path(dir_path)
-    if normalized_dir_path and not _is_safe_relative_path(normalized_dir_path):
-        raise HTTPException(status_code=400, detail="Invalid directory path")
-    if normalized_dir_path and not _is_visible_project_tree_path(
-        f"{normalized_dir_path}/"
-    ):
-        raise HTTPException(status_code=404, detail="Directory not found")
-
-    target_dir = (
-        project_root
-        if not normalized_dir_path
-        else (project_root / normalized_dir_path).resolve()
+    return cast(
+        list[ProjectFileTreeNode],
+        copaw_project_file_query_services.list_project_file_tree_nodes(
+            project_dir,
+            dir_path,
+            normalize_project_tree_dir_path=_normalize_project_tree_dir_path,
+            is_safe_relative_path=_is_safe_relative_path,
+            is_visible_project_tree_path=_is_visible_project_tree_path,
+            format_iso_time=_format_iso_time,
+            count_visible_project_tree_children=_count_visible_project_tree_children,
+            count_visible_project_tree_direct_files=_count_visible_project_tree_direct_files,
+            has_visible_project_tree_child_directories=_has_visible_project_tree_child_directories,
+            project_file_tree_node_factory=ProjectFileTreeNode,
+            http_exception_factory=HTTPException,
+        ),
     )
-    if not str(target_dir).startswith(str(project_root)):
-        raise HTTPException(status_code=400, detail="Invalid directory path")
-    if not target_dir.exists() or not target_dir.is_dir():
-        raise HTTPException(status_code=404, detail="Directory not found")
-
-    nodes: list[ProjectFileTreeNode] = []
-    try:
-        children = sorted(
-            target_dir.iterdir(),
-            key=lambda item: (not item.is_dir(), item.name.lower()),
-        )
-    except OSError as exc:
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
-
-    for child in children:
-        rel_path = child.relative_to(project_root).as_posix()
-        candidate = f"{rel_path}/" if child.is_dir() else rel_path
-        if not _is_visible_project_tree_path(candidate):
-            continue
-        try:
-            stat = child.stat()
-        except OSError:
-            continue
-        is_directory = child.is_dir()
-        nodes.append(
-            ProjectFileTreeNode(
-                filename=child.name,
-                path=rel_path,
-                size=0 if is_directory else stat.st_size,
-                modified_time=_format_iso_time(stat.st_mtime),
-                is_directory=is_directory,
-                child_count=(
-                    _count_visible_project_tree_children(child)
-                    if is_directory
-                    else 0
-                ),
-                descendant_file_count=(
-                    _count_visible_project_tree_direct_files(child)
-                    if is_directory
-                    else 0
-                ),
-                direct_file_count=(
-                    _count_visible_project_tree_direct_files(child)
-                    if is_directory
-                    else 0
-                ),
-                has_child_directories=(
-                    _has_visible_project_tree_child_directories(child)
-                    if is_directory
-                    else False
-                ),
-            )
-        )
-
-    return nodes
 
 
 def _list_project_files(project_dir: Path) -> list[ProjectFileInfo]:
-    files: list[ProjectFileInfo] = []
-    for record in scan_project_file_records(project_dir):
-        # Keep legacy behavior: hide nested .git tree from file list API.
-        if record.path.startswith(".git/") or "/.git/" in record.path:
-            continue
-        files.append(
-            ProjectFileInfo(
-                filename=record.filename,
-                path=record.path,
-                size=record.size,
-                modified_time=record.modified_time,
-            ),
-        )
-    return files
-
-
-def _normalize_project_metric_path(rel_path: str) -> str:
-    normalized = str(rel_path or "").replace("\\", "/")
-    if normalized.startswith("./"):
-        normalized = normalized[2:]
-    return normalized.lower()
-
-
-def _extension_of_project_path(rel_path: str) -> str:
-    normalized = _normalize_project_metric_path(rel_path)
-    file_name = normalized.split("/")[-1] if normalized else ""
-    if "." not in file_name:
-        return ""
-    return file_name.rsplit(".", 1)[-1]
-
-
-def _is_ignored_project_metric_file(rel_path: str) -> bool:
-    file_name = (_normalize_project_metric_path(rel_path).split("/")[-1] or "")
-    return file_name in _PROJECT_IGNORED_FILE_NAMES
-
-
-def _is_builtin_project_metric_file(rel_path: str) -> bool:
-    normalized = _normalize_project_metric_path(rel_path)
-    return _has_hidden_directory_segment(normalized)
-
-
-def _is_original_project_metric_file(rel_path: str) -> bool:
-    normalized = _normalize_project_metric_path(rel_path)
-    return normalized == "original" or normalized.startswith("original/")
-
-
-def _is_intermediate_project_metric_file(rel_path: str) -> bool:
-    normalized = _normalize_project_metric_path(rel_path)
-    return any(
-        normalized.startswith(f"{prefix}/")
-        for prefix in (
-            "intermediate",
-            "data",
-            "metadata",
-            "cross-book",
-            "term-candidates",
-            "review",
-        )
+    return cast(
+        list[ProjectFileInfo],
+        copaw_project_file_query_services.list_project_files(
+            project_dir,
+            scan_project_file_records=scan_project_file_records,
+            project_file_info_factory=ProjectFileInfo,
+        ),
     )
 
 
+def _normalize_project_metric_path(rel_path: str) -> str:
+    return copaw_project_file_query_services.normalize_project_metric_path(rel_path)
+
+
+def _extension_of_project_path(rel_path: str) -> str:
+    return copaw_project_file_query_services.extension_of_project_path(rel_path)
+
+
+def _is_ignored_project_metric_file(rel_path: str) -> bool:
+    return copaw_project_file_query_services.is_ignored_project_metric_file(
+        rel_path,
+        project_ignored_file_names=_PROJECT_IGNORED_FILE_NAMES,
+    )
+
+
+def _is_builtin_project_metric_file(rel_path: str) -> bool:
+    return copaw_project_file_query_services.is_builtin_project_metric_file(
+        rel_path,
+        has_hidden_directory_segment=_has_hidden_directory_segment,
+    )
+
+
+def _is_original_project_metric_file(rel_path: str) -> bool:
+    return copaw_project_file_query_services.is_original_project_metric_file(rel_path)
+
+
+def _is_intermediate_project_metric_file(rel_path: str) -> bool:
+    return copaw_project_file_query_services.is_intermediate_project_metric_file(rel_path)
+
+
 def _is_artifact_project_metric_file(rel_path: str) -> bool:
-    normalized = _normalize_project_metric_path(rel_path)
-    return normalized == "output" or normalized.startswith("output/")
+    return copaw_project_file_query_services.is_artifact_project_metric_file(rel_path)
 
 
 def _is_agent_project_metric_file(rel_path: str) -> bool:
-    normalized = _normalize_project_metric_path(rel_path)
-    return normalized.startswith(".agent/")
+    return copaw_project_file_query_services.is_agent_project_metric_file(rel_path)
 
 
 def _is_skill_project_metric_file(rel_path: str) -> bool:
-    normalized = _normalize_project_metric_path(rel_path)
-    return normalized.startswith(".skills/")
+    return copaw_project_file_query_services.is_skill_project_metric_file(rel_path)
 
 
 def _is_flow_project_metric_file(rel_path: str) -> bool:
-    normalized = _normalize_project_metric_path(rel_path)
-    parts = [part for part in normalized.split("/") if part]
-    return len(parts) >= 4 and parts[0] == "pipelines" and parts[2] == "pipeline"
+    return copaw_project_file_query_services.is_flow_project_metric_file(rel_path)
 
 
 def _is_case_project_metric_file(rel_path: str) -> bool:
-    normalized = _normalize_project_metric_path(rel_path)
-    parts = [part for part in normalized.split("/") if part]
-    return len(parts) >= 4 and parts[0] == "pipelines" and parts[2] == "runs"
+    return copaw_project_file_query_services.is_case_project_metric_file(rel_path)
 
 
 def _build_project_file_summary(project_dir: Path) -> ProjectFileSummary:
-    project_root = project_dir.resolve()
-    project_id = project_root.name
-    total_files = 0
-    builtin_files = 0
-    visible_files = 0
-    original_files = 0
-    intermediate_files = 0
-    artifact_files = 0
-    derived_files = 0
-    knowledge_candidate_files = 0
-    markdown_files = 0
-    text_files = 0
-    script_files = 0
-    other_type_files = 0
-    text_like_files = 0
-    agent_files = 0
-    skill_files = 0
-    flow_files = 0
-    case_files = 0
-
-    for record in scan_project_file_records(project_root):
-        rel_path = record.path
-        if record.ignored:
-            continue
-        total_files += 1
-        extension = extension_of_path(rel_path)
-        is_builtin = record.builtin
-        is_markdown = record.content_type == "markdown"
-        is_text_file = record.content_type == "text"
-        is_script_file = record.content_type == "script"
-        is_text_like = is_markdown or is_text_file or is_script_file
-        if is_builtin:
-            builtin_files += 1
-        else:
-            visible_files += 1
-            if record.stage == "original":
-                original_files += 1
-            elif record.stage == "intermediate":
-                intermediate_files += 1
-            elif record.stage == "artifact":
-                artifact_files += 1
-
-        if not is_builtin:
-            if _is_agent_project_metric_file(rel_path):
-                agent_files += 1
-            elif _is_skill_project_metric_file(rel_path):
-                skill_files += 1
-            elif _is_flow_project_metric_file(rel_path):
-                flow_files += 1
-            elif _is_case_project_metric_file(rel_path):
-                case_files += 1
-
-            if extension in _PROJECT_KNOWLEDGE_EXTENSIONS:
-                knowledge_candidate_files += 1
-            if is_markdown:
-                markdown_files += 1
-            if is_text_file:
-                text_files += 1
-            if is_script_file:
-                script_files += 1
-            if not is_markdown and not is_text_file and not is_script_file:
-                other_type_files += 1
-            if is_text_like:
-                text_like_files += 1
-
-    # Keep legacy semantics: derived_files only tracks intermediate workspace artifacts.
-    derived_files = intermediate_files
-    recent_update_records = collect_recent_project_updates(project_root, project_id)
-    recent_updates: list[ProjectFileInfo] = []
-    for item in recent_update_records:
-        path = str(item.get("path") or "").strip()
-        if not path:
-            continue
-        target = project_root / path
-        try:
-            stat = target.stat()
-        except OSError:
-            continue
-        recent_updates.append(
-            ProjectFileInfo(
-                filename=target.name,
-                path=path,
-                size=stat.st_size,
-                modified_time=str(item.get("modified_time") or _format_iso_time(stat.st_mtime)),
-            )
-        )
-
-    return ProjectFileSummary(
-        total_files=total_files,
-        builtin_files=builtin_files,
-        visible_files=visible_files,
-        original_files=original_files,
-        intermediate_files=intermediate_files,
-        artifact_files=artifact_files,
-        derived_files=derived_files,
-        knowledge_candidate_files=knowledge_candidate_files,
-        markdown_files=markdown_files,
-        text_files=text_files,
-        script_files=script_files,
-        other_type_files=other_type_files,
-        text_like_files=text_like_files,
-        agent_files=agent_files,
-        skill_files=skill_files,
-        flow_files=flow_files,
-        case_files=case_files,
-        recently_updated_files=len(recent_updates),
-        recent_updates=recent_updates,
+    return cast(
+        ProjectFileSummary,
+        copaw_project_file_query_services.build_project_file_summary(
+            project_dir,
+            scan_project_file_records=scan_project_file_records,
+            extension_of_path=extension_of_path,
+            is_agent_project_metric_file=_is_agent_project_metric_file,
+            is_skill_project_metric_file=_is_skill_project_metric_file,
+            is_flow_project_metric_file=_is_flow_project_metric_file,
+            is_case_project_metric_file=_is_case_project_metric_file,
+            project_knowledge_extensions=_PROJECT_KNOWLEDGE_EXTENSIONS,
+            collect_recent_project_updates=collect_recent_project_updates,
+            format_iso_time=_format_iso_time,
+            project_file_info_factory=ProjectFileInfo,
+            project_file_summary_factory=ProjectFileSummary,
+        ),
     )
 
 
@@ -2883,16 +1778,30 @@ def _build_project_file_summary_for_workspace(
     workspace_dir: Path,
     project_id: str,
 ) -> ProjectFileSummary:
-    project_dir = _resolve_project_dir(workspace_dir, project_id)
-    return _build_project_file_summary(project_dir)
+    return cast(
+        ProjectFileSummary,
+        copaw_project_file_query_services.build_project_file_summary_for_workspace(
+            workspace_dir,
+            project_id,
+            resolve_project_dir=_resolve_project_dir,
+            build_project_file_summary=_build_project_file_summary,
+        ),
+    )
 
 
 def _list_project_files_for_workspace(
     workspace_dir: Path,
     project_id: str,
 ) -> list[ProjectFileInfo]:
-    project_dir = _resolve_project_dir(workspace_dir, project_id)
-    return _list_project_files(project_dir)
+    return cast(
+        list[ProjectFileInfo],
+        copaw_project_file_query_services.list_project_files_for_workspace(
+            workspace_dir,
+            project_id,
+            resolve_project_dir=_resolve_project_dir,
+            list_project_files=_list_project_files,
+        ),
+    )
 
 
 def _query_project_files_for_workspace(
@@ -2900,25 +1809,17 @@ def _query_project_files_for_workspace(
     project_id: str,
     payload: ProjectFileQueryRequest,
 ) -> ProjectFileQueryResponse:
-    project_dir = _resolve_project_dir(workspace_dir, project_id)
-    result = query_project_file_records(
-        project_dir,
-        search=payload.search,
-        path_prefix=payload.path_prefix,
-        stages=list(payload.stages or []),
-        content_types=list(payload.content_types or []),
-        include_builtin=payload.include_builtin,
-        include_ignored=bool(payload.include_ignored),
-        size_min=payload.size_min,
-        size_max=payload.size_max,
-        modified_after=payload.modified_after,
-        modified_before=payload.modified_before,
-        sort_by=payload.sort_by,
-        sort_order=payload.sort_order,
-        offset=payload.offset,
-        limit=payload.limit,
+    return cast(
+        ProjectFileQueryResponse,
+        copaw_project_file_query_services.query_project_files_for_workspace(
+            workspace_dir,
+            project_id,
+            payload,
+            resolve_project_dir=_resolve_project_dir,
+            query_project_file_records=query_project_file_records,
+            response_model_validate=ProjectFileQueryResponse.model_validate,
+        ),
     )
-    return ProjectFileQueryResponse.model_validate(result)
 
 
 def _list_project_file_tree_nodes_for_workspace(
@@ -2926,44 +1827,33 @@ def _list_project_file_tree_nodes_for_workspace(
     project_id: str,
     dir_path: str = "",
 ) -> list[ProjectFileTreeNode]:
-    project_dir = _resolve_project_dir(workspace_dir, project_id)
-    return _list_project_file_tree_nodes(project_dir, dir_path)
+    return cast(
+        list[ProjectFileTreeNode],
+        copaw_project_file_query_services.list_project_file_tree_nodes_for_workspace(
+            workspace_dir,
+            project_id,
+            dir_path,
+            resolve_project_dir=_resolve_project_dir,
+            list_project_file_tree_nodes=_list_project_file_tree_nodes,
+        ),
+    )
 
 
 def _get_project_files_metadata(
     project_dir: Path,
     rel_paths: list[str],
 ) -> list[ProjectFileInfo]:
-    project_root = project_dir.resolve()
-    results: list[ProjectFileInfo] = []
-    seen_paths: set[str] = set()
-
-    for rel_path in rel_paths:
-        normalized_rel_path = str(rel_path or "").replace("\\", "/").strip()
-        if not normalized_rel_path or normalized_rel_path in seen_paths:
-            continue
-        if not _is_safe_relative_path(normalized_rel_path):
-            raise HTTPException(status_code=400, detail="Invalid file path")
-        target = (project_dir / normalized_rel_path).resolve()
-        if not str(target).startswith(str(project_root)):
-            raise HTTPException(status_code=400, detail="Invalid file path")
-        if not target.exists() or not target.is_file():
-            continue
-        try:
-            stat = target.stat()
-        except OSError:
-            continue
-        results.append(
-            ProjectFileInfo(
-                filename=target.name,
-                path=normalized_rel_path,
-                size=stat.st_size,
-                modified_time=_format_iso_time(stat.st_mtime),
-            )
-        )
-        seen_paths.add(normalized_rel_path)
-
-    return results
+    return cast(
+        list[ProjectFileInfo],
+        copaw_project_file_query_services.get_project_files_metadata(
+            project_dir,
+            rel_paths,
+            is_safe_relative_path=_is_safe_relative_path,
+            format_iso_time=_format_iso_time,
+            file_info_factory=ProjectFileInfo,
+            http_exception_factory=HTTPException,
+        ),
+    )
 
 
 def _get_project_files_metadata_for_workspace(
@@ -2971,45 +1861,35 @@ def _get_project_files_metadata_for_workspace(
     project_id: str,
     rel_paths: list[str],
 ) -> list[ProjectFileInfo]:
-    project_dir = _resolve_project_dir(workspace_dir, project_id)
-    return _get_project_files_metadata(project_dir, rel_paths)
+    return cast(
+        list[ProjectFileInfo],
+        copaw_project_file_query_services.get_project_files_metadata_for_workspace(
+            workspace_dir,
+            project_id,
+            rel_paths,
+            resolve_project_dir=_resolve_project_dir,
+            get_project_files_metadata=_get_project_files_metadata,
+        ),
+    )
 
 
 def _read_project_text_file(project_dir: Path, rel_path: str) -> str:
-    target = _resolve_project_file_path(project_dir, rel_path)
-    raw = target.read_bytes()
-    if b"\x00" in raw[:4096]:
-        raise HTTPException(
-            status_code=400, detail="Binary file preview is not supported"
-        )
-    return raw.decode("utf-8", errors="replace")
+    return copaw_project_file_query_services.read_project_text_file(
+        project_dir,
+        rel_path,
+        resolve_project_file_path=_resolve_project_file_path,
+        http_exception_factory=HTTPException,
+    )
 
 
 def _resolve_project_file_path(project_dir: Path, rel_path: str) -> Path:
-    if not _is_safe_relative_path(rel_path):
-        raise HTTPException(status_code=400, detail="Invalid file path")
-
-    target_rel_path = rel_path
-    target = (project_dir / target_rel_path).resolve()
-    project_root = project_dir.resolve()
-    if not str(target).startswith(str(project_root)):
-        raise HTTPException(status_code=400, detail="Invalid file path")
-    if not target.exists() or not target.is_file():
-        fallback_rel_path = _rewrite_original_to_data_path(target_rel_path)
-        if fallback_rel_path and _is_safe_relative_path(fallback_rel_path):
-            fallback_target = (project_dir / fallback_rel_path).resolve()
-            if (
-                str(fallback_target).startswith(str(project_root))
-                and fallback_target.exists()
-                and fallback_target.is_file()
-            ):
-                target_rel_path = fallback_rel_path
-                target = fallback_target
-    if not target.exists() or not target.is_file():
-        raise HTTPException(
-            status_code=404, detail=f"File '{rel_path}' not found"
-        )
-    return target
+    return copaw_project_file_query_services.resolve_project_file_path(
+        project_dir,
+        rel_path,
+        is_safe_relative_path=_is_safe_relative_path,
+        rewrite_original_to_data_path=_rewrite_original_to_data_path,
+        http_exception_factory=HTTPException,
+    )
 
 
 def _resolve_project_file_path_for_workspace(
@@ -3017,8 +1897,13 @@ def _resolve_project_file_path_for_workspace(
     project_id: str,
     rel_path: str,
 ) -> Path:
-    project_dir = _resolve_project_dir(workspace_dir, project_id)
-    return _resolve_project_file_path(project_dir, rel_path)
+    return copaw_project_file_query_services.resolve_project_file_path_for_workspace(
+        workspace_dir,
+        project_id,
+        rel_path,
+        resolve_project_dir=_resolve_project_dir,
+        resolve_project_file_path=_resolve_project_file_path,
+    )
 
 
 def _read_project_text_file_for_workspace(
@@ -3026,8 +1911,13 @@ def _read_project_text_file_for_workspace(
     project_id: str,
     rel_path: str,
 ) -> str:
-    project_dir = _resolve_project_dir(workspace_dir, project_id)
-    return _read_project_text_file(project_dir, rel_path)
+    return copaw_project_file_query_services.read_project_text_file_for_workspace(
+        workspace_dir,
+        project_id,
+        rel_path,
+        resolve_project_dir=_resolve_project_dir,
+        read_project_text_file=_read_project_text_file,
+    )
 
 
 def _upload_project_file(
@@ -3036,132 +1926,29 @@ def _upload_project_file(
     target_dir: str,
     relative_path: str = "",
 ) -> ProjectFileInfo:
-    def _raise(status_code: int, code: str, message: str) -> NoReturn:
-        raise HTTPException(
-            status_code=status_code,
-            detail={"code": code, "message": message},
-        )
-
-    if not upload.filename:
-        _raise(400, "PROJECT_UPLOAD_FILENAME_REQUIRED", "Uploaded file must have a filename")
-
-    safe_dir = (target_dir or "").strip().strip("/")
-    if safe_dir:
-        path = Path(safe_dir)
-        if path.is_absolute() or ".." in path.parts:
-            _raise(400, "PROJECT_TARGET_DIRECTORY_INVALID", "Invalid target directory")
-        safe_dir = path.as_posix().strip("/")
-    raw_relative_path = str(relative_path or "").strip().replace("\\", "/")
-
-    if raw_relative_path:
-        normalized_relative = Path(raw_relative_path)
-        if normalized_relative.is_absolute() or ".." in normalized_relative.parts:
-            _raise(400, "PROJECT_RELATIVE_PATH_INVALID", "Invalid relative path")
-        normalized_parts = [part for part in normalized_relative.parts if part and part != "."]
-        if not normalized_parts:
-            _raise(400, "PROJECT_RELATIVE_PATH_INVALID", "Invalid relative path")
-        filename = normalized_parts[-1].strip()
-        if not filename:
-            _raise(400, "PROJECT_FILENAME_INVALID", "Invalid filename")
-        relative_tail = Path(*normalized_parts)
-    else:
-        filename = Path(upload.filename).name.strip()
-        if not filename:
-            _raise(400, "PROJECT_FILENAME_INVALID", "Invalid filename")
-        relative_tail = Path(filename)
-
-    destination_dir = (project_dir / safe_dir).resolve() if safe_dir else project_dir.resolve()
-    project_root = project_dir.resolve()
-    if not str(destination_dir).startswith(str(project_root)):
-        _raise(400, "PROJECT_TARGET_DIRECTORY_INVALID", "Invalid target directory")
-    destination_dir.mkdir(parents=True, exist_ok=True)
-
-    destination_path = (destination_dir / relative_tail).resolve()
-    if not str(destination_path).startswith(str(project_root)):
-        _raise(400, "PROJECT_DESTINATION_PATH_INVALID", "Invalid destination path")
-    destination_path.parent.mkdir(parents=True, exist_ok=True)
-
-    content = upload.file.read()
-    destination_path.write_bytes(content)
-
-    stat = destination_path.stat()
-    rel = destination_path.relative_to(project_root).as_posix()
-    return ProjectFileInfo(
-        filename=destination_path.name,
-        path=rel,
-        size=stat.st_size,
-        modified_time=_format_iso_time(stat.st_mtime),
+    payload = copaw_project_file_ops.upload_project_file(
+        project_dir,
+        upload,
+        target_dir,
+        relative_path,
     )
+    return ProjectFileInfo.model_validate(payload)
 
 
 def _delete_project_path(
     project_dir: Path,
     rel_path: str,
 ) -> DeleteProjectPathResponse:
-    def _raise(status_code: int, code: str, message: str) -> NoReturn:
-        raise HTTPException(
-            status_code=status_code,
-            detail={"code": code, "message": message},
-        )
-
-    normalized = str(rel_path or "").strip().replace("\\", "/")
-    if not normalized or normalized in {".", "/"}:
-        _raise(400, "PROJECT_FILE_PATH_INVALID", "Invalid file path")
-    if not _is_safe_relative_path(normalized):
-        _raise(400, "PROJECT_FILE_PATH_INVALID", "Invalid file path")
-
-    project_root = project_dir.resolve()
-    target = (project_dir / normalized).resolve()
-    if not str(target).startswith(str(project_root)):
-        _raise(400, "PROJECT_FILE_PATH_INVALID", "Invalid file path")
-    if not target.exists():
-        _raise(404, "PROJECT_PATH_NOT_FOUND", f"File or directory '{normalized}' not found")
-
-    if target.is_dir():
-        shutil.rmtree(target)
-        is_directory = True
-    else:
-        target.unlink()
-        is_directory = False
-
-    return DeleteProjectPathResponse(
-        success=True,
-        path=normalized,
-        is_directory=is_directory,
-    )
+    payload = copaw_project_file_ops.delete_project_path(project_dir, rel_path)
+    return DeleteProjectPathResponse.model_validate(payload)
 
 
 def _create_project_directory(
     project_dir: Path,
     rel_path: str,
 ) -> CreateProjectDirectoryResponse:
-    def _raise(status_code: int, code: str, message: str) -> NoReturn:
-        raise HTTPException(
-            status_code=status_code,
-            detail={"code": code, "message": message},
-        )
-
-    normalized = str(rel_path or "").strip().replace("\\", "/")
-    if not normalized or normalized in {".", "/"}:
-        _raise(400, "PROJECT_DIRECTORY_PATH_INVALID", "Invalid directory path")
-    if not _is_safe_relative_path(normalized):
-        _raise(400, "PROJECT_DIRECTORY_PATH_INVALID", "Invalid directory path")
-
-    project_root = project_dir.resolve()
-    target = (project_dir / normalized).resolve()
-    if not str(target).startswith(str(project_root)):
-        _raise(400, "PROJECT_DIRECTORY_PATH_INVALID", "Invalid directory path")
-
-    if target.exists() and not target.is_dir():
-        _raise(409, "PROJECT_DIRECTORY_PATH_CONFLICT", "Target path exists as file")
-
-    existed = target.exists() and target.is_dir()
-    target.mkdir(parents=True, exist_ok=True)
-    return CreateProjectDirectoryResponse(
-        success=True,
-        path=normalized,
-        existed=existed,
-    )
+    payload = copaw_project_file_ops.create_project_directory(project_dir, rel_path)
+    return CreateProjectDirectoryResponse.model_validate(payload)
 
 
 def _move_project_path(
@@ -3171,52 +1958,13 @@ def _move_project_path(
     *,
     conflict_strategy: Literal["fail_if_exists", "overwrite"] = "fail_if_exists",
 ) -> MoveProjectPathResponse:
-    def _raise(status_code: int, code: str, message: str) -> NoReturn:
-        raise HTTPException(
-            status_code=status_code,
-            detail={"code": code, "message": message},
-        )
-
-    normalized_source = str(source_path or "").strip().replace("\\", "/")
-    normalized_target = str(target_path or "").strip().replace("\\", "/")
-    if not normalized_source or not normalized_target:
-        _raise(400, "PROJECT_MOVE_PATH_INVALID", "Invalid source or target path")
-    if not _is_safe_relative_path(normalized_source) or not _is_safe_relative_path(normalized_target):
-        _raise(400, "PROJECT_MOVE_PATH_INVALID", "Invalid source or target path")
-    if normalized_source == normalized_target:
-        _raise(400, "PROJECT_MOVE_IDENTICAL_PATH", "Source and target path are identical")
-
-    project_root = project_dir.resolve()
-    source = (project_dir / normalized_source).resolve()
-    target = (project_dir / normalized_target).resolve()
-    if not str(source).startswith(str(project_root)) or not str(target).startswith(str(project_root)):
-        _raise(400, "PROJECT_MOVE_PATH_INVALID", "Invalid source or target path")
-    if not source.exists():
-        _raise(404, "PROJECT_MOVE_SOURCE_NOT_FOUND", f"Path '{normalized_source}' not found")
-
-    is_directory = source.is_dir()
-    if is_directory:
-        source_prefix = f"{source.as_posix()}/"
-        if target.as_posix().startswith(source_prefix):
-            _raise(400, "PROJECT_MOVE_DIRECTORY_INTO_ITSELF", "Cannot move a directory into itself")
-
-    if target.exists():
-        if conflict_strategy == "fail_if_exists":
-            _raise(409, "PROJECT_MOVE_TARGET_CONFLICT", "Target path already exists")
-        if target.is_dir():
-            shutil.rmtree(target, ignore_errors=True)
-        else:
-            target.unlink(missing_ok=True)
-
-    target.parent.mkdir(parents=True, exist_ok=True)
-    shutil.move(str(source), str(target))
-
-    return MoveProjectPathResponse(
-        success=True,
-        source_path=normalized_source,
-        target_path=normalized_target,
-        is_directory=is_directory,
+    payload = copaw_project_file_ops.move_project_path(
+        project_dir,
+        source_path,
+        target_path,
+        conflict_strategy=conflict_strategy,
     )
+    return MoveProjectPathResponse.model_validate(payload)
 
 
 def _is_square_candidate_markdown(path: Path) -> bool:
@@ -4966,7 +3714,11 @@ async def create_agent_project(
     workspace_dir = _resolve_agent_workspace_dir(agentId)
 
     try:
-        return _create_project(workspace_dir, body)
+        return copaw_project_lifecycle_services.create_project_for_workspace(
+            workspace_dir=workspace_dir,
+            body=body,
+            create_project=_create_project,
+        )
     except FileExistsError as e:
         raise HTTPException(
             status_code=409, detail=f"Project already exists: {e}"
@@ -4993,9 +3745,10 @@ async def get_project_artifact_profile(
     workspace_dir = _resolve_agent_workspace_dir(agentId)
 
     try:
-        return _get_project_artifact_profile(
-            workspace_dir,
-            projectId,
+        return copaw_project_metadata_services.get_project_artifact_profile_for_workspace(
+            workspace_dir=workspace_dir,
+            project_id=projectId,
+            get_profile=_get_project_artifact_profile,
         )
     except HTTPException:
         raise
@@ -5020,10 +3773,11 @@ async def update_project_artifact_profile(
     workspace_dir = _resolve_agent_workspace_dir(agentId)
 
     try:
-        return _update_project_artifact_profile(
-            workspace_dir,
-            projectId,
-            body,
+        return copaw_project_metadata_services.update_project_artifact_profile_for_workspace(
+            workspace_dir=workspace_dir,
+            project_id=projectId,
+            body=body,
+            update_profile=_update_project_artifact_profile,
         )
     except HTTPException:
         raise
@@ -5048,10 +3802,11 @@ async def update_project_artifact_distill_mode(
     workspace_dir = _resolve_agent_workspace_dir(agentId)
 
     try:
-        return _update_project_artifact_distill_mode(
-            workspace_dir,
-            projectId,
-            body.artifact_distill_mode,
+        return copaw_project_metadata_services.update_project_artifact_distill_mode_for_workspace(
+            workspace_dir=workspace_dir,
+            project_id=projectId,
+            artifact_distill_mode=body.artifact_distill_mode,
+            update_distill_mode=_update_project_artifact_distill_mode,
         )
     except HTTPException:
         raise
@@ -5076,10 +3831,11 @@ async def update_project_workspace_chat_binding(
     workspace_dir = _resolve_agent_workspace_dir(agentId)
 
     try:
-        return _update_project_workspace_chat_binding(
-            workspace_dir,
-            projectId,
-            body.preferred_workspace_chat_id,
+        return copaw_project_metadata_services.update_project_workspace_chat_binding_for_workspace(
+            workspace_dir=workspace_dir,
+            project_id=projectId,
+            preferred_workspace_chat_id=body.preferred_workspace_chat_id,
+            update_binding=_update_project_workspace_chat_binding,
         )
     except HTTPException:
         raise
@@ -5106,10 +3862,11 @@ async def update_project_knowledge_sink(
     workspace_dir = _resolve_agent_workspace_dir(agentId)
 
     try:
-        return _update_project_auto_knowledge_sink(
-            workspace_dir,
-            projectId,
-            body.project_auto_knowledge_sink,
+        return copaw_project_metadata_services.update_project_knowledge_sink_for_workspace(
+            workspace_dir=workspace_dir,
+            project_id=projectId,
+            project_auto_knowledge_sink=body.project_auto_knowledge_sink,
+            update_knowledge_sink=_update_project_auto_knowledge_sink,
         )
     except HTTPException:
         raise
@@ -5137,10 +3894,11 @@ async def update_project_knowledge_registration(
     workspace_dir = _resolve_agent_workspace_dir(agentId)
 
     try:
-        return _update_project_agent_knowledge_registration(
-            workspace_dir,
-            projectId,
-            body.project_agent_knowledge_registered,
+        return copaw_project_metadata_services.update_project_knowledge_registration_for_workspace(
+            workspace_dir=workspace_dir,
+            project_id=projectId,
+            project_agent_knowledge_registered=body.project_agent_knowledge_registered,
+            update_knowledge_registration=_update_project_agent_knowledge_registration,
         )
     except HTTPException:
         raise
@@ -5163,9 +3921,13 @@ async def acquire_project_knowledge_watch_lease(
     workspace_dir = _resolve_agent_workspace_dir(agentId)
 
     try:
-        project_dir = _resolve_project_dir(workspace_dir, projectId)
         return AcquireProjectKnowledgeWatchLeaseResponse.model_validate(
-            acquire_project_watch_lease(project_dir)
+            copaw_project_watch_artifact_services.acquire_project_knowledge_watch_lease_for_workspace(
+                workspace_dir=workspace_dir,
+                project_id=projectId,
+                resolve_project_dir=_resolve_project_dir,
+                acquire_watch_lease=acquire_project_watch_lease,
+            )
         )
     except HTTPException:
         raise
@@ -5189,9 +3951,14 @@ async def release_project_knowledge_watch_lease(
     workspace_dir = _resolve_agent_workspace_dir(agentId)
 
     try:
-        project_dir = _resolve_project_dir(workspace_dir, projectId)
         return ReleaseProjectKnowledgeWatchLeaseResponse.model_validate(
-            release_project_watch_lease(project_dir, leaseId)
+            copaw_project_watch_artifact_services.release_project_knowledge_watch_lease_for_workspace(
+                workspace_dir=workspace_dir,
+                project_id=projectId,
+                lease_id=leaseId,
+                resolve_project_dir=_resolve_project_dir,
+                release_watch_lease=release_project_watch_lease,
+            )
         )
     except HTTPException:
         raise
@@ -5225,10 +3992,11 @@ async def auto_distill_project_skills_draft(
         raise HTTPException(status_code=404, detail=str(e)) from e
 
     try:
-        return _auto_distill_project_skills_to_draft(
-            Path(workspace.workspace_dir),
-            projectId,
+        return copaw_project_watch_artifact_services.auto_distill_project_skills_draft_for_workspace(
+            workspace_dir=Path(workspace.workspace_dir),
+            project_id=projectId,
             run_id=body.run_id,
+            auto_distill=_auto_distill_project_skills_to_draft,
         )
     except HTTPException:
         raise
@@ -5257,10 +4025,11 @@ async def confirm_project_skill_stable(
         raise HTTPException(status_code=404, detail=str(e)) from e
 
     try:
-        return _confirm_project_skill_stable(
-            Path(workspace.workspace_dir),
-            projectId,
-            artifactId,
+        return copaw_project_watch_artifact_services.confirm_project_skill_stable_for_workspace(
+            workspace_dir=Path(workspace.workspace_dir),
+            project_id=projectId,
+            artifact_id=artifactId,
+            confirm_skill_stable=_confirm_project_skill_stable,
         )
     except HTTPException:
         raise
@@ -5294,15 +4063,16 @@ async def promote_project_skill_artifact(
         raise HTTPException(status_code=404, detail=str(e)) from e
 
     try:
-        result = _promote_project_skill_to_agent(
-            Path(workspace.workspace_dir),
-            projectId,
-            artifactId,
-            body,
+        return copaw_project_watch_artifact_services.promote_project_skill_artifact_for_workspace(
+            workspace_dir=Path(workspace.workspace_dir),
+            project_id=projectId,
+            artifact_id=artifactId,
+            body=body,
+            request=request,
+            agent_id=agentId,
+            promote_project_skill=_promote_project_skill_to_agent,
+            schedule_agent_reload=schedule_agent_reload,
         )
-        if body.enable:
-            schedule_agent_reload(request, agentId)
-        return result
     except HTTPException:
         raise
     except Exception as e:
@@ -5330,7 +4100,12 @@ async def clone_agent_project(
         raise HTTPException(status_code=404, detail=str(e)) from e
 
     try:
-        return _clone_project(Path(workspace.workspace_dir), projectId, body)
+        return copaw_project_lifecycle_services.clone_project_for_workspace(
+            workspace_dir=Path(workspace.workspace_dir),
+            project_id=projectId,
+            body=body,
+            clone_project=_clone_project,
+        )
     except FileExistsError as e:
         raise HTTPException(
             status_code=409, detail=f"Target project already exists: {e}"
@@ -5361,7 +4136,11 @@ async def delete_agent_project(
         raise HTTPException(status_code=404, detail=str(e)) from e
 
     try:
-        return _delete_project(Path(workspace.workspace_dir), projectId)
+        return copaw_project_lifecycle_services.delete_project_for_workspace(
+            workspace_dir=Path(workspace.workspace_dir),
+            project_id=projectId,
+            delete_project=_delete_project,
+        )
     except HTTPException:
         raise
     except Exception as e:
@@ -5446,22 +4225,18 @@ async def upload_agent_project_file(
     workspace_dir = _resolve_agent_workspace_dir(agentId)
 
     try:
-        project_dir = _resolve_project_dir(workspace_dir, projectId)
-        uploaded = _upload_project_file(
-            project_dir,
-            file,
-            target_dir,
-            relative_path,
+        payload = copaw_project_file_services.upload_project_file_for_workspace(
+            workspace_dir=workspace_dir,
+            project_id=projectId,
+            file=file,
+            target_dir=target_dir,
+            relative_path=relative_path,
+            resolve_project_dir=_resolve_project_dir,
+            update_monitoring_state=update_project_file_monitoring_state,
+            record_realtime_paths=record_project_realtime_paths,
+            monitoring_active=PROJECT_FILE_MONITORING_ACTIVE,
         )
-        update_project_file_monitoring_state(
-            project_dir,
-            PROJECT_FILE_MONITORING_ACTIVE,
-        )
-        record_project_realtime_paths(
-            str(workspace_dir),
-            [project_dir / uploaded.path],
-        )
-        return uploaded
+        return ProjectFileInfo.model_validate(payload)
     except HTTPException:
         raise
     except Exception as e:
@@ -5485,17 +4260,16 @@ async def delete_agent_project_path(
     workspace_dir = _resolve_agent_workspace_dir(agentId)
 
     try:
-        project_dir = _resolve_project_dir(workspace_dir, projectId)
-        deleted = _delete_project_path(project_dir, targetPath)
-        update_project_file_monitoring_state(
-            project_dir,
-            PROJECT_FILE_MONITORING_ACTIVE,
+        payload = copaw_project_file_services.delete_project_path_for_workspace(
+            workspace_dir=workspace_dir,
+            project_id=projectId,
+            target_path=targetPath,
+            resolve_project_dir=_resolve_project_dir,
+            update_monitoring_state=update_project_file_monitoring_state,
+            record_realtime_paths=record_project_realtime_paths,
+            monitoring_active=PROJECT_FILE_MONITORING_ACTIVE,
         )
-        record_project_realtime_paths(
-            str(workspace_dir),
-            [project_dir / deleted.path],
-        )
-        return deleted
+        return DeleteProjectPathResponse.model_validate(payload)
     except HTTPException:
         raise
     except Exception as e:
@@ -5518,17 +4292,16 @@ async def create_agent_project_directory(
     workspace_dir = _resolve_agent_workspace_dir(agentId)
 
     try:
-        project_dir = _resolve_project_dir(workspace_dir, projectId)
-        created = _create_project_directory(project_dir, body.path)
-        update_project_file_monitoring_state(
-            project_dir,
-            PROJECT_FILE_MONITORING_ACTIVE,
+        payload = copaw_project_file_services.create_project_directory_for_workspace(
+            workspace_dir=workspace_dir,
+            project_id=projectId,
+            directory_path=body.path,
+            resolve_project_dir=_resolve_project_dir,
+            update_monitoring_state=update_project_file_monitoring_state,
+            record_realtime_paths=record_project_realtime_paths,
+            monitoring_active=PROJECT_FILE_MONITORING_ACTIVE,
         )
-        record_project_realtime_paths(
-            str(workspace_dir),
-            [project_dir / created.path],
-        )
-        return created
+        return CreateProjectDirectoryResponse.model_validate(payload)
     except HTTPException:
         raise
     except Exception as e:
@@ -5551,22 +4324,18 @@ async def move_agent_project_path(
     workspace_dir = _resolve_agent_workspace_dir(agentId)
 
     try:
-        project_dir = _resolve_project_dir(workspace_dir, projectId)
-        moved = _move_project_path(
-            project_dir,
-            body.source_path,
-            body.target_path,
+        payload = copaw_project_file_services.move_project_path_for_workspace(
+            workspace_dir=workspace_dir,
+            project_id=projectId,
+            source_path=body.source_path,
+            target_path=body.target_path,
             conflict_strategy=body.conflict_strategy,
+            resolve_project_dir=_resolve_project_dir,
+            update_monitoring_state=update_project_file_monitoring_state,
+            record_realtime_paths=record_project_realtime_paths,
+            monitoring_active=PROJECT_FILE_MONITORING_ACTIVE,
         )
-        update_project_file_monitoring_state(
-            project_dir,
-            PROJECT_FILE_MONITORING_ACTIVE,
-        )
-        record_project_realtime_paths(
-            str(workspace_dir),
-            [project_dir / moved.source_path, project_dir / moved.target_path],
-        )
-        return moved
+        return MoveProjectPathResponse.model_validate(payload)
     except HTTPException:
         raise
     except Exception as e:
