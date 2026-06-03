@@ -216,7 +216,6 @@ interface AnywhereChatProps {
     ok: boolean;
     error?: string;
   }) => void;
-  projectContext?: string;
 }
 
 type StreamResponseData = {
@@ -355,10 +354,6 @@ function isPipelineDesignBootstrapText(text: string): boolean {
     text.includes("模板设计模式") ||
     text.includes("I want to create a new Pipeline")
   );
-}
-
-function buildProjectContextBlock(context: string): string {
-  return `<copaw:project-context>\n${context}\n</copaw:project-context>`;
 }
 
 function buildPipelineOpportunityInlineHint(): string {
@@ -870,7 +865,6 @@ export default function AnywhereChat({
   onAssistantTurnCompleted,
   autoAttachRequest,
   onAutoAttachHandled,
-  projectContext,
 }: AnywhereChatProps) {
   const isComposingRef = useRef(false);
   const { t } = useTranslation();
@@ -902,8 +896,6 @@ export default function AnywhereChat({
   const [tailUserActionHost, setTailUserActionHost] = useState<HTMLElement | null>(null);
   const [tailUserActionMessageId, setTailUserActionMessageId] = useState("");
   const chatRef = useRef<IAgentScopeRuntimeWebUIRef>(null);
-  const projectContextRef = useRef<string | undefined>(projectContext);
-  const injectedProjectContextSessionsRef = useRef<Set<string>>(new Set());
   const whisperSpeechRef = useRef<WhisperSpeechButtonRef>(null);
   const approvalKeyRef = useRef("");
   const historyIndexRef = useRef<number>(-1);
@@ -2127,10 +2119,6 @@ export default function AnywhereChat({
   }, [loadChatHistory, sessionId]);
 
   useEffect(() => {
-    projectContextRef.current = projectContext;
-  }, [projectContext]);
-
-  useEffect(() => {
     if (!sessionId) {
       return;
     }
@@ -2683,13 +2671,8 @@ export default function AnywhereChat({
       const shouldInlinePipelineGuide =
         !bootstrapText && shouldSuggestPipelineOpportunity(latestUserText);
 
-      const shouldInjectProjectContext =
-        !isAutoContinueRequest &&
-        !!projectContextRef.current &&
-        !injectedProjectContextSessionsRef.current.has(sessionId);
-      if (shouldInjectProjectContext) {
-        injectedProjectContextSessionsRef.current.add(sessionId);
-      }
+      const shouldInlinePipelineGuide =
+        !bootstrapText && shouldSuggestPipelineOpportunity(latestUserText);
 
       if (shouldInlinePipelineGuide) {
         const now = Date.now();
@@ -2707,14 +2690,6 @@ export default function AnywhereChat({
               {
                 ...lastMessage,
                 content: [
-                  ...(shouldInjectProjectContext
-                    ? [
-                        {
-                          type: "text",
-                          text: buildProjectContextBlock(projectContextRef.current!),
-                        },
-                      ]
-                    : []),
                   ...lastMessage.content.map((part) =>
                     part && typeof part === "object"
                       ? normalizeContentUrls(part)

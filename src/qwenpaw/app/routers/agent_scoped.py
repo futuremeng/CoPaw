@@ -59,6 +59,18 @@ class AgentContextMiddleware(BaseHTTPMiddleware):
                 root_session_id[:12],
             )
 
+        # Extract X-Project-Id header for project-scoped context
+        project_id = request.headers.get("X-Project-Id")
+        if project_id:
+            request.state.project_id = project_id
+            if not hasattr(request, "request_context"):
+                request.request_context = {}
+            request.request_context["project_id"] = project_id
+            logger.debug(
+                "AgentContextMiddleware: project_id=%s from X-Project-Id header",
+                project_id,
+            )
+
         response = await call_next(request)
         return response
 

@@ -30,6 +30,7 @@ from .prompt import (
     build_system_prompt_from_working_dir,
     get_active_model_supports_multimodal,
 )
+from ..app.project_context import build_project_system_prompt_suffix
 from .skill_system import (
     apply_skill_config_env_overrides,
     ensure_skills_initialized,
@@ -441,6 +442,10 @@ class QwenPawAgent(CodingModeMixin, ToolGuardMixin, ReActAgent):
     def _build_sys_prompt(self) -> str:
         """Build system prompt from working dir files and env context.
 
+        Also merges project-level context from ``.agent/PROJECT.md``
+        and ``.agent/AGENTS.md`` when a ``project_id`` is present in
+        the request context.
+
         Returns:
             Complete system prompt string
         """
@@ -476,50 +481,38 @@ class QwenPawAgent(CodingModeMixin, ToolGuardMixin, ReActAgent):
         if self._env_context is not None:
             sys_prompt = sys_prompt + "\n\n" + self._env_context
 
+        # Merge project-level context when a project_id is active
+        project_id = (
+            self._request_context.get("project_id")
+            if self._request_context
+            else None
+        )
+        if project_id and self._workspace_dir:
+            try:
+                project_suffix = build_project_system_prompt_suffix(
+                    workspace_dir=Path(self._workspace_dir),
+                    project_id=project_id,
+                )
+                if project_suffix:
+                    sys_prompt = (
+                        f"{sys_prompt}\n\n"
+                        f"=== PROJECT CONTEXT ===\n"
+                        f"{project_suffix}"
+                    )
+                    logger.info(
+                        "Merged project context for project_id=%s "
+                        "into system prompt (%d chars)",
+                        project_id,
+                        len(project_suffix),
+                    )
+            except Exception as exc:
+                logger.warning(
+                    "Failed to merge project context for project_id=%s: %s",
+                    project_id,
+                    exc,
+                )
+
         return sys_prompt
-
-    def _register_hooks(self) -> None:
-        """Register pre-reasoning and pre-acting hooks."""
-        # Bootstrap hook - checks BOOTSTRAP.md on first interaction
-        # Use workspace_dir if available, else fallback to WORKING_DIR
-        working_dir = (
-            self._workspace_dir if self._workspace_dir else WORKING_DIR
-        )
-        bootstrap_hook = BootstrapHook(
-            working_dir=working_dir,
-            language=self._language,
-        )
-        self.register_instance_hook(
-            hook_type="pre_reasoning",
-            hook_name="bootstrap_hook",
-            hook=bootstrap_hook.__call__,
-        )
-        logger.debug("Registered bootstrap hook")
-
-        # Context manager hooks - delegate compaction / tool-result pruning
-        # to the context manager's lifecycle methods
-        if self.context_manager is not None:
-            self.register_instance_hook(
-                hook_type="pre_reply",
-                hook_name="context_pre_reply",
-                hook=self.context_manager.pre_reply,
-            )
-            self.register_instance_hook(
-                hook_type="pre_reasoning",
-                hook_name="context_pre_reasoning",
-                hook=self.context_manager.pre_reasoning,
-            )
-            self.register_instance_hook(
-                hook_type="post_acting",
-                hook_name="context_post_acting",
-                hook=self.context_manager.post_acting,
-            )
-            self.register_instance_hook(
-                hook_type="post_reply",
-                hook_name="context_post_reply",
-                hook=self.context_manager.post_reply,
-            )
-            logger.debug("Registered context manager hooks")
 
     def rebuild_sys_prompt(self) -> None:
         """Rebuild and replace the system prompt.

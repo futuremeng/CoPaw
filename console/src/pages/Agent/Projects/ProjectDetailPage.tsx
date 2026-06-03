@@ -21,6 +21,7 @@ import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { chatApi } from "../../../api/modules/chat";
 import { knowledgeApi } from "../../../api/modules/knowledge";
+import { setProjectIdHeader, clearProjectIdHeader } from "../../../api/authHeaders";
 import ProjectAutomationPanel from "./components/ProjectAutomationPanel";
 import ProjectChatPanel, {
   type ProjectChatAutoAttachRequest,
@@ -911,6 +912,19 @@ export default function ProjectDetailPage() {
       cancelled = true;
     };
   }, [currentAgent?.id, projectWorkspaceFacade, selectedProject?.id]);
+
+  // Sync project ID header for backend project context injection
+  useEffect(() => {
+    const projectId = selectedProject?.id || "";
+    if (projectId) {
+      setProjectIdHeader(projectId);
+    } else {
+      clearProjectIdHeader();
+    }
+    return () => {
+      clearProjectIdHeader();
+    };
+  }, [selectedProject?.id]);
 
   const fetchRuntimeSignalDetails = useCallback(async () => {
     if (!selectedProject?.id || !projectKnowledgeState.activeKnowledgeTasks.length) {
