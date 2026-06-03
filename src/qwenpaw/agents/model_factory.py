@@ -13,7 +13,7 @@ Example:
 import base64
 import logging
 import os
-from typing import List, Sequence, Tuple, Type, Any, Union, Optional, cast
+from typing import List, Sequence, Tuple, Type, Any, Union, Optional
 from urllib.parse import unquote, urlparse
 
 from agentscope.formatter import FormatterBase, OpenAIChatFormatter
@@ -36,7 +36,6 @@ except ImportError:  # pragma: no cover - compatibility fallback
 from .utils.message_request_normalizer import (
     normalize_messages_for_model_request,
 )
-from .utils.tool_message_utils import _sanitize_tool_messages
 from ..exceptions import ProviderError, ModelFormatterError
 from ..providers import ProviderManager
 from ..providers.retry_chat_model import (
@@ -373,8 +372,9 @@ def _format_anthropic_messages(  # pylint: disable=too-many-branches
     blocks and media blocks nested inside ``tool_result`` outputs.
 
     A ``seen_media`` set tracks image/video source paths already encoded
-    in top-level blocks. When the same media appears inside a
-    ``tool_result`` output, it is replaced with a lightweight text
+    in top-level blocks.  When the same media appears inside a
+    ``tool_result`` output (e.g. ``view_image`` called on an
+    already-uploaded photo), it is replaced with a lightweight text
     placeholder to avoid duplicating large base64 payloads.
     """
     messages: list[dict] = []
@@ -655,6 +655,13 @@ def _fix_image_mime_types(messages: list[dict]) -> None:
 
 _MEDIA_BLOCK_TYPES = ("image", "audio", "video")
 
+# Block types that the upstream agentscope OpenAI / Gemini formatters
+# silently drop. We track them here so we can predict which assistant
+# messages will be dropped before alignment in FileBlockSupportFormatter.
+# Keep this in sync with the `else: logger.warning("Unsupported block
+# type ...")` branch in agentscope's _openai_formatter.
+_FORMATTER_SKIPPED_TYPES = frozenset({"thinking", "file"})
+
 
 def _fixup_media_list(items: list) -> None:
     """Normalize media blocks in a list in-place.
@@ -662,6 +669,10 @@ def _fixup_media_list(items: list) -> None:
     - Strips ``file://`` prefixes from source URLs.
     - Replaces media blocks whose local file no longer exists with
       a text placeholder so the downstream formatter won't throw.
+    - Converts ``file`` blocks to text placeholders, since neither the
+      OpenAI nor the Anthropic top-level formatters accept ``file``
+      blocks (the upstream OpenAI formatter silently drops them, which
+      can drop the whole message if nothing else survives).
     - Recurses into ``tool_result`` output lists.
     """
     for i, block in enumerate(items):
@@ -694,6 +705,30 @@ def _fixup_media_list(items: list) -> None:
                         f" — file deleted from disk]"
                     ),
                 }
+        elif btype == "file":
+            source = block.get("source") or {}
+            file_url = (
+                source.get("url", "") if isinstance(source, dict) else ""
+            )
+            readable_path = (
+                _file_url_to_path(file_url)
+                if isinstance(file_url, str) and file_url.startswith("file://")
+                else file_url
+            )
+            filename = (
+                block.get("filename")
+                or block.get("name")
+                or (readable_path.rsplit("/", 1)[-1] if readable_path else "")
+                or "file"
+            )
+            items[i] = {
+                "type": "text",
+                "text": (
+                    f"File '{filename}' is available at: {readable_path}"
+                    if readable_path
+                    else f"File '{filename}'"
+                ),
+            }
         elif btype == "tool_result":
             output = block.get("output")
             if isinstance(output, list):
@@ -730,11 +765,19 @@ def _create_file_block_support_formatter(
             ``extra_content`` on tool_use blocks (e.g. Gemini
             thought_signature) is carried through to the API request.
             """
-            msgs = _sanitize_tool_messages(msgs)
+            (
+                normalized_msgs,
+                is_anthropic_formatter,
+                _is_gemini_formatter,
+            ) = _normalize_messages_for_formatter(
+                msgs,
+                base_formatter_class,
+                self,
+            )
 
             reasoning_contents = {}
             extra_contents: dict[str, Any] = {}
-            for msg in msgs:
+            for msg in normalized_msgs:
                 if msg.role != "assistant":
                     continue
                 for block in msg.get_content_blocks():
@@ -753,27 +796,7 @@ def _create_file_block_support_formatter(
             # Convert file:// URLs to paths for all media blocks,
             # and replace deleted local files with text placeholders.
             # TODO: remove this after AgentScope updated
-            for msg in msgs:
-                for block in msg.get_content_blocks():
-                    if block.get("type") in ("image", "audio", "video"):
-                        source = block.get("source")
-                        if (
-                            isinstance(source, dict)
-                            and source.get("type") == "url"
-                            and isinstance(source.get("url"), str)
-                            and source["url"].startswith("file://")
-                        ):
-                            source["url"] = _file_url_to_path(source["url"])
-
-            msgs, is_anthropic_formatter, _is_gemini_formatter = (
-                _normalize_messages_for_formatter(
-                    msgs,
-                    base_formatter_class,
-                    self,
-                )
-            )
-
-            for msg in msgs:
+            for msg in normalized_msgs:
                 if isinstance(msg.content, list):
                     _fixup_media_list(msg.content)
 
@@ -781,7 +804,7 @@ def _create_file_block_support_formatter(
             # media blocks (top-level & inside tool_result output).
             # TODO: remove after agentscope anthropic formatter updated
             if is_anthropic_formatter:
-                messages = _format_anthropic_messages(msgs)
+                messages = _format_anthropic_messages(normalized_msgs)
             else:
                 # Gemini handles video natively; for others
                 # (OpenAI) we inject it via placeholders.
@@ -789,17 +812,17 @@ def _create_file_block_support_formatter(
                 video_subs: dict[str, dict] = {}
                 if _needs_video:
                     video_subs = _substitute_video_blocks(
-                        msgs,
+                        normalized_msgs,
                     )
 
-                messages = await cast(Any, super())._format(msgs)
+                messages = await super()._format(normalized_msgs)
 
                 if video_subs:
                     _replace_video_placeholders(
                         messages,
                         video_subs,
                     )
-                    _restore_video_blocks(msgs, video_subs)
+                    _restore_video_blocks(normalized_msgs, video_subs)
 
                 if _needs_video and getattr(
                     self,
@@ -807,7 +830,7 @@ def _create_file_block_support_formatter(
                     False,
                 ):
                     messages = _promote_tool_result_videos(
-                        msgs,
+                        normalized_msgs,
                         messages,
                     )
 
@@ -837,13 +860,22 @@ def _create_file_block_support_formatter(
                 # thinking-only messages (no content/tool_calls), so we
                 # predict survivors and collect reasoning only for those.
                 aligned_reasoning = []
-                for m in (msg for msg in msgs if msg.role == "assistant"):
-                    is_thinking_only = (
+                for m in (
+                    msg for msg in normalized_msgs if msg.role == "assistant"
+                ):
+                    # A message is dropped by the base formatter when every
+                    # block is one the formatter skips (currently "thinking"
+                    # and "file" — see _FORMATTER_SKIPPED_TYPES). Predicting
+                    # this lets us align reasoning_content correctly.
+                    is_dropped_by_formatter = (
                         isinstance(m.content, list)
                         and m.content
-                        and all(b.get("type") == "thinking" for b in m.content)
+                        and all(
+                            b.get("type") in _FORMATTER_SKIPPED_TYPES
+                            for b in m.content
+                        )
                     )
-                    if not is_thinking_only:
+                    if not is_dropped_by_formatter:
                         aligned_reasoning.append(
                             reasoning_contents.get(id(m)),
                         )
@@ -853,10 +885,21 @@ def _create_file_block_support_formatter(
                 ]
 
                 if len(aligned_reasoning) != len(out_assistant):
+                    # A mismatch means a message was dropped by the base
+                    # formatter that our predictor did not anticipate
+                    # (likely a new block type that should be added to
+                    # _FORMATTER_SKIPPED_TYPES). Index-based alignment past
+                    # the drop point would attribute every subsequent
+                    # message's reasoning to the wrong response — actively
+                    # misleading. Skip injection for this turn only and
+                    # warn loudly so the gap can be closed at the source.
                     logger.warning(
                         "Assistant message count mismatch after formatting "
                         "(%d expected survivors, %d actual). "
-                        "Skipping reasoning_content injection.",
+                        "Skipping reasoning_content injection for this turn. "
+                        "A block type is likely being dropped by the base "
+                        "formatter without being listed in "
+                        "_FORMATTER_SKIPPED_TYPES — please investigate.",
                         len(aligned_reasoning),
                         len(out_assistant),
                     )
@@ -869,8 +912,8 @@ def _create_file_block_support_formatter(
 
         @staticmethod
         def convert_tool_result_to_string(
-            output: Any,
-        ) -> tuple[str, Sequence[Tuple[str, Any]]]:
+            output: Union[str, List[dict]],
+        ) -> tuple[str, Sequence[Tuple[str, dict]]]:
             """Extend parent class to support file blocks.
 
             Uses try-first strategy for compatibility with parent class.
@@ -897,7 +940,7 @@ def _create_file_block_support_formatter(
 
                 # Handle output containing file blocks
                 textual_output = []
-                multimodal_data: list[Tuple[str, Any]] = []
+                multimodal_data = []
 
                 for block in output:
                     if not isinstance(block, dict) or "type" not in block:
@@ -926,7 +969,7 @@ def _create_file_block_support_formatter(
                             text,
                             data,
                         ) = base_formatter_class.convert_tool_result_to_string(
-                            cast(Any, [block]),
+                            [block],
                         )
                         textual_output.append(text)
                         multimodal_data.extend(data)
@@ -990,9 +1033,7 @@ def create_model_and_formatter(
             pass
 
     # Try to get agent-specific model first
-    agent_config = None
     model_slot = None
-    provider = None
     retry_config = None
     rate_limit_config = None
     if agent_id:
@@ -1040,50 +1081,12 @@ def create_model_and_formatter(
                 ),
             )
         provider_id = global_model.provider_id
-        provider = ProviderManager.get_instance().get_provider(provider_id)
 
     # Create the formatter based on the real model class
     formatter = _create_formatter_instance(model.__class__)
 
-    runtime_status_recorder = None
-    if agent_config is not None:
-        try:
-            from ..agents.utils import get_token_counter
-            from ..app.runner.runtime_status_store import (
-                RuntimeStatusRecorder,
-                resolve_context_window_tokens,
-                resolve_reserved_response_tokens,
-            )
-
-            token_counter = get_token_counter(agent_config)
-            reserved_response_tokens = resolve_reserved_response_tokens(provider)
-            context_window_tokens = resolve_context_window_tokens(
-                provider,
-                agent_config.running,
-                reserved_response_tokens,
-            )
-            runtime_status_recorder = RuntimeStatusRecorder(
-                token_counter=token_counter,
-                context_window_tokens=context_window_tokens,
-                reserved_response_tokens=reserved_response_tokens,
-                provider_id=provider_id,
-                model_id=getattr(model, "model_name", None),
-                profile_label=(
-                    "Local runtime" if getattr(provider, "is_local", False) else "Cloud/runtime"
-                ),
-            )
-        except Exception:
-            logger.debug(
-                "Failed to initialize runtime status recorder",
-                exc_info=True,
-            )
-
     # Wrap with retry logic for transient LLM API errors
-    wrapped_model = TokenRecordingModelWrapper(
-        provider_id,
-        model,
-        runtime_status_recorder=runtime_status_recorder,
-    )
+    wrapped_model = TokenRecordingModelWrapper(provider_id, model)
     wrapped_model = RetryChatModel(
         wrapped_model,
         retry_config=retry_config,
@@ -1112,13 +1115,10 @@ def _create_formatter_instance(
         base_formatter_class,
     )
     kwargs: dict[str, Any] = {}
-    promote_tool_result_formatter_bases: tuple[type, ...] = (
-        OpenAIChatFormatter,
-    )
-    if GeminiChatFormatter is not None:
-        promote_tool_result_formatter_bases += (GeminiChatFormatter,)
-
-    if issubclass(base_formatter_class, promote_tool_result_formatter_bases):
+    if issubclass(
+        base_formatter_class,
+        (OpenAIChatFormatter, GeminiChatFormatter),
+    ):
         kwargs["promote_tool_result_images"] = True
     return formatter_class(**kwargs)
 

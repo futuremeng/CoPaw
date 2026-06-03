@@ -17,15 +17,8 @@ from starlette.responses import StreamingResponse
 from agentscope_runtime.engine.schemas.agent_schemas import AgentRequest
 from ...utils.logging import LOG_FILE_PATH
 from ..agent_context import get_agent_for_request
-from ..runner.models import ChatRuntimeStatus
-from ..runner.runtime_status_store import (
-    build_empty_runtime_status,
-    load_persisted_runtime_status,
-    resolve_context_window_tokens,
-    resolve_reserved_response_tokens,
-)
-from .providers import get_provider_manager
 from ..runner.title_generator import generate_and_update_title
+from ..utils import check_upload_size
 
 
 logger = logging.getLogger(__name__)
@@ -38,10 +31,6 @@ class MarkInboxReadRequest(BaseModel):
     all: bool = False
 
 
-MAX_UPLOAD_BYTES = 10 * 1024 * 1024
-AUTO_CONTINUE_PROMPT = (
-    "请继续上一条回答，不要重复已输出内容，从中断处接着写，直到完整结束。"
-)
 MAX_DEBUG_LOG_LINES = 1000
 
 
@@ -52,7 +41,15 @@ def _safe_filename(name: str) -> str:
 
 
 def _extract_placeholder_name(content_parts: list) -> tuple[str, str]:
-    """Return ``(placeholder_name, first_user_text)`` for a new chat."""
+    """Return ``(placeholder_name, first_user_text)`` for a new chat.
+
+    The placeholder name shows up in the session drawer immediately while a
+    background task asks the model for a real title. Content shapes match
+    ``channels/base.py::_extract_chat_name``: dict blocks like
+    ``{"type": "text", "text": "..."}``, raw strings, and objects with a
+    ``.text`` attribute. Anything else (audio/image/file blocks) is treated
+    as media and gets the generic "Media Message" placeholder.
+    """
     if not content_parts:
         return "New Chat", ""
     content = content_parts[0]
@@ -72,11 +69,7 @@ def _extract_placeholder_name(content_parts: list) -> tuple[str, str]:
     return first_text[:10], first_text
 
 
-def _extract_session_and_payload(
-    request_data: Union[AgentRequest, dict],
-    *,
-    auto_continue_enabled: bool = True,
-):
+def _extract_session_and_payload(request_data: Union[AgentRequest, dict]):
     """Extract run_key (ChatSpec.id), session_id, and native payload.
 
     run_key must be ChatSpec.id (chat_id) so it matches list_chats/get_chat.
@@ -92,11 +85,6 @@ def _extract_session_and_payload(
         channel_id = request_data.get("channel", "console")
         sender_id = request_data.get("user_id", "default")
         session_id = request_data.get("session_id", "default")
-        continue_mode = request_data.get("continue_mode") is True
-        auto_continue = request_data.get("auto_continue") is True
-        if continue_mode and not auto_continue_enabled:
-            continue_mode = False
-            auto_continue = False
         input_data = request_data.get("input", [])
         content_parts = []
         for content_part in input_data:
@@ -104,11 +92,6 @@ def _extract_session_and_payload(
                 content_parts.extend(list(content_part.content or []))
             elif isinstance(content_part, dict) and "content" in content_part:
                 content_parts.extend(content_part["content"] or [])
-        if continue_mode and not content_parts:
-            content_parts = [{"type": "text", "text": AUTO_CONTINUE_PROMPT}]
-    if isinstance(request_data, AgentRequest):
-        continue_mode = False
-        auto_continue = False
 
     native_payload = {
         "channel_id": channel_id,
@@ -117,8 +100,6 @@ def _extract_session_and_payload(
         "meta": {
             "session_id": session_id,
             "user_id": sender_id,
-            "continue_mode": continue_mode,
-            "auto_continue": auto_continue,
         },
     }
     return native_payload
@@ -173,12 +154,7 @@ async def post_console_chat(
             detail="Channel Console not found",
         )
     try:
-        native_payload = _extract_session_and_payload(
-            request_data,
-            auto_continue_enabled=bool(
-                getattr(workspace.config.running, "auto_continue_enabled", True),
-            ),
-        )
+        native_payload = _extract_session_and_payload(request_data)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
     session_id = console_channel.resolve_session_id(
@@ -297,57 +273,6 @@ async def post_console_chat_stop(
     return {"stopped": stopped}
 
 
-@router.get(
-    "/chats/{chat_id}/runtime-status",
-    response_model=ChatRuntimeStatus,
-    summary="Get precise runtime context status for a chat",
-)
-async def get_console_chat_runtime_status(
-    chat_id: str,
-    request: Request,
-) -> ChatRuntimeStatus:
-    """Return the last runtime-pushed context snapshot for a chat."""
-    workspace = await get_agent_for_request(request)
-    chat_spec = await workspace.chat_manager.get_chat(chat_id)
-    if not chat_spec:
-        raise HTTPException(status_code=404, detail=f"Chat not found: {chat_id}")
-
-    provider_manager = get_provider_manager(request)
-    snapshot = await load_persisted_runtime_status(
-        workspace.runner.session,
-        session_id=chat_spec.session_id,
-        user_id=chat_spec.user_id,
-        chat_id=chat_id,
-    )
-    if snapshot is not None:
-        return snapshot
-
-    agent_config = workspace.config
-    model_slot = agent_config.active_model or provider_manager.get_active_model()
-    provider = None
-    if model_slot and model_slot.provider_id:
-        provider = provider_manager.get_provider(model_slot.provider_id)
-    reserved_response_tokens = resolve_reserved_response_tokens(provider)
-    context_window_tokens = resolve_context_window_tokens(
-        provider,
-        agent_config.running,
-        reserved_response_tokens,
-    )
-    return build_empty_runtime_status(
-        agent_id=workspace.agent_id,
-        session_id=chat_spec.session_id,
-        user_id=chat_spec.user_id,
-        chat_id=chat_id,
-        context_window_tokens=context_window_tokens,
-        reserved_response_tokens=reserved_response_tokens,
-        model_id=getattr(model_slot, "model", None),
-        provider_id=getattr(model_slot, "provider_id", None),
-        profile_label=(
-            "Local runtime" if getattr(provider, "is_local", False) else "Cloud/runtime"
-        ),
-    )
-
-
 @router.post("/upload", response_model=dict, summary="Upload file for chat")
 async def post_console_upload(
     request: Request,
@@ -365,12 +290,7 @@ async def post_console_upload(
     media_dir = console_channel.media_dir
     media_dir.mkdir(parents=True, exist_ok=True)
     data = await file.read()
-    if len(data) > MAX_UPLOAD_BYTES:
-        raise HTTPException(
-            status_code=400,
-            detail="File too large (max "
-            f"{MAX_UPLOAD_BYTES // (1024 * 1024)} MB)",
-        )
+    check_upload_size(data)
     safe_name = _safe_filename(file.filename or "file")
     stored_name = f"{uuid.uuid4().hex}_{safe_name}"
 

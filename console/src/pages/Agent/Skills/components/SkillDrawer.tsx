@@ -285,8 +285,7 @@ export function SkillDrawer({
       title={editingSkill ? t("skills.viewSkill") : t("skills.createSkill")}
       open={open}
       onClose={onClose}
-      destroyOnClose
-      forceRender
+      destroyOnHidden
       footer={drawerFooter}
     >
       <Form form={form} layout="vertical" onFinish={handleSubmit}>

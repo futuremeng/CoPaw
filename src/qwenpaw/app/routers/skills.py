@@ -72,7 +72,7 @@ from ...config.config import (
     SkillsMarketInstallConfig,
 )
 from ...security.skill_scanner import SkillScanError
-from ..utils import schedule_agent_reload
+from ..utils import check_upload_size, schedule_agent_reload
 
 logger = logging.getLogger(__name__)
 
@@ -347,7 +347,6 @@ _ALLOWED_ZIP_TYPES = {
     "application/x-zip-compressed",
     "application/octet-stream",
 }
-_MAX_UPLOAD_BYTES = 100 * 1024 * 1024  # 100 MB
 
 
 def _load_market_payload_from_path(path: Path) -> SkillsMarketPayload:
@@ -1093,14 +1092,7 @@ async def _read_validated_zip_upload(file: UploadFile) -> bytes:
         )
 
     data = await file.read()
-    if len(data) > _MAX_UPLOAD_BYTES:
-        raise HTTPException(
-            status_code=400,
-            detail=(
-                f"File too large ({len(data) // (1024 * 1024)} MB). "
-                f"Maximum is {_MAX_UPLOAD_BYTES // (1024 * 1024)} MB."
-            ),
-        )
+    check_upload_size(data)
     return data
 
 

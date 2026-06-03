@@ -50,7 +50,7 @@ interface ApprovalMessageData {
 
 import WhisperSpeechButton, {
   WhisperSpeechButtonRef,
-} from "./components/WhisperSpeechButton/index";
+} from "./components/WhisperSpeechButton";
 
 import {
   toDisplayUrl,
@@ -61,15 +61,13 @@ import {
   extractUserMessageText,
   extractTextFromMessage,
   setTextareaValue,
-  sanitizeRuntimeStreamPayload,
   formatMessageTime,
   type CopyableResponse,
   type RuntimeLoadingBridgeApi,
 } from "./utils";
 import { openExternalLink } from "../../utils/openExternalLink";
 import { getLastEditorCopy } from "../Coding/lastEditorCopy";
-
-const CHAT_ATTACHMENT_MAX_MB = 10;
+import { useUploadLimitStore } from "../../stores/uploadLimitStore";
 
 interface SessionInfo {
   session_id?: string;
@@ -140,10 +138,6 @@ function renderSuggestionLabel(command: string, description: string) {
   );
 }
 
-function isComposingKeyboardEvent(e: KeyboardEvent): boolean {
-  return !!e.isComposing;
-}
-
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
@@ -182,7 +176,7 @@ function useIMEComposition(isChatActive: () => boolean) {
       if (target?.tagName === "TEXTAREA" && e.key === "Enter" && !e.shiftKey) {
         // e.isComposing is the standard flag; isComposingRef covers the
         // post-compositionend grace period needed by Safari.
-        if (isComposingRef.current || isComposingKeyboardEvent(e)) {
+        if (isComposingRef.current || (e as any).isComposing) {
           e.stopPropagation();
           e.stopImmediatePropagation();
           e.preventDefault();
@@ -362,8 +356,7 @@ function useMessageHistoryNavigation(
     text: string;
   }
 
-  const findMessageInDirection = useCallback(
-    (
+  const findMessageInDirection = (
     messages: string[],
     startIndex: number,
     direction: 1 | -1,
@@ -386,9 +379,7 @@ function useMessageHistoryNavigation(
     }
 
     return null;
-  },
-    [],
-  );
+  };
 
   const isSuggestionPopupOpen = (textarea: HTMLTextAreaElement): boolean =>
     textarea.value.startsWith("/");
@@ -404,7 +395,7 @@ function useMessageHistoryNavigation(
         target?.closest('[class*="sender"]') !== null;
 
       if (!isChatSender) return;
-      if (isComposingRef.current || isComposingKeyboardEvent(e)) return;
+      if (isComposingRef.current || (e as any).isComposing) return;
       if (e.ctrlKey || e.metaKey || e.altKey) return;
 
       const textarea = target as HTMLTextAreaElement;
@@ -480,19 +471,21 @@ function useMessageHistoryNavigation(
       document.removeEventListener("keydown", handleKeyDown, true);
       document.removeEventListener("focusin", handleFocus, true);
     };
-  }, [
-    isChatActive,
-    isComposingRef,
-    getUserMessagesWithText,
-    findMessageInDirection,
-  ]);
+  }, [isChatActive, isComposingRef, getUserMessagesWithText]);
 }
 
 // ---------------------------------------------------------------------------
 // Chat input draft persistence
 // ---------------------------------------------------------------------------
 
-const DRAFT_STORAGE_KEY = "qwenpaw_chat_input_draft";
+const DRAFT_STORAGE_KEY_PREFIX = "qwenpaw_chat_input_draft";
+let draftSuppressed = false;
+
+function getDraftStorageKey(agentId?: string): string {
+  return agentId
+    ? `${DRAFT_STORAGE_KEY_PREFIX}_${agentId}`
+    : DRAFT_STORAGE_KEY_PREFIX;
+}
 
 interface DraftState {
   value: string;
@@ -500,7 +493,9 @@ interface DraftState {
   selectionEnd: number;
 }
 
-function useChatInputDraft(isChatActive: () => boolean) {
+function useChatInputDraft(isChatActive: () => boolean, agentId?: string) {
+  const storageKey = getDraftStorageKey(agentId);
+
   useEffect(() => {
     if (!isChatActive()) return;
 
@@ -518,9 +513,9 @@ function useChatInputDraft(isChatActive: () => boolean) {
         selectionEnd: textarea.selectionEnd,
       };
       if (draft.value) {
-        localStorage.setItem(DRAFT_STORAGE_KEY, JSON.stringify(draft));
+        localStorage.setItem(storageKey, JSON.stringify(draft));
       } else {
-        localStorage.removeItem(DRAFT_STORAGE_KEY);
+        localStorage.removeItem(storageKey);
       }
     };
 
@@ -543,7 +538,7 @@ function useChatInputDraft(isChatActive: () => boolean) {
       const textarea = getTextarea();
       if (textarea) {
         clearInterval(restoreInterval);
-        const raw = localStorage.getItem(DRAFT_STORAGE_KEY);
+        const raw = localStorage.getItem(storageKey);
         if (raw) {
           try {
             const draft: DraftState = JSON.parse(raw);
@@ -570,13 +565,16 @@ function useChatInputDraft(isChatActive: () => boolean) {
       if (saveTimer) clearTimeout(saveTimer);
       document.removeEventListener("input", handleInput, true);
 
-      // Final save on unmount
-      const textarea = getTextarea();
-      if (textarea) {
-        saveDraft(textarea);
+      // Final save on unmount (skip if message was just sent)
+      if (!draftSuppressed) {
+        const textarea = getTextarea();
+        if (textarea) {
+          saveDraft(textarea);
+        }
       }
+      draftSuppressed = false;
     };
-  }, [isChatActive]);
+  }, [isChatActive, storageKey]);
 }
 
 /**
@@ -703,7 +701,7 @@ export default function ChatPage() {
   useEffect(() => {
     let cancelled = false;
     planApi
-      .getPlanConfig(selectedAgent)
+      .getPlanConfig()
       .then((cfg) => {
         if (!cancelled) setPlanEnabled(cfg.enabled);
       })
@@ -897,7 +895,7 @@ export default function ChatPage() {
   }, []);
 
   useMessageHistoryNavigation(chatRef, isChatActive, isComposingRef);
-  useChatInputDraft(isChatActive);
+  useChatInputDraft(isChatActive, selectedAgent);
   useChatPasteFromEditor();
 
   const onFileCardClick = useCallback(
@@ -1068,7 +1066,7 @@ export default function ChatPage() {
         message.error(t("common.copyFailed"));
       }
     },
-    [t, message],
+    [t],
   );
 
   const customFetch = useCallback(
@@ -1103,7 +1101,7 @@ export default function ChatPage() {
       const session: SessionInfo = input[input.length - 1]?.session || {};
       const lastInput = input.slice(-1);
       const lastMsg = lastInput[0];
-      const rewrittenInput: Array<Record<string, unknown>> =
+      const rewrittenInput =
         lastMsg?.content && Array.isArray(lastMsg.content)
           ? [
               {
@@ -1128,7 +1126,7 @@ export default function ChatPage() {
         requestBody.session_id;
       if (backendChatId) {
         const userText = rewrittenInput
-          .filter((m) => m["role"] === "user")
+          .filter((m: any) => m.role === "user")
           .map(extractUserMessageText)
           .join("\n")
           .trim();
@@ -1170,16 +1168,15 @@ export default function ChatPage() {
           message.warning(t("chat.attachments.imageOnlyWarning"));
         }
         const sizeMb = file.size / 1024 / 1024;
-        const isWithinLimit = sizeMb < CHAT_ATTACHMENT_MAX_MB;
-
-        if (!isWithinLimit) {
+        const uploadLimit = useUploadLimitStore.getState().uploadMaxSizeMb;
+        if (uploadLimit !== null && sizeMb > uploadLimit) {
           message.error(
             t("chat.attachments.fileSizeExceeded", {
-              limit: CHAT_ATTACHMENT_MAX_MB,
+              limit: uploadLimit,
               size: sizeMb.toFixed(2),
             }),
           );
-          onError?.(new Error(`File size exceeds ${CHAT_ATTACHMENT_MAX_MB}MB`));
+          onError?.(new Error(`File size exceeds ${uploadLimit}MB`));
           return;
         }
 
@@ -1190,7 +1187,7 @@ export default function ChatPage() {
         onError?.(e instanceof Error ? e : new Error(String(e)));
       }
     },
-    [multimodalCaps, t, message],
+    [multimodalCaps, t],
   );
 
   const options = useMemo(() => {
@@ -1227,11 +1224,10 @@ export default function ChatPage() {
 
     const handleBeforeSubmit = async () => {
       if (isComposingRef.current) return false;
+      localStorage.removeItem(getDraftStorageKey(selectedAgent));
+      draftSuppressed = true;
       return true;
     };
-
-    const senderConfig = (i18nConfig as { sender?: Record<string, unknown> })
-      .sender;
 
     return {
       ...i18nConfig,
@@ -1258,25 +1254,32 @@ export default function ChatPage() {
         avatar: "/qwenpaw.png",
       },
       sender: {
-        ...(senderConfig ?? {}),
+        ...(i18nConfig as any)?.sender,
         beforeSubmit: handleBeforeSubmit,
         allowSpeech: whisperChecked && !whisperEnabled,
         prefix: whisperEnabled ? (
           <WhisperSpeechButton
-            buttonRef={whisperSpeechRef}
+            ref={whisperSpeechRef}
             onTranscription={handleWhisperTranscription}
           />
         ) : undefined,
         attachments: {
           multiple: true,
-          trigger: function (props?: { disabled?: boolean }) {
+          trigger: function (props: any) {
+            const uploadLimit = useUploadLimitStore.getState().uploadMaxSizeMb;
             const tooltipKey = multimodalCaps.supportsMultimodal
               ? multimodalCaps.supportsImage && !multimodalCaps.supportsVideo
                 ? "chat.attachments.tooltipImageOnly"
                 : "chat.attachments.tooltip"
               : "chat.attachments.tooltipNoMultimodal";
+            const tooltipTitle =
+              uploadLimit !== null
+                ? `${t(tooltipKey)}, ${t("chat.attachments.fileSizeLimit", {
+                    limit: uploadLimit,
+                  })}`
+                : t(tooltipKey);
             return (
-              <Tooltip title={t(tooltipKey, { limit: CHAT_ATTACHMENT_MAX_MB })}>
+              <Tooltip title={tooltipTitle}>
                 <IconButton
                   disabled={props?.disabled}
                   icon={<SparkAttachmentLine />}
@@ -1302,9 +1305,7 @@ export default function ChatPage() {
         ...defaultConfig.api,
         fetch: customFetch,
         responseParser: (chunk: string) => {
-          const payload = sanitizeRuntimeStreamPayload(
-            JSON.parse(chunk) as Record<string, unknown>,
-          );
+          const payload = JSON.parse(chunk) as Record<string, unknown>;
 
           if (payloadRequestsHistoryClear(payload)) {
             pendingClearHistoryRef.current = true;
@@ -1312,7 +1313,8 @@ export default function ChatPage() {
               scheduleHistoryClear();
             }
           }
-          return payload;
+
+          return payload as any;
         },
         replaceMediaURL: (url: string) => {
           return toDisplayUrl(url);
@@ -1415,10 +1417,9 @@ export default function ChatPage() {
     scheduleHistoryClear,
     planEnabled,
     onFileCardClick,
-    handleWhisperTranscription,
-    isComposingRef,
     whisperChecked,
     whisperEnabled,
+    handleWhisperTranscription,
   ]);
 
   return (

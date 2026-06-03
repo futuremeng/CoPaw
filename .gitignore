@@ -128,6 +128,13 @@ src/.hypothesis/
 
 # Worktrees
 .worktrees/
+.qwenpaw/worktrees/
 
 # Local File
 /localfile/
+
+# E2E test artifacts
+e2e/reports/
+e2e/data/
+e2e/.pytest_cache/
+e2e/__pycache__/
