@@ -1,0 +1,324 @@
+// ── Scroll container ───────────────────────────────────────────────────────
+
+.scrollContainer {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+.treeOnlyScrollContainer {
+  height: 100%;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+// ── Header ─────────────────────────────────────────────────────────────────
+
+.treeOnlyHeaderRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 8px 4px 16px;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.sectionTitle {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary, rgba(0, 0, 0, 0.85));
+  white-space: nowrap;
+}
+
+.panelExtraActions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.panelExtraAction {
+  font-size: 12px;
+  padding: 0 6px;
+}
+
+.latestUpdatedFileButton {
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+// ── Upload / Create toolbar ────────────────────────────────────────────────
+
+.treeUploadRow {
+  padding: 0 8px 6px 16px;
+  flex-shrink: 0;
+}
+
+.chatEmptyActions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.treeUploadButton {
+  font-size: 12px;
+}
+
+.treeSelectedCountText {
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+// ── Filter toolbar ─────────────────────────────────────────────────────────
+
+.overviewTreeToolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 8px 4px 16px;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.treeToolbarSticky {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: inherit;
+}
+
+.treeToolbarLeft {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1;
+  min-width: 0;
+}
+
+.treeToolbarRight {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.treeFilterInput {
+  width: 180px;
+  font-size: 12px;
+}
+
+.treeModeSegment {
+  font-size: 12px;
+
+  :global(.ant-segmented-item) {
+    font-size: 12px;
+  }
+}
+
+// ── Tree transition ────────────────────────────────────────────────────────
+
+.treeTransitionShell {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0 8px 8px;
+  transition: opacity 0.18s ease;
+}
+
+.treeTransitionShellFullHeight {
+  height: 100%;
+}
+
+.treeTransitionEnter {
+  opacity: 0.6;
+}
+
+// ── Center state (loading/empty) ───────────────────────────────────────────
+
+.centerState {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 200px;
+}
+
+// ── Ant Tree overrides ────────────────────────────────────────────────────
+
+.overviewCompactTree {
+  font-size: 12px;
+
+  :global(.ant-tree-treenode) {
+    padding: 0;
+    width: 100%;
+  }
+
+  :global(.ant-tree-node-content-wrapper) {
+    display: flex !important;
+    align-items: center;
+    min-height: 28px;
+    padding: 0 4px !important;
+    background: none !important;
+    overflow: hidden;
+  }
+
+  :global(.ant-tree-switcher) {
+    width: 16px;
+    flex-shrink: 0;
+  }
+
+  :global(.ant-tree-node-selected) > :global(.ant-tree-node-content-wrapper) {
+    background: var(--item-hover-bg, rgba(0, 0, 0, 0.04)) !important;
+    border-radius: 4px;
+  }
+
+  :global(.ant-tree-indent-unit) {
+    width: 14px;
+  }
+
+  // ── Node title row ────────────────────────────────────────────────────
+
+  .treeNodeRow {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    min-width: 0;
+    gap: 4px;
+  }
+
+  .compactTreeFolderLabel,
+  .compactTreeLeafLabel {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    min-width: 0;
+    flex: 1;
+  }
+
+  .treeNodeText {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 12px;
+    color: var(--text-primary, rgba(0, 0, 0, 0.85));
+  }
+
+  .treeNodeTextHighlighted {
+    color: var(--primary-color, #1677ff);
+    font-weight: 500;
+  }
+
+  .treeNodeTextAttached {
+    color: var(--success-color, #52c41a);
+    font-weight: 500;
+  }
+
+  .treeNodeAttachedMark {
+    color: var(--success-color, #52c41a);
+    font-size: 10px;
+    margin-left: 2px;
+    flex-shrink: 0;
+  }
+
+  .treeNodeMetaCount {
+    font-size: 10px;
+    color: var(--text-tertiary, rgba(0, 0, 0, 0.35));
+    margin-left: 4px;
+    flex-shrink: 0;
+    background: var(--tag-default-bg, rgba(0, 0, 0, 0.04));
+    border-radius: 3px;
+    padding: 0 4px;
+    line-height: 16px;
+  }
+
+  // ── Node action buttons (visible on hover) ────────────────────────────
+
+  .treeNodeActions {
+    display: none;
+    align-items: center;
+    gap: 1px;
+    flex-shrink: 0;
+    margin-left: auto;
+    padding-left: 4px;
+  }
+
+  :global(.ant-tree-node-content-wrapper:hover) .treeNodeActions,
+  :global(.qwenpaw-tree-node-content-wrapper:hover) .treeNodeActions,
+  :global(.copaw-tree-node-content-wrapper:hover) .treeNodeActions {
+    display: flex;
+  }
+
+  :global(.ant-tree-node-content-wrapper.ant-tree-node-selected) .treeNodeActions,
+  :global(.qwenpaw-tree-node-content-wrapper.qwenpaw-tree-node-selected) .treeNodeActions,
+  :global(.copaw-tree-node-content-wrapper.copaw-tree-node-selected) .treeNodeActions {
+    display: flex;
+  }
+
+  .attachActionButton {
+    width: 20px;
+    height: 20px;
+    min-width: 20px;
+    font-size: 11px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    color: var(--text-secondary, rgba(0, 0, 0, 0.45));
+
+    &:hover {
+      color: var(--primary-color, #1677ff);
+    }
+  }
+}
+
+.overviewCompactTreeFullHeight {
+  height: 100%;
+}
+
+// ── File icons ─────────────────────────────────────────────────────────────
+
+.treeNodeIconFolder {
+  font-size: 13px;
+  color: var(--warning-color, #faad14);
+  flex-shrink: 0;
+}
+
+.treeNodeIconFile {
+  font-size: 12px;
+  color: var(--text-secondary, rgba(0, 0, 0, 0.45));
+  flex-shrink: 0;
+}
+
+.treeNodeIconWrap {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.priorityFileIcon {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+
+  :global(.anticon) {
+    color: var(--primary-color, #1677ff);
+  }
+}
+
+// ── Dark mode ──────────────────────────────────────────────────────────────
+
+:global(.dark-mode) {
+  .treeNodeText {
+    color: rgba(255, 255, 255, 0.85);
+  }
+
+  .treeNodeActions {
+    :global(.anticon) {
+      color: rgba(255, 255, 255, 0.45);
+    }
+  }
+}

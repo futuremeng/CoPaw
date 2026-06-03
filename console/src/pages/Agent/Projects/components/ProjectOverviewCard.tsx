@@ -63,7 +63,6 @@ interface ProjectOverviewCardProps {
   onSelectLatestUpdatedFile?: (path: string) => void;
   onRefreshProjectTreeDirectory?: (path: string) => Promise<AgentProjectFileTreeNode[]>;
   projectFilesRefreshing?: boolean;
-  treeOnly?: boolean;
   selectedProject?: AgentProjectSummary;
   projectFileCount: number;
   pipelineTemplateCount: number;
@@ -835,7 +834,6 @@ export default function ProjectOverviewCard({
   onSelectLatestUpdatedFile,
   onRefreshProjectTreeDirectory,
   projectFilesRefreshing = false,
-  treeOnly = false,
   selectedProject,
   projectFileCount: _projectFileCount,
   pipelineTemplateCount: _pipelineTemplateCount,
@@ -903,11 +901,8 @@ export default function ProjectOverviewCard({
     if (activeStage === "builtin" || selectedMetricFilter === "builtin") {
       return builtInFiles;
     }
-    if (treeOnly && !selectedMetricFilter) {
-      return projectFiles;
-    }
     return nonBuiltInFiles;
-  }, [activeStage, builtInFiles, nonBuiltInFiles, projectFiles, selectedMetricFilter, treeOnly]);
+  }, [activeStage, builtInFiles, nonBuiltInFiles, projectFiles, selectedMetricFilter]);
   const attachTitle = t("projects.chat.addAttachment", "Add to chat attachments");
   const detachTitle = t("projects.chat.removeAttachment", "Remove from chat attachments");
   const refreshTitle = t("projects.refreshFiles", "Refresh");
@@ -1207,8 +1202,7 @@ export default function ProjectOverviewCard({
     selectedMetricFilter && isProjectKnowledgeFilterKey(selectedMetricFilter),
   );
   const useLazyTreeMode = Boolean(
-    treeOnly
-    && treeDisplayMode === "filter"
+    treeDisplayMode === "filter"
     && !normalizedTreeFilterQuery
     && (!selectedMetricFilter
       || ["original", "intermediate", "artifact", "agent", "skill", "flow", "case", "builtin"].includes(selectedMetricFilter)),
@@ -1228,12 +1222,9 @@ export default function ProjectOverviewCard({
   }, [lazyTreeItems]);
 
   useEffect(() => {
-    if (!treeOnly) {
-      return;
-    }
     setLazyTreeItems((prev) => mergeLazyTreeRootItems(prev, projectTreeNodes || []));
     setRefreshingDirectoryPaths([]);
-  }, [projectTreeNodes, treeOnly]);
+  }, [projectTreeNodes]);
 
   useEffect(() => {
     if (typeof treeFilterQuery === "string") {
@@ -1513,208 +1504,6 @@ export default function ProjectOverviewCard({
     ...item,
     label: t(item.labelI18nKey, item.defaultLabel),
   }));
-
-  if (treeOnly) {
-    return (
-      <div className={`${styles.scrollContainer} ${styles.treeOnlyScrollContainer}`}>
-        <div className={styles.treeOnlyHeaderRow}>
-          <span className={styles.sectionTitle}>{t("projects.projectSpaceFiles", "Project Space Files")}</span>
-          <div className={styles.panelExtraActions}>
-            <div className={styles.latestUpdatedFileWrap}>
-              <Tooltip title={latestUpdatedFilePath || "--"}>
-                <span>
-                  <Button
-                    size="small"
-                    type="link"
-                    className={`${styles.panelExtraAction} ${styles.latestUpdatedFileButton}`}
-                    onClick={() => {
-                      if (!latestUpdatedFilePath) {
-                        return;
-                      }
-                      onSelectLatestUpdatedFile?.(latestUpdatedFilePath);
-                    }}
-                    disabled={!latestUpdatedFilePath}
-                  >
-                    {t("projects.latestUpdatedFile", "Recent Update")}
-                  </Button>
-                </span>
-              </Tooltip>
-            </div>
-            <Button
-              size="small"
-              type="link"
-              icon={<ReloadOutlined spin={projectFilesRefreshing} />}
-              className={styles.panelExtraAction}
-              onClick={() => {
-                void onRefreshProjectFiles?.();
-              }}
-              disabled={!onRefreshProjectFiles || projectFilesRefreshing}
-            >
-              {t("projects.refreshFiles", "Refresh")}
-            </Button>
-          </div>
-        </div>
-        <div className={styles.treeUploadRow}>
-          <div className={styles.chatEmptyActions}>
-            <Button type="primary" className={styles.treeUploadButton} onClick={onUploadFiles}>
-              {t("projects.upload.button", "Upload Files")}
-            </Button>
-            <Button onClick={() => onRequestCreateChildDirectory?.("")}>{createFolderTitle}</Button>
-            <Button
-              disabled={!onRequestSetSelectedFilePaths || treeFilePaths.length === 0}
-              onClick={() => onRequestSetSelectedFilePaths?.(treeFilePaths)}
-            >
-              {selectVisibleTitle}
-            </Button>
-            <Button
-              disabled={!onRequestSetSelectedFilePaths || selectedAttachPaths.length === 0}
-              onClick={() => onRequestSetSelectedFilePaths?.([])}
-            >
-              {clearSelectedTitle}
-            </Button>
-            <Button
-              disabled={!onRequestMoveSelectedFilePaths || selectedAttachPaths.length === 0}
-              onClick={() => onRequestMoveSelectedFilePaths?.(selectedAttachPaths)}
-            >
-              {moveSelectedTitle}
-            </Button>
-            <Button
-              danger
-              disabled={!onRequestDeleteSelectedFilePaths || selectedAttachPaths.length === 0}
-              onClick={() => onRequestDeleteSelectedFilePaths?.(selectedAttachPaths)}
-            >
-              {deleteSelectedTitle}
-            </Button>
-            <Text type="secondary" className={styles.treeSelectedCountText}>
-              {t("projects.selectedFilesCount", "Selected: {{count}}", {
-                count: selectedAttachPaths.length,
-              })}
-            </Text>
-          </div>
-        </div>
-        <div className={`${styles.overviewTreeToolbar} ${styles.treeToolbarSticky}`}>
-          <div className={styles.treeToolbarLeft}>
-            <Input
-              size="small"
-              allowClear
-              value={effectiveTreeFilterQuery}
-              onChange={(event) => {
-                const next = event.target.value;
-                if (typeof treeFilterQuery === "string") {
-                  onTreeFilterQueryChange?.(next);
-                } else {
-                  setLocalTreeFilterQuery(next);
-                }
-              }}
-              className={styles.treeFilterInput}
-              prefix={<SearchOutlined />}
-              placeholder={t("projects.treeFilterPlaceholder", "Filter files")}
-            />
-            <Button
-              size="small"
-              type={showSelectedOnly ? "primary" : "default"}
-              onClick={() => setShowSelectedOnly((prev) => !prev)}
-            >
-              {selectedOnlyTitle}
-            </Button>
-          </div>
-          <div className={styles.treeToolbarRight}>
-            <Segmented
-              size="small"
-              className={styles.treeModeSegment}
-              value={treeDisplayMode}
-              onChange={(value) => onTreeDisplayModeChange(value as TreeDisplayMode)}
-              options={[
-                { label: t("projects.treeViewMode.filter", "Filter"), value: "filter" },
-                { label: t("projects.treeViewMode.highlight", "Highlight"), value: "highlight" },
-              ]}
-            />
-          </div>
-        </div>
-        <div
-          className={`${styles.treeTransitionShell} ${styles.treeTransitionShellFullHeight} ${treeTransitioning ? styles.treeTransitionEnter : ""}`}
-        >
-          {useLazyTreeMode && projectTreeLoading && lazyTreeData.length === 0 ? (
-            <div className={styles.centerState}>
-              <Spin />
-            </div>
-          ) : (useLazyTreeMode ? lazyTreeData : treeData).length === 0 ? (
-            <Empty
-              image={Empty.PRESENTED_IMAGE_SIMPLE}
-              description={emptyTreeDescription}
-            />
-          ) : (
-            <Tree
-              className={`${styles.overviewCompactTree} ${styles.overviewCompactTreeFullHeight}`}
-              selectedKeys={selectedFilePath ? [selectedFilePath] : []}
-              treeData={useLazyTreeMode ? lazyTreeData : treeData}
-              draggable={Boolean(onRequestMoveTreePath)}
-              onDrop={handleTreeDrop}
-              expandedKeys={expandedKeys}
-              onExpand={(keys) => {
-                const nextKeys = normalizeTreeKeys((keys as string[]).map((key) => String(key)));
-                const previousKeySet = new Set(expandedKeys);
-                updateExpandedKeys(nextKeys);
-                if (!useLazyTreeMode) {
-                  return;
-                }
-                for (const key of nextKeys) {
-                  if (!previousKeySet.has(key)) {
-                    const shouldForceRefresh = staleDirectorySet.has(key);
-                    void loadTreeDirectory(key, shouldForceRefresh ? { force: true } : undefined)
-                      .then((loaded) => {
-                        if (loaded && shouldForceRefresh) {
-                          onConsumeStaleDirectoryPaths?.([key]);
-                        }
-                      });
-                  }
-                }
-              }}
-              loadData={useLazyTreeMode && onLoadProjectTreeChildren
-                ? async (treeNode) => {
-                  const key = String(treeNode.key || "");
-                  const currentNode = findLazyTreeItem(lazyTreeItemsRef.current, key);
-                  const shouldForceRefresh = staleDirectorySet.has(key);
-                  if (!currentNode || !currentNode.is_directory || (currentNode.loaded && !shouldForceRefresh)) {
-                    return;
-                  }
-                  const loaded = await loadTreeDirectory(
-                    key,
-                    shouldForceRefresh ? { force: true } : undefined,
-                  );
-                  if (loaded && shouldForceRefresh) {
-                    onConsumeStaleDirectoryPaths?.([key]);
-                  }
-                }
-                : undefined}
-              onSelect={(keys, info) => {
-                const key = String(keys[0] || info?.node?.key || "");
-                const selectedLazyNode = useLazyTreeMode
-                  ? findLazyTreeItem(lazyTreeItems, key)
-                  : null;
-                if (key && (!selectedLazyNode || !selectedLazyNode.is_directory)) {
-                  handleTreeSelect(keys, {
-                    node: {
-                      key: info?.node?.key,
-                      isLeaf: info?.node?.isLeaf,
-                    },
-                    nativeEvent: info?.nativeEvent,
-                  });
-                }
-              }}
-            />
-          )}
-        </div>
-        <ContextMenu
-          visible={treeContextMenu.visible}
-          x={treeContextMenu.x}
-          y={treeContextMenu.y}
-          items={contextMenuItems}
-          onClose={treeContextMenu.hide}
-        />
-      </div>
-    );
-  }
 
   return (
     <Card

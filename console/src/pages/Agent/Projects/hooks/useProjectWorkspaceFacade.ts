@@ -21,7 +21,7 @@ interface UseProjectWorkspaceFacadeParams {
   scope?: "project" | "workspace";
 }
 
-interface ProjectWorkspaceFacade {
+export interface ProjectWorkspaceFacade {
   adapter: ProjectWorkspaceAdapter | null;
   getProjectAdapter: (projectIdOverride?: string) => ProjectWorkspaceAdapter | null;
   queryFiles: (input: ProjectWorkspaceQueryInput) => Promise<ProjectWorkspaceQueryOutput>;

@@ -36,9 +36,9 @@ import {
   getProjectKnowledgeSemanticDescription,
   getProjectKnowledgeSemanticReasonLabel,
 } from "./utils/projectKnowledgePipelineUi";
-import ProjectOverviewCard from "./components/ProjectOverviewCard";
+import ProjectFileTree from "./components/ProjectFileTree";
 import ProjectUploadModal from "./components/ProjectUploadModal";
-import ProjectWorkbenchPanel from "./components/ProjectWorkbenchPanel";
+import ProjectEditorPanel from "./components/ProjectEditorPanel";
 import ProjectMetricsPanel from "./components/ProjectMetricsPanel";
 import ProjectEvidencePanel from "./components/ProjectEvidencePanel";
 import useArtifactSelectionGuards from "./hooks/useArtifactSelectionGuards";
@@ -4529,15 +4529,10 @@ export default function ProjectDetailPage() {
                     <div className={styles.splitterPanel}>
                         <div className={styles.columnLeft}>
                         <div className={styles.columnStack}>
-                          <ProjectOverviewCard
+                          <ProjectFileTree
                             selectedProject={selectedProject}
-                            projectFileCount={projectFileCount}
-                            pipelineTemplateCount={pipelineTemplates.length}
-                            pipelineRunCount={pipelineRuns.length}
-                            projectWorkspaceSummary={projectWorkspaceSummary}
                             projectFiles={effectiveProjectFiles}
                             projectFileSummary={projectFileSummary}
-                            projectVisibleSummary={visibleProjectSummary}
                             projectTreeNodes={projectTreeNodes}
                             projectTreeLoading={projectTreeLoading}
                             priorityFilePaths={priorityFilePaths}
@@ -4546,35 +4541,26 @@ export default function ProjectDetailPage() {
                             staleDirectoryPaths={staleProjectTreeDirectoryPaths}
                             selectedAttachPaths={selectedAttachPaths}
                             treeFilterQuery={projectFileSearchQuery}
-                            onTreeFilterQueryChange={setProjectFileSearchQuery}
-                            activeStage={activeStage}
                             selectedMetricFilter={selectedMetricFilter}
-                            onMetricFilterChange={setSelectedMetricFilter}
+                            activeStage={activeStage}
                             treeDisplayMode={treeDisplayMode}
-                            onTreeDisplayModeChange={setTreeDisplayMode}
+                            deletingTreePaths={deletingProjectPaths}
+                            projectFilesRefreshing={filesLoading || projectTreeLoading}
+                            latestUpdatedFilePath={latestUpdatedFilePath}
+                            onTreeFilterQueryChange={setProjectFileSearchQuery}
                             onExpandedKeysChange={setTreeExpandedKeys}
                             onConsumeStaleDirectoryPaths={(paths) => {
-                              if (paths.length === 0) {
-                                return;
-                              }
+                              if (paths.length === 0) return;
                               setStaleProjectTreeDirectoryPaths((prev) =>
                                 prev.filter((item) => !paths.includes(item)));
                             }}
                             onRefreshProjectFiles={handleRefreshProjectFiles}
-                            latestUpdatedFilePath={latestUpdatedFilePath}
                             onRefreshProjectTreeDirectory={(path) => {
-                              if (!currentAgent || !selectedProject) {
-                                return Promise.resolve([]);
-                              }
+                              if (!currentAgent || !selectedProject) return Promise.resolve([]);
                               return loadProjectTreeDirectory(currentAgent.id, selectedProject, path);
                             }}
-                            projectFilesRefreshing={filesLoading || projectTreeLoading}
-                            treeOnly
-                            onUploadFiles={openProjectUploadModal}
                             onLoadProjectTreeChildren={(path) => {
-                              if (!currentAgent || !selectedProject) {
-                                return Promise.resolve([]);
-                              }
+                              if (!currentAgent || !selectedProject) return Promise.resolve([]);
                               return loadProjectTreeDirectory(currentAgent.id, selectedProject, path);
                             }}
                             onSelectFileFromTree={(path) => {
@@ -4600,7 +4586,8 @@ export default function ProjectDetailPage() {
                               ));
                               setSelectedAttachPaths(normalizedPaths);
                             }}
-                            deletingTreePaths={deletingProjectPaths}
+                            onUploadFiles={openProjectUploadModal}
+                            onTreeDisplayModeChange={setTreeDisplayMode}
                           />
                         </div>
                       </div>
@@ -4615,17 +4602,9 @@ export default function ProjectDetailPage() {
                     <div className={styles.splitterPanel}>
                       <div className={styles.columnRight}>
                         <div className={styles.rightWorkbenchPrimary}>
-                          <ProjectWorkbenchPanel
-                            agentId={currentAgent?.id}
-                            projectId={selectedProject?.id}
-                            syncNotice={workbenchSyncNotice}
-                            filesLoading={filesLoading}
-                            contentLoading={contentLoading}
-                            artifactRecords={artifactRecords}
-                            selectedArtifactRecord={selectedArtifactRecord}
+                          <ProjectEditorPanel
+                            projectWorkspaceFacade={projectWorkspaceFacade}
                             selectedFilePath={selectedFilePath}
-                            knownProjectFilesByPath={knownProjectFilesByPath}
-                            projectFiles={effectiveProjectFiles}
                             fileContent={fileContent}
                             charStatsContent={charStatsContent}
                             nerStructuredContent={nerStructuredContent}
@@ -4637,10 +4616,10 @@ export default function ProjectDetailPage() {
                             onSendSelectedFilesToChat={() => {
                               void handleSendSelectedFilesToChat();
                             }}
-                            onDismissSyncNotice={() => {
-                              setWorkbenchSyncNotice(null);
+                            loadFileContent={(path) => {
+                              // Delegate to the existing file content state
+                              return path === selectedFilePath ? fileContent : undefined;
                             }}
-                            formatBytes={formatBytes}
                           />
                         </div>
                       </div>

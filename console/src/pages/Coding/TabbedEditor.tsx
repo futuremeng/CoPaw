@@ -58,6 +58,10 @@ interface TabbedEditorProps {
   onTabDirtyChange: (path: string, dirty: boolean) => void;
   onTabContentChange: (path: string, content: string) => void;
   onFileSaved?: (path: string) => void;
+  /** Custom file loader – defaults to workspaceApi.loadCodeFile */
+  loadFile?: (path: string) => Promise<{ content?: string }>;
+  /** Custom file saver – defaults to workspaceApi.saveCodeFile */
+  saveFile?: (path: string, content: string) => Promise<{ path?: string; size?: number }>;
 }
 
 // ---------------------------------------------------------------------------
@@ -254,6 +258,8 @@ export default function TabbedEditor({
   onTabDirtyChange,
   onTabContentChange,
   onFileSaved,
+  loadFile,
+  saveFile,
 }: TabbedEditorProps) {
   const { isDark } = useTheme();
   const editorRef = useRef<MonacoEditor.IStandaloneCodeEditor | null>(null);
@@ -343,10 +349,11 @@ export default function TabbedEditor({
     );
     if (toHydrate.length === 0) return undefined;
 
+    const loadFn = loadFile ?? workspaceApi.loadCodeFile;
     void Promise.all(
       toHydrate.map(async ([path]) => {
         try {
-          const result = await workspaceApi.loadCodeFile(path);
+          const result = await loadFn(path);
           return { path, modified: result.content ?? "", ok: true };
         } catch {
           return { path, modified: "", ok: false };
@@ -367,7 +374,7 @@ export default function TabbedEditor({
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedAgent]);
+  }, [selectedAgent, loadFile]);
 
   // ---- Monaco setup -------------------------------------------------------
 
@@ -540,7 +547,8 @@ export default function TabbedEditor({
     setSaving(true);
     try {
       const content = editorRef.current?.getValue() ?? activeTab?.content ?? "";
-      await workspaceApi.saveCodeFile(activeTabPath, content);
+      const saveFn = saveFile ?? workspaceApi.saveCodeFile;
+      await saveFn(activeTabPath, content);
       onTabDirtyChange(activeTabPath, false);
       onFileSaved?.(activeTabPath);
     } catch {
@@ -548,7 +556,7 @@ export default function TabbedEditor({
     } finally {
       setSaving(false);
     }
-  }, [activeTabPath, saving, activeTab, onTabDirtyChange, onFileSaved]);
+  }, [activeTabPath, saving, activeTab, onTabDirtyChange, onFileSaved, saveFile]);
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
@@ -614,7 +622,8 @@ export default function TabbedEditor({
     // Suppress the watcher so the revert write doesn't spawn a new diff
     undoInProgressRef.current.add(activeTabPath);
     try {
-      await workspaceApi.saveCodeFile(activeTabPath, diff.original);
+      const saveFn = saveFile ?? workspaceApi.saveCodeFile;
+      await saveFn(activeTabPath, diff.original);
     } catch {
       // ignore – UI is already restored
     } finally {
@@ -628,6 +637,7 @@ export default function TabbedEditor({
     pendingDiffs,
     selectedAgent,
     removeDiff,
+    saveFile,
     onTabContentChange,
     onTabDirtyChange,
   ]);
@@ -674,7 +684,8 @@ export default function TabbedEditor({
 
       undoInProgressRef.current.add(activeTabPath);
       try {
-        await workspaceApi.saveCodeFile(activeTabPath, newModified);
+        const saveFn = saveFile ?? workspaceApi.saveCodeFile;
+        await saveFn(activeTabPath, newModified);
       } catch {
         // ignore — UI state is updated below regardless
       } finally {
@@ -736,8 +747,8 @@ export default function TabbedEditor({
 
     const existingDiff = pendingDiffs[path];
 
-    workspaceApi
-      .loadCodeFile(path)
+    const loadFn = loadFile ?? workspaceApi.loadCodeFile;
+    loadFn(path)
       .then((res) => {
         const newModified = res.content ?? "";
 
