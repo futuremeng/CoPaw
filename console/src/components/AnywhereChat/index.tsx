@@ -2671,9 +2671,6 @@ export default function AnywhereChat({
       const shouldInlinePipelineGuide =
         !bootstrapText && shouldSuggestPipelineOpportunity(latestUserText);
 
-      const shouldInlinePipelineGuide =
-        !bootstrapText && shouldSuggestPipelineOpportunity(latestUserText);
-
       if (shouldInlinePipelineGuide) {
         const now = Date.now();
         const cooldownKey = "copaw.pipeline.opportunity.lastAt";

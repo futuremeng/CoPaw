@@ -439,6 +439,49 @@ class QwenPawAgent(CodingModeMixin, ToolGuardMixin, ReActAgent):
                         e,
                     )
 
+    def _register_hooks(self) -> None:
+        """Register pre-reasoning and pre-acting hooks."""
+        # Bootstrap hook - checks BOOTSTRAP.md on first interaction
+        # Use workspace_dir if available, else fallback to WORKING_DIR
+        working_dir = (
+            self._workspace_dir if self._workspace_dir else WORKING_DIR
+        )
+        bootstrap_hook = BootstrapHook(
+            working_dir=working_dir,
+            language=self._language,
+        )
+        self.register_instance_hook(
+            hook_type="pre_reasoning",
+            hook_name="bootstrap_hook",
+            hook=bootstrap_hook.__call__,
+        )
+        logger.debug("Registered bootstrap hook")
+
+        # Context manager hooks - delegate compaction / tool-result pruning
+        # to the context manager's lifecycle methods
+        if self.context_manager is not None:
+            self.register_instance_hook(
+                hook_type="pre_reply",
+                hook_name="context_pre_reply",
+                hook=self.context_manager.pre_reply,
+            )
+            self.register_instance_hook(
+                hook_type="pre_reasoning",
+                hook_name="context_pre_reasoning",
+                hook=self.context_manager.pre_reasoning,
+            )
+            self.register_instance_hook(
+                hook_type="post_acting",
+                hook_name="context_post_acting",
+                hook=self.context_manager.post_acting,
+            )
+            self.register_instance_hook(
+                hook_type="post_reply",
+                hook_name="context_post_reply",
+                hook=self.context_manager.post_reply,
+            )
+            logger.debug("Registered context manager hooks")
+
     def _build_sys_prompt(self) -> str:
         """Build system prompt from working dir files and env context.
 
