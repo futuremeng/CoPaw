@@ -1241,14 +1241,6 @@
       "naming": 4,
       "removed": 137
     },
-    "src/qwenpaw/cli/doctor_cmd.py": {
-      "added": 76,
-      "behavior_added": 76,
-      "behavior_removed": 4,
-      "mechanical": false,
-      "naming": 0,
-      "removed": 4
-    },
     "src/qwenpaw/cli/init_cmd.py": {
       "added": 7,
       "behavior_added": 0,
@@ -1483,15 +1475,15 @@
     }
   },
   "totals": {
-    "added": 16053,
-    "behavior_added": 15927,
-    "behavior_files": 180,
-    "behavior_removed": 2735,
-    "files": 184,
+    "added": 15977,
+    "behavior_added": 15851,
+    "behavior_files": 179,
+    "behavior_removed": 2731,
+    "files": 183,
     "mechanical_files": 1,
     "naming_files": 4,
     "naming_lines": 126,
     "naming_touched_files": 22,
-    "removed": 2861
+    "removed": 2857
   }
 }
