@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 
 from copaw.config.config import GraphifyConfig
-from copaw.knowledge.graphify_provider import (
+from qwenpaw.knowledge.graphify_provider import (
     GraphifyLoadError,
     GraphifyNotConfiguredError,
     GraphifyRemoteError,

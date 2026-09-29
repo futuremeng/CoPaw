@@ -17,7 +17,7 @@ _EXPORTS = {
 		"qwenpaw.knowledge.knowledge_quantization_architecture",
 		"QuantizationArchitectureManager",
 	),
-	"RetrievalFacade": ("copaw.knowledge.facades", "RetrievalFacade"),
+	"RetrievalFacade": ("qwenpaw.knowledge.facades", "RetrievalFacade"),
 	"QuantizationFacade": ("qwenpaw.knowledge.knowledge_quantization_facade", "QuantizationFacade"),
 	"DuckDBKnowledgeCatalog": ("copaw.knowledge.duckdb_catalog", "DuckDBKnowledgeCatalog"),
 	"build_l2_quantization_scorecard": (

@@ -9,7 +9,7 @@ from typing import Any
 _EXPORTS = {
 	"KnowledgeManager": ("qwenpaw.knowledge.manager", "KnowledgeManager"),
 	"GraphOpsManager": ("qwenpaw.knowledge.graph_ops", "GraphOpsManager"),
-	"RetrievalFacade": ("copaw.knowledge.facades", "RetrievalFacade"),
+	"RetrievalFacade": ("qwenpaw.knowledge.facades", "RetrievalFacade"),
 }
 
 __all__ = list(_EXPORTS)

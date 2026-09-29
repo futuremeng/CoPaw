@@ -10,8 +10,8 @@ import pytest
 
 from copaw.config.config import Config, GraphifyConfig, KnowledgeSourceSpec
 from copaw.knowledge import GraphOpsManager, KnowledgeManager
-from copaw.knowledge.graph_enrichment_pipeline import run_system_knowledge_enrichment
-from copaw.knowledge.graphify_provider import GraphifyNotConfiguredError
+from qwenpaw.knowledge.enrichment_pipeline import run_system_knowledge_enrichment
+from qwenpaw.knowledge.graphify_provider import GraphifyNotConfiguredError
 
 
 def _build_graphify_text_source() -> KnowledgeSourceSpec:
@@ -179,7 +179,7 @@ def test_graph_query_graphify_no_fallback_raises_when_not_configured(tmp_path):
 
 def test_graph_query_graphify_fallback_on_runtime_error(tmp_path):
     """When the provider raises GraphifyError and fallback_to_local=True, falls back."""
-    from copaw.knowledge.graphify_provider import GraphifyError
+    from qwenpaw.knowledge.graphify_provider import GraphifyError
 
     knowledge_config = Config().knowledge
     knowledge_config.enabled = True

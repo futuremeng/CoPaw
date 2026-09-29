@@ -27,17 +27,13 @@ ROOT = Path(__file__).resolve().parents[1]
 SRC_COPAW = ROOT / "src" / "copaw"
 SRC_QWENPAW = ROOT / "src" / "qwenpaw"
 
-# qwenpaw may intentionally bridge to copaw for explicit extension-only modules.
-ALLOWED_QWENPAW_TO_COPAW = {
-    "knowledge/architecture.py",
-    "knowledge/enrichment_pipeline.py",
-    "knowledge/facades.py",
-    "knowledge/graphify_provider.py",
-    "knowledge/local_graph_provider.py",
-}
+# WP-01 + D-16 closed this bridge: every implementation qwenpaw needs now lives
+# in the engine package, so qwenpaw must never import copaw -- shared path or not.
+ALLOWED_QWENPAW_TO_COPAW: set[str] = set()
 
-# Shared files intentionally kept non-thin for runtime branding bridge or
-# extension ownership in copaw.
+# Shared files that are legitimately non-thin on the copaw side: the branded
+# entry points (cli, __main__) and the overlay app / lazy knowledge tables.
+# Anything else sharing a path with qwenpaw must be a pure re-export shim.
 ALLOWED_NON_THIN_SHARED = {
     "__init__.py",
     "__main__.py",
@@ -45,11 +41,6 @@ ALLOWED_NON_THIN_SHARED = {
     "cli/__init__.py",
     "cli/main.py",
     "knowledge/__init__.py",
-    "knowledge/architecture.py",
-    "knowledge/enrichment_pipeline.py",
-    "knowledge/facades.py",
-    "knowledge/graphify_provider.py",
-    "knowledge/local_graph_provider.py",
 }
 
 # copaw-only files should remain under extension areas (prefix match).

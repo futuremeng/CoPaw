@@ -1,14 +1,18 @@
 # -*- coding: utf-8 -*-
 """WP-01 boundary: ``src/copaw`` must stay removable as a whole directory.
 
-The allow-list below is a ratchet: it may only shrink.  Growing it re-introduces
-an invasive dependency from the upstream-owned package onto fork-private code
-(P1-行为), which is exactly what WP-01 exists to remove.
+The allow-lists below are ratchets that may only shrink, and WP-01 took them to
+empty: ``src/qwenpaw`` no longer imports or names any copaw module.  Re-opening
+them re-introduces an invasive dependency from the upstream-owned package onto
+fork-private code (P1-行为), which is what this file exists to keep at zero.
 """
 
 from __future__ import annotations
 
+import os
 import re
+import subprocess
+import sys
 from pathlib import Path
 
 import click
@@ -29,20 +33,14 @@ _INVASIVE_RE = re.compile(
     re.M,
 )
 
-# Files inside ``src/qwenpaw`` still holding a top-level ``from copaw`` import.
-# This is the WP-01 relocation queue, and per D-16 it has exactly one resolution:
-# the copaw-resident implementation the importer needs sinks into
-# ``src/qwenpaw`` and ``src/copaw`` keeps only the alias shells plus the CLI /
-# overlay.  Moving importers out of ``src/qwenpaw`` was ruled out because the
-# desktop entry imports the core package directly.
-# No upstream-owned file may appear here: ``src/qwenpaw/app/routers/agents.py``,
-# the last one, was severed in this queue's second increment.
-INVASIVE_COPAW_IMPORT_ALLOWLIST: frozenset[str] = frozenset(
-    {
-        "src/qwenpaw/knowledge/enrichment_pipeline.py",
-        "src/qwenpaw/knowledge/graphify_provider.py",
-    },
-)
+# WP-01 closed the relocation queue: no file inside ``src/qwenpaw`` may reach
+# into ``copaw`` any more.  Per D-16 the resolution was always the same one --
+# the copaw-resident implementation the importer needed sank into
+# ``src/qwenpaw``, because moving importers out was impossible (the desktop
+# entry imports the core package directly) and no upstream-owned file was ever
+# allowed to grow such an import.  These sets stay empty: adding an entry means
+# re-opening P1-行为, not a free pass.
+INVASIVE_COPAW_IMPORT_ALLOWLIST: frozenset[str] = frozenset()
 
 
 def _python_files() -> list[Path]:
@@ -81,11 +79,7 @@ def test_invasive_allow_list_is_a_ratchet() -> None:
 _MODULE_STRING_RE = re.compile(r"""['"](copaw(?:\.\w+)+)['"]""")
 COPAW_SRC = REPO_ROOT / "src" / "copaw"
 
-INVASIVE_COPAW_MODULE_REF_ALLOWLIST: frozenset[str] = frozenset(
-    {
-        "src/qwenpaw/knowledge/__init__.py",
-    },
-)
+INVASIVE_COPAW_MODULE_REF_ALLOWLIST: frozenset[str] = frozenset()
 
 
 def _copaw_module_exists(dotted: str) -> bool:
@@ -182,3 +176,48 @@ def test_copaw_app_entry_extends_qwenpaw_app_object() -> None:
     assert "from qwenpaw.app._app import app" in source_text
     assert "app.include_router(" in source_text
     assert "runtime_mode" not in source_text
+
+
+# WP-01 Gate(b): ``src/copaw`` has to be removable as a whole directory.  The
+# probe blocks every ``copaw*`` import instead of renaming the directory, so it
+# also catches lazy ``import_module`` calls, and it runs in a subprocess because
+# this test module already imported copaw.
+_COPAW_ABSENT_SNIPPET = '''
+import sys
+
+
+class _BlockCopaw:
+    def find_spec(self, fullname, path=None, target=None):
+        if fullname == "copaw" or fullname.startswith("copaw."):
+            raise ModuleNotFoundError("copaw is not installed: " + fullname)
+        return None
+
+
+sys.meta_path.insert(0, _BlockCopaw())
+for _name in list(sys.modules):
+    if _name == "copaw" or _name.startswith("copaw."):
+        del sys.modules[_name]
+
+
+import click
+from qwenpaw.app._app import app
+from qwenpaw.cli.main import cli
+
+print(len(app.routes), len(cli.list_commands(click.Context(cli))))
+'''
+
+
+def test_qwenpaw_starts_with_copaw_removed() -> None:
+    env = dict(os.environ, PYTHONPATH=str(REPO_ROOT / "src"), CI="true")
+    result = subprocess.run(
+        [sys.executable, "-c", _COPAW_ABSENT_SNIPPET],
+        cwd=REPO_ROOT,
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr[-4000:]
+    routes, commands = result.stdout.split()
+    assert int(routes) > 0
+    assert int(commands) > 0
