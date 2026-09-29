@@ -3343,8 +3343,8 @@ async def update_agent(
     description="Delete agent and workspace (cannot delete default agent)",
 )
 async def delete_agent(
-    request: Request,
     agentId: str = PathParam(...),
+    request: Request = None,
 ) -> dict:
     """Delete an agent."""
     config = load_config()

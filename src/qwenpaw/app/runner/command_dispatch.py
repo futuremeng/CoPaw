@@ -253,7 +253,6 @@ async def run_command_path(  # pylint: disable=too-many-statements,too-many-bran
         agent_name=runner.agent_name,
         memory=memory,
         memory_manager=runner.memory_manager,
-        enable_memory_manager=runner.memory_manager is not None,
     )
     try:
         response_msg = await conv_handler.handle_conversation_command(query)

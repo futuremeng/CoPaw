@@ -55,26 +55,6 @@ class OpenAIProvider(Provider):
             return LOCAL_COMPAT_PLACEHOLDER_API_KEY
         return api_key
 
-    @staticmethod
-    def _format_api_error(error: APIError) -> str:
-        """Format APIError with status and response body when present."""
-        parts: list[str] = []
-        status = getattr(error, "status_code", None)
-        if status is not None:
-            parts.append(f"status={status}")
-
-        body = getattr(error, "body", None)
-        if body is not None:
-            if isinstance(body, (dict, list)):
-                body_text = json.dumps(body, ensure_ascii=False)
-            else:
-                body_text = str(body)
-            parts.append(f"body={body_text}")
-        else:
-            parts.append(f"message={error}")
-
-        return ", ".join(parts)
-
     def _build_default_headers(self) -> dict:
         return dict(self.custom_headers) if self.custom_headers else {}
 
@@ -117,20 +97,16 @@ class OpenAIProvider(Provider):
         try:
             await client.models.list(timeout=timeout)
             return True, ""
-        except APIError as e:
+        except APIError:
+            return False, f"API error when connecting to `{self.base_url}`"
+        except Exception:
             return (
                 False,
-                "API error when connecting to "
-                f"`{self.base_url}` ({self._format_api_error(e)})",
-            )
-        except Exception as e:
-            return (
-                False,
-                "Unknown exception when connecting to "
-                f"`{self.base_url}`: {e}",
+                f"Unknown exception when connecting to `{self.base_url}`",
             )
 
     async def fetch_models(self, timeout: float = 5) -> List[ModelInfo]:
+        """Fetch available models."""
         try:
             client = self._client(timeout=timeout)
             payload = await client.models.list(timeout=timeout)
@@ -174,17 +150,12 @@ class OpenAIProvider(Provider):
             async for _ in res:
                 break
             return True, ""
-        except APIError as e:
+        except APIError:
+            return False, f"API error when connecting to model '{model_id}'"
+        except Exception:
             return (
                 False,
-                "API error when connecting to model "
-                f"'{model_id}' ({self._format_api_error(e)})",
-            )
-        except Exception as e:
-            return (
-                False,
-                "Unknown exception when connecting to model "
-                f"'{model_id}': {e}",
+                f"Unknown exception when connecting to model '{model_id}'",
             )
 
     def get_chat_model_instance(self, model_id: str) -> ChatModelBase:
