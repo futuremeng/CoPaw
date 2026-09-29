@@ -180,7 +180,9 @@ P3 里 ≥50 行的 7 个文件（合计 1,345 行，余 23 个文件 264 行）
 
 **处置**：(a) `patch-chat-flushsync.mjs` 按 D-8 属于**必须消除**项，进 WP-08：先测 v2 的 SDK（1.2.0-beta）里 `flushSync` 这个性能问题是否仍存在；不存在则直接删脚本；仍存在则**不 patch**，改为在 Copaw 自己的组件层规避，或按 D-13 提一条**明确的 bug PR 给 SDK/上游**（这是 D-13 允许的那一类）。(b) 若短期内保留任何形态，脚本必须改成"锚点失配即 exit 1"，把静默失效变成构建失败。(c) `test:coverage` 脚本要在 WP-08 里补回来，否则 WP-08/11 的"CI 绿"Gate 无法执行。
 
-### 2.2 D-4 实测结论：CI 不是"可能不绿"，是**从未跑过 Python 测试**（2026-09-29 全部本地复现）
+### 2.2 D-4 实测结论：CI **确实执行了 pytest，但从未收集到任何一个测试**（2026-09-29 本地 + `gh run view --log` 双向复现）
+
+> **本轮口径更正（第二次，必须先读）**：本节上一版写的是"CI 从未跑过 Python 测试 / 根因是 `tests.yml` 的 console 构建挡在前面"。这个因果**是错的**：fork 的 `main` 上另有**一个会执行 pytest 的 workflow**（`unit-tests.yml`），它不是被 tsc 挡住的，而是**自己死在收集之前**。上一版之所以漏掉它，是因为我只看了上游拥有的 `tests.yml`。事实链见下面"两条 CI 腿"。`tests.yml` 的 console-构建耦合本身仍然成立，只是它不是"pytest 没跑"的唯一原因，甚至不是当前 main 上的实际原因。
 
 **远端事实**（`gh run list` / `gh workflow list`）：
 
@@ -195,7 +197,18 @@ P3 里 ≥50 行的 7 个文件（合计 1,345 行，余 23 个文件 264 行）
 
 最后一行是关键：**红是 fork 造成的，不是 runner/密钥/基础设施问题**，不能外包给环境。
 
-**失败的真正位置在 pytest 之前**：`tests.yml` 的每个 job 第一步都是 `cd console && npm ci && npm run build`，而 `build = tsc -b && vite build`（`console/package.json:9`）。tsc 先炸，于是 **Unit / Contract / Integrated 三个 job 一次都没有执行到 pytest**。
+**两条 CI 腿，两条不同的死法**（同一 SHA `77b6e0d27` 的 run `36538346764`，2026-09-29 我 WP-00 推送触发）：
+
+| 腿 | 失败步骤（`gh run view --json jobs` 原样） | 真实原因（`--log` 逐行核对） |
+| --- | --- | --- |
+| `Unit Tests - py3.13` | `Run L1 hard gate tests (must pass)` | 上游自有 `tests/conftest.py:22` → `qwenpaw.providers` → `agentscope 1.0.20` → `from mcp.client.streamable_http import streamablehttp_client` **ImportError**。fork 的 `pyproject.toml` **完全没有 `mcp` 约束**（v1 与 merge-base 都没有；上游到 v2 才加 `mcp>=1.28,<2.0` 并同步换 `agentscope==2.0.8`）→ CI 每次解析到新 mcp 就整体崩，**exit 4，0 个测试被收集**。本地 `.venv` 是 `mcp 1.27.2`，所以本地永远复现不了这条 |
+| `Unit Tests - py3.13` | `Run all unit tests (informational — pre-existing failures tolerated)` | 同一个 ImportError，同样是 exit 4 / 0 收集，只是这一步挂了 `continue-on-error: true` 所以不出现在失败步骤里 |
+| `Unit Tests - py3.10` | `Check namespace boundaries (gate)` | **死在 pytest 之前**：`scripts/check_namespace_boundaries.py` 报 `non_extension_copaw_only: 10`（10 个 `app/routers/project_*_services.py` 越界）。这条红是我自己那条 fork 提交 `b0f1661cc` 加的门禁 |
+| `Coverage Report` | success | 因为它整条 `continue-on-error: true` 且 pytest 末尾 `\|\| true` —— **"绿"在这里等于"什么都没测"** |
+
+**`unit-tests.yml` 的来历不是"fork 自建 CI"，而是"上游废弃、fork 单方面保活"**（本轮 `git log --full-history` 查清）：上游 `13b8fa108`（PR #3630，2026-04-23）新增 → 上游 `c05077d9a`（#4748 "drop redundant unit-tests.yml workflow"，2026-05-28，**是 merge-base `e111ec6fb` 的祖先**）删除 → 上游 `upstream/main` 现在**没有这个文件**；fork 侧 `b0f1661cc`（"ci: enforce namespace boundary checks in unit workflow"，+10）在它被删除前后改过它，于是后续 sync 合并按"modify/delete"保下了 fork 版本。后果有两个，都要写进 WP-01 的判断：**修它不等于维护上游 CI**（上游已经判定它冗余），**但它现在是 fork 唯一的后端测试入口**，所以"修好现有这条腿"优先于"再新建一条腿"。
+
+另一条仍然成立的老结论：`tests.yml`（上游自有、fork 未改）的每个后端 job 第一步是 `cd console && npm ci && npm run build`（`build = tsc -b && vite build`，`console/package.json:9`），fork 有 63 个 tsc 错误 → **那三个 job 也确实到不了 pytest**。两条腿各自独立地测不到后端，这是"CI 从未给过后端任何回归保护"的完整解释。
 
 **本地复现的完整数字**（这是本项目第一次拿到它们）：
 
@@ -205,6 +218,16 @@ P3 里 ≥50 行的 7 个文件（合计 1,345 行，余 23 个文件 264 行）
 | `pytest tests/unit`（强制越过收集错误） | **3069 passed, 90 failed, 5 skipped, 24 collection errors**，耗时 15m51s | 失败测试：77 在 fork 新增测试文件 / **13 在上游自有测试文件**；收集错误：22 fork 新增 / **2 上游自有** |
 | `console` `vitest run` | **492 tests：465 passed, 27 failed**，10 个文件失败 | 全部集中在 `console/src/pages/Agent/Projects/tests/*`（fork 新增） |
 
+**24 个收集错误的完整归因（本轮逐条落到文件，`CI=true` 跑，不碰钥匙串）** —— 上一版只说了"22 fork / 2 上游"，没说是为什么。三种原因，**修法完全不同**：
+
+| # | 原因 | 涉及文件 | 归属 | 正确修法 |
+| --- | --- | --- | --- | --- |
+| A | **20** 个 fork 新增测试 `import copaw.X`，而 `src/copaw/X` **已经不存在、实现回到了 `src/qwenpaw/X`**（实测：`app/runner`、`app/mcp`、`app/project_realtime_events.py`、`providers`、`config/utils.py`、`agents/tools/knowledge_search.py`、`agents/tool_guard_mixin.py` 全部 `copaw:missing / qwenpaw:EXISTS`；只有 `app/routers/skills`、`agents/skills_hub` 两边都没有 = 实现已被删） | `tests/unit/app/runner/{test_api,test_runner,test_session,test_runtime_status_store,test_knowledge_context_injection}.py`、`tests/unit/app/{test_mcp_config_watcher,test_mcp_stateful_client,test_skill_market_install_tool,test_skill_market_search_tool,test_skills_hub_markdown_import,test_tool_guard_mcp_fallback,test_knowledge_search_tool,test_agent_config_watcher,test_audio_transcription_auto_install}.py`、`tests/unit/app/routers/{test_agents_square,test_skills_market,test_tools_router,test_workspace_router}.py`、`tests/unit/config/test_config_utils.py`、`tests/unit/providers/test_retry_chat_model.py`、`tests/unit/agents/tools/test_file_io_realtime_events.py` | **全部 fork 自有**（merge-base 无此文件）→ 修它们不违反"不改上游测试" | 这正是 §2 那条"25 个 `from qwenpaw…import *` 薄壳 + 56 个实现"漂移的**下游代价**：某次重构把实现搬回 qwenpaw、忘了同步测试。要么把测试改指真实模块，要么补回薄壳 —— **按 P2 原生优先：测试应指向上游真实接缝，`copaw` 侧只在仍有 fork 实现时才留壳** |
+| B | **2** 个 fork 新增测试与兄弟目录**同名文件冲突**（`import file mismatch`）：`tests/unit/app/runner/test_api.py` vs `tests/unit/app/crons/test_api.py`；`tests/unit/knowledge/test_manager.py` vs `tests/unit/app/crons/test_manager.py`。根因是 fork 只有 **20** 个 `tests/**/__init__.py`，而 `tests/unit/app/**` 整棵子树一个都没有；上游 v2 有 **54** 个，且上游同样存在同名 basename → **上游是靠 `__init__.py` 让模块名唯一，fork 少放了文件** | 上述 4 个文件里的 2 个 | fork 自有 | 给 `tests/unit/app/`、`tests/unit/app/{crons,runner,routers}/`、`tests/unit/knowledge/` 补 `__init__.py`（纯新增 fork 侧文件，不碰上游测试内容）。**这是"一个空文件修掉两类红"的最高性价比项** |
+| C | **2** 个**上游自有测试**因为 fork 改了上游源码而符号消失：`_copy_template_md_files` 不在 `qwenpaw.agents.utils.setup_utils`、`validate_cron_trigger` 不在 `qwenpaw.app.crons.manager` | `tests/unit/agents/utils/test_setup_utils.py`、`tests/unit/workspace/test_cli_agent_id.py` | 上游自有且 **fork 未改过测试本身**（`git diff e111ec6fb main` 为空）→ 破坏 100% 在源码侧 | **这就是 P1-行为 的实物证据**，且前者位于 CI 的 L1 硬门禁路径（`tests/unit/agents/utils`）→ 即使修好 mcp 漂移，L1 也仍然红。修法只有两种：恢复被删符号，或按 D-8 认定该 fork 改动无效并回退它 |
+
+→ 对 WP-01 的直接含义：**"修 CI"不是一个任务，是三个**：C 是 P1 欠债（必须逐条归因、可能砍功能），A 是 fork 自留地里的路径漂移（可机械修，但要先定"测试指 qwenpaw 还是补 copaw 壳"），B 是 20 分钟的空 `__init__.py`。B、C 修完，本地才能拿到一个"收集阶段干净"的基线，A 修完才有资格谈 §5 各 WP 的 Gate。
+
 **已经存在的 P1 破坏，有一条是可当场复现的**：
 
 ```
@@ -213,15 +236,17 @@ ImportError: cannot import name 'validate_cron_trigger' from 'qwenpaw.app.crons.
 ```
 
 引入者是 fork 自己的提交 `9077dfb9c`（2026-03-14，"fix(cron): reject invalid cron expressions on write path, closes #1443"，**不是** merge-base 的后代）。被 import 的符号在本树的任何版本里都不存在 —— 上游 `v1.1.11` 与 `upstream/main` 的 `cron_cmd.py` 里 `validate_cron_trigger` 出现次数都是 **0**。配套的上游 PR `#1467 feat/upstream/cron-invalid-schedule` 已 **CLOSED 未合并**。
-→ 结论：**`qwenpaw cron` 命令组在 fork 的 `main` 上是坏的，今天就是坏的**；而它之所以能坏 6 个月，正是因为上面那条链路（tsc 炸 → pytest 不跑 → 没人看见）。这是 D-8 想防的失效模式的实例，不是假设。
+→ 结论：**`qwenpaw cron` 命令组在 fork 的 `main` 上是坏的，今天就是坏的**；它之所以能坏 6 个月，是因为**后端测试从来没有真正执行过**：上游自有 `tests.yml` 的三个 job 死在 pytest 之前的 tsc 构建，fork 保活的 `unit-tests.yml` 死在收集之前（CI 端是 mcp 版本漂移 → 0 收集，本地端是上面那 24 个收集错误）。这条 `ImportError` 正是下面 C 类"2 个上游自有测试收集错误"之一，即 **P1-行为 欠债与"CI 测不到"是同一批事实的两个侧面**。这是 D-8 想防的失效模式的实例，不是假设。
 
 **对计划的直接改写**：
 
 1. "先补 CI 再迁移"这个默认解读**是错的**。58/63 的 tsc 错误与 77/90 的测试失败都在 fork 自有文件里，而 §4/§5 的既定动作就是**不把这批 fork 前端文件带上 v2**。所以 CI 变绿是 WP-02/WP-09 的**结果**，不是它的前置条件。
 2. 但反过来，**剩余那批红是真实欠债**：13 个上游自有测试失败 + 2 个收集错误 + 5 个上游文件 tsc 错误 = 当前"破坏 qwenpaw"的可度量积压。需要逐条归因（fork 改坏 vs fork 的半合并让测试与源码不自洽），`cron_cmd` 那条已证明至少有一类是前者。
-3. 任何 Gate 里写"测试绿"之前，必须先有一个**只跑 pytest 的 job**（把 console 构建从后端测试里解耦）。否则"绿"永远取决于前端，而后端回归等于没有门禁。
-4. **新发现的上游约束**：v2 的 `Frontend Tests` 跑的是 `npm run test:coverage`，且注释明写 "coverage **ratchet** blocks PR on regression"。所以 WP-08/WP-11 的前端工作量要含配套测试，不能只算页面代码。
-5. `npm run build` 与 `format:check` 都含 `tsc -b`；fork 现有 63 个类型错误说明 fork 从来没有跑通构建门禁 —— 与 §2 的 187 个"改动上游文件"提交同源。
+3. 任何 Gate 里写"测试绿"之前，必须有一条**收集阶段不报错、且失败会让 job 变红的 pytest 腿**。措辞更正：这条腿**已经存在**（`unit-tests.yml`），但它的形态是"信息性步骤 `continue-on-error` + 硬门禁步骤永远红 + 收集阶段 0 测试"，等价于没有门禁。WP-01 的动作因此从"**新建**一个只跑 pytest 的 job"改成"**把已有的 `unit-tests.yml` 修到会真正收集并执行测试**"（解 mcp 漂移 + 解 24 个收集错误 + 让 L1 步骤要么真过要么明确降级），成本更低且不新增上游文件改动。
+4. **本地跑测试的两条硬约束（本轮踩到，写死以免复犯）**：(a) worktree 里必须 `PYTHONPATH=src`，否则 `import qwenpaw` 会静默解析到主检出目录，测的是别的树的代码；(b) 必须 `CI=true` —— `src/qwenpaw/security/secret_store.py` 的 `_should_skip_keyring()` 认这个变量，不设它时测试会去读写 macOS 钥匙串里的 `qwenpaw` / 旧 `copaw` `master_key` 条目，**每个用例各弹一次系统授权框**（用户 2026-09-29 明确要求"以后不要存钥匙串"）。
+5. **新发现的上游约束**：v2 的 `Frontend Tests` 跑的是 `npm run test:coverage`，且注释明写 "coverage **ratchet** blocks PR on regression"。所以 WP-08/WP-11 的前端工作量要含配套测试，不能只算页面代码。
+6. `npm run build` 与 `format:check` 都含 `tsc -b`；fork 现有 63 个类型错误说明 fork 从来没有跑通构建门禁 —— 与 §2 的 187 个"改动上游文件"提交同源。
+7. **本地基线的可复现事实（本轮 worktree 与主检出各跑一次，错误集合逐字节相同）**：`pytest tests/unit/ --ignore=tests/unit/channels` 在**收集阶段 `Interrupted: 24 errors`、执行 0 个测试**。也就是说 §2.2 表里那组"3069 passed / 90 failed"必须先加 `--continue-on-collection-errors` 才拿得到；任何 Gate 若只写"pytest 全绿"，在当前树上它连收集阶段都过不去，而**收集阶段的 24 个红是比 90 个失败更硬的欠债**（它让 90 这个数字随时可能变成 0）。
 
 ### 2.3 D-9 实测结论：`agents.py` 不是一个 4,239 行的 patch，而是一个**已经拆过一次的门面**
 
@@ -442,12 +467,20 @@ skill_provider · prompt_section · agent_profile · managed_service · dependen
 - **基线数字复核**：本次提交只新增 1 个 fork 自有文件，未触碰任何上游自有文件 → **P1 = 全仓 187 文件 / +24,985 / −12,377 不变**；`main` 的指针从 `a0002eaaa` 前进到 `77b6e0d27`（本节上一段写的 `a0002eaaa` 是"复核时"的状态，保留作追溯）。
 - **`main` 自此不再前进**：WP-01 起的每个工作包按红线走独立分支独立 PR。**基线指针 = tag `v1-fork-final-2026-09-29` → `77b6e0d27`；其后 `main` 只接**纯文档提交**（不含任何代码/上游自有文件改动），P1 数字仍为 187 / +24,985 / −12,377。**基线的稳定指针是 tag，不是 `main` 的 sha** —— 查 v1 兜底一律用 `v1-fork-final-2026-09-29`。**
 
-### WP-01 建立 P1 不变式：`copaw` 可整体丢弃（**1.5–2.5d**，前置 WP-00；原估 1–2d，§2.1.1 的全仓口径 + `tests/` 还原 +0.5d）
+### WP-01 建立 P1 不变式：`copaw` 可整体丢弃（**2.5–3.5d**，前置 WP-00；原估 1–2d → §2.1.1 的全仓口径 + `tests/` 还原 +0.5d → **本轮 D-4 二次更正的 CI-1/CI-2 再 +1d**）
 **在 v1.1.11b1 基线上做**，不引入任何上游 v2 变更 —— 这一步在 v1 上做冲突为零，拖到 v2 上做就要同时对抗 1160 提交。
 目标不是"顺手解耦"，是**验证原则 1/2 的下限**：把 `src/qwenpaw` 内 12 个 fork 自有 importer 移入 `src/copaw`，消除 **5 处**上游文件伸向 fork 私有模块的侵入（`import copaw`：`app/routers/agents.py`、`cli/doctor_cmd.py`；`import runtime_mode`：`app/_app.py`、`cli/main.py`、`cli/app_cmd.py`，其中 **`runtime_mode` 是本步的主目标** —— 它是 v1"一套代码两种产品"的 flavor 开关，位于 qwenpaw 启动主路径上，v2 无对应物，处置方式是**整体作废并把它承载的差异改用 PawApp 装载表达**），使 **`src/copaw` 成为可整目录删除而不影响 qwenpaw 启动与功能的独立包**。这是 `copaw` 长期存在（P2 第二类）的合法性前提。
-另外新增一项**由 §2.2 逼出来的交付物**：把 `tests.yml` 里"每个后端 job 先 `cd console && npm run build`"的耦合拆开，加一个**只跑 pytest 的 job**。没有这一步，本项目所有 Gate 里写的"测试绿"都只等于"前端 tsc 过得了"，后端回归等于无门禁（fork 已经这样把 `qwenpaw cron` 的 ImportError 漏了 6 个月）。
+另外新增一项**由 §2.2 逼出来的交付物**（措辞已按本轮实测更正）：**不是"新建一个只跑 pytest 的 job"，而是"把已有的 `unit-tests.yml` 修到能真正收集并执行测试"** —— 它已经存在（上游 #3630 加、上游 #4748 删、fork 单方面保活），已经在 py3.13 那条腿上调用 pytest，但每次都是 `exit 4 / 0 collected`。拆开是三件事，成本依次递增：
+
+| 子项 | 动作 | 是否触碰上游自有文件 | 估时 |
+| --- | --- | --- | --- |
+| **CI-1 版本漂移** | 让 CI 的依赖解析回到 `mcp<1.28`（agentscope 1.0.20 需要旧符号 `streamablehttp_client`）。**做法是把约束加在 fork 自有的 `unit-tests.yml` 的 install 步骤里（`pip install "mcp<1.28"`），不去改 `pyproject.toml`** —— 后者是上游自有文件，加一行就是 P1-行为 净增，且 v1 即将冻结、不值得为它花掉一次命名税 | 否（`unit-tests.yml` 已是 fork 单方面维持的文件） | 0.2d |
+| **CI-2 收集干净** | 修 §2.2 表的 24 个收集错误里的 **A 类 20 个 + B 类 2 个**（都是 fork 自有测试文件，允许直接改）：A 类把 `import copaw.X` 指向真实存在的 `qwenpaw.X`（或明确补回 copaw 薄壳，判定标准见 P2"原生优先"）；B 类给 `tests/unit/app/**`、`tests/unit/knowledge/` 补 `__init__.py`（上游 v2 有 54 个、fork 只有 20 个，同名 basename 因此撞车） | 否 | **0.5–1d**（A 类要逐个判断"测试该指哪边"，不是纯机械替换） |
+| **CI-3 语义归因** | C 类 2 个上游自有测试（`_copy_template_md_files`、`validate_cron_trigger`）→ 并进下面 Gate(b) 的"P1 欠债逐条归因"，**不在本项里偷偷跳过** | 是（可能要回退 fork 对上游源码的改动） | 计入 Gate(b) |
+
+没有 CI-1/CI-2，本项目所有 Gate 里写的"测试绿"都只等于"前端 tsc 过得了"或"收集阶段没报错就算过"，后端回归等于无门禁（fork 已经这样把 `qwenpaw cron` 的 ImportError 漏了 6 个月）。**CI-1、CI-2 必须在其他 WP-01 动作之前做完**，否则后面的每一步都没有可信的回归判据。
 **再新增一项由 D-15 逼出来的交付物**：把 P1-命名册做成**可机械重放**的资产 —— 用上面 Gate(a) 的配对脚本把 22 文件 / 127 行改名对导出成一份 `位置 → 替换对` 清单（落在 fork 自有文件里，例如 `scripts/copaw_brand.json` + 一个 apply 脚本），使每次跟进上游时"改名"是一条命令而不是人肉重打。**判定标准：清空 fork 的全部改名后重放该清单，`git diff` 与清空前逐字节相同。** 这条是 D-15 承认命名税之后唯一能让它不失控的做法；同时它会自动暴露"哪些改名上游已经原生给了"（如 CLI 命令名 `copaw`），那些条目应当被删掉而不是被重放。
-**Gate**：`git grep -E "^(from|import) copaw|^from \.\.+runtime_mode|^from \.runtime_mode" -- src/qwenpaw` 命中 **0**；`src/qwenpaw/runtime_mode.py` 不存在或其消费点已全部移除；临时移开 `src/copaw` 后 qwenpaw 仍能起、上游测试仍全绿（P1 的直接证明）；`src/qwenpaw`/`console/src` 中被 fork 改动的上游文件数不增加；**pytest-only job 在 console 构建失败时仍然执行并出报告**；**本轮新增三条（来自 §2.1.1 与 §8 已闭环 19）**：(a) 计数脚本口径改为**全仓 187 文件**（`package-lock.json` 单列），基线记下来后只减不增 —— **且脚本必须自动把每个文件的 diff 拆成 `P1-行为` 与 `P1-命名` 两栏**（拆法见 §7：删掉的含 `qwenpaw` 行与加进来的含 `copaw` 行归一化后逐字相等 = 命名，其余 = 行为；当前基线 22 文件 / 127 行命名、其余为行为），两栏各自单独设"只减不增"的目标，命名栏按 D-15 允许持平但要求逐条可重放；(b) `tests/` 里那 10 个被 fork 改过的上游测试**还原为上游版本**（它们现在是唯一回归判据上的污点）；(c) `cli/doctor_cmd.py` 那 76 行改走 `register_doctor_contribution` / `qwenpaw.doctor`（未验证项 16 的时序与 pass/fail 缺口先实测，实测不过就按 D-8 砍这条自检）。
+**Gate**：`git grep -E "^(from|import) copaw|^from \.\.+runtime_mode|^from \.runtime_mode" -- src/qwenpaw` 命中 **0**；`src/qwenpaw/runtime_mode.py` 不存在或其消费点已全部移除；临时移开 `src/copaw` 后 qwenpaw 仍能起、上游测试仍全绿（P1 的直接证明）；`src/qwenpaw`/`console/src` 中被 fork 改动的上游文件数不增加；**`unit-tests.yml` 的 py3.13 腿必须出现"收集到 N>0 个测试"的 pytest 输出，且 `pytest tests/unit --ignore=tests/unit/channels` 在收集阶段 0 error（本地与 CI 同口径，本地跑一律带 `CI=true PYTHONPATH=src`）**；**本轮新增四条（来自 §2.1.1 与 §8 已闭环 19）**：(a0) **CI-1 落地后，`mcp` 的可解析范围要写进 fork 自有文件并留一条注释说明"v1 钉 agentscope 1.0.20 → 需 `mcp<1.28`；v2 已换 agentscope 2.0.8 + `mcp>=1.28`，迁移到 v2 时删除本钉"** —— 否则这条钉会被误当成 fork 的长期需求带上 v2；(a) 计数脚本口径改为**全仓 187 文件**（`package-lock.json` 单列），基线记下来后只减不增 —— **且脚本必须自动把每个文件的 diff 拆成 `P1-行为` 与 `P1-命名` 两栏**（拆法见 §7：删掉的含 `qwenpaw` 行与加进来的含 `copaw` 行归一化后逐字相等 = 命名，其余 = 行为；当前基线 22 文件 / 127 行命名、其余为行为），两栏各自单独设"只减不增"的目标，命名栏按 D-15 允许持平但要求逐条可重放；(b) `tests/` 里那 10 个被 fork 改过的上游测试**还原为上游版本**（它们现在是唯一回归判据上的污点）；(c) `cli/doctor_cmd.py` 那 76 行改走 `register_doctor_contribution` / `qwenpaw.doctor`（未验证项 16 的时序与 pass/fail 缺口先实测，实测不过就按 D-8 砍这条自检）。
 
 ### WP-02 语义查重 + 归属判定（**3–4d**，前置 WP-00；原估 3–4d → D-13 使 `上游PR` 态消失后降到 2–3d → §2.1.1 的账外 43 文件与 §8 已闭环 18 的 project-directory 比对加回 1d）
 只读上游，产出重叠矩阵：上游 v2 的 `project_directory.py` / `market.py` / `plugins/memory/*` / `pawapps.py` / `loops.py` / `harnesses.py` 是否已覆盖 fork 对应能力。**必须读实现，不能只比文件名**（第 4 节的判断目前只到文件名级）。
@@ -540,8 +573,9 @@ skill_provider · prompt_section · agent_profile · managed_service · dependen
 `sync/v2` → PR → `origin`。`main` 保留 v1 兜底至少一个 release 周期。
 
 **关键路径**：WP-00 → WP-01 → WP-02 → WP-03 → WP-04 → WP-05 → WP-08 → **WP-11** → WP-10。WP-06/07/09 可并行。
-**总量**：含 WP-11（原则 4 / D-10 / D-12）后，主路径串行 **28–44 人日**（WP-00 0.5 + WP-01 **1.5–2.5** + WP-02 **3–4** + WP-03 1 + WP-04 4–6 + WP-05 3–5 + WP-08 4–7 + WP-11 10–17 + WP-10 1；WP-06 **1.5–2** / WP-07 1–2 / WP-09 0.5 并行，另加 WP-01 的 pytest-only job ≈0.5d）。**本轮"以仓库实际为准"把总量抬回 +1.5d**：WP-01 的全仓 P1 口径 + `tests/` 还原（+0.5d）、WP-02 的账外 43 文件与 project-directory 语义比对（+1d）。这是四次修正里第一次**上调**（前三次 D-9 / `managed_service` / D-13 都是下调），因为前三次修的是"估多了的能力项"，这次补的是"漏计的账"。
-**D-15 的裁决给总量挂了一个条件项（尚未计入 28–44）**：界面内文案若按"可见品牌都叫 Copaw"彻底落地，需处理 v2 上游 locale 的 **494 处 QwenPaw 字样**（7 个上游 JSON）。**若 §8 未验证 19 验出运行时覆盖接缝 → +0.5d（写一个覆盖层）；若验不过、只能直接 patch 那 7 个文件 → +1–2d，并且这 7 个文件进 P1-命名册、每次跟进上游都要重放。** 这条在 WP-02 结束时定数，不在主路径估里凭空加。
+**总量**：含 WP-11（原则 4 / D-10 / D-12）后，主路径串行 **29–45 人日**（WP-00 0.5 + WP-01 **2.5–3.5** + WP-02 **3–4** + WP-03 1 + WP-04 4–6 + WP-05 3–5 + WP-08 4–7 + WP-11 10–17 + WP-10 1；WP-06 **1.5–2** / WP-07 1–2 / WP-09 0.5 并行）。**本轮（D-4 二次更正）再抬 +1d，全部落在 WP-01**：原来那句"另加 pytest-only job ≈0.5d"**取消**（job 已存在，不用新建），换成 §2.2/WP-01 的 **CI-1 mcp 漂移 0.2d + CI-2 修 24 个收集错误 0.5–1d**（其中 A 类 20 个要逐个判断"测试指向 `qwenpaw` 还是补回 `copaw` 薄壳"，不是纯机械替换），CI-3 归因并入既有 Gate(b) 不重复计时。加上上一轮"以仓库实际为准"的 +1.5d，**这是连续第二次上调**（累计 28–44 → 29–45），性质相同：补的都是"漏计的账"，不是"估多的能力项"。
+**为什么必须先做 CI-1/CI-2**：本轮实测确认本地与 CI 都在**收集阶段**就归零（0 个测试被执行），这意味着 §5 每个 WP 的 Gate 里"上游测试仍全绿""测试不劣化"这类判据**目前全部无法执行**，只能靠人肉读 diff。CI-1/CI-2 之后才第一次有可信回归判据 —— 它同时是 **P1 这条原则能不能被验证**的前提，不是工程洁癖。
+**D-15 的裁决给总量挂了一个条件项（尚未计入 29–45）**：界面内文案若按"可见品牌都叫 Copaw"彻底落地，需处理 v2 上游 locale 的 **494 处 QwenPaw 字样**（7 个上游 JSON）。**若 §8 未验证 19 验出运行时覆盖接缝 → +0.5d（写一个覆盖层）；若验不过、只能直接 patch 那 7 个文件 → +1–2d，并且这 7 个文件进 P1-命名册、每次跟进上游都要重放。** 这条在 WP-02 结束时定数，不在主路径估里凭空加。
 **区间被收窄过三次（上一轮），本轮按仓库实际抬回 1.5d**：原估 30–51 → D-9 消解使 WP-06 从 3–6d 降到 2–3d（D-14 后再降到 1.5–2d，但它是并行包，不进串行主路径）→ `managed_service` 问题证伪使 WP-04 从 5–8d 降到 4–6d → **D-13 取消 `上游PR` 归属态使 WP-02 从 3–4d 降到 2–3d**（主路径因此 −1d）。**当前区间宽度已不再由 D-9 决定，而是由两处未验证项决定：WP-08/11b 的页面能否全走 slot（§8 未验证 7），以及 WP-11a 那三处未实测的鉴权/重定向行为（§8 未验证 15）。** D-10 已裁决为形态 3，其代价已从"工时区间"转成**永久的上游同步税**（§6.1，且 D-13 确认这笔税没有"等上游合"的退出路径）。
 
 ---
@@ -559,7 +593,7 @@ skill_provider · prompt_section · agent_profile · managed_service · dependen
 | D-6 | `copaw` 摆放 A/B 案 | 并入 D-7 |
 | D-7 | "放到 copaw" 指包还是产品层 | **并存**：稳定的私有能力进 `src/copaw`（全局顶层包，零导入改写，可整目录丢弃），想反哺的进 `plugins/apps/copaw-*` |
 | D-8 | 无接缝时能否挂 patch | **不许挂，宁可砍该功能**。代价量化见 §2.1 + §2.3 —— 原本以为代价集中在 `agents.py` 那 4,239 行新增，§2.3 拆开后它不含任何需要手工合并的语义（D-14 归零）；1,656 行因上游已删文件而自动作废，1,609 行分布在 **30 个文件**（≥50 行的 7 个占 1,345 行）上待 WP-02 逐条签字，另有本轮补出的 899 行中间带。**D-8 原本的退路"走上游 PR"已由 D-13 关闭 → 现在只剩"原生 / copaw / 砍"三种处置**。例外见 D-10 / §6.1 |
-| **D-4** | 当前 fork CI 是否绿 | **已实测，答案比"不绿"更糟：CI 从未执行过一次 pytest。** 根因是 `tests.yml` 每个 job 先 `cd console && npm ci && npm run build`（`build = tsc -b && vite build`），fork 有 63 个 tsc 错误 → 构建先炸、三个后端 job 全数在测试前失败；nightly 已 `disabled_inactivity`。同期上游 CI 全绿 ⇒ 红是 fork 造成的。本地首次拿到完整数字（3069 passed / 90 failed / 24 collection errors，vitest 465/27）。**推论：CI 绿是 WP-02/09 的结果，不是前置条件**；但"先补一个只跑 pytest 的 job"变成 WP-01 的新增交付物。详见 §2.2 |
+| **D-4** | 当前 fork CI 是否绿 | **已实测（本轮第二次更正，见 §2.2 顶部）：CI 会执行 pytest，但从未收集到任何一个测试。** 两条腿两种死法：`unit-tests.yml`（**上游 #3630 新增、上游 #4748 删除、fork 单方面保活**，`upstream/main` 现在已无此文件）在 py3.13 死于 `tests/conftest.py:22 → agentscope 1.0.20 → mcp.client.streamable_http.streamablehttp_client` **ImportError**（fork 的 `pyproject.toml` 对 `mcp` **零约束**，CI 每次解析到新 mcp 即整体 `exit 4 / 0 collected`；本地 `.venv` 是 `mcp 1.27.2` 所以复现不了），同一步的"信息性"版本挂了 `continue-on-error: true` 所以连红都不报；py3.10 更早死于 fork 自己加的 `check_namespace_boundaries.py`（`non_extension_copaw_only: 10`）；`Coverage Report` 反而 **success**，因为它整条 `\|\| true`。上游自有 `tests.yml` 的那条老结论不变：每个后端 job 先 `cd console && npm ci && npm run build`（`tsc -b`），fork 63 个类型错误 → 那三个 job 到不了 pytest。`main` 上该 workflow 共 71 次运行、最近 12 次全 failure/cancelled。本地首次拿到完整数字（3069 passed / 90 failed / **24 个收集错误，本轮已逐条归因成 A20/B2/C2 三类**，vitest 465/27）。**推论修正：CI 绿仍是 WP-02/09 的结果，但"修 CI"不再是要不要做的前置，而是 WP-01 的第一个交付物，且动作从"新建 pytest-only job"改为"修好已有这条腿"（CI-1/CI-2/CI-3 三子项）。** 详见 §2.2 |
 | **D-9** | `agents.py` 那 4,239 行新增的重表达深度 | **(a)/(b) 二选一前提不成立。** AST + 路径枚举实测：44 个 handler 只占 1,193 行；100 个非路由模块级函数（855 行）已经是**纯粹转发给 `src/copaw/app/routers/project_*`** 的门面；44 个类里 42 个是 pydantic 模型。37 条唯一路径中 **24 条 project + 6 条 square 是 v2 完全没有的私有命名空间**（迁到 PawApp 前缀零冲突），只有 4 条与 v2 同名；v2 反向有 10 条 fork 缺的路径必须原样保留。曾经认定的唯一不可重表达项 `system_protected` **已由 D-14 裁决砍掉**，于是同名 4 条路径也改为原样采用 v2 版本 → **手工语义合并面 = 0**。WP-06 因此从 3–6d → 2–3d → **1.5–2d**。详见 §2.3 |
 | D-10 | 第三种界面做到哪一层 | **定为形态 3：`/wb` 与 `/console`、`/os` 平级**，明知需破 D-8。原由：形态 1（`route.wrap` 全屏路由）经 §3.3 穷尽验证**不能摘掉 Sidebar/Header** —— v2 的 chromeless 页面只有 `/login`、`/hub/admin`、`/os` 三个且全部宿主硬编码，`SlotName` 虽为 `string` 但宿主只渲染 7 个 `<Slot>` 且无 shell 级位，PawApp 路径被 `pawapp-sdk/ui.tsx:130-133` 与 `MainLayout/index.tsx:42-45` 双重锁在 `/apps/{id}` 下，后端 `registry.py:274` 把插件路由硬拼 `/api`。**原生做不到，不是没找。** |
 | D-11 | "看板"指任务流转看板还是概览仪表盘 | **都不选，重定义为工作台**（对话/文件/统计/知识/任务的操作性聚合入口）。上游 `agent-kanban` 不是复用对象 |
@@ -609,7 +643,7 @@ skill_provider · prompt_section · agent_profile · managed_service · dependen
 
 | 编号 | 状态 | 备注 |
 | --- | --- | --- |
-| ~~D-4~~ | **已闭环**（§2.2、已关闭表）。结论与"是否绿"这个问题本身不同：CI 从未跑到过 pytest | 已生效；新增 WP-01 交付物"只跑 pytest 的 job" |
+| ~~D-4~~ | **已闭环两次**（§2.2）。第一版结论"CI 从未跑到 pytest"**机制说错了**，本轮更正为"CI 执行了 pytest 但 0 收集"，并查明 `unit-tests.yml` 是**上游废弃、fork 保活**的文件 | 已生效；WP-01 交付物从"新建 pytest-only job"改为"修好已有这条腿（CI-1 mcp 漂移 / CI-2 24 个收集错误 / CI-3 归因并入 Gate b）" |
 | ~~D-9~~ | **已闭环**（§2.3）。二选一被实测消解；D-14 把最后的残差归零 | 已生效 |
 | ~~D-10~~ | **已裁决为形态 3**，原生可行性已穷尽证伪（§3.3） | 已生效；例外治理见 §6.1 |
 | ~~D-11~~ | **已裁决为"工作台"**，不是看板也不是仪表盘 | 已生效 |
@@ -658,7 +692,7 @@ skill_provider · prompt_section · agent_profile · managed_service · dependen
    - 后端 `plugins/registry.py:274` 把 `register_http_router` 硬拼 `/api{prefix}`，`register_middleware`（`plugins/api.py:644`）是 AgentScope 请求级而非 ASGI → 插件拿不到顶层 mount。
 5. ~~新顶层 URL 是否需要后端改动~~ → **不需要**。`hub/control_app.py:1830-1841` 的 `@app.get("/{path:path}")` 对所有非 `api/` 路径回落 `index.html`，`/wb` 直接命中同一 bundle。WP-11a 的 patch 面因此是**纯前端 2 个文件**。
 6. 更正 item 2 的静态路径表述：PawApp 静态资源实际挂在 **`/api/pawapps/{app_id}/static/{file_path}`**（`app/routers/pawapps.py:24,240-291`），前端 bundle 在 **`/api/frontend_plugin/{plugin_id}/files/{file_path}`**（`routers/frontend_plugin.py:20,59`）—— 与 app 自己的 `/api/{app_id}` router 前缀**是三个不同的 URL 空间**，写 WP-03 骨架时别混。
-7. ~~D-4：CI 是否可用~~ → **已实测**（§2.2）：fork CI **从未执行过 pytest**（tsc 构建门禁在前）；本地第一次拿到全量数字（3069 passed / 90 failed / 24 collection errors / vitest 465-of-492）。并当场复现一条 P1 破坏：`import qwenpaw.cli.cron_cmd` → `ImportError: validate_cron_trigger`，由 fork 独有提交 `9077dfb9c` 引入、配套上游 PR `#1467` CLOSED。**"测试绿"从现在起是可测的事实而不是要求**，前提是先做 WP-01 的 pytest-only job。
+7. ~~D-4：CI 是否可用~~ → **已实测并按本轮证据二次更正**（§2.2）：措辞从"fork CI 从未执行过 pytest（tsc 构建门禁在前）"改为"**fork CI 执行了 pytest，但从未收集到任何一个测试**"。完整原因有两条且互不相同：上游自有 `tests.yml` 三个后端 job 确实死在前面的 `tsc -b`；而 fork 保活的 `unit-tests.yml` 已含 pytest 步骤（**注意它不是 fork 自建的：上游 #3630 加、上游 #4748 删，`upstream/main` 现在没有这个文件**），py3.13 死于 `mcp` 无版本约束导致的 `streamablehttp_client` ImportError（`exit 4 / 0 collected`），py3.10 死于 fork 自己的 namespace 边界门禁（`non_extension_copaw_only: 10`），`Coverage Report` 因为整条 `\|\| true` 反而显示 success。本地第一次拿到全量数字（3069 passed / 90 failed / **24 collection errors，本轮归因为 A 类 20 个 fork 测试引用已搬回的 `copaw.*` 路径 + B 类 2 个同名 basename 撞车（fork 只有 20 个 `tests/**/__init__.py`，v2 有 54 个）+ C 类 2 个上游自有测试因 fork 改源码而符号消失** / vitest 465-of-492）。并当场复现一条 P1 破坏：`import qwenpaw.cli.cron_cmd` → `ImportError: validate_cron_trigger`，由 fork 独有提交 `9077dfb9c` 引入、配套上游 PR `#1467` CLOSED —— **它就是 C 类里的 `tests/unit/workspace/test_cli_agent_id.py`，即"P1 欠债"与"CI 测不到"是同一批事实的两个侧面**。**"测试绿"从现在起是可测的事实而不是要求**，前提是先做 WP-01 的 CI-1/CI-2。
 8. ~~D-9：`agents.py` 那 4,239 行新增的重表达深度~~ → **已实测并消解**（§2.3）：AST 五分类（互斥、合计 4,505 行）= 44 handler **1,193** / 100 纯转发门面 **855** / 25 helper **1,120** / 44 class **385** / import+常量前导 **952**；37 条路径中 30 条（24 project + 6 square）是 v2 无对应的私有命名空间；4 条与 v2 同名，且**在 D-14 后确认全部原样采用 v2 版本**（§8 已闭环 15）；v2 反向 10 条路径必须保留。**"无对应"只成立于路径字符串层面** —— v2 有概念相近的 `project-directory` 命名空间（见 item 18），所以这一句不能当成"上游没有 project 能力"的结论用。
 9. ~~原则 3 的覆盖深度~~ → **已实测边界**（§3.2）：console 聊天界面内品牌接缝完整（`QwenPaw.chat.leftHeader/theme/welcome/sender/request/response`，全部返 `Disposable`）；界面外**无接缝**（`console/index.html` 的 `<title>`、`pyproject.toml` 包名与 description、CLI 文本、Docker 标签），v2 全库 `branding|productName` 命中 0。→ 原则 3 只能声明为"界面内 Copaw 化 + 界面外沿用 qwenpaw 名义"，除非把包名改掉（那是 fork 名分问题，不在本计划范围）。
 10. **新增事实（未列决策，但改变多处措辞）**：反哺 PR 通道 21 开 1 合并（§2.4）；v2 `frontend-tests.yml` 跑 `test:coverage` 且注释明写 coverage **ratchet** 会挡 PR → 前端工作包必须自带测试；`src/copaw` 81 文件 / 407 KB 中 **25 个是 `from qwenpaw…import *` 再导出壳**，56 个是实现；**上游自有文件里伸手进 fork 独有模块的有 5 个而非 2 个**（见下一条）。
@@ -804,6 +838,20 @@ python -m pytest tests/unit -q --continue-on-collection-errors 2>&1 | tail -5   
 python -c "import qwenpaw.cli.cron_cmd"          # ImportError: validate_cron_trigger（P1 活体样本）
 git log -1 --format="%h %ad %s" --date=short 9077dfb9c
 git grep -c "validate_cron_trigger" upstream/main -- src/qwenpaw   # 0 命中
+
+# D-4 二次更正：unit-tests.yml 来历 + 24 个收集错误三类归因（§2.2 / WP-01 CI-1~CI-3）
+git cat-file -e e111ec6fb:.github/workflows/unit-tests.yml && echo exists || echo "merge-base 无此文件"   # → 无
+git log --oneline --diff-filter=A --full-history -- .github/workflows/unit-tests.yml   # 13b8fa108 (#3630, 上游新增)
+git log --full-history --oneline --diff-filter=D -- .github/workflows/unit-tests.yml   # c05077d9a (#4748, 上游删除)
+git merge-base --is-ancestor c05077d9a e111ec6fb && echo "删除早于 merge-base"          # → 是 ⇒ fork 单方面保活
+gh run list --workflow unit-tests.yml --limit 12 --json conclusion,createdAt,headSha   # 最近 12 次全 failure/cancelled
+gh run view 36538346764 --json jobs --jq '.jobs[] | .name+" | "+.conclusion+" | "+([.steps[]|select(.conclusion=="failure")|.name]|join(" ; "))'
+gh run view 36538346764 --log | awk -F'\t' '$2 ~ /informational/ {print $3}' | tail -25  # exit 4 + streamablehttp_client
+grep -niE "mcp" pyproject.toml                       # v1/merge-base 零命中 ⇒ 无约束
+git show upstream/main:pyproject.toml | grep -n "mcp" # v2: mcp>=1.28,<2.0（配合 agentscope==2.0.8）
+python -c "from importlib.metadata import version; print(version('mcp'))"   # 本地 1.27.2 ⇒ 本地复现不了 CI 那条
+CI=true PYTHONPATH=src python -m pytest tests/unit/ --ignore=tests/unit/channels --co -q --tb=line   # 24 个收集错误明细
+find tests -name __init__.py | wc -l                  # fork 20  vs  git ls-tree -r upstream/main -- tests | grep -c __init__.py = 54
 
 # D-9 agents.py 拆形（§2.3）—— AST 统计，勿用行数估算
 python3 - <<'PY'
