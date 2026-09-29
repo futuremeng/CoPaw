@@ -36,6 +36,11 @@ PLACEHOLDER = "\x00"
 # Mechanical, non-semantic diffs reported on their own line.
 MECHANICAL = {"console/package-lock.json", "package-lock.json"}
 
+# Packaging metadata never participates in rename pairing: retargeting a console
+# script is a behaviour change even though both brand spellings appear on the
+# line (``copaw = "qwenpaw.cli.main:cli"`` -> ``copaw = "copaw.cli.main:cli"``).
+NO_RENAME_PAIRING = {"pyproject.toml"}
+
 
 def _run(args: list[str]) -> str:
     return subprocess.run(
@@ -150,7 +155,7 @@ def rename_pairs_by_path(
     return {
         path: pairs
         for path, removed, added in _iter_diff_files(base_ref, target_ref)
-        if (pairs := pair_rename_lines(removed, added))
+        if path not in NO_RENAME_PAIRING and (pairs := pair_rename_lines(removed, added))
     }
 
 

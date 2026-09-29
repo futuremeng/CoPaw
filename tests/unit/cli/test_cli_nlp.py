@@ -3,11 +3,11 @@ from pathlib import Path
 
 from click.testing import CliRunner
 
-from qwenpaw.cli.nlp_cmd import _grade_l2_assessment, nlp_group
+from copaw.cli.nlp_cmd import _grade_l2_assessment, nlp_group
 
 
 def test_assess_l2_all_projects_without_state_fails_by_default(monkeypatch) -> None:
-    monkeypatch.setattr("qwenpaw.cli.nlp_cmd._discover_project_state_files", lambda limit=100: [])
+    monkeypatch.setattr("copaw.cli.nlp_cmd._discover_project_state_files", lambda limit=100: [])
 
     result = CliRunner().invoke(
         nlp_group,
@@ -19,7 +19,7 @@ def test_assess_l2_all_projects_without_state_fails_by_default(monkeypatch) -> N
 
 
 def test_assess_l2_all_projects_allow_empty_returns_json(monkeypatch) -> None:
-    monkeypatch.setattr("qwenpaw.cli.nlp_cmd._discover_project_state_files", lambda limit=100: [])
+    monkeypatch.setattr("copaw.cli.nlp_cmd._discover_project_state_files", lambda limit=100: [])
 
     result = CliRunner().invoke(
         nlp_group,
@@ -64,7 +64,7 @@ def test_assess_l2_all_projects_invalid_state_json_is_marked(monkeypatch, tmp_pa
     broken.write_text("{invalid json", encoding="utf-8")
 
     monkeypatch.setattr(
-        "qwenpaw.cli.nlp_cmd._discover_project_state_files",
+        "copaw.cli.nlp_cmd._discover_project_state_files",
         lambda limit=100: [("demo_project", broken)],
     )
 

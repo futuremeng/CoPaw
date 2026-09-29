@@ -92,7 +92,9 @@ build-backend = "setuptools.build_meta"
 
 [project.scripts]
 qwenpaw = "qwenpaw.cli.main:cli"
-copaw = "qwenpaw.cli.main:cli"
+# Copaw = qwenpaw core + the src/copaw overlay, so src/qwenpaw stays free of
+# copaw references and src/copaw remains removable as a directory.
+copaw = "copaw.cli.main:cli"
 
 # Optional doctor plugins: callable (DoctorRunContext) -> list[str]
 # [project.entry-points."qwenpaw.doctor"]
