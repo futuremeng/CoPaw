@@ -52,6 +52,7 @@ def test_console_entry_or_fallback_ok(app_server) -> None:
         assert body.strip()
         assert "<!doctype html>" in body.lower() or "<html" in body.lower()
         return
+
     # Source installs without prebuilt frontend currently return 404 at
     # /console/. In this case, "/" should still expose a clear fallback
     # message instead of crashing.
