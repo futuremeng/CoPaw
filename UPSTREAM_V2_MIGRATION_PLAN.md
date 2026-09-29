@@ -438,9 +438,9 @@ skill_provider · prompt_section · agent_profile · managed_service · dependen
 **WP-00 已完成（2026-09-29，四条 Gate 全中）**：
 - 提交 `77b6e0d27 docs: add UPSTREAM_V2_MIGRATION_PLAN (WP-00 baseline)`（本文件，991 行纯新增，提交前扫描无密钥类内容）。
 - `git push origin main` 快进 `af07bcdb4..77b6e0d27`，推后 `git rev-list --left-right --count main...origin/main` = **0 0**，`main` = `origin/main` = `77b6e0d27` → 那 3 个提交（含 `248e61b35` 的 1,432 行前端代码）第一次有仓外副本。用户已明确"这个库保持开源，可以随时推送"。
-- `git tag v1-fork-final-2026-09-29 main` 已建（**当前仅在本地，未推 tag**）。
+- `git tag v1-fork-final-2026-09-29 main` 已建，**并已推到 `origin`**（`git ls-remote --tags origin` 可见 `77b6e0d27…`）。
 - **基线数字复核**：本次提交只新增 1 个 fork 自有文件，未触碰任何上游自有文件 → **P1 = 全仓 187 文件 / +24,985 / −12,377 不变**；`main` 的指针从 `a0002eaaa` 前进到 `77b6e0d27`（本节上一段写的 `a0002eaaa` 是"复核时"的状态，保留作追溯）。
-- **`main` 自此不再前进**：WP-01 起的每个工作包按红线走独立分支独立 PR。**基线指针 = tag `v1-fork-final-2026-09-29` → `77b6e0d27`；其后 `main` 只接过本计划的完成记录提交（`6e9e62d9f`，纯文档），未触碰任何上游自有文件，P1 数字仍为 187 / +24,985 / −12,377。**
+- **`main` 自此不再前进**：WP-01 起的每个工作包按红线走独立分支独立 PR。**基线指针 = tag `v1-fork-final-2026-09-29` → `77b6e0d27`；其后 `main` 只接**纯文档提交**（不含任何代码/上游自有文件改动），P1 数字仍为 187 / +24,985 / −12,377。**基线的稳定指针是 tag，不是 `main` 的 sha** —— 查 v1 兜底一律用 `v1-fork-final-2026-09-29`。**
 
 ### WP-01 建立 P1 不变式：`copaw` 可整体丢弃（**1.5–2.5d**，前置 WP-00；原估 1–2d，§2.1.1 的全仓口径 + `tests/` 还原 +0.5d）
 **在 v1.1.11b1 基线上做**，不引入任何上游 v2 变更 —— 这一步在 v1 上做冲突为零，拖到 v2 上做就要同时对抗 1160 提交。
