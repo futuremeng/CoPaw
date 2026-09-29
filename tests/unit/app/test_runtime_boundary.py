@@ -24,15 +24,19 @@ from copaw.cli.app_command import (
 REPO_ROOT = Path(__file__).resolve().parents[3]
 QWENPAW_SRC = REPO_ROOT / "src" / "qwenpaw"
 
-_INVASIVE_RE = re.compile(r"^(from|import) (copaw|\S*runtime_mode)\b", re.M)
+_INVASIVE_RE = re.compile(
+    r"^[ \t]*(from|import) (copaw|\S*runtime_mode)\b",
+    re.M,
+)
 
 # Files inside ``src/qwenpaw`` still holding a top-level ``from copaw`` import.
-# This is the WP-01 relocation queue: the fork-owned modules move to
-# ``src/copaw``; ``app/routers/agents.py`` is upstream-owned and must lose the
-# import instead of moving (it is the project-domain forwarding facade).
+# This is the WP-01 relocation queue.  Every entry has two possible resolutions:
+# the importing module moves into ``src/copaw`` behind the overlay, or the
+# copaw-resident dependency it needs moves into ``src/qwenpaw``.  Which one
+# applies per module is pending the desktop-entry ruling; ``app/routers/agents.py``
+# is upstream-owned, so it must lose the import rather than move.
 INVASIVE_COPAW_IMPORT_ALLOWLIST: frozenset[str] = frozenset(
     {
-        "src/qwenpaw/agents/utils/hanlp_sidecar.py",
         "src/qwenpaw/app/flow_engine_runtime.py",
         "src/qwenpaw/app/knowledge_workflow.py",
         "src/qwenpaw/app/project_knowledge_watcher.py",
@@ -73,6 +77,51 @@ def test_invasive_allow_list_is_a_ratchet() -> None:
     """Every recorded file must still be invasive; stale entries must be dropped."""
     resolved = INVASIVE_COPAW_IMPORT_ALLOWLIST - _invasive_files()
     assert resolved == set()
+    stale_refs = INVASIVE_COPAW_MODULE_REF_ALLOWLIST - _dynamic_invasive_files()
+    assert stale_refs == set()
+
+
+# ``import_module("<copaw…>")`` and lazy ``_EXPORTS`` tables reach copaw without
+# an import statement, so the regex above cannot see them.  Only strings that map
+# onto a real module file count; brand/log/entry-point names such as
+# ``copaw.dingtalk.stream`` and ``copaw.doctor`` resolve to nothing and are skipped.
+_MODULE_STRING_RE = re.compile(r"""['"](copaw(?:\.\w+)+)['"]""")
+COPAW_SRC = REPO_ROOT / "src" / "copaw"
+
+INVASIVE_COPAW_MODULE_REF_ALLOWLIST: frozenset[str] = frozenset(
+    {
+        "src/qwenpaw/knowledge/__init__.py",
+    },
+)
+
+
+def _copaw_module_exists(dotted: str) -> bool:
+    parts = dotted.split(".")
+    if parts[0] != "copaw":
+        return False
+    relative = "/".join(parts[1:])
+    return (COPAW_SRC / f"{relative}.py").is_file() or (
+        COPAW_SRC / relative / "__init__.py"
+    ).is_file()
+
+
+def _dynamic_invasive_files() -> set[str]:
+    out: set[str] = set()
+    for path in _python_files():
+        text = path.read_text(encoding="utf-8")
+        if any(
+            _copaw_module_exists(dotted)
+            for dotted in _MODULE_STRING_RE.findall(text)
+        ):
+            out.add(path.relative_to(REPO_ROOT).as_posix())
+    return out
+
+
+def test_qwenpaw_does_not_import_copaw_modules_dynamically() -> None:
+    unrecorded = sorted(
+        _dynamic_invasive_files() - INVASIVE_COPAW_MODULE_REF_ALLOWLIST
+    )
+    assert unrecorded == []
 
 
 def test_runtime_mode_module_is_gone() -> None:

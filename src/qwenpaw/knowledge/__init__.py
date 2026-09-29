@@ -7,8 +7,8 @@ from typing import Any
 
 
 _EXPORTS = {
-	"KnowledgeManager": ("copaw.knowledge.manager", "KnowledgeManager"),
-	"GraphOpsManager": ("copaw.knowledge.graph_ops", "GraphOpsManager"),
+	"KnowledgeManager": ("qwenpaw.knowledge.manager", "KnowledgeManager"),
+	"GraphOpsManager": ("qwenpaw.knowledge.graph_ops", "GraphOpsManager"),
 	"RetrievalFacade": ("copaw.knowledge.facades", "RetrievalFacade"),
 }
 

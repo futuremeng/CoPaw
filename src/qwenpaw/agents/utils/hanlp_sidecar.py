@@ -10,10 +10,9 @@ import threading
 import time
 from pathlib import Path
 
-from copaw.knowledge.hanlp_nlp_runtime import NLPRuntime
-
 from ...config import load_config, save_config
 from ...constant import WORKING_DIR
+from ...knowledge.hanlp_nlp_runtime import NLPRuntime
 
 _STATUS_CACHE: dict | None = None
 _STATUS_CACHE_TIME = 0.0

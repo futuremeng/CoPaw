@@ -9,12 +9,12 @@ from typing import Any, Callable
 
 from fastapi import HTTPException
 
-from copaw.config.config import KnowledgeConfig
 from copaw.app.flow_engine import FlowDefinition, FlowStepDefinition
-from copaw.knowledge.graph_ops import GraphOpsManager
-from copaw.knowledge.manager import KnowledgeManager
 from copaw.knowledge.project_pipeline_manager import DEFAULT_PROJECT_PIPELINE_QUALITY_LOOP_ROUNDS
 
+from ..config.config import KnowledgeConfig
+from ..knowledge.graph_ops import GraphOpsManager
+from ..knowledge.manager import KnowledgeManager
 from .builtin_agents import (
     BUILTIN_UNDERSTAND_DOMAIN_ANALYZER_ID,
     BUILTIN_UNDERSTAND_FILE_ANALYZER_ID,
