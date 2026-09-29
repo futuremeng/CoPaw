@@ -810,12 +810,12 @@
       "removed": 0
     },
     "pyproject.toml": {
-      "added": 5,
-      "behavior_added": 5,
-      "behavior_removed": 0,
+      "added": 8,
+      "behavior_added": 8,
+      "behavior_removed": 1,
       "mechanical": false,
       "naming": 0,
-      "removed": 0
+      "removed": 1
     },
     "scripts/README.md": {
       "added": 152,
@@ -1010,8 +1010,8 @@
       "removed": 49
     },
     "src/qwenpaw/app/_app.py": {
-      "added": 54,
-      "behavior_added": 54,
+      "added": 45,
+      "behavior_added": 45,
       "behavior_removed": 15,
       "mechanical": false,
       "naming": 0,
@@ -1233,14 +1233,6 @@
       "naming": 0,
       "removed": 40
     },
-    "src/qwenpaw/cli/app_cmd.py": {
-      "added": 2,
-      "behavior_added": 2,
-      "behavior_removed": 1,
-      "mechanical": false,
-      "naming": 0,
-      "removed": 1
-    },
     "src/qwenpaw/cli/desktop_cmd.py": {
       "added": 216,
       "behavior_added": 212,
@@ -1266,12 +1258,12 @@
       "removed": 7
     },
     "src/qwenpaw/cli/main.py": {
-      "added": 21,
-      "behavior_added": 19,
-      "behavior_removed": 1,
+      "added": 2,
+      "behavior_added": 0,
+      "behavior_removed": 0,
       "mechanical": false,
       "naming": 2,
-      "removed": 3
+      "removed": 2
     },
     "src/qwenpaw/cli/update_cmd.py": {
       "added": 1,
@@ -1491,15 +1483,15 @@
     }
   },
   "totals": {
-    "added": 16080,
-    "behavior_added": 15954,
-    "behavior_files": 182,
-    "behavior_removed": 2736,
-    "files": 185,
+    "added": 16053,
+    "behavior_added": 15927,
+    "behavior_files": 180,
+    "behavior_removed": 2735,
+    "files": 184,
     "mechanical_files": 1,
-    "naming_files": 3,
+    "naming_files": 4,
     "naming_lines": 126,
     "naming_touched_files": 22,
-    "removed": 2862
+    "removed": 2861
   }
 }
