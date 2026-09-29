@@ -40,7 +40,10 @@ ALLOWED_QWENPAW_TO_COPAW = {
 # extension ownership in copaw.
 ALLOWED_NON_THIN_SHARED = {
     "__init__.py",
+    "__main__.py",
     "app/_app.py",
+    "cli/__init__.py",
+    "cli/main.py",
     "knowledge/__init__.py",
     "knowledge/architecture.py",
     "knowledge/enrichment_pipeline.py",
@@ -50,9 +53,13 @@ ALLOWED_NON_THIN_SHARED = {
 }
 
 # copaw-only files should remain under extension areas (prefix match).
+# ``cli/`` is Copaw's own product entry point (D-16): the branded CLI, its
+# scoped uvicorn target swap and its doctor contributions are deliberately not
+# mirrored in the engine package.
 ALLOWED_COPAW_ONLY_PREFIXES = (
     "knowledge/",
     "app/flow_engine/",
+    "cli/",
 )
 
 # Keep these as explicit file-level exceptions to avoid broad app/router

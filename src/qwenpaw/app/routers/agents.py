@@ -91,16 +91,16 @@ from ..project_file_query import (
     query_project_file_records,
     scan_project_file_records,
 )
-from copaw.app.routers import project_file_services as copaw_project_file_services
-from copaw.app.routers import project_file_query_services as copaw_project_file_query_services
-from copaw.app.routers import project_file_ops as copaw_project_file_ops
-from copaw.app.routers import project_artifact_normalization_services as copaw_project_artifact_normalization_services
-from copaw.app.routers import project_artifact_workflow_services as copaw_project_artifact_workflow_services
-from copaw.app.routers import project_scaffold_services as copaw_project_scaffold_services
-from copaw.app.routers import project_lifecycle_services as copaw_project_lifecycle_services
-from copaw.app.routers import project_metadata_services as copaw_project_metadata_services
-from copaw.app.routers import project_summary_services as copaw_project_summary_services
-from copaw.app.routers import project_watch_artifact_services as copaw_project_watch_artifact_services
+from . import project_file_services as copaw_project_file_services
+from . import project_file_query_services as copaw_project_file_query_services
+from . import project_file_ops as copaw_project_file_ops
+from . import project_artifact_normalization_services as copaw_project_artifact_normalization_services
+from . import project_artifact_workflow_services as copaw_project_artifact_workflow_services
+from . import project_scaffold_services as copaw_project_scaffold_services
+from . import project_lifecycle_services as copaw_project_lifecycle_services
+from . import project_metadata_services as copaw_project_metadata_services
+from . import project_summary_services as copaw_project_summary_services
+from . import project_watch_artifact_services as copaw_project_watch_artifact_services
 
 logger = logging.getLogger(__name__)
 
