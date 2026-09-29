@@ -28,8 +28,8 @@ _INVASIVE_RE = re.compile(r"^(from|import) (copaw|\S*runtime_mode)\b", re.M)
 
 # Files inside ``src/qwenpaw`` still holding a top-level ``from copaw`` import.
 # This is the WP-01 relocation queue: the fork-owned modules move to
-# ``src/copaw``; the two upstream-owned ones (``app/routers/agents.py``,
-# ``cli/doctor_cmd.py``) must lose the import instead of moving.
+# ``src/copaw``; ``app/routers/agents.py`` is upstream-owned and must lose the
+# import instead of moving (it is the project-domain forwarding facade).
 INVASIVE_COPAW_IMPORT_ALLOWLIST: frozenset[str] = frozenset(
     {
         "src/qwenpaw/agents/utils/hanlp_sidecar.py",
@@ -42,7 +42,6 @@ INVASIVE_COPAW_IMPORT_ALLOWLIST: frozenset[str] = frozenset(
         "src/qwenpaw/app/routers/flows.py",
         "src/qwenpaw/app/routers/knowledge.py",
         "src/qwenpaw/app/routers/sidecar.py",
-        "src/qwenpaw/cli/doctor_cmd.py",
         "src/qwenpaw/knowledge/enrichment_pipeline.py",
         "src/qwenpaw/knowledge/graphify_provider.py",
     },

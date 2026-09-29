@@ -19,9 +19,7 @@ from ..__version__ import __version__
 from ..app.auth import has_registered_users, is_auth_enabled
 from ..config import load_config
 from ..config.utils import strict_validate_config_file
-from ..constant import WORKING_DIR
 from ..constant import PROJECT_NAME, WORKING_DIR
-from copaw.knowledge.hanlp_nlp_runtime import NLPRuntime
 from ..providers.provider import Provider
 from ..providers.provider_manager import ProviderManager
 from ..utils.console_static import (
@@ -232,66 +230,6 @@ def _check_web_auth(base: str) -> tuple[bool, str]:
     )
 
 
-def _check_hanlp_sidecar(cfg) -> tuple[bool, str, list[str]]:
-    runtime = NLPRuntime()
-    runtime_cfg = cfg.knowledge.model_copy(deep=True)
-    setattr(runtime_cfg, "nlp", cfg.nlp.model_copy(deep=True))
-    state = runtime.probe(runtime_cfg)
-    status = str(state.get("status") or "unavailable").strip().lower()
-    reason_code = str(state.get("reason_code") or "").strip().upper()
-    reason = str(state.get("reason") or "HanLP sidecar state is unavailable.").strip()
-    notes: list[str] = []
-
-    hanlp_cfg = cfg.nlp
-    if not NLPRuntime._sidecar_enabled(hanlp_cfg):
-        if sys.version_info[:2] == (3, 10):
-            notes.append(
-                "Main runtime is Python 3.10. Install directly with: "
-                "python -m pip install 'hanlp[full]', then set nlp.sidecar_enabled=true.",
-            )
-        else:
-            notes.append(
-                "Enable HanLP sidecar with COPAW_HANLP_SIDECAR_ENABLED=1 and "
-                "set COPAW_HANLP_SIDECAR_PYTHON to a Python 3.6-3.10 interpreter.",
-            )
-    elif not str(hanlp_cfg.python_executable or "").strip():
-        notes.append(
-            "Set COPAW_HANLP_SIDECAR_PYTHON or nlp.python_executable "
-            "to the dedicated Python 3.6-3.10 sidecar interpreter.",
-        )
-    else:
-        notes.append(
-            f"Configured sidecar Python: {hanlp_cfg.python_executable}",
-        )
-    model_home = (
-        str(getattr(hanlp_cfg, "model_home", "") or "").strip()
-        or str(getattr(hanlp_cfg, "hanlp_home", "") or "").strip()
-    )
-    if model_home:
-        notes.append(f"HANLP_HOME: {model_home}")
-    else:
-        notes.append(
-            "Optional: set COPAW_HANLP_HOME when using preloaded offline model caches.",
-        )
-
-    if status == "ready":
-        return True, reason, notes
-    if reason_code == "HANLP_IMPORT_UNAVAILABLE":
-        notes.append(
-            "Install HanLP in the sidecar environment, for example: "
-            "<sidecar-python> -m pip install 'hanlp[full]'",
-        )
-    elif reason_code == "HANLP_FULL_INSTALL_REQUIRED":
-        notes.append(
-            "Install full dependencies in sidecar: <sidecar-python> -m pip install 'hanlp[full]'.",
-        )
-    elif reason_code == "HANLP_SIDECAR_PYTHON_INCOMPATIBLE":
-        notes.append(
-            "HanLP 2.x local runtime should use Python 3.6-3.10 according to the upstream install guide.",
-        )
-    return False, reason, notes
-
-
 def _classify_console_root_response(resp: httpx.Response) -> tuple[bool, str]:
     ct = (resp.headers.get("content-type") or "").lower()
     if "text/html" in ct:
@@ -482,8 +420,6 @@ def run_doctor_checks(
             "`qwenpaw doctor fix --dry-run --help` and `--only`.",
         )
 
-    cfg = load_config() if config_ok else None
-
     raw_cfg = load_raw_config_dict()
     if raw_cfg is not None:
         unknown = scan_unknown_config_keys(raw_cfg)
@@ -503,7 +439,8 @@ def run_doctor_checks(
                 "yet).",
             )
 
-    if cfg is not None:
+    if config_ok:
+        cfg = load_config()
         legacy = legacy_single_agent_workspace_note(cfg)
         if legacy:
             click.echo("\n=== Multi-agent / workspace ===")
@@ -571,15 +508,6 @@ def run_doctor_checks(
                 click.style("OK", fg="green")
                 + " — no enabled-channel credential warnings",
             )
-
-        click.echo("\n=== HanLP Sidecar ===")
-        hanlp_ok, hanlp_detail, hanlp_notes = _check_hanlp_sidecar(cfg)
-        if hanlp_ok:
-            click.echo(click.style("OK", fg="green") + f" — {hanlp_detail}")
-        else:
-            click.echo(click.style("Note:", fg="yellow") + f" {hanlp_detail}")
-        for line in hanlp_notes:
-            click.echo(f"  - {line}")
 
         click.echo("\n=== Doctor extensions ===")
         ext_ctx = DoctorRunContext(
@@ -874,7 +802,7 @@ def run_doctor_checks(
     for line in llm_notes:
         click.echo(click.style("Note:", fg="yellow") + f" {line}")
 
-    if cfg is not None:
+    if config_ok:
         click.echo("\n=== Models (per agent) ===")
         aok, lines, extra_notes = asyncio.run(
             check_enabled_agents_model_connections(
@@ -908,7 +836,7 @@ def run_doctor_checks(
         for ln in extra_notes:
             click.echo(click.style("Note:", fg="yellow") + f" {ln}")
 
-    if cfg is not None:
+    if config_ok:
         mismatch = api_target_mismatch_note(cfg, base)
         if mismatch:
             click.echo("\n=== API target ===")

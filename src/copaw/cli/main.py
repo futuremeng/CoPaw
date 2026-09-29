@@ -13,10 +13,12 @@ from __future__ import annotations
 from qwenpaw.cli.main import cli
 
 from .app_command import attach_overlay_app_command
+from .doctor_hanlp import register as register_hanlp_doctor
 from .nlp_cmd import nlp_group
 
 attach_overlay_app_command(cli)
 cli.add_command(nlp_group, "nlp")
+register_hanlp_doctor()
 
 
 def main() -> None:
