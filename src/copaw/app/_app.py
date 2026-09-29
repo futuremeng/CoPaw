@@ -9,8 +9,8 @@ deleting ``src/copaw`` cannot break it.
 
 from qwenpaw.app._app import app
 
-from .routers.knowledge_hanlp_tasks import router as knowledge_hanlp_tasks_router
-from .routers.knowledge_siamese_tasks import router as knowledge_siamese_tasks_router
+from qwenpaw.app.routers.knowledge_hanlp_tasks import router as knowledge_hanlp_tasks_router
+from qwenpaw.app.routers.knowledge_siamese_tasks import router as knowledge_siamese_tasks_router
 
 app.state.runtime_overlay_enabled = True
 app.include_router(knowledge_hanlp_tasks_router, prefix="/api")

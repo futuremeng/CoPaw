@@ -1893,7 +1893,7 @@ async def run_knowledge_nlp_task(
     request_id = str(request_id_raw).strip() if request_id_raw is not None else None
 
     try:
-        from copaw.app.routers.knowledge_hanlp_tasks import (
+        from .knowledge_hanlp_tasks import (
             HanLPTaskRunRequest,
             _run_hanlp_task,
         )

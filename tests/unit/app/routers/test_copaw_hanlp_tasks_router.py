@@ -303,7 +303,7 @@ class _SlowTokenizeRuntime(_FakeRuntime):
 
 
 def _install_runtime_mocks(monkeypatch):
-    from copaw.app.routers import knowledge_hanlp_tasks as module
+    from qwenpaw.app.routers import knowledge_hanlp_tasks as module
 
     fake_cfg = _make_root_config(
         _make_nlp_config(model_id="MSRA_NER_BERT_BASE_ZH")
@@ -313,7 +313,7 @@ def _install_runtime_mocks(monkeypatch):
 
 
 def _install_runtime_mocks_with_strategy(monkeypatch):
-    from copaw.app.routers import knowledge_hanlp_tasks as module
+    from qwenpaw.app.routers import knowledge_hanlp_tasks as module
 
     cfg = _make_root_config(
         _make_nlp_config(
@@ -335,7 +335,7 @@ def _install_runtime_mocks_with_strategy(monkeypatch):
 
 
 def _install_unavailable_runtime_mocks(monkeypatch):
-    from copaw.app.routers import knowledge_hanlp_tasks as module
+    from qwenpaw.app.routers import knowledge_hanlp_tasks as module
 
     fake_cfg = _make_root_config(
         _make_nlp_config(model_id="MSRA_NER_BERT_BASE_ZH")
@@ -345,7 +345,7 @@ def _install_unavailable_runtime_mocks(monkeypatch):
 
 
 def _install_nested_list_ner_runtime_mocks(monkeypatch):
-    from copaw.app.routers import knowledge_hanlp_tasks as module
+    from qwenpaw.app.routers import knowledge_hanlp_tasks as module
 
     fake_cfg = _make_root_config(
         _make_nlp_config(model_id="MSRA_NER_BERT_BASE_ZH")
@@ -355,7 +355,7 @@ def _install_nested_list_ner_runtime_mocks(monkeypatch):
 
 
 def _install_runtime_mocks_with_strategy_and_task_matrix(monkeypatch):
-    from copaw.app.routers import knowledge_hanlp_tasks as module
+    from qwenpaw.app.routers import knowledge_hanlp_tasks as module
 
     cfg = _make_root_config(
         _make_nlp_config(
@@ -382,7 +382,7 @@ def _install_runtime_mocks_with_strategy_and_task_matrix(monkeypatch):
 
 
 def _install_fragmented_ner_runtime_mocks(monkeypatch):
-    from copaw.app.routers import knowledge_hanlp_tasks as module
+    from qwenpaw.app.routers import knowledge_hanlp_tasks as module
 
     fake_cfg = _make_root_config(
         _make_nlp_config(model_id="MSRA_NER_BERT_BASE_ZH")
@@ -392,7 +392,7 @@ def _install_fragmented_ner_runtime_mocks(monkeypatch):
 
 
 def _install_slow_tokenize_runtime_mocks(monkeypatch):
-    from copaw.app.routers import knowledge_hanlp_tasks as module
+    from qwenpaw.app.routers import knowledge_hanlp_tasks as module
 
     fake_cfg = _make_root_config(
         _make_nlp_config(
@@ -555,7 +555,7 @@ def test_copaw_hanlp_ner_prefers_task_matrix_model_over_strategy_default(monkeyp
 
 
 def test_copaw_hanlp_ner_injects_runtime_default_model_when_matrix_empty(monkeypatch):
-    from copaw.app.routers import knowledge_hanlp_tasks as module
+    from qwenpaw.app.routers import knowledge_hanlp_tasks as module
 
     cfg = _make_root_config(
         _make_nlp_config(
@@ -592,7 +592,7 @@ def test_copaw_hanlp_ner_injects_runtime_default_model_when_matrix_empty(monkeyp
 
 
 def test_copaw_hanlp_dep_injects_runtime_default_model_when_matrix_empty(monkeypatch):
-    from copaw.app.routers import knowledge_hanlp_tasks as module
+    from qwenpaw.app.routers import knowledge_hanlp_tasks as module
 
     cfg = _make_root_config(
         _make_nlp_config(
@@ -629,7 +629,7 @@ def test_copaw_hanlp_dep_injects_runtime_default_model_when_matrix_empty(monkeyp
 
 
 def test_copaw_hanlp_ner_filters_noisy_and_overlapping_entities(monkeypatch):
-    from copaw.app.routers import knowledge_hanlp_tasks as module
+    from qwenpaw.app.routers import knowledge_hanlp_tasks as module
 
     normalized = module._normalize_ner_result(
         [
@@ -647,7 +647,7 @@ def test_copaw_hanlp_ner_filters_noisy_and_overlapping_entities(monkeypatch):
 
 
 def test_copaw_hanlp_ner_runtime_timeout_is_raised_for_bert_when_too_low(monkeypatch):
-    from copaw.app.routers import knowledge_hanlp_tasks as module
+    from qwenpaw.app.routers import knowledge_hanlp_tasks as module
 
     cfg = SimpleNamespace(
         nlp=SimpleNamespace(
@@ -667,7 +667,7 @@ def test_copaw_hanlp_ner_runtime_timeout_is_raised_for_bert_when_too_low(monkeyp
 
 
 def test_copaw_hanlp_ner_route_timeout_budget_matches_ner_model(monkeypatch):
-    from copaw.app.routers import knowledge_hanlp_tasks as module
+    from qwenpaw.app.routers import knowledge_hanlp_tasks as module
 
     cfg = SimpleNamespace(
         nlp=SimpleNamespace(
@@ -843,7 +843,7 @@ def test_copaw_hanlp_tokenize_run_slash_endpoint_degrades_on_route_timeout(monke
 
 
 def test_route_timeout_sec_is_capped_for_interactive_requests():
-    from copaw.app.routers import knowledge_hanlp_tasks as module
+    from qwenpaw.app.routers import knowledge_hanlp_tasks as module
 
     effective_config = SimpleNamespace(
         nlp=SimpleNamespace(
@@ -863,7 +863,7 @@ def test_route_timeout_sec_is_capped_for_interactive_requests():
 
 
 def test_copaw_hanlp_tokenize_run_degrades_when_route_setup_exceeds_deadline(monkeypatch):
-    from copaw.app.routers import knowledge_hanlp_tasks as module
+    from qwenpaw.app.routers import knowledge_hanlp_tasks as module
 
     async def _slow_resolve(_request):
         await asyncio.sleep(0.05)

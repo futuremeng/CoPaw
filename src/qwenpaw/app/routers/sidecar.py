@@ -9,7 +9,7 @@ from typing import Any
 from fastapi import APIRouter, Query
 
 from ...config import load_config
-from copaw.knowledge.hanlp_nlp_runtime import NLPRuntime, _HANLP_PRETRAINED_URLS
+from ...knowledge.hanlp_nlp_runtime import NLPRuntime, _HANLP_PRETRAINED_URLS
 from .agent import (
     _build_hanlp_api_snapshot,
     _build_nlp_strategy_payload,
@@ -257,7 +257,7 @@ def _build_siamese_status_payload(config, strategy_payload: dict[str, Any]) -> d
         str(getattr(nlp_cfg, "siamese_python_executable", "") or "")
     )
     try:
-        from copaw.knowledge.siamese_uninlu_runtime import SiameseUniNLURuntime
+        from ...knowledge.siamese_uninlu_runtime import SiameseUniNLURuntime
 
         probe = SiameseUniNLURuntime.probe(config)
         probe_status = str(probe.get("status") or "unavailable")
@@ -569,7 +569,7 @@ async def get_sidecar_nlp_methods_catalog() -> dict[str, Any]:
     selected_provider = str(getattr(nlp_cfg, "provider", "hanlp") or "hanlp").strip().lower()
     hanlp_methods = _build_hanlp_methods_catalog(config)
     try:
-        from copaw.knowledge.siamese_uninlu_runtime import SiameseUniNLURuntime
+        from ...knowledge.siamese_uninlu_runtime import SiameseUniNLURuntime
 
         siamese_methods = SiameseUniNLURuntime.methods_catalog()
     except Exception:

@@ -61,12 +61,9 @@ ALLOWED_COPAW_ONLY_PREFIXES = (
     "cli/",
 )
 
-# Keep these as explicit file-level exceptions to avoid broad app/router
-# namespace expansion while preserving current extension ownership.
-ALLOWED_COPAW_ONLY_FILES = {
-    "app/routers/knowledge_hanlp_tasks.py",
-    "app/routers/knowledge_siamese_tasks.py",
-}
+# copaw-only routers were sunk into the engine package (D-16); the Copaw overlay
+# includes them from ``qwenpaw`` so no file-level exception is needed here.
+ALLOWED_COPAW_ONLY_FILES: set[str] = set()
 
 QWENPAW_TO_COPAW_IMPORT_RE = re.compile(r"^\s*from\s+copaw\.[\w.]+\s+import\s+", re.M)
 COPAW_TO_QWENPAW_IMPORT_RE = re.compile(

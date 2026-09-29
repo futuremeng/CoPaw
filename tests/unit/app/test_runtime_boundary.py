@@ -39,9 +39,6 @@ _INVASIVE_RE = re.compile(
 # the last one, was severed in this queue's second increment.
 INVASIVE_COPAW_IMPORT_ALLOWLIST: frozenset[str] = frozenset(
     {
-        "src/qwenpaw/app/routers/agent.py",
-        "src/qwenpaw/app/routers/knowledge.py",
-        "src/qwenpaw/app/routers/sidecar.py",
         "src/qwenpaw/knowledge/enrichment_pipeline.py",
         "src/qwenpaw/knowledge/graphify_provider.py",
     },

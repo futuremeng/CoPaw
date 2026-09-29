@@ -181,7 +181,7 @@ def test_post_siamese_install_offloads_to_thread(monkeypatch):
 
     monkeypatch.setattr(agent_router_module.asyncio, "to_thread", fake_to_thread)
     monkeypatch.setattr(
-        "copaw.knowledge.siamese_uninlu_runtime.initialize_siamese_sidecar",
+        "qwenpaw.knowledge.siamese_uninlu_runtime.initialize_siamese_sidecar",
         lambda _config: {
             "success": True,
             "already_available": False,

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from copaw.knowledge.siamese_uninlu_runtime import _SIAMESE_METHODS
+from qwenpaw.knowledge.siamese_uninlu_runtime import _SIAMESE_METHODS
 
 
 def test_siamese_ner_default_schema_includes_company_and_product() -> None:

@@ -19,10 +19,10 @@ from fastapi.testclient import TestClient
 
 from qwenpaw.app.flow_engine import FlowTransitionNotAllowedError
 
-from copaw.app.routers import knowledge as knowledge_router_module
+from qwenpaw.app.routers import knowledge as knowledge_router_module
 from qwenpaw.app import knowledge_workflow as knowledge_workflow_module
 from copaw.config.config import Config
-from copaw.knowledge import GraphOpsManager, KnowledgeManager
+from qwenpaw.knowledge import GraphOpsManager, KnowledgeManager
 from qwenpaw.knowledge.knowledge_quantization_architecture import QuantizationArchitectureManager
 
 
@@ -1218,7 +1218,7 @@ def test_run_knowledge_nlp_task_delegates_to_hanlp_runner(
     knowledge_api_client: TestClient,
     monkeypatch,
 ):
-    from copaw.app.routers import knowledge_hanlp_tasks as hanlp_tasks_module
+    from qwenpaw.app.routers import knowledge_hanlp_tasks as hanlp_tasks_module
 
     async def fake_run_hanlp_task(task_key, request_body, _http_request):
         return {

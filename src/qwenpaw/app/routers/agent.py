@@ -877,7 +877,7 @@ async def post_hanlp_download_model() -> dict:
 )
 async def post_siamese_install() -> dict:
     """Initialize Siamese UniNLU sidecar runtime and persist config fields."""
-    from copaw.knowledge.siamese_uninlu_runtime import initialize_siamese_sidecar
+    from ...knowledge.siamese_uninlu_runtime import initialize_siamese_sidecar
 
     def _initialize() -> dict:
         config = load_config()

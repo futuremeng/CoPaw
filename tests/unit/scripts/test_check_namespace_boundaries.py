@@ -52,10 +52,13 @@ def test_flow_engine_lives_in_the_engine_package():
     assert not (repo_root / "src" / "copaw" / "app" / "flow_engine").exists()
 
 
-def test_allowed_copaw_only_files_include_existing_knowledge_task_routers():
+def test_copaw_keeps_no_router_level_exceptions():
+    """D-16: both Copaw task routers were sunk into ``qwenpaw.app.routers``."""
     mod = _load_module()
-    assert "app/routers/knowledge_hanlp_tasks.py" in mod.ALLOWED_COPAW_ONLY_FILES
-    assert "app/routers/knowledge_siamese_tasks.py" in mod.ALLOWED_COPAW_ONLY_FILES
+    repo_root = Path(__file__).resolve().parents[3]
+    assert mod.ALLOWED_COPAW_ONLY_FILES == set()
+    assert not (repo_root / "src" / "copaw" / "app" / "routers" / "knowledge_hanlp_tasks.py").exists()
+    assert (repo_root / "src" / "qwenpaw" / "app" / "routers" / "knowledge_hanlp_tasks.py").is_file()
 
 
 def test_allowed_non_thin_shared_includes_copaw_app_overlay():
