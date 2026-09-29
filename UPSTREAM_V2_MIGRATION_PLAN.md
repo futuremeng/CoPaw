@@ -431,9 +431,16 @@ skill_provider · prompt_section · agent_profile · managed_service · dependen
 
 ### WP-00 冻结基线（0.5d）
 打 tag + 保留现有 `backup/*` 惯例，不碰代码。
-**基线的实际状态（2026-09-29 按"以仓库实际为准"复核，全部实测）**：`main` = `a0002eaaa`（2026-06-03），工作区干净、只有本计划文档未纳入 git；`main` 相对 `origin/main` 是 **3 ahead / 0 behind**，即 **v1 唯一兜底有 3 个提交从未推送**：`248e61b35`（refactor(projects)：文件树独立组件 + `TabbedEditor` 替换预览，8 文件 +1,797/−262）、`c5f04f83f`（feat(backend)：项目上下文注入 system prompt，7 文件 +216/−72）、`a0002eaaa`（fix：恢复误删的 `_register_hooks`，2 文件 +43/−3）。仓库里**不存在 `sync/v2` 分支**，`git log --all --grep=WP-`、reflog、dangling objects 全空 → **本计划没有任何 WP 已被执行**。
+**基线的实际状态（2026-09-29 按"以仓库实际为准"复核，全部实测）**：`main` = `a0002eaaa`（2026-06-03），工作区干净、只有本计划文档未纳入 git；`main` 相对 `origin/main` 是 **3 ahead / 0 behind**，即 **v1 唯一兜底有 3 个提交从未推送**：`248e61b35`（refactor(projects)：文件树独立组件 + `TabbedEditor` 替换预览，8 文件 +1,797/−262）、`c5f04f83f`（feat(backend)：项目上下文注入 system prompt，7 文件 +216/−72）、`a0002eaaa`（fix：恢复误删的 `_register_hooks`，2 文件 +43/−3）。仓库里**不存在 `sync/v2` 分支**，`git log --all --grep=WP-`、reflog、dangling objects 全空 → **本计划没有任何 WP 已被执行**。**（本段是复核时点的状态。稍后 WP-00 已执行：`main` = `77b6e0d27`、已推 `origin`、tag `v1-fork-final-2026-09-29` 已建，见本节末的完成记录。除 WP-00 外，仍无任何 WP 被执行。）**
 这 3 个提交触及 **4 个上游自有文件**（`console/src/api/authHeaders.ts`、`console/src/pages/Coding/TabbedEditor.tsx`、`src/qwenpaw/agents/react_agent.py`、`src/qwenpaw/app/routers/agent_scoped.py`），且这 4 个已在 §2.1 的 P1 61 文件 / `console/src` 83 文件计数内，**所以上述基线数字不变**；其余 10 个文件是 fork 自有路径（`console/src/pages/Agent/Projects/**`、`src/qwenpaw/app/project_context.py` 等，v2 下不存在）。
 **Gate**：`git tag v1-fork-final-<date> main` 存在；那 3 个未推送提交已推到 `origin` 或另存 `backup/` ref（**tag 不够 —— tag 指向的提交本身还在本地，磁盘坏了就一起没了**）；本计划文档纳入 git（否则唯一一份迁移依据是未版本化的单文件）；`main` 明确标记为 v1 兜底不再前进。
+
+**WP-00 已完成（2026-09-29，四条 Gate 全中）**：
+- 提交 `77b6e0d27 docs: add UPSTREAM_V2_MIGRATION_PLAN (WP-00 baseline)`（本文件，991 行纯新增，提交前扫描无密钥类内容）。
+- `git push origin main` 快进 `af07bcdb4..77b6e0d27`，推后 `git rev-list --left-right --count main...origin/main` = **0 0**，`main` = `origin/main` = `77b6e0d27` → 那 3 个提交（含 `248e61b35` 的 1,432 行前端代码）第一次有仓外副本。用户已明确"这个库保持开源，可以随时推送"。
+- `git tag v1-fork-final-2026-09-29 main` 已建（**当前仅在本地，未推 tag**）。
+- **基线数字复核**：本次提交只新增 1 个 fork 自有文件，未触碰任何上游自有文件 → **P1 = 全仓 187 文件 / +24,985 / −12,377 不变**；`main` 的指针从 `a0002eaaa` 前进到 `77b6e0d27`（本节上一段写的 `a0002eaaa` 是"复核时"的状态，保留作追溯）。
+- **`main` 自此不再前进**：WP-01 起的每个工作包按红线走独立分支独立 PR。
 
 ### WP-01 建立 P1 不变式：`copaw` 可整体丢弃（**1.5–2.5d**，前置 WP-00；原估 1–2d，§2.1.1 的全仓口径 + `tests/` 还原 +0.5d）
 **在 v1.1.11b1 基线上做**，不引入任何上游 v2 变更 —— 这一步在 v1 上做冲突为零，拖到 v2 上做就要同时对抗 1160 提交。
