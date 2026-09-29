@@ -6,7 +6,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from copaw.app import agent_config_watcher as watcher_module
+from qwenpaw.app import agent_config_watcher as watcher_module
 
 
 @pytest.mark.asyncio

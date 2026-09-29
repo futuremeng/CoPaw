@@ -9,8 +9,8 @@ import pytest
 from fastapi import FastAPI, HTTPException
 from fastapi.testclient import TestClient
 
-from copaw.app.project_realtime_events import collect_project_realtime_changes
-from copaw.app.routers import workspace as workspace_router_module
+from qwenpaw.app.project_realtime_events import collect_project_realtime_changes
+from qwenpaw.app.routers import workspace as workspace_router_module
 
 
 @pytest.fixture

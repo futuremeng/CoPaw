@@ -2,7 +2,7 @@
 
 import frontmatter
 
-from copaw.agents import skills_hub
+from qwenpaw.agents.skill_system import hub as skills_hub
 
 
 def test_fetch_bundle_from_github_url_normalizes_markdown_blob(

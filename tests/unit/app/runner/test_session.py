@@ -4,7 +4,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from copaw.app.runner.session import (
+from qwenpaw.app.runner.session import (
     SafeJSONSession,
     normalize_in_memory_memory_state,
     restore_in_memory_memory,

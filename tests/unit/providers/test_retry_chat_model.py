@@ -6,7 +6,7 @@ from typing import Any, AsyncGenerator, cast
 import httpx
 from agentscope.model import ChatModelBase
 
-from copaw.providers.retry_chat_model import RetryChatModel, _is_retryable
+from qwenpaw.providers.retry_chat_model import RetryChatModel, _is_retryable
 
 
 def test_is_retryable_for_httpx_remote_protocol_error() -> None:
@@ -55,7 +55,7 @@ async def test_retry_stream_when_remote_protocol_error(
     async def _no_sleep(_: float) -> None:
         return None
 
-    import copaw.providers.retry_chat_model as retry_module
+    import qwenpaw.providers.retry_chat_model as retry_module
 
     monkeypatch.setattr(retry_module, "LLM_MAX_RETRIES", 1)
     monkeypatch.setattr(retry_module.asyncio, "sleep", _no_sleep)

@@ -1,0 +1,1505 @@
+{
+  "base_ref": "e111ec6fb",
+  "files": {
+    ".github/ISSUE_TEMPLATE/config.yml": {
+      "added": 3,
+      "behavior_added": 3,
+      "behavior_removed": 0,
+      "mechanical": false,
+      "naming": 0,
+      "removed": 0
+    },
+    ".github/PULL_REQUEST_TEMPLATE.md": {
+      "added": 16,
+      "behavior_added": 16,
+      "behavior_removed": 0,
+      "mechanical": false,
+      "naming": 0,
+      "removed": 0
+    },
+    ".github/workflows/frontend-tests.yml": {
+      "added": 10,
+      "behavior_added": 10,
+      "behavior_removed": 0,
+      "mechanical": false,
+      "naming": 0,
+      "removed": 0
+    },
+    ".github/workflows/pr-under-review.yml": {
+      "added": 0,
+      "behavior_added": 0,
+      "behavior_removed": 2,
+      "mechanical": false,
+      "naming": 0,
+      "removed": 2
+    },
+    ".gitignore": {
+      "added": 5,
+      "behavior_added": 5,
+      "behavior_removed": 0,
+      "mechanical": false,
+      "naming": 0,
+      "removed": 0
+    },
+    "CONTRIBUTING.md": {
+      "added": 7,
+      "behavior_added": 7,
+      "behavior_removed": 0,
+      "mechanical": false,
+      "naming": 0,
+      "removed": 0
+    },
+    "CONTRIBUTING_zh.md": {
+      "added": 7,
+      "behavior_added": 7,
+      "behavior_removed": 0,
+      "mechanical": false,
+      "naming": 0,
+      "removed": 0
+    },
+    "Makefile": {
+      "added": 5,
+      "behavior_added": 5,
+      "behavior_removed": 1,
+      "mechanical": false,
+      "naming": 0,
+      "removed": 1
+    },
+    "README.md": {
+      "added": 60,
+      "behavior_added": 58,
+      "behavior_removed": 17,
+      "mechanical": false,
+      "naming": 2,
+      "removed": 19
+    },
+    "README_ja.md": {
+      "added": 65,
+      "behavior_added": 63,
+      "behavior_removed": 20,
+      "mechanical": false,
+      "naming": 2,
+      "removed": 22
+    },
+    "README_ru.md": {
+      "added": 67,
+      "behavior_added": 65,
+      "behavior_removed": 20,
+      "mechanical": false,
+      "naming": 2,
+      "removed": 22
+    },
+    "README_zh.md": {
+      "added": 70,
+      "behavior_added": 68,
+      "behavior_removed": 17,
+      "mechanical": false,
+      "naming": 2,
+      "removed": 19
+    },
+    "console/index.html": {
+      "added": 12,
+      "behavior_added": 11,
+      "behavior_removed": 1,
+      "mechanical": false,
+      "naming": 1,
+      "removed": 2
+    },
+    "console/package-lock.json": {
+      "added": 8960,
+      "behavior_added": 8960,
+      "behavior_removed": 9444,
+      "mechanical": true,
+      "naming": 0,
+      "removed": 9444
+    },
+    "console/package.json": {
+      "added": 21,
+      "behavior_added": 21,
+      "behavior_removed": 13,
+      "mechanical": false,
+      "naming": 0,
+      "removed": 13
+    },
+    "console/src/App.tsx": {
+      "added": 16,
+      "behavior_added": 16,
+      "behavior_removed": 4,
+      "mechanical": false,
+      "naming": 0,
+      "removed": 4
+    },
+    "console/src/api/authHeaders.ts": {
+      "added": 38,
+      "behavior_added": 38,
+      "behavior_removed": 0,
+      "mechanical": false,
+      "naming": 0,
+      "removed": 0
+    },
+    "console/src/api/index.ts": {
+      "added": 9,
+      "behavior_added": 9,
+      "behavior_removed": 0,
+      "mechanical": false,
+      "naming": 0,
+      "removed": 0
+    },
+    "console/src/api/modules/agent.ts": {
+      "added": 363,
+      "behavior_added": 363,
+      "behavior_removed": 17,
+      "mechanical": false,
+      "naming": 0,
+      "removed": 17
+    },
+    "console/src/api/modules/agents.ts": {
+      "added": 718,
+      "behavior_added": 718,
+      "behavior_removed": 0,
+      "mechanical": false,
+      "naming": 0,
+      "removed": 0
+    },
+    "console/src/api/modules/auth.ts": {
+      "added": 30,
+      "behavior_added": 30,
+      "behavior_removed": 4,
+      "mechanical": false,
+      "naming": 0,
+      "removed": 4
+    },
+    "console/src/api/modules/chat.ts": {
+      "added": 143,
+      "behavior_added": 143,
+      "behavior_removed": 4,
+      "mechanical": false,
+      "naming": 0,
+      "removed": 4
+    },
+    "console/src/api/modules/mcp.ts": {
+      "added": 11,
+      "behavior_added": 11,
+      "behavior_removed": 0,
+      "mechanical": false,
+      "naming": 0,
+      "removed": 0
+    },
+    "console/src/api/modules/plan.ts": {
+      "added": 16,
+      "behavior_added": 16,
+      "behavior_removed": 7,
+      "mechanical": false,
+      "naming": 0,
+      "removed": 7
+    },
+    "console/src/api/modules/skill.ts": {
+      "added": 43,
+      "behavior_added": 43,
+      "behavior_removed": 0,
+      "mechanical": false,
+      "naming": 0,
+      "removed": 0
+    },
+    "console/src/api/request.test.ts": {
+      "added": 58,
+      "behavior_added": 58,
+      "behavior_removed": 0,
+      "mechanical": false,
+      "naming": 0,
+      "removed": 0
+    },
+    "console/src/api/request.ts": {
+      "added": 122,
+      "behavior_added": 122,
+      "behavior_removed": 5,
+      "mechanical": false,
+      "naming": 0,
+      "removed": 5
+    },
+    "console/src/api/types/agent.ts": {
+      "added": 62,
+      "behavior_added": 62,
+      "behavior_removed": 11,
+      "mechanical": false,
+      "naming": 0,
+      "removed": 11
+    },
+    "console/src/api/types/agents.ts": {
+      "added": 617,
+      "behavior_added": 617,
+      "behavior_removed": 3,
+      "mechanical": false,
+      "naming": 0,
+      "removed": 3
+    },
+    "console/src/api/types/chat.ts": {
+      "added": 44,
+      "behavior_added": 44,
+      "behavior_removed": 1,
+      "mechanical": false,
+      "naming": 0,
+      "removed": 1
+    },
+    "console/src/api/types/index.ts": {
+      "added": 2,
+      "behavior_added": 2,
+      "behavior_removed": 0,
+      "mechanical": false,
+      "naming": 0,
+      "removed": 0
+    },
+    "console/src/api/types/mcp.ts": {
+      "added": 2,
+      "behavior_added": 2,
+      "behavior_removed": 0,
+      "mechanical": false,
+      "naming": 0,
+      "removed": 0
+    },
+    "console/src/api/types/skill.ts": {
+      "added": 73,
+      "behavior_added": 73,
+      "behavior_removed": 0,
+      "mechanical": false,
+      "naming": 0,
+      "removed": 0
+    },
+    "console/src/components/AgentSelector/AgentSelector.test.tsx": {
+      "added": 4,
+      "behavior_added": 4,
+      "behavior_removed": 3,
+      "mechanical": false,
+      "naming": 0,
+      "removed": 3
+    },
+    "console/src/components/AgentSelector/index.module.less": {
+      "added": 24,
+      "behavior_added": 24,
+      "behavior_removed": 6,
+      "mechanical": false,
+      "naming": 0,
+      "removed": 6
+    },
+    "console/src/components/AgentSelector/index.tsx": {
+      "added": 18,
+      "behavior_added": 18,
+      "behavior_removed": 10,
+      "mechanical": false,
+      "naming": 0,
+      "removed": 10
+    },
+    "console/src/components/ChunkErrorBoundary.tsx": {
+      "added": 1,
+      "behavior_added": 1,
+      "behavior_removed": 0,
+      "mechanical": false,
+      "naming": 0,
+      "removed": 0
+    },
+    "console/src/components/LanguageSwitcher/index.module.less": {
+      "added": 1,
+      "behavior_added": 1,
+      "behavior_removed": 1,
+      "mechanical": false,
+      "naming": 0,
+      "removed": 1
+    },
+    "console/src/components/LanguageSwitcher/index.tsx": {
+      "added": 1,
+      "behavior_added": 1,
+      "behavior_removed": 3,
+      "mechanical": false,
+      "naming": 0,
+      "removed": 3
+    },
+    "console/src/components/PlanPanel/index.tsx": {
+      "added": 13,
+      "behavior_added": 13,
+      "behavior_removed": 5,
+      "mechanical": false,
+      "naming": 0,
+      "removed": 5
+    },
+    "console/src/i18n.ts": {
+      "added": 91,
+      "behavior_added": 91,
+      "behavior_removed": 7,
+      "mechanical": false,
+      "naming": 0,
+      "removed": 7
+    },
+    "console/src/layouts/Header.tsx": {
+      "added": 8,
+      "behavior_added": 7,
+      "behavior_removed": 5,
+      "mechanical": false,
+      "naming": 1,
+      "removed": 6
+    },
+    "console/src/layouts/MainLayout/index.tsx": {
+      "added": 32,
+      "behavior_added": 32,
+      "behavior_removed": 10,
+      "mechanical": false,
+      "naming": 0,
+      "removed": 10
+    },
+    "console/src/layouts/Sidebar.tsx": {
+      "added": 50,
+      "behavior_added": 50,
+      "behavior_removed": 3,
+      "mechanical": false,
+      "naming": 0,
+      "removed": 3
+    },
+    "console/src/layouts/constants.ts": {
+      "added": 11,
+      "behavior_added": 8,
+      "behavior_removed": 0,
+      "mechanical": false,
+      "naming": 3,
+      "removed": 3
+    },
+    "console/src/layouts/index.module.less": {
+      "added": 16,
+      "behavior_added": 16,
+      "behavior_removed": 4,
+      "mechanical": false,
+      "naming": 0,
+      "removed": 4
+    },
+    "console/src/locales/en.json": {
+      "added": 128,
+      "behavior_added": 128,
+      "behavior_removed": 0,
+      "mechanical": false,
+      "naming": 0,
+      "removed": 0
+    },
+    "console/src/locales/id.json": {
+      "added": 13,
+      "behavior_added": 13,
+      "behavior_removed": 2,
+      "mechanical": false,
+      "naming": 0,
+      "removed": 2
+    },
+    "console/src/locales/ja.json": {
+      "added": 11,
+      "behavior_added": 11,
+      "behavior_removed": 0,
+      "mechanical": false,
+      "naming": 0,
+      "removed": 0
+    },
+    "console/src/locales/pt-BR.json": {
+      "added": 11,
+      "behavior_added": 11,
+      "behavior_removed": 0,
+      "mechanical": false,
+      "naming": 0,
+      "removed": 0
+    },
+    "console/src/locales/ru.json": {
+      "added": 11,
+      "behavior_added": 11,
+      "behavior_removed": 0,
+      "mechanical": false,
+      "naming": 0,
+      "removed": 0
+    },
+    "console/src/locales/zh.json": {
+      "added": 128,
+      "behavior_added": 128,
+      "behavior_removed": 0,
+      "mechanical": false,
+      "naming": 0,
+      "removed": 0
+    },
+    "console/src/pages/Agent/Config/components/ReactAgentCard.tsx": {
+      "added": 20,
+      "behavior_added": 20,
+      "behavior_removed": 15,
+      "mechanical": false,
+      "naming": 0,
+      "removed": 15
+    },
+    "console/src/pages/Agent/Config/components/index.ts": {
+      "added": 1,
+      "behavior_added": 1,
+      "behavior_removed": 0,
+      "mechanical": false,
+      "naming": 0,
+      "removed": 0
+    },
+    "console/src/pages/Agent/Config/index.module.less": {
+      "added": 12,
+      "behavior_added": 12,
+      "behavior_removed": 0,
+      "mechanical": false,
+      "naming": 0,
+      "removed": 0
+    },
+    "console/src/pages/Agent/Config/useAgentConfig.tsx": {
+      "added": 46,
+      "behavior_added": 46,
+      "behavior_removed": 47,
+      "mechanical": false,
+      "naming": 0,
+      "removed": 47
+    },
+    "console/src/pages/Agent/MCP/components/MCPClientCard.tsx": {
+      "added": 47,
+      "behavior_added": 47,
+      "behavior_removed": 14,
+      "mechanical": false,
+      "naming": 0,
+      "removed": 14
+    },
+    "console/src/pages/Agent/MCP/index.module.less": {
+      "added": 5,
+      "behavior_added": 5,
+      "behavior_removed": 10,
+      "mechanical": false,
+      "naming": 0,
+      "removed": 10
+    },
+    "console/src/pages/Agent/MCP/index.tsx": {
+      "added": 87,
+      "behavior_added": 87,
+      "behavior_removed": 144,
+      "mechanical": false,
+      "naming": 0,
+      "removed": 144
+    },
+    "console/src/pages/Agent/MCP/useMCP.ts": {
+      "added": 71,
+      "behavior_added": 71,
+      "behavior_removed": 10,
+      "mechanical": false,
+      "naming": 0,
+      "removed": 10
+    },
+    "console/src/pages/Agent/Skills/components/index.ts": {
+      "added": 1,
+      "behavior_added": 1,
+      "behavior_removed": 1,
+      "mechanical": false,
+      "naming": 0,
+      "removed": 1
+    },
+    "console/src/pages/Agent/Skills/index.module.less": {
+      "added": 5,
+      "behavior_added": 5,
+      "behavior_removed": 4,
+      "mechanical": false,
+      "naming": 0,
+      "removed": 4
+    },
+    "console/src/pages/Agent/Skills/index.tsx": {
+      "added": 1056,
+      "behavior_added": 1056,
+      "behavior_removed": 72,
+      "mechanical": false,
+      "naming": 0,
+      "removed": 72
+    },
+    "console/src/pages/Agent/Tools/index.module.less": {
+      "added": 4,
+      "behavior_added": 4,
+      "behavior_removed": 3,
+      "mechanical": false,
+      "naming": 0,
+      "removed": 3
+    },
+    "console/src/pages/Agent/Workspace/components/FileListPanel.tsx": {
+      "added": 8,
+      "behavior_added": 8,
+      "behavior_removed": 6,
+      "mechanical": false,
+      "naming": 0,
+      "removed": 6
+    },
+    "console/src/pages/Agent/Workspace/components/useAgentsData.ts": {
+      "added": 58,
+      "behavior_added": 58,
+      "behavior_removed": 24,
+      "mechanical": false,
+      "naming": 0,
+      "removed": 24
+    },
+    "console/src/pages/Agent/Workspace/index.module.less": {
+      "added": 9,
+      "behavior_added": 9,
+      "behavior_removed": 2,
+      "mechanical": false,
+      "naming": 0,
+      "removed": 2
+    },
+    "console/src/pages/Agent/Workspace/index.tsx": {
+      "added": 12,
+      "behavior_added": 12,
+      "behavior_removed": 0,
+      "mechanical": false,
+      "naming": 0,
+      "removed": 0
+    },
+    "console/src/pages/Chat/ModelSelector/index.module.less": {
+      "added": 2,
+      "behavior_added": 2,
+      "behavior_removed": 1,
+      "mechanical": false,
+      "naming": 0,
+      "removed": 1
+    },
+    "console/src/pages/Chat/OptionsPanel/defaultConfig.ts": {
+      "added": 2,
+      "behavior_added": 1,
+      "behavior_removed": 1,
+      "mechanical": false,
+      "naming": 1,
+      "removed": 2
+    },
+    "console/src/pages/Chat/components/ChatHeaderTitle/index.tsx": {
+      "added": 4,
+      "behavior_added": 4,
+      "behavior_removed": 1,
+      "mechanical": false,
+      "naming": 0,
+      "removed": 1
+    },
+    "console/src/pages/Chat/components/ChatSessionDrawer/index.tsx": {
+      "added": 5,
+      "behavior_added": 5,
+      "behavior_removed": 5,
+      "mechanical": false,
+      "naming": 0,
+      "removed": 5
+    },
+    "console/src/pages/Chat/components/WhisperSpeechButton/index.tsx": {
+      "added": 10,
+      "behavior_added": 10,
+      "behavior_removed": 14,
+      "mechanical": false,
+      "naming": 0,
+      "removed": 14
+    },
+    "console/src/pages/Chat/index.module.less": {
+      "added": 103,
+      "behavior_added": 103,
+      "behavior_removed": 0,
+      "mechanical": false,
+      "naming": 0,
+      "removed": 0
+    },
+    "console/src/pages/Chat/utils.test.ts": {
+      "added": 58,
+      "behavior_added": 58,
+      "behavior_removed": 0,
+      "mechanical": false,
+      "naming": 0,
+      "removed": 0
+    },
+    "console/src/pages/Chat/utils.ts": {
+      "added": 121,
+      "behavior_added": 121,
+      "behavior_removed": 0,
+      "mechanical": false,
+      "naming": 0,
+      "removed": 0
+    },
+    "console/src/pages/Coding/TabbedEditor.tsx": {
+      "added": 19,
+      "behavior_added": 19,
+      "behavior_removed": 8,
+      "mechanical": false,
+      "naming": 0,
+      "removed": 8
+    },
+    "console/src/pages/Control/Channels/components/ChannelCard.tsx": {
+      "added": 1,
+      "behavior_added": 1,
+      "behavior_removed": 1,
+      "mechanical": false,
+      "naming": 0,
+      "removed": 1
+    },
+    "console/src/pages/Control/Channels/components/ChannelDrawer.tsx": {
+      "added": 15,
+      "behavior_added": 15,
+      "behavior_removed": 3,
+      "mechanical": false,
+      "naming": 0,
+      "removed": 3
+    },
+    "console/src/pages/Control/Channels/index.module.less": {
+      "added": 3,
+      "behavior_added": 3,
+      "behavior_removed": 2,
+      "mechanical": false,
+      "naming": 0,
+      "removed": 2
+    },
+    "console/src/pages/Control/CronJobs/components/columns.tsx": {
+      "added": 1,
+      "behavior_added": 1,
+      "behavior_removed": 1,
+      "mechanical": false,
+      "naming": 0,
+      "removed": 1
+    },
+    "console/src/pages/Control/Heartbeat/index.tsx": {
+      "added": 6,
+      "behavior_added": 6,
+      "behavior_removed": 12,
+      "mechanical": false,
+      "naming": 0,
+      "removed": 12
+    },
+    "console/src/pages/Control/Sessions/index.tsx": {
+      "added": 1,
+      "behavior_added": 1,
+      "behavior_removed": 1,
+      "mechanical": false,
+      "naming": 0,
+      "removed": 1
+    },
+    "console/src/pages/Login/index.tsx": {
+      "added": 4,
+      "behavior_added": 3,
+      "behavior_removed": 2,
+      "mechanical": false,
+      "naming": 1,
+      "removed": 3
+    },
+    "console/src/pages/Settings/Agents/components/AgentTable.tsx": {
+      "added": 100,
+      "behavior_added": 100,
+      "behavior_removed": 60,
+      "mechanical": false,
+      "naming": 0,
+      "removed": 60
+    },
+    "console/src/pages/Settings/Agents/components/index.ts": {
+      "added": 1,
+      "behavior_added": 1,
+      "behavior_removed": 0,
+      "mechanical": false,
+      "naming": 0,
+      "removed": 0
+    },
+    "console/src/pages/Settings/Agents/index.module.less": {
+      "added": 1,
+      "behavior_added": 1,
+      "behavior_removed": 1,
+      "mechanical": false,
+      "naming": 0,
+      "removed": 1
+    },
+    "console/src/pages/Settings/Agents/index.tsx": {
+      "added": 44,
+      "behavior_added": 44,
+      "behavior_removed": 20,
+      "mechanical": false,
+      "naming": 0,
+      "removed": 20
+    },
+    "console/src/pages/Settings/Environments/index.module.less": {
+      "added": 39,
+      "behavior_added": 39,
+      "behavior_removed": 9,
+      "mechanical": false,
+      "naming": 0,
+      "removed": 9
+    },
+    "console/src/pages/Settings/Models/components/modals/ProviderConfigModal.tsx": {
+      "added": 239,
+      "behavior_added": 239,
+      "behavior_removed": 2,
+      "mechanical": false,
+      "naming": 0,
+      "removed": 2
+    },
+    "console/src/pages/Settings/Models/index.module.less": {
+      "added": 139,
+      "behavior_added": 139,
+      "behavior_removed": 2,
+      "mechanical": false,
+      "naming": 0,
+      "removed": 2
+    },
+    "console/src/pages/Settings/Security/index.module.less": {
+      "added": 20,
+      "behavior_added": 20,
+      "behavior_removed": 2,
+      "mechanical": false,
+      "naming": 0,
+      "removed": 2
+    },
+    "console/src/pages/Settings/Security/index.tsx": {
+      "added": 264,
+      "behavior_added": 264,
+      "behavior_removed": 76,
+      "mechanical": false,
+      "naming": 0,
+      "removed": 76
+    },
+    "console/src/pages/Settings/SkillPool/index.module.less": {
+      "added": 4,
+      "behavior_added": 4,
+      "behavior_removed": 3,
+      "mechanical": false,
+      "naming": 0,
+      "removed": 3
+    },
+    "console/src/plugins/PluginContext.tsx": {
+      "added": 8,
+      "behavior_added": 8,
+      "behavior_removed": 1,
+      "mechanical": false,
+      "naming": 0,
+      "removed": 1
+    },
+    "console/src/plugins/usePluginLoader.ts": {
+      "added": 43,
+      "behavior_added": 43,
+      "behavior_removed": 2,
+      "mechanical": false,
+      "naming": 0,
+      "removed": 2
+    },
+    "console/src/styles/layout.css": {
+      "added": 4,
+      "behavior_added": 4,
+      "behavior_removed": 4,
+      "mechanical": false,
+      "naming": 0,
+      "removed": 4
+    },
+    "console/src/utils/lazyWithRetry.ts": {
+      "added": 35,
+      "behavior_added": 35,
+      "behavior_removed": 4,
+      "mechanical": false,
+      "naming": 0,
+      "removed": 4
+    },
+    "console/tsconfig.app.json": {
+      "added": 1,
+      "behavior_added": 1,
+      "behavior_removed": 2,
+      "mechanical": false,
+      "naming": 0,
+      "removed": 2
+    },
+    "console/vite.config.ts": {
+      "added": 25,
+      "behavior_added": 25,
+      "behavior_removed": 2,
+      "mechanical": false,
+      "naming": 0,
+      "removed": 2
+    },
+    "deploy/Dockerfile": {
+      "added": 1,
+      "behavior_added": 1,
+      "behavior_removed": 0,
+      "mechanical": false,
+      "naming": 0,
+      "removed": 0
+    },
+    "pyproject.toml": {
+      "added": 5,
+      "behavior_added": 5,
+      "behavior_removed": 0,
+      "mechanical": false,
+      "naming": 0,
+      "removed": 0
+    },
+    "scripts/README.md": {
+      "added": 152,
+      "behavior_added": 152,
+      "behavior_removed": 1,
+      "mechanical": false,
+      "naming": 0,
+      "removed": 1
+    },
+    "scripts/install.bat": {
+      "added": 8,
+      "behavior_added": 6,
+      "behavior_removed": 2,
+      "mechanical": false,
+      "naming": 2,
+      "removed": 4
+    },
+    "scripts/install.ps1": {
+      "added": 8,
+      "behavior_added": 8,
+      "behavior_removed": 0,
+      "mechanical": false,
+      "naming": 0,
+      "removed": 0
+    },
+    "scripts/install.sh": {
+      "added": 4,
+      "behavior_added": 4,
+      "behavior_removed": 1,
+      "mechanical": false,
+      "naming": 0,
+      "removed": 1
+    },
+    "scripts/pack/README.md": {
+      "added": 22,
+      "behavior_added": 22,
+      "behavior_removed": 0,
+      "mechanical": false,
+      "naming": 0,
+      "removed": 0
+    },
+    "scripts/pack/README_zh.md": {
+      "added": 19,
+      "behavior_added": 19,
+      "behavior_removed": 0,
+      "mechanical": false,
+      "naming": 0,
+      "removed": 0
+    },
+    "scripts/pack/build_macos.sh": {
+      "added": 18,
+      "behavior_added": 15,
+      "behavior_removed": 2,
+      "mechanical": false,
+      "naming": 3,
+      "removed": 5
+    },
+    "scripts/pack/build_win.ps1": {
+      "added": 7,
+      "behavior_added": 0,
+      "behavior_removed": 0,
+      "mechanical": false,
+      "naming": 7,
+      "removed": 7
+    },
+    "scripts/pack/desktop.nsi": {
+      "added": 16,
+      "behavior_added": 1,
+      "behavior_removed": 1,
+      "mechanical": false,
+      "naming": 15,
+      "removed": 16
+    },
+    "scripts/wheel_build.sh": {
+      "added": 11,
+      "behavior_added": 11,
+      "behavior_removed": 2,
+      "mechanical": false,
+      "naming": 0,
+      "removed": 2
+    },
+    "src/qwenpaw/agents/command_handler.py": {
+      "added": 7,
+      "behavior_added": 7,
+      "behavior_removed": 1,
+      "mechanical": false,
+      "naming": 0,
+      "removed": 1
+    },
+    "src/qwenpaw/agents/hooks/__init__.py": {
+      "added": 3,
+      "behavior_added": 3,
+      "behavior_removed": 0,
+      "mechanical": false,
+      "naming": 0,
+      "removed": 0
+    },
+    "src/qwenpaw/agents/memory/agent_md_manager.py": {
+      "added": 4,
+      "behavior_added": 4,
+      "behavior_removed": 1,
+      "mechanical": false,
+      "naming": 0,
+      "removed": 1
+    },
+    "src/qwenpaw/agents/prompt.py": {
+      "added": 31,
+      "behavior_added": 31,
+      "behavior_removed": 0,
+      "mechanical": false,
+      "naming": 0,
+      "removed": 0
+    },
+    "src/qwenpaw/agents/react_agent.py": {
+      "added": 76,
+      "behavior_added": 76,
+      "behavior_removed": 40,
+      "mechanical": false,
+      "naming": 0,
+      "removed": 40
+    },
+    "src/qwenpaw/agents/skill_system/__init__.py": {
+      "added": 20,
+      "behavior_added": 20,
+      "behavior_removed": 0,
+      "mechanical": false,
+      "naming": 0,
+      "removed": 0
+    },
+    "src/qwenpaw/agents/skills/multi_agent_collaboration-zh/SKILL.md": {
+      "added": 1,
+      "behavior_added": 1,
+      "behavior_removed": 1,
+      "mechanical": false,
+      "naming": 0,
+      "removed": 1
+    },
+    "src/qwenpaw/agents/tools/file_io.py": {
+      "added": 60,
+      "behavior_added": 60,
+      "behavior_removed": 2,
+      "mechanical": false,
+      "naming": 0,
+      "removed": 2
+    },
+    "src/qwenpaw/agents/tools/file_search.py": {
+      "added": 2,
+      "behavior_added": 2,
+      "behavior_removed": 2,
+      "mechanical": false,
+      "naming": 0,
+      "removed": 2
+    },
+    "src/qwenpaw/agents/utils/__init__.py": {
+      "added": 2,
+      "behavior_added": 2,
+      "behavior_removed": 0,
+      "mechanical": false,
+      "naming": 0,
+      "removed": 0
+    },
+    "src/qwenpaw/agents/utils/audio_transcription.py": {
+      "added": 335,
+      "behavior_added": 335,
+      "behavior_removed": 5,
+      "mechanical": false,
+      "naming": 0,
+      "removed": 5
+    },
+    "src/qwenpaw/agents/utils/file_handling.py": {
+      "added": 3,
+      "behavior_added": 3,
+      "behavior_removed": 2,
+      "mechanical": false,
+      "naming": 0,
+      "removed": 2
+    },
+    "src/qwenpaw/agents/utils/message_processing.py": {
+      "added": 49,
+      "behavior_added": 49,
+      "behavior_removed": 4,
+      "mechanical": false,
+      "naming": 0,
+      "removed": 4
+    },
+    "src/qwenpaw/agents/utils/setup_utils.py": {
+      "added": 199,
+      "behavior_added": 199,
+      "behavior_removed": 49,
+      "mechanical": false,
+      "naming": 0,
+      "removed": 49
+    },
+    "src/qwenpaw/app/_app.py": {
+      "added": 54,
+      "behavior_added": 54,
+      "behavior_removed": 15,
+      "mechanical": false,
+      "naming": 0,
+      "removed": 15
+    },
+    "src/qwenpaw/app/agent_config_watcher.py": {
+      "added": 221,
+      "behavior_added": 221,
+      "behavior_removed": 110,
+      "mechanical": false,
+      "naming": 0,
+      "removed": 110
+    },
+    "src/qwenpaw/app/agent_context.py": {
+      "added": 59,
+      "behavior_added": 59,
+      "behavior_removed": 33,
+      "mechanical": false,
+      "naming": 0,
+      "removed": 33
+    },
+    "src/qwenpaw/app/channels/dingtalk/channel.py": {
+      "added": 74,
+      "behavior_added": 74,
+      "behavior_removed": 1,
+      "mechanical": false,
+      "naming": 0,
+      "removed": 1
+    },
+    "src/qwenpaw/app/channels/manager.py": {
+      "added": 1,
+      "behavior_added": 1,
+      "behavior_removed": 1,
+      "mechanical": false,
+      "naming": 0,
+      "removed": 1
+    },
+    "src/qwenpaw/app/mcp/manager.py": {
+      "added": 194,
+      "behavior_added": 194,
+      "behavior_removed": 16,
+      "mechanical": false,
+      "naming": 0,
+      "removed": 16
+    },
+    "src/qwenpaw/app/mcp/stateful_client.py": {
+      "added": 690,
+      "behavior_added": 690,
+      "behavior_removed": 396,
+      "mechanical": false,
+      "naming": 0,
+      "removed": 396
+    },
+    "src/qwenpaw/app/mcp/watcher.py": {
+      "added": 26,
+      "behavior_added": 26,
+      "behavior_removed": 8,
+      "mechanical": false,
+      "naming": 0,
+      "removed": 8
+    },
+    "src/qwenpaw/app/migration.py": {
+      "added": 159,
+      "behavior_added": 156,
+      "behavior_removed": 125,
+      "mechanical": false,
+      "naming": 3,
+      "removed": 128
+    },
+    "src/qwenpaw/app/multi_agent_manager.py": {
+      "added": 18,
+      "behavior_added": 18,
+      "behavior_removed": 8,
+      "mechanical": false,
+      "naming": 0,
+      "removed": 8
+    },
+    "src/qwenpaw/app/routers/__init__.py": {
+      "added": 14,
+      "behavior_added": 14,
+      "behavior_removed": 0,
+      "mechanical": false,
+      "naming": 0,
+      "removed": 0
+    },
+    "src/qwenpaw/app/routers/agent_scoped.py": {
+      "added": 14,
+      "behavior_added": 14,
+      "behavior_removed": 0,
+      "mechanical": false,
+      "naming": 0,
+      "removed": 0
+    },
+    "src/qwenpaw/app/routers/agents.py": {
+      "added": 4239,
+      "behavior_added": 4239,
+      "behavior_removed": 335,
+      "mechanical": false,
+      "naming": 0,
+      "removed": 335
+    },
+    "src/qwenpaw/app/routers/config.py": {
+      "added": 56,
+      "behavior_added": 56,
+      "behavior_removed": 21,
+      "mechanical": false,
+      "naming": 0,
+      "removed": 21
+    },
+    "src/qwenpaw/app/routers/plan.py": {
+      "added": 2,
+      "behavior_added": 2,
+      "behavior_removed": 0,
+      "mechanical": false,
+      "naming": 0,
+      "removed": 0
+    },
+    "src/qwenpaw/app/routers/providers.py": {
+      "added": 43,
+      "behavior_added": 43,
+      "behavior_removed": 5,
+      "mechanical": false,
+      "naming": 0,
+      "removed": 5
+    },
+    "src/qwenpaw/app/routers/skills.py": {
+      "added": 698,
+      "behavior_added": 698,
+      "behavior_removed": 4,
+      "mechanical": false,
+      "naming": 0,
+      "removed": 4
+    },
+    "src/qwenpaw/app/routers/tools.py": {
+      "added": 28,
+      "behavior_added": 28,
+      "behavior_removed": 111,
+      "mechanical": false,
+      "naming": 0,
+      "removed": 111
+    },
+    "src/qwenpaw/app/routers/workspace.py": {
+      "added": 105,
+      "behavior_added": 105,
+      "behavior_removed": 59,
+      "mechanical": false,
+      "naming": 0,
+      "removed": 59
+    },
+    "src/qwenpaw/app/runner/__init__.py": {
+      "added": 21,
+      "behavior_added": 21,
+      "behavior_removed": 17,
+      "mechanical": false,
+      "naming": 0,
+      "removed": 17
+    },
+    "src/qwenpaw/app/runner/api.py": {
+      "added": 457,
+      "behavior_added": 457,
+      "behavior_removed": 34,
+      "mechanical": false,
+      "naming": 0,
+      "removed": 34
+    },
+    "src/qwenpaw/app/runner/command_dispatch.py": {
+      "added": 8,
+      "behavior_added": 8,
+      "behavior_removed": 17,
+      "mechanical": false,
+      "naming": 0,
+      "removed": 17
+    },
+    "src/qwenpaw/app/runner/models.py": {
+      "added": 108,
+      "behavior_added": 108,
+      "behavior_removed": 0,
+      "mechanical": false,
+      "naming": 0,
+      "removed": 0
+    },
+    "src/qwenpaw/app/runner/query_error_dump.py": {
+      "added": 3,
+      "behavior_added": 3,
+      "behavior_removed": 3,
+      "mechanical": false,
+      "naming": 0,
+      "removed": 3
+    },
+    "src/qwenpaw/app/runner/session.py": {
+      "added": 326,
+      "behavior_added": 326,
+      "behavior_removed": 245,
+      "mechanical": false,
+      "naming": 0,
+      "removed": 245
+    },
+    "src/qwenpaw/app/runner/title_generator.py": {
+      "added": 15,
+      "behavior_added": 15,
+      "behavior_removed": 4,
+      "mechanical": false,
+      "naming": 0,
+      "removed": 4
+    },
+    "src/qwenpaw/app/workspace/service_factories.py": {
+      "added": 16,
+      "behavior_added": 16,
+      "behavior_removed": 1,
+      "mechanical": false,
+      "naming": 0,
+      "removed": 1
+    },
+    "src/qwenpaw/app/workspace/workspace.py": {
+      "added": 36,
+      "behavior_added": 36,
+      "behavior_removed": 40,
+      "mechanical": false,
+      "naming": 0,
+      "removed": 40
+    },
+    "src/qwenpaw/cli/app_cmd.py": {
+      "added": 2,
+      "behavior_added": 2,
+      "behavior_removed": 1,
+      "mechanical": false,
+      "naming": 0,
+      "removed": 1
+    },
+    "src/qwenpaw/cli/desktop_cmd.py": {
+      "added": 216,
+      "behavior_added": 212,
+      "behavior_removed": 133,
+      "mechanical": false,
+      "naming": 4,
+      "removed": 137
+    },
+    "src/qwenpaw/cli/doctor_cmd.py": {
+      "added": 76,
+      "behavior_added": 76,
+      "behavior_removed": 4,
+      "mechanical": false,
+      "naming": 0,
+      "removed": 4
+    },
+    "src/qwenpaw/cli/init_cmd.py": {
+      "added": 7,
+      "behavior_added": 0,
+      "behavior_removed": 0,
+      "mechanical": false,
+      "naming": 7,
+      "removed": 7
+    },
+    "src/qwenpaw/cli/main.py": {
+      "added": 21,
+      "behavior_added": 19,
+      "behavior_removed": 1,
+      "mechanical": false,
+      "naming": 2,
+      "removed": 3
+    },
+    "src/qwenpaw/cli/update_cmd.py": {
+      "added": 1,
+      "behavior_added": 0,
+      "behavior_removed": 0,
+      "mechanical": false,
+      "naming": 1,
+      "removed": 1
+    },
+    "src/qwenpaw/config/__init__.py": {
+      "added": 0,
+      "behavior_added": 0,
+      "behavior_removed": 2,
+      "mechanical": false,
+      "naming": 0,
+      "removed": 2
+    },
+    "src/qwenpaw/config/config.py": {
+      "added": 247,
+      "behavior_added": 247,
+      "behavior_removed": 0,
+      "mechanical": false,
+      "naming": 0,
+      "removed": 0
+    },
+    "src/qwenpaw/config/context.py": {
+      "added": 39,
+      "behavior_added": 39,
+      "behavior_removed": 0,
+      "mechanical": false,
+      "naming": 0,
+      "removed": 0
+    },
+    "src/qwenpaw/config/utils.py": {
+      "added": 25,
+      "behavior_added": 25,
+      "behavior_removed": 0,
+      "mechanical": false,
+      "naming": 0,
+      "removed": 0
+    },
+    "src/qwenpaw/constant.py": {
+      "added": 1,
+      "behavior_added": 1,
+      "behavior_removed": 0,
+      "mechanical": false,
+      "naming": 0,
+      "removed": 0
+    },
+    "src/qwenpaw/providers/ollama_provider.py": {
+      "added": 2,
+      "behavior_added": 2,
+      "behavior_removed": 2,
+      "mechanical": false,
+      "naming": 0,
+      "removed": 2
+    },
+    "src/qwenpaw/providers/openai_chat_model_compat.py": {
+      "added": 114,
+      "behavior_added": 114,
+      "behavior_removed": 11,
+      "mechanical": false,
+      "naming": 0,
+      "removed": 11
+    },
+    "src/qwenpaw/providers/openai_provider.py": {
+      "added": 49,
+      "behavior_added": 49,
+      "behavior_removed": 11,
+      "mechanical": false,
+      "naming": 0,
+      "removed": 11
+    },
+    "src/qwenpaw/providers/retry_chat_model.py": {
+      "added": 62,
+      "behavior_added": 62,
+      "behavior_removed": 16,
+      "mechanical": false,
+      "naming": 0,
+      "removed": 16
+    },
+    "src/qwenpaw/security/skill_scanner/data/default_policy.yaml": {
+      "added": 0,
+      "behavior_added": 0,
+      "behavior_removed": 1,
+      "mechanical": false,
+      "naming": 0,
+      "removed": 1
+    },
+    "src/qwenpaw/security/tool_guard/guardians/file_guardian.py": {
+      "added": 3,
+      "behavior_added": 3,
+      "behavior_removed": 2,
+      "mechanical": false,
+      "naming": 0,
+      "removed": 2
+    },
+    "src/qwenpaw/token_usage/model_wrapper.py": {
+      "added": 15,
+      "behavior_added": 15,
+      "behavior_removed": 8,
+      "mechanical": false,
+      "naming": 0,
+      "removed": 8
+    },
+    "tests/integration/test_app_startup.py": {
+      "added": 0,
+      "behavior_added": 0,
+      "behavior_removed": 1,
+      "mechanical": false,
+      "naming": 0,
+      "removed": 1
+    },
+    "tests/unit/agents/test_command_handler.py": {
+      "added": 21,
+      "behavior_added": 21,
+      "behavior_removed": 0,
+      "mechanical": false,
+      "naming": 0,
+      "removed": 0
+    },
+    "tests/unit/agents/test_session.py": {
+      "added": 43,
+      "behavior_added": 43,
+      "behavior_removed": 0,
+      "mechanical": false,
+      "naming": 0,
+      "removed": 0
+    },
+    "tests/unit/app/test_agents_ordering.py": {
+      "added": 26,
+      "behavior_added": 26,
+      "behavior_removed": 1,
+      "mechanical": false,
+      "naming": 0,
+      "removed": 1
+    },
+    "tests/unit/app/test_title_generator.py": {
+      "added": 10,
+      "behavior_added": 10,
+      "behavior_removed": 7,
+      "mechanical": false,
+      "naming": 0,
+      "removed": 7
+    },
+    "tests/unit/providers/test_ollama_provider.py": {
+      "added": 31,
+      "behavior_added": 31,
+      "behavior_removed": 0,
+      "mechanical": false,
+      "naming": 0,
+      "removed": 0
+    },
+    "tests/unit/providers/test_openai_provider.py": {
+      "added": 38,
+      "behavior_added": 38,
+      "behavior_removed": 2,
+      "mechanical": false,
+      "naming": 0,
+      "removed": 2
+    },
+    "tests/unit/providers/test_openai_stream_toolcall_compat.py": {
+      "added": 100,
+      "behavior_added": 100,
+      "behavior_removed": 0,
+      "mechanical": false,
+      "naming": 0,
+      "removed": 0
+    },
+    "tests/unit/workspace/test_agent_model.py": {
+      "added": 37,
+      "behavior_added": 37,
+      "behavior_removed": 0,
+      "mechanical": false,
+      "naming": 0,
+      "removed": 0
+    },
+    "tests/unit/workspace/test_workspace.py": {
+      "added": 24,
+      "behavior_added": 24,
+      "behavior_removed": 0,
+      "mechanical": false,
+      "naming": 0,
+      "removed": 0
+    },
+    "website/public/docs/cli.en.md": {
+      "added": 24,
+      "behavior_added": 2,
+      "behavior_removed": 2,
+      "mechanical": false,
+      "naming": 22,
+      "removed": 24
+    },
+    "website/public/docs/cli.zh.md": {
+      "added": 25,
+      "behavior_added": 2,
+      "behavior_removed": 2,
+      "mechanical": false,
+      "naming": 23,
+      "removed": 25
+    },
+    "website/public/docs/desktop.en.md": {
+      "added": 11,
+      "behavior_added": 0,
+      "behavior_removed": 2,
+      "mechanical": false,
+      "naming": 11,
+      "removed": 13
+    },
+    "website/public/docs/desktop.zh.md": {
+      "added": 11,
+      "behavior_added": 0,
+      "behavior_removed": 2,
+      "mechanical": false,
+      "naming": 11,
+      "removed": 13
+    }
+  },
+  "totals": {
+    "added": 16080,
+    "behavior_added": 15954,
+    "behavior_files": 182,
+    "behavior_removed": 2736,
+    "files": 185,
+    "mechanical_files": 1,
+    "naming_files": 3,
+    "naming_lines": 126,
+    "naming_touched_files": 22,
+    "removed": 2862
+  }
+}

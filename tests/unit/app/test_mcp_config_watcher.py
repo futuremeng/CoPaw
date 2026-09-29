@@ -6,8 +6,8 @@ from typing import cast
 
 import pytest
 
-from copaw.app.mcp import watcher as watcher_module
-from copaw.app.mcp import MCPClientManager
+from qwenpaw.app.mcp import watcher as watcher_module
+from qwenpaw.app.mcp import MCPClientManager
 
 
 @pytest.mark.asyncio

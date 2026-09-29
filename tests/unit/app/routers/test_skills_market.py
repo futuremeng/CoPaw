@@ -12,8 +12,8 @@ from fastapi import FastAPI
 from fastapi import HTTPException
 from fastapi.testclient import TestClient
 
-from copaw.app.routers import skills as skills_router_module
-from copaw.app.routers.skills import (
+from qwenpaw.app.routers import skills as skills_router_module
+from qwenpaw.app.routers.skills import (
     MarketError,
     MarketplaceItem,
     SkillsMarketPayload,
@@ -414,8 +414,8 @@ def test_validate_market_maps_index_value_error_to_http_400(
     def _raise_index_error(*args, **kwargs):
         raise ValueError("MARKET_INDEX_INVALID: missing skills")
 
-    monkeypatch.setattr("copaw.app.routers.skills._run_git_command", _ok_ls_remote)
-    monkeypatch.setattr("copaw.app.routers.skills._load_market_index", _raise_index_error)
+    monkeypatch.setattr("qwenpaw.app.routers.skills._run_git_command", _ok_ls_remote)
+    monkeypatch.setattr("qwenpaw.app.routers.skills._load_market_index", _raise_index_error)
 
     with pytest.raises(HTTPException) as exc:
         asyncio.run(validate_market(payload))
@@ -448,8 +448,8 @@ def test_validate_market_maps_market_runtime_error_to_http_502(
     def _raise_unreachable(*args, **kwargs):
         raise RuntimeError("MARKET_UNREACHABLE: clone failed")
 
-    monkeypatch.setattr("copaw.app.routers.skills._run_git_command", _ok_ls_remote)
-    monkeypatch.setattr("copaw.app.routers.skills._load_market_index", _raise_unreachable)
+    monkeypatch.setattr("qwenpaw.app.routers.skills._run_git_command", _ok_ls_remote)
+    monkeypatch.setattr("qwenpaw.app.routers.skills._load_market_index", _raise_unreachable)
 
     with pytest.raises(HTTPException) as exc:
         asyncio.run(validate_market(payload))
@@ -470,9 +470,9 @@ def test_validate_market_endpoint_returns_normalized_contract(
             stderr="",
         )
 
-    monkeypatch.setattr("copaw.app.routers.skills._run_git_command", _ok_ls_remote)
+    monkeypatch.setattr("qwenpaw.app.routers.skills._run_git_command", _ok_ls_remote)
     monkeypatch.setattr(
-        "copaw.app.routers.skills._load_market_index",
+        "qwenpaw.app.routers.skills._load_market_index",
         lambda *_args, **_kwargs: ({"skills": []}, []),
     )
 
@@ -501,11 +501,11 @@ def test_marketplace_endpoint_returns_expected_shape(
     skills_api_client: TestClient,
 ) -> None:
     monkeypatch.setattr(
-        "copaw.app.routers.skills._load_current_market_config",
+        "qwenpaw.app.routers.skills._load_current_market_config",
         lambda: SkillsMarketConfig(),
     )
     monkeypatch.setattr(
-        "copaw.app.routers.skills._aggregate_marketplace",
+        "qwenpaw.app.routers.skills._aggregate_marketplace",
         lambda *_args, **_kwargs: (
             [
                 MarketplaceItem(
@@ -552,11 +552,11 @@ def test_marketplace_install_endpoint_returns_not_found_when_item_missing(
     tmp_path: Path,
 ) -> None:
     monkeypatch.setattr(
-        "copaw.app.routers.skills._load_current_market_config",
+        "qwenpaw.app.routers.skills._load_current_market_config",
         lambda: SkillsMarketConfig(),
     )
     monkeypatch.setattr(
-        "copaw.app.routers.skills._aggregate_marketplace",
+        "qwenpaw.app.routers.skills._aggregate_marketplace",
         lambda *_args, **_kwargs: ([], [], {}),
     )
 
@@ -564,7 +564,7 @@ def test_marketplace_install_endpoint_returns_not_found_when_item_missing(
         return SimpleNamespace(workspace_dir=str(tmp_path / "workspace"))
 
     monkeypatch.setattr(
-        "copaw.app.agent_context.get_agent_for_request",
+        "qwenpaw.app.agent_context.get_agent_for_request",
         _mock_get_agent_for_request,
     )
 

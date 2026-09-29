@@ -5,7 +5,7 @@ from __future__ import annotations
 import httpcore
 import httpx
 
-from copaw.app.mcp import stateful_client as stateful_client_module
+from qwenpaw.app.mcp import stateful_client as stateful_client_module
 
 
 def test_summarize_exception_chain_includes_nested_causes() -> None:

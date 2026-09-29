@@ -4,11 +4,11 @@ from __future__ import annotations
 import importlib
 from types import SimpleNamespace
 
-from copaw.app.routers.skills import MarketError, MarketplaceItem
+from qwenpaw.app.routers.skills import MarketError, MarketplaceItem
 
 
 async def test_skill_market_search_filters_by_query_and_tags(monkeypatch) -> None:
-    module = importlib.import_module("copaw.agents.tools.skill_market_search")
+    module = importlib.import_module("qwenpaw.agents.tools.skill_market_search")
 
     monkeypatch.setattr(
         module,
@@ -81,7 +81,7 @@ async def test_skill_market_search_filters_by_query_and_tags(monkeypatch) -> Non
 
 
 async def test_skill_market_search_returns_no_matches_message(monkeypatch) -> None:
-    module = importlib.import_module("copaw.agents.tools.skill_market_search")
+    module = importlib.import_module("qwenpaw.agents.tools.skill_market_search")
 
     monkeypatch.setattr(
         module,
@@ -110,7 +110,7 @@ async def test_skill_market_search_returns_no_matches_message(monkeypatch) -> No
 
 
 async def test_skill_market_search_returns_error_message_on_exception(monkeypatch) -> None:
-    module = importlib.import_module("copaw.agents.tools.skill_market_search")
+    module = importlib.import_module("qwenpaw.agents.tools.skill_market_search")
 
     monkeypatch.setattr(
         module,

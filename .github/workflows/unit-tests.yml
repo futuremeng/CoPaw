@@ -63,12 +63,22 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -e ".[dev]"
+          # agentscope 1.0.20 imports mcp.client.streamable_http.streamablehttp_client,
+          # which mcp >= 1.28 no longer exports. pyproject has no mcp bound, so a fresh
+          # resolve aborts tests/conftest.py and collects zero tests.
+          pip install "mcp<1.28"
 
       - name: Check namespace boundaries (gate)
         if: matrix.python-version == '3.10'
         run: |
           git fetch --depth=1 https://github.com/agentscope-ai/QwenPaw.git main:qwenpaw_upstream_main || true
           python scripts/check_namespace_boundaries.py --upstream-ref qwenpaw_upstream_main
+
+      - name: Check P1 invariants (gate)
+        if: matrix.python-version == '3.10'
+        run: |
+          python scripts/check_p1_invariants.py --check
+          python scripts/copaw_brand.py verify
 
       - name: Run all unit tests (informational — pre-existing failures tolerated)
         continue-on-error: true
@@ -78,6 +88,13 @@ jobs:
             -v \
             --tb=line \
             -q
+
+      - name: Fail loudly if nothing was collected
+        run: |
+          pytest tests/unit --ignore=tests/unit/channels --collect-only -q 2>&1 \
+            | tee /tmp/collect.txt | tail -n 3
+          grep -Eq "[1-9][0-9]* tests? collected" /tmp/collect.txt \
+            || { echo "::error::pytest collected zero tests — the suite is not running"; exit 1; }
 
       - name: Run L1 hard gate tests (must pass)
         run: |
@@ -117,6 +134,7 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -e ".[dev]"
+          pip install "mcp<1.28"
 
       - name: Run unit tests with coverage
         run: |

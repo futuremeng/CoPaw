@@ -9,7 +9,6 @@ import click
 
 from .http import client, print_json
 from ..app.channels.schema import DEFAULT_CHANNEL
-from ..app.crons.manager import validate_cron_trigger
 
 
 def _base_url(ctx: click.Context, base_url: Optional[str]) -> str:
@@ -576,15 +575,6 @@ def create_job(
             share_session=share_session,
             timeout_seconds=timeout_seconds,
         )
-    # Early local validation: catch obvious errors before hitting the server.
-    schedule = payload.get("schedule", {})
-    try:
-        validate_cron_trigger(
-            schedule.get("cron", ""),
-            schedule.get("timezone", "UTC"),
-        )
-    except ValueError as e:
-        raise click.UsageError(f"Invalid cron expression: {e}") from e
     with client(base_url) as c:
         headers = {"X-Agent-Id": agent_id}
         r = c.post("/cron/jobs", json=payload, headers=headers)

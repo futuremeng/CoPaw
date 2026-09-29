@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from copaw.agents.tool_guard_mixin import ToolGuardMixin
+from qwenpaw.agents.tool_guard_mixin import ToolGuardMixin
 
 
 @dataclass

@@ -2,7 +2,7 @@
 
 import json
 
-from copaw.config.utils import load_config
+from qwenpaw.config.utils import load_config
 
 
 def test_load_config_migrates_legacy_knowledge_engine_object(tmp_path):

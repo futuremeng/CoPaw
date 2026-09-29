@@ -4,7 +4,7 @@ from __future__ import annotations
 from types import SimpleNamespace
 import importlib
 
-from copaw.agents.tools.knowledge_search import knowledge_search
+from qwenpaw.agents.tools.knowledge_search import knowledge_search
 
 
 async def test_knowledge_search_rejects_empty_query() -> None:
@@ -14,7 +14,7 @@ async def test_knowledge_search_rejects_empty_query() -> None:
 
 
 async def test_knowledge_search_returns_disabled_message(monkeypatch) -> None:
-    module = importlib.import_module("copaw.agents.tools.knowledge_search")
+    module = importlib.import_module("qwenpaw.agents.tools.knowledge_search")
 
     monkeypatch.setattr(
         module,
@@ -35,7 +35,7 @@ async def test_knowledge_search_returns_disabled_message(monkeypatch) -> None:
 async def test_knowledge_search_returns_runtime_disabled_message(
     monkeypatch,
 ) -> None:
-    module = importlib.import_module("copaw.agents.tools.knowledge_search")
+    module = importlib.import_module("qwenpaw.agents.tools.knowledge_search")
 
     monkeypatch.setattr(
         module,
@@ -54,7 +54,7 @@ async def test_knowledge_search_returns_runtime_disabled_message(
 
 
 async def test_knowledge_search_formats_hits(monkeypatch) -> None:
-    module = importlib.import_module("copaw.agents.tools.knowledge_search")
+    module = importlib.import_module("qwenpaw.agents.tools.knowledge_search")
 
     class _FakeManager:
         def __init__(self, working_dir) -> None:

@@ -136,6 +136,107 @@ def _resolve_md_lang_dir(agents_root: Path, language: str) -> Path:
     return md_lang_dir
 
 
+def _template_fallback_language_order(language: str) -> list[str]:
+    ordered: list[str] = []
+    for lang_opt in (language, "en", "zh", "ru"):
+        if lang_opt not in ordered:
+            ordered.append(lang_opt)
+    return ordered
+
+
+def _copy_template_md_files(
+    template_root: Path,
+    fallback_langs: list[str],
+    workspace_dir: Path,
+    only_if_missing: bool,
+) -> list[str]:
+    candidate_names: list[str] = []
+    seen_names: set[str] = set()
+
+    for lang_opt in fallback_langs:
+        lang_dir = template_root / lang_opt
+        if not lang_dir.exists():
+            continue
+        for template_file in lang_dir.glob("*.md"):
+            if template_file.name in seen_names:
+                continue
+            seen_names.add(template_file.name)
+            candidate_names.append(template_file.name)
+
+    copied: list[str] = []
+    for filename in candidate_names:
+        dst_p = workspace_dir / filename
+        if only_if_missing and dst_p.exists():
+            continue
+        source_p = None
+        for lang_opt in fallback_langs:
+            cand = template_root / lang_opt / filename
+            if cand.exists():
+                source_p = cand
+                break
+        if source_p is None:
+            logger.warning(
+                "Workspace template missing for %s (langs tried: %s)",
+                filename,
+                fallback_langs,
+            )
+            continue
+        try:
+            shutil.copy2(source_p, dst_p)
+            copied.append(filename)
+        except OSError as e:
+            logger.warning(
+                "Failed to copy workspace template file %s: %s",
+                filename,
+                e,
+            )
+    return copied
+
+
+def copy_template_md_files(
+    template_id: str,
+    language: str,
+    workspace_dir: Path | str,
+    *,
+    only_if_missing: bool = True,
+) -> list[str]:
+    """Copy template-specific markdown files into an agent workspace.
+
+    Files are read from ``md_files/<template_id>/<language>/`` with fallback
+    order ``language`` then the built-in fallback languages on a
+    per-file basis.
+
+    Args:
+        template_id: Template directory name under ``agents/md_files``.
+        language: Supported agent language code.
+        workspace_dir: Agent workspace root.
+        only_if_missing: If True, skip targets that already exist.
+
+    Returns:
+        List of copied or overwritten file names.
+    """
+    workspace_dir = Path(workspace_dir).expanduser()
+    workspace_dir.mkdir(parents=True, exist_ok=True)
+
+    agents_root = Path(__file__).resolve().parent.parent
+    template_root = agents_root / "md_files" / template_id
+    if not template_root.exists():
+        logger.warning(
+            "Workspace template directory not found: %s",
+            template_root,
+        )
+        return []
+
+    copied_files = _copy_template_md_files(
+        template_root,
+        _template_fallback_language_order(language),
+        workspace_dir,
+        only_if_missing,
+    )
+    _remove_bootstrap_from_workspace(workspace_dir)
+    return copied_files
+
+
 def _qa_fallback_language_order(language: str) -> list[str]:
     ordered: list[str] = []
     for lang_opt in (language, "en", "zh", "ru"):

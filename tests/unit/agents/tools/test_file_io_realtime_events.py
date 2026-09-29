@@ -4,8 +4,8 @@ from pathlib import Path
 
 import pytest
 
-from copaw.agents.tools import file_io
-from copaw.app.project_realtime_events import collect_project_realtime_changes
+from qwenpaw.agents.tools import file_io
+from qwenpaw.app.project_realtime_events import collect_project_realtime_changes
 from copaw.config.context import set_current_focus_dir, set_current_workspace_dir
 
 

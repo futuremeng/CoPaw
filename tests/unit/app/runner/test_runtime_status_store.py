@@ -1,14 +1,14 @@
 from __future__ import annotations
 
-from copaw.app.runner.models import ChatRuntimeStatus, ChatRuntimeStatusBreakdownItem
-from copaw.app.runner.runtime_status_store import (
+from qwenpaw.app.runner.models import ChatRuntimeStatus, ChatRuntimeStatusBreakdownItem
+from qwenpaw.app.runner.runtime_status_store import (
     RuntimeStatusWriteContext,
     load_persisted_runtime_status,
     persist_runtime_status,
     reset_current_runtime_status_context,
     set_current_runtime_status_context,
 )
-from copaw.app.runner.session import SafeJSONSession
+from qwenpaw.app.runner.session import SafeJSONSession
 
 
 async def test_persist_and_load_runtime_status(tmp_path) -> None:
