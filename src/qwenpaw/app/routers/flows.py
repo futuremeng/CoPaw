@@ -7,7 +7,8 @@ from typing import Any, Literal
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 
-from copaw.app.flow_engine import (
+from ..agent_context import resolve_agent_id_for_request
+from ..flow_engine import (
     FlowDefinition,
     FlowDefinitionNotFoundError,
     FlowEngineError,
@@ -15,8 +16,6 @@ from copaw.app.flow_engine import (
     FlowTransitionConflictError,
     FlowTransitionNotAllowedError,
 )
-
-from ..agent_context import resolve_agent_id_for_request
 from ..flow_engine_runtime import get_flow_engine_service
 
 router = APIRouter(prefix="/flows", tags=["flows"])

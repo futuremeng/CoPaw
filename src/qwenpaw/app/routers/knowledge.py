@@ -26,11 +26,6 @@ from ...knowledge import (
     GraphOpsManager,
     KnowledgeManager,
 )
-from copaw.app.flow_engine import (
-    FlowRunNotFoundError,
-    FlowTransitionConflictError,
-    FlowTransitionNotAllowedError,
-)
 from copaw.knowledge.knowledge_quantization_facade import QuantizationFacade
 from copaw.knowledge.project_pipeline_manager import (
     ProjectKnowledgePipelineManager,
@@ -39,18 +34,23 @@ from copaw.knowledge.project_pipeline_manager import (
     build_project_source_spec,
 )
 from ...knowledge.module_skills import sync_knowledge_module_skills
-from ..knowledge_workflow_steps import KNOWLEDGE_WORKFLOW_STEP_IDS
+from ..agent_context import (
+    get_loaded_agent_for_request,
+    resolve_agent_id_for_request,
+)
+from ..flow_engine import (
+    FlowRunNotFoundError,
+    FlowTransitionConflictError,
+    FlowTransitionNotAllowedError,
+)
 from ..flow_engine_runtime import get_flow_engine_service
+from ..knowledge_workflow_steps import KNOWLEDGE_WORKFLOW_STEP_IDS
 from .knowledge_models import (
     ProjectPipelineCommandResponse,
     ProjectPipelineSourceCandidatesResponse,
     ProjectPipelineSourcesResponse,
     ProjectPipelineRunResponse,
     ProjectPipelineStatusResponse,
-)
-from ..agent_context import (
-    get_loaded_agent_for_request,
-    resolve_agent_id_for_request,
 )
 
 router = APIRouter(prefix="/knowledge", tags=["knowledge"])

@@ -30,20 +30,20 @@ _INVASIVE_RE = re.compile(
 )
 
 # Files inside ``src/qwenpaw`` still holding a top-level ``from copaw`` import.
-# This is the WP-01 relocation queue.  Every entry has two possible resolutions:
-# the importing module moves into ``src/copaw`` behind the overlay, or the
-# copaw-resident dependency it needs moves into ``src/qwenpaw``.  Which one
-# applies per module is pending the desktop-entry ruling; ``app/routers/agents.py``
-# is upstream-owned, so it must lose the import rather than move.
+# This is the WP-01 relocation queue, and per D-16 it has exactly one resolution:
+# the copaw-resident implementation the importer needs sinks into
+# ``src/qwenpaw`` and ``src/copaw`` keeps only the alias shells plus the CLI /
+# overlay.  Moving importers out of ``src/qwenpaw`` was ruled out because the
+# desktop entry imports the core package directly.
+# ``app/routers/agents.py`` is upstream-owned, so it must lose its import
+# outright rather than wait for the module it needs.
 INVASIVE_COPAW_IMPORT_ALLOWLIST: frozenset[str] = frozenset(
     {
-        "src/qwenpaw/app/flow_engine_runtime.py",
         "src/qwenpaw/app/knowledge_workflow.py",
         "src/qwenpaw/app/project_knowledge_watcher.py",
         "src/qwenpaw/app/routers/agent.py",
         "src/qwenpaw/app/routers/agents.py",
         "src/qwenpaw/app/routers/agents_pipeline_core.py",
-        "src/qwenpaw/app/routers/flows.py",
         "src/qwenpaw/app/routers/knowledge.py",
         "src/qwenpaw/app/routers/sidecar.py",
         "src/qwenpaw/knowledge/enrichment_pipeline.py",

@@ -5,8 +5,7 @@ from __future__ import annotations
 from functools import lru_cache
 from pathlib import Path
 
-from copaw.app.flow_engine import FlowEngineService
-
+from .flow_engine import FlowEngineService
 from ..constant import WORKING_DIR
 
 

@@ -9,7 +9,6 @@ from typing import Any, Callable
 
 from fastapi import HTTPException
 
-from copaw.app.flow_engine import FlowDefinition, FlowStepDefinition
 from copaw.knowledge.project_pipeline_manager import DEFAULT_PROJECT_PIPELINE_QUALITY_LOOP_ROUNDS
 
 from ..config.config import KnowledgeConfig
@@ -21,6 +20,8 @@ from .builtin_agents import (
     BUILTIN_UNDERSTAND_GRAPH_REVIEWER_ID,
     BUILTIN_UNDERSTAND_PROJECT_SCANNER_ID,
 )
+from .flow_engine import FlowDefinition, FlowStepDefinition
+from .flow_engine_runtime import get_flow_engine_service
 from .knowledge_workflow_steps import (
     KNOWLEDGE_WORKFLOW_STEP_IDS,
     KNOWLEDGE_WORKFLOW_STEP_SPECS,
@@ -35,7 +36,6 @@ from .routers.agents_pipeline_core import (
     _persist_project_pipeline_run,
     _pipeline_now_iso,
 )
-from .flow_engine_runtime import get_flow_engine_service
 
 KNOWLEDGE_WORKFLOW_TEMPLATE_ID = "builtin-knowledge-processing-v1"
 KNOWLEDGE_WORKFLOW_TEMPLATE_NAME = "Knowledge Processing Workflow"

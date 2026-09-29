@@ -17,7 +17,7 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from copaw.app.flow_engine import FlowTransitionNotAllowedError
+from qwenpaw.app.flow_engine import FlowTransitionNotAllowedError
 
 from copaw.app.routers import knowledge as knowledge_router_module
 from qwenpaw.app import knowledge_workflow as knowledge_workflow_module

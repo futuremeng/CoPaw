@@ -6,7 +6,7 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from copaw.app.flow_engine import FlowDefinition, FlowEngineService, FlowStepDefinition
+from qwenpaw.app.flow_engine import FlowDefinition, FlowEngineService, FlowStepDefinition
 from qwenpaw.app.routers import flows as flows_router_module
 from qwenpaw.app.routers import flows_global as flows_global_router_module
 
