@@ -58,7 +58,6 @@ ALLOWED_NON_THIN_SHARED = {
 # mirrored in the engine package.
 ALLOWED_COPAW_ONLY_PREFIXES = (
     "knowledge/",
-    "app/flow_engine/",
     "cli/",
 )
 

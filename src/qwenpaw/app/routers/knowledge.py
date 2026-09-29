@@ -26,8 +26,8 @@ from ...knowledge import (
     GraphOpsManager,
     KnowledgeManager,
 )
-from copaw.knowledge.knowledge_quantization_facade import QuantizationFacade
-from copaw.knowledge.project_pipeline_manager import (
+from ...knowledge.knowledge_quantization_facade import QuantizationFacade
+from ...knowledge.project_pipeline_manager import (
     ProjectKnowledgePipelineManager,
     ProjectPipelineCommand,
     ProjectPipelineCoordinator,

@@ -43,9 +43,13 @@ def test_compute_local_report_has_expected_shape():
     assert isinstance(report["non_thin_shared"], list)
 
 
-def test_allowed_copaw_only_prefixes_includes_flow_engine():
+def test_flow_engine_lives_in_the_engine_package():
+    """D-16: the flow engine implementation was sunk into ``src/qwenpaw``."""
     mod = _load_module()
-    assert "app/flow_engine/" in mod.ALLOWED_COPAW_ONLY_PREFIXES
+    repo_root = Path(__file__).resolve().parents[3]
+    assert "app/flow_engine/" not in mod.ALLOWED_COPAW_ONLY_PREFIXES
+    assert (repo_root / "src" / "qwenpaw" / "app" / "flow_engine" / "__init__.py").is_file()
+    assert not (repo_root / "src" / "copaw" / "app" / "flow_engine").exists()
 
 
 def test_allowed_copaw_only_files_include_existing_knowledge_task_routers():

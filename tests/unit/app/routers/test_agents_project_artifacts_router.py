@@ -10,7 +10,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.testclient import TestClient
 
 from copaw.config.config import Config
-from copaw.knowledge.project_pipeline_manager import build_project_source_spec
+from qwenpaw.knowledge.project_pipeline_manager import build_project_source_spec
 from qwenpaw.config.utils import load_config
 from qwenpaw.app.project_realtime_events import (
     collect_project_realtime_changes,

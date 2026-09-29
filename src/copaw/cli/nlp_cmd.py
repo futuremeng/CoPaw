@@ -13,7 +13,7 @@ import click
 
 from qwenpaw.config import load_config
 from copaw.knowledge.hanlp_nlp_runtime import NLPRuntime
-from copaw.knowledge.knowledge_quantization_assessment import (
+from qwenpaw.knowledge.knowledge_quantization_assessment import (
     build_l2_quantization_scorecard,
     grade_l2_quantization_assessment,
     normalize_l2_quantization_grade_thresholds,

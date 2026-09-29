@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import cast
 
 from copaw.config.config import Config, KnowledgeSourceSpec
-from copaw.knowledge.project_pipeline_manager import (
+from qwenpaw.knowledge.project_pipeline_manager import (
     ProjectKnowledgePipelineManager,
     ProjectPipelineCommand,
     ProjectPipelineCoordinator,

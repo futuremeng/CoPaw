@@ -64,7 +64,7 @@ from ...agents.utils import (
 from ...agents.skills_manager import SkillPoolService, get_workspace_skills_dir
 from ..multi_agent_manager import MultiAgentManager
 from ...constant import WORKING_DIR
-from copaw.knowledge.project_pipeline_manager import (
+from ...knowledge.project_pipeline_manager import (
     DEFAULT_PROJECT_PIPELINE_COOLDOWN_SECONDS,
     DEFAULT_PROJECT_PIPELINE_DEBOUNCE_SECONDS,
     ProjectKnowledgePipelineManager,

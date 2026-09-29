@@ -2,7 +2,7 @@
 
 import pytest
 
-from copaw.knowledge.knowledge_quantization_architecture import QuantizationArchitectureManager
+from qwenpaw.knowledge.knowledge_quantization_architecture import QuantizationArchitectureManager
 
 
 def test_schedule_l2_does_not_require_l1(tmp_path):

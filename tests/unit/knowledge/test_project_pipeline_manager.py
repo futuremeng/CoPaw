@@ -8,8 +8,8 @@ from pathlib import Path
 from types import SimpleNamespace
 
 from copaw.config.config import Config, KnowledgeSourceSpec
-from copaw.knowledge import project_pipeline_dispatch
-from copaw.knowledge.project_pipeline_manager import ProjectKnowledgePipelineManager
+from qwenpaw.knowledge import project_pipeline_dispatch
+from qwenpaw.knowledge.project_pipeline_manager import ProjectKnowledgePipelineManager
 
 
 def test_run_sync_loop_failure_preserves_l2_snapshot(tmp_path: Path, monkeypatch):

@@ -5,7 +5,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from copaw.config.config import Config, KnowledgeSourceSpec
-from copaw.knowledge.project_pipeline_manager import ProjectKnowledgePipelineManager
+from qwenpaw.knowledge.project_pipeline_manager import ProjectKnowledgePipelineManager
 
 
 def _build_source(project_id: str, project_dir: Path) -> KnowledgeSourceSpec:

@@ -323,7 +323,7 @@ class ProjectKnowledgePipelineManager:
 		self.knowledge_root = self.working_dir / knowledge_dirname
 		self.state_path = self.knowledge_root / "project-pipeline-state.json"
 		self._lock = self._get_lock(str(self.state_path.resolve()))
-		knowledge_manager_cls = getattr(importlib.import_module("copaw.knowledge.manager"), "KnowledgeManager")
+		knowledge_manager_cls = getattr(importlib.import_module("qwenpaw.knowledge.manager"), "KnowledgeManager")
 		self._knowledge_manager = knowledge_manager_cls(
 			self.working_dir,
 			knowledge_dirname=knowledge_dirname,

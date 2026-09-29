@@ -19,7 +19,7 @@ from pydantic import BaseModel, Field
 from ...config import load_config, save_config
 from ...config.config import generate_short_agent_id
 from ..project_realtime_events import record_project_realtime_paths
-from copaw.knowledge.project_pipeline_manager import (
+from ...knowledge.project_pipeline_manager import (
     ProjectKnowledgePipelineManager,
     ensure_project_source_registered,
 )

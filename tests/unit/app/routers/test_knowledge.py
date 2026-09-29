@@ -23,7 +23,7 @@ from copaw.app.routers import knowledge as knowledge_router_module
 from qwenpaw.app import knowledge_workflow as knowledge_workflow_module
 from copaw.config.config import Config
 from copaw.knowledge import GraphOpsManager, KnowledgeManager
-from copaw.knowledge.knowledge_quantization_architecture import QuantizationArchitectureManager
+from qwenpaw.knowledge.knowledge_quantization_architecture import QuantizationArchitectureManager
 
 
 @pytest.fixture

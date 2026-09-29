@@ -7,7 +7,7 @@ from types import SimpleNamespace
 import pytest
 
 from copaw.config.config import KnowledgeConfig, KnowledgeSourceSpec
-from copaw.knowledge.project_pipeline_manager import ProjectKnowledgePipelineManager
+from qwenpaw.knowledge.project_pipeline_manager import ProjectKnowledgePipelineManager
 from qwenpaw.app.knowledge_workflow import (
     KNOWLEDGE_WORKFLOW_TEMPLATE_ID,
     KnowledgeWorkflowOrchestrator,

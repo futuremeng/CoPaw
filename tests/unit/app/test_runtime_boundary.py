@@ -35,15 +35,11 @@ _INVASIVE_RE = re.compile(
 # ``src/qwenpaw`` and ``src/copaw`` keeps only the alias shells plus the CLI /
 # overlay.  Moving importers out of ``src/qwenpaw`` was ruled out because the
 # desktop entry imports the core package directly.
-# ``app/routers/agents.py`` is upstream-owned, so it must lose its import
-# outright rather than wait for the module it needs.
+# No upstream-owned file may appear here: ``src/qwenpaw/app/routers/agents.py``,
+# the last one, was severed in this queue's second increment.
 INVASIVE_COPAW_IMPORT_ALLOWLIST: frozenset[str] = frozenset(
     {
-        "src/qwenpaw/app/knowledge_workflow.py",
-        "src/qwenpaw/app/project_knowledge_watcher.py",
         "src/qwenpaw/app/routers/agent.py",
-        "src/qwenpaw/app/routers/agents.py",
-        "src/qwenpaw/app/routers/agents_pipeline_core.py",
         "src/qwenpaw/app/routers/knowledge.py",
         "src/qwenpaw/app/routers/sidecar.py",
         "src/qwenpaw/knowledge/enrichment_pipeline.py",
