@@ -9,8 +9,8 @@ def test_sync_knowledge_module_skills_toggles_active_skill(
     monkeypatch,
     tmp_path: Path,
 ) -> None:
-    module = importlib.import_module("copaw.knowledge.module_skills")
-    skills_manager = importlib.import_module("copaw.agents.skills_manager")
+    module = importlib.import_module("qwenpaw.knowledge.module_skills")
+    skills_manager = importlib.import_module("qwenpaw.agents.skills_manager")
 
     module_skills_dir = tmp_path / "module_skills"
     knowledge_skill_dir = module_skills_dir / "knowledge_search_assistant"

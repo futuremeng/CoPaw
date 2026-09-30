@@ -110,7 +110,7 @@ def test_get_transcription_language_hints_for_simplified_chinese(monkeypatch):
     class _Config:
         agents = _Agents()
 
-    monkeypatch.setattr("copaw.config.load_config", lambda: _Config())
+    monkeypatch.setattr("qwenpaw.config.load_config", lambda: _Config())
 
     hints = audio_transcription_module._get_transcription_language_hints()
     assert hints["whisper_language"] is None
@@ -124,7 +124,7 @@ def test_get_transcription_language_hints_for_english_locale(monkeypatch):
     class _Config:
         agents = _Agents()
 
-    monkeypatch.setattr("copaw.config.load_config", lambda: _Config())
+    monkeypatch.setattr("qwenpaw.config.load_config", lambda: _Config())
 
     hints = audio_transcription_module._get_transcription_language_hints()
     assert hints["whisper_language"] == "en"
