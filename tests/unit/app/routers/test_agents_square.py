@@ -154,7 +154,11 @@ def agents_square_api_client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) ->
             raise ValueError(f"Agent '{agent_id}' not found")
         return cfg
 
-    def fake_init_workspace(workspace_dir: Path, _cfg: AgentProfileConfig):
+    def fake_init_workspace(
+        workspace_dir: Path,
+        _skill_names: list[str] | None = None,
+        _builtin_template_key: str | None = None,
+    ):
         (workspace_dir / "sessions").mkdir(parents=True, exist_ok=True)
         (workspace_dir / "memory").mkdir(parents=True, exist_ok=True)
 
@@ -237,8 +241,10 @@ def test_square_items_endpoint_returns_expected_shape(
     assert data["meta"]["item_count"] == 1
 
 
-def test_agents_square_config_defaults_include_expected_sources() -> None:
-    config = AgentsSquareConfig()
+def test_agents_square_bundled_defaults_include_expected_sources() -> None:
+    # 8a6521a03 moved the bundled square defaults out of the model into
+    # qwenpaw/agents_square/default.json, so the contract is the loader.
+    config = agents_router_module._load_default_square_config()
 
     assert [source.id for source in config.sources] == [
         "agency-agents-zh",
@@ -248,9 +254,10 @@ def test_agents_square_config_defaults_include_expected_sources() -> None:
     assert [source.enabled for source in config.sources] == [True, False, False]
     assert [source.order for source in config.sources] == [1, 2, 3]
     assert [source.url for source in config.sources] == [
-        "https://github.com/jnMetaCode/agency-agents-zh",
+        # _normalize_square_source rewrites every github URL to its .git form.
+        "https://github.com/jnMetaCode/agency-agents-zh.git",
         "https://github.com/msitarzewski/agency-agents.git",
-        "https://github.com/dsclca12/agent-teams",
+        "https://github.com/dsclca12/agent-teams.git",
     ]
 
 
@@ -763,7 +770,7 @@ def test_square_import_bundle_toggles_skip_skills_and_tools(
         0,
     )
     assert latest_event_id >= 1
-    assert any(path.startswith("flows/") for path in changed_paths)
+    assert any(path.startswith("artifacts/flow/") for path in changed_paths)
 
 
 def test_square_import_bundle_can_skip_flow_descriptions(

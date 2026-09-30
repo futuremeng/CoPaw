@@ -2913,10 +2913,6 @@ async def put_square_sources(
 
     _save_current_square_config(square_cfg)
 
-    # Keep root config in sync for backward compatibility.
-    config = load_config()
-    config.agents_square = square_cfg
-    save_config(config)
     return _square_config_to_payload(square_cfg)
 
 
@@ -2926,11 +2922,6 @@ async def put_square_sources(
 async def reset_square_sources() -> AgentsSquareSourcesPayload:
     """Reset current square sources by copying bundled default.json."""
     square_cfg = _reset_current_square_config_to_default()
-
-    # Keep root config in sync for backward compatibility.
-    config = load_config()
-    config.agents_square = square_cfg
-    save_config(config)
 
     return _square_config_to_payload(square_cfg)
 
