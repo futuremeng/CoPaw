@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -22,6 +23,7 @@ router = APIRouter(prefix="/agents", tags=["agents"])
 
 _IGNORED_PROJECT_PARTS = {".git", ".knowledge", "__pycache__"}
 _MAX_CHANGED_PATHS = 32
+_RECENT_PROJECT_METRIC_WINDOW_SEC = 7 * 24 * 60 * 60
 
 
 def _clamp_int(
@@ -41,6 +43,10 @@ def _clamp_int(
 def _hash_entries(entries: list[str]) -> str:
     payload = "\n".join(entries)
     return hashlib.sha1(payload.encode("utf-8")).hexdigest()
+
+
+def _is_recent_project_metric_file(mtime: float) -> bool:
+    return (time.time() - float(mtime)) <= _RECENT_PROJECT_METRIC_WINDOW_SEC
 
 
 def _collect_changed_paths(
@@ -140,7 +146,7 @@ def _build_file_tree_signal(
             markdown_files += 1
         if extension in agents_router_impl._PROJECT_TEXT_LIKE_EXTENSIONS:
             text_like_files += 1
-        if agents_router_impl._is_recent_project_metric_file(stat.st_mtime):
+        if _is_recent_project_metric_file(stat.st_mtime):
             recently_updated_files += 1
 
     signal = {
