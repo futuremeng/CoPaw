@@ -49,12 +49,58 @@ class KnowledgeHanLPTaskConfig(KnowledgeTaskSpec):
     """Compatibility alias for HanLP task matrix entries."""
 
 
+def _default_hanlp_tasks() -> Dict[str, KnowledgeHanLPTaskConfig]:
+    """The L2 annotation baseline the task matrix must always carry."""
+    return {
+        "cor": KnowledgeHanLPTaskConfig(
+            enabled=True,
+            task_name="coreference_resolution",
+            artifact_key="cor",
+            eval_role="primary",
+        ),
+        "ner_msra": KnowledgeHanLPTaskConfig(
+            enabled=True,
+            task_name="ner/msra",
+            artifact_key="ner_msra",
+            eval_role="primary",
+        ),
+        "dep": KnowledgeHanLPTaskConfig(
+            enabled=True,
+            task_name="dep",
+            artifact_key="dep",
+            eval_role="primary",
+        ),
+        "sdp": KnowledgeHanLPTaskConfig(
+            enabled=True,
+            task_name="sdp",
+            artifact_key="sdp",
+            eval_role="primary",
+        ),
+        "con": KnowledgeHanLPTaskConfig(
+            enabled=True,
+            task_name="con",
+            artifact_key="con",
+            eval_role="auxiliary",
+        ),
+    }
+
+
 class KnowledgeTaskMatrixConfig(BaseModel):
     """HanLP task matrix configuration."""
 
     model_config = ConfigDict(extra="allow")
 
-    tasks: Dict[str, KnowledgeHanLPTaskConfig] = Field(default_factory=dict)
+    tasks: Dict[str, KnowledgeHanLPTaskConfig] = Field(
+        default_factory=_default_hanlp_tasks,
+    )
+
+    @model_validator(mode="after")
+    def _ensure_default_tasks(self) -> "KnowledgeTaskMatrixConfig":
+        defaults = _default_hanlp_tasks()
+        for key, task in defaults.items():
+            if key not in self.tasks:
+                self.tasks[key] = task
+        return self
 
 
 class KnowledgeNLPConfig(BaseModel):
