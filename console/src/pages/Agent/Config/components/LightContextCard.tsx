@@ -302,9 +302,9 @@ export function LightContextCard({ maxInputLength }: LightContextCardProps) {
                 >
                   <SliderWithValue
                     min={1}
-                    max={10}
+                    max={365}
                     step={1}
-                    marks={{ 1: "1", 5: "5", 10: "10" }}
+                    marks={{ 1: "1", 30: "30", 365: "365" }}
                   />
                 </Form.Item>
 

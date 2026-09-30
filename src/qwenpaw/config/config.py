@@ -765,10 +765,15 @@ class ToolResultPruningConfig(BaseModel):
     )
 
     offload_retention_days: int = Field(
-        default=5,
+        default=30,
         ge=1,
-        le=10,
-        description="Number of days to retain tool result files",
+        le=365,
+        description=(
+            "Number of days to retain complete archived tool result files. "
+            "This lifetime is independent of Scroll history retention; after "
+            "expiry, history may still contain the bounded preview but not "
+            "the complete artifact."
+        ),
     )
 
     tool_results_cache: str = Field(
