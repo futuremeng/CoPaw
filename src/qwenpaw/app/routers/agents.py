@@ -56,11 +56,7 @@ from ...config.config import (
 )
 from ...config.utils import load_config, save_config
 from ...agents.memory.agent_md_manager import AgentMdManager
-from ...agents.utils import (
-    copy_builtin_agent_md_files,
-    copy_builtin_qa_md_files,
-    copy_md_files,
-)
+from ...agents.utils import copy_workspace_md_files
 from ...agents.skills_manager import SkillPoolService, get_workspace_skills_dir
 from ..multi_agent_manager import MultiAgentManager
 from ...constant import WORKING_DIR
@@ -4333,8 +4329,8 @@ async def move_agent_project_path(
         raise HTTPException(status_code=500, detail=str(e)) from e
 
 
-def _ensure_default_heartbeat_md(workspace_dir: Path, language: str) -> None:
-    """Write a default HEARTBEAT.md when the workspace has none."""
+def _ensure_heartbeat_file(workspace_dir: Path, language: str) -> None:
+    """Create the default HEARTBEAT.md if it is missing."""
     heartbeat_file = workspace_dir / "HEARTBEAT.md"
     if heartbeat_file.exists():
         return
@@ -4367,27 +4363,18 @@ def _ensure_default_heartbeat_md(workspace_dir: Path, language: str) -> None:
         file.write(heartbeat_content.strip())
 
 
-def _copy_builtin_skills(workspace_dir: Path) -> None:
-    """Copy builtin skills into a new workspace when missing."""
-    builtin_skills_dir = (
-        Path(__file__).parent.parent.parent / "agents" / "skills"
+def _apply_workspace_md_templates(
+    workspace_dir: Path,
+    language: str,
+    *,
+    md_template_id: str | None,
+) -> None:
+    """Copy common and template-specific markdown files for a workspace."""
+    copy_workspace_md_files(
+        language,
+        workspace_dir,
+        md_template_id=md_template_id,
     )
-    if not builtin_skills_dir.exists():
-        return
-
-    target_skills_dir = get_workspace_skills_dir(workspace_dir)
-    target_skills_dir.mkdir(parents=True, exist_ok=True)
-
-    for skill_dir in builtin_skills_dir.iterdir():
-        if not skill_dir.is_dir() or not (skill_dir / "SKILL.md").exists():
-            continue
-        target_skill_dir = target_skills_dir / skill_dir.name
-        if target_skill_dir.exists():
-            continue
-        try:
-            shutil.copytree(skill_dir, target_skill_dir)
-        except Exception as e:
-            logger.warning("Failed to copy skill %s: %s", skill_dir.name, e)
 
 
 def _install_initial_skills(
@@ -4435,43 +4422,25 @@ def _install_initial_skills(
 def _initialize_agent_workspace(
     workspace_dir: Path,
     skill_names: list[str] | None = None,
-    builtin_template_key: str | None = None,
+    md_template_id: str | None = None,
 ) -> None:
     """Initialize agent workspace (similar to copaw init --defaults)."""
     from ...config import load_config as load_global_config
 
     (workspace_dir / "sessions").mkdir(exist_ok=True)
     (workspace_dir / "memory").mkdir(exist_ok=True)
-    (workspace_dir / "skills").mkdir(exist_ok=True)
-    (workspace_dir / "active_skills").mkdir(exist_ok=True)
-    (workspace_dir / "customized_skills").mkdir(exist_ok=True)
     _ensure_projects_layout(workspace_dir)
     get_workspace_skills_dir(workspace_dir).mkdir(exist_ok=True)
 
     config = load_global_config()
     language = config.agents.language or "zh"
 
-    if builtin_template_key == "qa":
-        copy_builtin_qa_md_files(
-            language,
-            workspace_dir,
-            only_if_missing=True,
-        )
-    elif builtin_template_key:
-        copy_builtin_agent_md_files(
-            builtin_template_key,
-            language,
-            workspace_dir,
-            only_if_missing=True,
-        )
-    else:
-        copy_md_files(
-            language,
-            skip_existing=True,
-            workspace_dir=workspace_dir,
-        )
-    _ensure_default_heartbeat_md(workspace_dir, language)
-    _copy_builtin_skills(workspace_dir)
+    _apply_workspace_md_templates(
+        workspace_dir,
+        language,
+        md_template_id=md_template_id,
+    )
+    _ensure_heartbeat_file(workspace_dir, language)
     _install_initial_skills(workspace_dir, skill_names)
 
     jobs_file = workspace_dir / "jobs.json"

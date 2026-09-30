@@ -867,7 +867,7 @@ def _do_ensure_builtin_agents(spec_ids: list[str] | None = None) -> None:
                 _initialize_agent_workspace(
                     workspace,
                     skill_names=list(spec.skill_names),
-                    builtin_template_key=spec.template_key,
+                    md_template_id=spec.template_key,
                 )
             except Exception:
                 logger.warning(
@@ -901,7 +901,7 @@ def _do_ensure_builtin_agents(spec_ids: list[str] | None = None) -> None:
         _initialize_agent_workspace(
             workspace,
             skill_names=list(spec.skill_names),
-            builtin_template_key=spec.template_key,
+            md_template_id=spec.template_key,
         )
 
         config.agents.profiles[spec.id] = AgentProfileRef(
