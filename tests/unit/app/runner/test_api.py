@@ -285,6 +285,7 @@ def test_list_chats_reads_repo_without_loading_workspace(
             "meta": {},
             "status": "idle",
             "pinned": False,
+            "source": "chat",
         }
     ]
     manager.get_agent.assert_not_called()

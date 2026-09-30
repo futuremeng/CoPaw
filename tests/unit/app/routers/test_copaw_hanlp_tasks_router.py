@@ -906,7 +906,10 @@ def test_copaw_hanlp_colon_run_endpoint_is_not_supported(monkeypatch):
             json={"text": "微软 发布 新模型", "request_id": "req-tokenize-colon"},
         )
 
-    assert response.status_code == 405
+    # Starlette only answers 405 when the path still matches a route; the colon
+    # form matches nothing, so 404 carries the same "not supported" answer that
+    # the legacy /api/knowledge/tasks/.../run case above asserts.
+    assert response.status_code in {404, 405}
 
 
 def test_copaw_hanlp_legacy_knowledge_run_endpoint_is_not_supported(monkeypatch):
