@@ -417,6 +417,14 @@
       "naming": 0,
       "removed": 0
     },
+    "console/src/pages/Agent/Config/components/LightContextCard.tsx": {
+      "added": 2,
+      "behavior_added": 2,
+      "behavior_removed": 2,
+      "mechanical": false,
+      "naming": 0,
+      "removed": 2
+    },
     "console/src/pages/Agent/Config/components/ReactAgentCard.tsx": {
       "added": 20,
       "behavior_added": 20,
@@ -810,8 +818,8 @@
       "removed": 0
     },
     "pyproject.toml": {
-      "added": 8,
-      "behavior_added": 8,
+      "added": 10,
+      "behavior_added": 10,
       "behavior_removed": 1,
       "mechanical": false,
       "naming": 0,
@@ -896,14 +904,6 @@
       "mechanical": false,
       "naming": 0,
       "removed": 2
-    },
-    "src/qwenpaw/agents/command_handler.py": {
-      "added": 7,
-      "behavior_added": 7,
-      "behavior_removed": 1,
-      "mechanical": false,
-      "naming": 0,
-      "removed": 1
     },
     "src/qwenpaw/agents/hooks/__init__.py": {
       "added": 3,
@@ -1010,8 +1010,8 @@
       "removed": 49
     },
     "src/qwenpaw/app/_app.py": {
-      "added": 45,
-      "behavior_added": 45,
+      "added": 43,
+      "behavior_added": 43,
       "behavior_removed": 15,
       "mechanical": false,
       "naming": 0,
@@ -1106,12 +1106,12 @@
       "removed": 0
     },
     "src/qwenpaw/app/routers/agents.py": {
-      "added": 4239,
-      "behavior_added": 4239,
-      "behavior_removed": 335,
+      "added": 4229,
+      "behavior_added": 4229,
+      "behavior_removed": 334,
       "mechanical": false,
       "naming": 0,
-      "removed": 335
+      "removed": 334
     },
     "src/qwenpaw/app/routers/config.py": {
       "added": 56,
@@ -1178,8 +1178,8 @@
       "removed": 34
     },
     "src/qwenpaw/app/runner/command_dispatch.py": {
-      "added": 8,
-      "behavior_added": 8,
+      "added": 7,
+      "behavior_added": 7,
       "behavior_removed": 17,
       "mechanical": false,
       "naming": 0,
@@ -1208,14 +1208,6 @@
       "mechanical": false,
       "naming": 0,
       "removed": 245
-    },
-    "src/qwenpaw/app/runner/title_generator.py": {
-      "added": 15,
-      "behavior_added": 15,
-      "behavior_removed": 4,
-      "mechanical": false,
-      "naming": 0,
-      "removed": 4
     },
     "src/qwenpaw/app/workspace/service_factories.py": {
       "added": 16,
@@ -1274,12 +1266,12 @@
       "removed": 2
     },
     "src/qwenpaw/config/config.py": {
-      "added": 247,
-      "behavior_added": 247,
-      "behavior_removed": 0,
+      "added": 73,
+      "behavior_added": 73,
+      "behavior_removed": 3,
       "mechanical": false,
       "naming": 0,
-      "removed": 0
+      "removed": 3
     },
     "src/qwenpaw/config/context.py": {
       "added": 39,
@@ -1322,12 +1314,12 @@
       "removed": 11
     },
     "src/qwenpaw/providers/openai_provider.py": {
-      "added": 49,
-      "behavior_added": 49,
-      "behavior_removed": 11,
+      "added": 11,
+      "behavior_added": 11,
+      "behavior_removed": 2,
       "mechanical": false,
       "naming": 0,
-      "removed": 11
+      "removed": 2
     },
     "src/qwenpaw/providers/retry_chat_model.py": {
       "added": 62,
@@ -1360,86 +1352,6 @@
       "mechanical": false,
       "naming": 0,
       "removed": 8
-    },
-    "tests/integration/test_app_startup.py": {
-      "added": 0,
-      "behavior_added": 0,
-      "behavior_removed": 1,
-      "mechanical": false,
-      "naming": 0,
-      "removed": 1
-    },
-    "tests/unit/agents/test_command_handler.py": {
-      "added": 21,
-      "behavior_added": 21,
-      "behavior_removed": 0,
-      "mechanical": false,
-      "naming": 0,
-      "removed": 0
-    },
-    "tests/unit/agents/test_session.py": {
-      "added": 43,
-      "behavior_added": 43,
-      "behavior_removed": 0,
-      "mechanical": false,
-      "naming": 0,
-      "removed": 0
-    },
-    "tests/unit/app/test_agents_ordering.py": {
-      "added": 26,
-      "behavior_added": 26,
-      "behavior_removed": 1,
-      "mechanical": false,
-      "naming": 0,
-      "removed": 1
-    },
-    "tests/unit/app/test_title_generator.py": {
-      "added": 10,
-      "behavior_added": 10,
-      "behavior_removed": 7,
-      "mechanical": false,
-      "naming": 0,
-      "removed": 7
-    },
-    "tests/unit/providers/test_ollama_provider.py": {
-      "added": 31,
-      "behavior_added": 31,
-      "behavior_removed": 0,
-      "mechanical": false,
-      "naming": 0,
-      "removed": 0
-    },
-    "tests/unit/providers/test_openai_provider.py": {
-      "added": 38,
-      "behavior_added": 38,
-      "behavior_removed": 2,
-      "mechanical": false,
-      "naming": 0,
-      "removed": 2
-    },
-    "tests/unit/providers/test_openai_stream_toolcall_compat.py": {
-      "added": 100,
-      "behavior_added": 100,
-      "behavior_removed": 0,
-      "mechanical": false,
-      "naming": 0,
-      "removed": 0
-    },
-    "tests/unit/workspace/test_agent_model.py": {
-      "added": 37,
-      "behavior_added": 37,
-      "behavior_removed": 0,
-      "mechanical": false,
-      "naming": 0,
-      "removed": 0
-    },
-    "tests/unit/workspace/test_workspace.py": {
-      "added": 24,
-      "behavior_added": 24,
-      "behavior_removed": 0,
-      "mechanical": false,
-      "naming": 0,
-      "removed": 0
     },
     "website/public/docs/cli.en.md": {
       "added": 24,
@@ -1475,15 +1387,15 @@
     }
   },
   "totals": {
-    "added": 15977,
-    "behavior_added": 15851,
-    "behavior_files": 179,
-    "behavior_removed": 2731,
-    "files": 183,
+    "added": 15404,
+    "behavior_added": 15278,
+    "behavior_files": 168,
+    "behavior_removed": 2710,
+    "files": 172,
     "mechanical_files": 1,
     "naming_files": 4,
     "naming_lines": 126,
     "naming_touched_files": 22,
-    "removed": 2857
+    "removed": 2836
   }
 }
