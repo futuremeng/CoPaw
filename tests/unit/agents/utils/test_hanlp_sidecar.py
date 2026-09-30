@@ -1,7 +1,8 @@
 from pathlib import Path
-from types import SimpleNamespace
 
 from qwenpaw.agents.utils import hanlp_sidecar as hanlp_sidecar_module
+from qwenpaw.config.config import Config
+from qwenpaw.config.product_models import KnowledgeHanLPTaskConfig
 
 
 class _StatusSequence:
@@ -14,35 +15,21 @@ class _StatusSequence:
         return self._states[0]
 
 
+def _task(**overrides):
+    payload = {"enabled": True, "eval_role": "primary", **overrides}
+    payload.setdefault("task_name", payload["artifact_key"])
+    return KnowledgeHanLPTaskConfig(**payload)
+
+
 def _make_config():
-    task_matrix = SimpleNamespace(
-        tasks={
-            "ner_msra": SimpleNamespace(
-                enabled=True,
-                task_name="ner/msra",
-                artifact_key="ner_msra",
-                eval_role="primary",
-                model_id="",
-            ),
-            "dep": SimpleNamespace(
-                enabled=True,
-                task_name="dep",
-                artifact_key="dep",
-                eval_role="primary",
-                model_id="",
-            ),
-        }
-    )
-    nlp = SimpleNamespace(
-        enabled=False,
-        sidecar_enabled=False,
-        python_executable="",
-        hanlp_home="",
-        model_home="",
-        model_id="FINE_ELECTRA_SMALL_ZH",
-        task_matrix=task_matrix,
-    )
-    return SimpleNamespace(knowledge=SimpleNamespace(), nlp=nlp)
+    """The sidecar deep-copies the real knowledge config, so use the real model."""
+    root = Config()
+    root.nlp.model_id = "FINE_ELECTRA_SMALL_ZH"
+    root.nlp.task_matrix.tasks = {
+        "ner_msra": _task(artifact_key="ner_msra", task_name="ner/msra"),
+        "dep": _task(artifact_key="dep"),
+    }
+    return root
 
 
 def test_build_status_includes_task_matrix_states(monkeypatch):
@@ -375,44 +362,15 @@ def test_auto_install_hanlp_sidecar_uses_uv_managed_environment(monkeypatch, tmp
 
 
 def test_run_hanlp_preload_tracks_stable_order_and_progress(monkeypatch):
-    config = SimpleNamespace(
-        knowledge=SimpleNamespace(),
-        nlp=SimpleNamespace(
-            model_id="FINE_ELECTRA_SMALL_ZH",
-            task_matrix=SimpleNamespace(
-                tasks={
-                    "zeta": SimpleNamespace(
-                        enabled=True,
-                        task_name="zeta",
-                        artifact_key="zeta",
-                        eval_role="primary",
-                        model_id="",
-                    ),
-                    "coref": SimpleNamespace(
-                        enabled=True,
-                        task_name="coref",
-                        artifact_key="coref",
-                        eval_role="primary",
-                        model_id="",
-                    ),
-                    "alpha": SimpleNamespace(
-                        enabled=True,
-                        task_name="alpha",
-                        artifact_key="alpha",
-                        eval_role="primary",
-                        model_id="",
-                    ),
-                    "beta": SimpleNamespace(
-                        enabled=False,
-                        task_name="beta",
-                        artifact_key="beta",
-                        eval_role="primary",
-                        model_id="",
-                    ),
-                },
-            ),
-        ),
-    )
+    root = Config()
+    root.nlp.model_id = "FINE_ELECTRA_SMALL_ZH"
+    root.nlp.task_matrix.tasks = {
+        "zeta": _task(artifact_key="zeta"),
+        "coref": _task(artifact_key="coref"),
+        "alpha": _task(artifact_key="alpha"),
+        "beta": _task(artifact_key="beta", enabled=False),
+    }
+    config = root
     run_sequence: list[str] = []
     progress_snapshots: list[dict] = []
 
