@@ -3,7 +3,7 @@
 
 This module provides a lightweight manager used by graph tools. It keeps
 current MVP behavior compatible while reserving integration points for
-graph-provider implementations (for example, Cognee/Graphify).
+graph-provider implementations (for example, Graphify).
 """
 
 from __future__ import annotations
@@ -1169,9 +1169,6 @@ Agent gate review is mandatory before automatic continuation.
             effective_query_text = translated
             warnings.append("CYPHER_MVP_TRANSLATED")
 
-        if engine == "cognee":
-            raise RuntimeError("Cognee graph provider is not wired yet.")
-
         if engine == "graphify":
             graphify_cfg = getattr(config, "graphify", None)
             try:
@@ -1615,10 +1612,7 @@ Agent gate review is mandatory before automatic continuation.
         result_engine = engine
         memify_result: dict[str, Any] = {}
 
-        if engine == "cognee":
-            error = "Cognee memify provider is not wired yet."
-            warnings = ["COGNEE_PROVIDER_NOT_READY"]
-        elif engine == "graphify":
+        if engine == "graphify":
             graphify_cfg = getattr(config, "graphify", None)
             try:
                 memify_result = graphify_memify(

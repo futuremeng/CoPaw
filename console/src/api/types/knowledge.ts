@@ -714,7 +714,7 @@ export interface KnowledgeClearResponse {
 
 /**
  * Graph query record from graph knowledge engine.
- * Compatible with Graphify/Cognee graph records.
+ * Compatible with Graphify graph records.
  */
 export interface GraphQueryRecord {
   subject: string;

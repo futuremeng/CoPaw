@@ -18,7 +18,6 @@
 | **技能市场** | Skills Marketplace（Git-backed 聚合、Console 市场管理、覆盖前确认） | 已完成 |
 |  | 子项：已集成 [futuremeng/editor-skills](https://github.com/futuremeng/editor-skills) | 已完成 |
 | **知识库** | 知识沉淀能力（本地持续演进） | 进行中 |
-| **知识库增强** | 引入 cognee 作为知识库增强项 | 进行中 |
 | **MCP 方向** | 内置 jiulu_mcp | 计划中 |
 | | 内置 mineru_mcp | 计划中 |
 

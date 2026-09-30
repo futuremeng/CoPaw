@@ -51,7 +51,7 @@ def test_load_config_coerces_legacy_knowledge_engine_string_to_local(tmp_path):
     payload = {
         "knowledge": {
             "enabled": True,
-            "engine": "cognee",
+            "engine": "legacy_engine",
         }
     }
     config_path.write_text(

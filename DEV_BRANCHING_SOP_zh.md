@@ -68,7 +68,7 @@
 ### 5.1 先合开发主线（fork/main）
 
 - git checkout fork/main
-- git merge --no-ff feat/upstream/knowledge-layer-mvp-sop-cognee
+- git merge --no-ff feat/upstream/<topic-branch>
 
 ### 5.2 再合本地 main（仅当 main=本地发布整合线）
 

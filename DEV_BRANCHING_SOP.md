@@ -68,7 +68,7 @@ Important: main is not a frozen mirror, but it must not accumulate upstream lag.
 ### 5.1 Merge into development mainline first (fork/main)
 
 - git checkout fork/main
-- git merge --no-ff feat/upstream/knowledge-layer-mvp-sop-cognee
+- git merge --no-ff feat/upstream/<topic-branch>
 
 ### 5.2 Merge into local mainline (only when main = integration line)
 
