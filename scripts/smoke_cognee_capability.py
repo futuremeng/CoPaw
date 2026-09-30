@@ -147,6 +147,8 @@ def main() -> int:
         config=knowledge_config,
         query_mode="template",
         dataset_scope=None,
+        project_scope=None,
+        include_global=True,
         top_k=5,
     )
     print(json.dumps(graph_result.__dict__, ensure_ascii=False, indent=2))
@@ -160,6 +162,8 @@ def main() -> int:
         config=knowledge_config,
         query_mode="template",
         dataset_scope=None,
+        project_scope=None,
+        include_global=True,
         top_k=10,
     )
     triplets = [

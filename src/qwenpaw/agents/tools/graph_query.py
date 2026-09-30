@@ -112,6 +112,10 @@ async def graph_query(
             query_mode=mode,
             query_text=text,
             dataset_scope=dataset_scope,
+            # The tool has no project-scoped surface; keep the whole graph
+            # visible so the LLM sees what it saw before project filtering.
+            project_scope=None,
+            include_global=True,
             top_k=max(1, int(top_k)),
             timeout_sec=max(1, min(int(timeout_sec), 120)),
             preferred_output_mode=preferred_output_mode or None,

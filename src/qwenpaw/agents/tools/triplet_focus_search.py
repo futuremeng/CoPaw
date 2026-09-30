@@ -85,6 +85,9 @@ async def triplet_focus_search(
             query_mode="template",
             query_text=effective_query,
             dataset_scope=dataset_scope,
+            # See graph_query: the tool surface is not project-scoped.
+            project_scope=None,
+            include_global=True,
             top_k=max(1, int(top_k)),
             timeout_sec=20,
         )
