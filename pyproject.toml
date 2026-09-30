@@ -79,6 +79,8 @@ include-package-data = true
     "agents/md_files/**",
     "agents/skills/**",
     "tokenizer/**",
+    "agents_square/*.json",
+    "skills_market/*.json",
     "security/tool_guard/rules/**",
     "security/skill_scanner/rules/**",
     "security/skill_scanner/data/**",
