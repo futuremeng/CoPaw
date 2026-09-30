@@ -1343,6 +1343,7 @@ def test_run_project_pipeline_offloads_dispatch_to_thread(
     project_dir = tmp_path / "projects" / project_id
     project_dir.mkdir(parents=True, exist_ok=True)
 
+    (project_dir / "notes.md").write_text("pipeline input\n", encoding="utf-8")
     config_payload = make_knowledge_config().model_dump(mode="json")
     config_payload["enabled"] = True
     config_payload["memify_enabled"] = True
@@ -1350,6 +1351,11 @@ def test_run_project_pipeline_offloads_dispatch_to_thread(
     assert saved.status_code == 200
 
     class _FakeProjectPipelineManager:
+        def get_state(self, _project_id):
+            return {
+                "manual_source_paths": ["notes.md"],
+            }
+
         def start_sync(self, **kwargs):
             return {
                 "accepted": True,
@@ -1394,7 +1400,7 @@ def test_run_project_pipeline_offloads_dispatch_to_thread(
     assert getattr(command, "quantization_stage", "") == "l2"
 
 
-def test_run_project_pipeline_auto_registers_project_source(
+def test_run_project_pipeline_dispatches_selected_manual_source_file(
     knowledge_api_client: TestClient,
     tmp_path: Path,
     monkeypatch,
@@ -1403,6 +1409,7 @@ def test_run_project_pipeline_auto_registers_project_source(
     project_dir = tmp_path / "projects" / project_id
     project_dir.mkdir(parents=True, exist_ok=True)
 
+    (project_dir / "notes.md").write_text("pipeline input\n", encoding="utf-8")
     config_payload = make_knowledge_config().model_dump(mode="json")
     config_payload["enabled"] = True
     config_payload["memify_enabled"] = True
@@ -1411,7 +1418,11 @@ def test_run_project_pipeline_auto_registers_project_source(
 
     class _FakeProjectPipelineManager:
         def get_state(self, project_id):
-            return {"project_id": project_id, "status": "idle"}
+            return {
+                "project_id": project_id,
+                "status": "idle",
+                "manual_source_paths": ["notes.md"],
+            }
 
     captured: dict[str, object] = {}
 
@@ -1419,6 +1430,9 @@ def test_run_project_pipeline_auto_registers_project_source(
         def dispatch(self, command):
             captured["source_id"] = getattr(getattr(command, "source", None), "id", "")
             captured["source_location"] = getattr(getattr(command, "source", None), "location", "")
+            context = getattr(command, "execution_context", None) or {}
+            captured["execution_scope"] = context.get("scope")
+            captured["execution_source_file_path"] = context.get("source_file_path")
             return SimpleNamespace(
                 action="start_sync",
                 operation_id="ps-run-no-register",
@@ -1449,13 +1463,11 @@ def test_run_project_pipeline_auto_registers_project_source(
     )
 
     assert response.status_code == 200
-    assert captured["source_id"] == f"project-{project_id}-workspace"
-    assert str(captured["source_location"]).endswith(f"projects/{project_id}")
-    sources = knowledge_router_module.load_config().knowledge.sources
-    assert len(sources) == 1
-    assert sources[0].id == f"project-{project_id}-workspace"
-    assert str(sources[0].project_id) == project_id
-    assert str(sources[0].location).endswith(f"projects/{project_id}")
+    assert str(captured["source_id"]).startswith("project-file-")
+    assert str(captured["source_location"]).endswith(f"projects/{project_id}/notes.md")
+    assert captured["execution_scope"] == "source_file"
+    assert captured["execution_source_file_path"] == "notes.md"
+    assert knowledge_router_module.load_config().knowledge.sources == []
 
 
 def test_run_project_pipeline_allows_fast_mode_when_memify_disabled(
@@ -1467,6 +1479,7 @@ def test_run_project_pipeline_allows_fast_mode_when_memify_disabled(
     project_dir = tmp_path / "projects" / project_id
     project_dir.mkdir(parents=True, exist_ok=True)
 
+    (project_dir / "notes.md").write_text("pipeline input\n", encoding="utf-8")
     config_payload = make_knowledge_config().model_dump(mode="json")
     config_payload["enabled"] = True
     config_payload["memify_enabled"] = False
@@ -1476,6 +1489,11 @@ def test_run_project_pipeline_allows_fast_mode_when_memify_disabled(
     captured: dict[str, object] = {}
 
     class _FakeProjectPipelineManager:
+        def get_state(self, _project_id):
+            return {
+                "manual_source_paths": ["notes.md"],
+            }
+
         def start_sync(self, **kwargs):
             captured.update(kwargs)
             return {"accepted": True, "project_id": kwargs["project_id"], "status": "queued"}
@@ -1504,6 +1522,7 @@ def test_run_project_pipeline_returns_operation_metadata(
     project_dir = tmp_path / "projects" / project_id
     project_dir.mkdir(parents=True, exist_ok=True)
 
+    (project_dir / "notes.md").write_text("pipeline input\n", encoding="utf-8")
     config_payload = make_knowledge_config().model_dump(mode="json")
     config_payload["enabled"] = True
     config_payload["memify_enabled"] = True
@@ -1511,6 +1530,11 @@ def test_run_project_pipeline_returns_operation_metadata(
     assert saved.status_code == 200
 
     class _FakeProjectPipelineManager:
+        def get_state(self, _project_id):
+            return {
+                "manual_source_paths": ["notes.md"],
+            }
+
         def start_sync(self, **kwargs):
             return {
                 "accepted": True,
@@ -1552,6 +1576,7 @@ def test_run_project_pipeline_returns_flow_run_id_when_bridge_available(
     project_dir = tmp_path / "projects" / project_id
     project_dir.mkdir(parents=True, exist_ok=True)
 
+    (project_dir / "notes.md").write_text("pipeline input\n", encoding="utf-8")
     config_payload = make_knowledge_config().model_dump(mode="json")
     config_payload["enabled"] = True
     config_payload["memify_enabled"] = True
@@ -1570,7 +1595,11 @@ def test_run_project_pipeline_returns_flow_run_id_when_bridge_available(
             }
 
         def get_state(self, project_id):
-            return {"project_id": project_id, "status": "queued"}
+            return {
+                "project_id": project_id,
+                "status": "queued",
+                "manual_source_paths": ["notes.md"],
+            }
 
     class _FakeCoordinator:
         def dispatch(self, command):
@@ -1635,6 +1664,7 @@ def test_project_pipeline_status_syncs_flow_run_terminal_state(
     project_dir = tmp_path / "projects" / project_id
     project_dir.mkdir(parents=True, exist_ok=True)
 
+    (project_dir / "notes.md").write_text("pipeline input\n", encoding="utf-8")
     config_payload = make_knowledge_config().model_dump(mode="json")
     config_payload["enabled"] = True
     config_payload["memify_enabled"] = True
@@ -1648,6 +1678,7 @@ def test_project_pipeline_status_syncs_flow_run_terminal_state(
             return {
                 "project_id": project_id,
                 "status": "succeeded",
+                "manual_source_paths": ["notes.md"],
             }
 
     class _FakeCoordinator:
@@ -1737,6 +1768,7 @@ def test_run_project_pipeline_persists_bridge_flow_run_id_for_later_commands(
     project_dir = tmp_path / "projects" / project_id
     project_dir.mkdir(parents=True, exist_ok=True)
 
+    (project_dir / "notes.md").write_text("pipeline input\n", encoding="utf-8")
     config_payload = make_knowledge_config().model_dump(mode="json")
     config_payload["enabled"] = True
     config_payload["memify_enabled"] = True
@@ -1757,7 +1789,12 @@ def test_run_project_pipeline_persists_bridge_flow_run_id_for_later_commands(
             }
 
         def get_state(self, project_id):
-            return {"project_id": project_id, "status": "queued", "last_result": {}}
+            return {
+                "project_id": project_id,
+    "status": "queued",
+                "last_result": {},
+                "manual_source_paths": ["notes.md"],
+            }
 
     class _FakeCoordinator:
         def dispatch(self, command):
@@ -1863,6 +1900,7 @@ def test_project_pipeline_ws_snapshot_recovers_persisted_runtime_meta_after_brid
     project_dir = tmp_path / "projects" / project_id
     project_dir.mkdir(parents=True, exist_ok=True)
 
+    (project_dir / "notes.md").write_text("pipeline input\n", encoding="utf-8")
     config_payload = make_knowledge_config().model_dump(mode="json")
     config_payload["enabled"] = True
     config_payload["memify_enabled"] = True
@@ -1887,6 +1925,7 @@ def test_project_pipeline_ws_snapshot_recovers_persisted_runtime_meta_after_brid
                 "project_id": project_id,
                 "status": "idle",
                 "last_result": {},
+                "manual_source_paths": ["notes.md"],
             }
 
     class _FakeCoordinator:
@@ -2862,6 +2901,7 @@ def test_project_pipeline_status_projects_runtime_operation_metadata(
     project_dir = tmp_path / "projects" / project_id
     project_dir.mkdir(parents=True, exist_ok=True)
 
+    (project_dir / "notes.md").write_text("pipeline input\n", encoding="utf-8")
     config_payload = make_knowledge_config().model_dump(mode="json")
     config_payload["enabled"] = True
     config_payload["memify_enabled"] = True
@@ -2903,6 +2943,7 @@ def test_project_pipeline_status_projects_runtime_operation_metadata(
                         "recent_error_source": "invalid-source",
                     }
                 },
+                "manual_source_paths": ["notes.md"],
             }
 
     monkeypatch.setattr(
@@ -3063,6 +3104,7 @@ def test_project_pipeline_ws_snapshot_includes_latest_run_operation_metadata(
     project_dir = tmp_path / "projects" / project_id
     project_dir.mkdir(parents=True, exist_ok=True)
 
+    (project_dir / "notes.md").write_text("pipeline input\n", encoding="utf-8")
     config_payload = make_knowledge_config().model_dump(mode="json")
     config_payload["enabled"] = True
     config_payload["memify_enabled"] = True
@@ -3098,6 +3140,7 @@ def test_project_pipeline_ws_snapshot_includes_latest_run_operation_metadata(
                         "recent_error_source": "workflow_step",
                     }
                 },
+                "manual_source_paths": ["notes.md"],
             }
 
     monkeypatch.setattr(
