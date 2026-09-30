@@ -5,8 +5,9 @@ import importlib
 import json
 from types import SimpleNamespace
 
-from copaw.config.config import Config, KnowledgeSourceSpec
+from copaw.config.config import KnowledgeSourceSpec
 from copaw.knowledge.manager import KnowledgeManager
+from tests.fixtures.knowledge_config import make_knowledge_config
 
 
 async def test_graph_query_requires_graph_enabled(monkeypatch) -> None:
@@ -223,7 +224,7 @@ async def test_graph_tool_chain_smoke_local_engine(
     memify_status_module = importlib.import_module("copaw.agents.tools.memify_status")
     triplet_module = importlib.import_module("copaw.agents.tools.triplet_focus_search")
 
-    knowledge_config = Config().knowledge
+    knowledge_config = make_knowledge_config()
     knowledge_config.enabled = True
     knowledge_config.graph_query_enabled = True
     knowledge_config.triplet_search_enabled = True
