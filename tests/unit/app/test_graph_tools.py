@@ -1,8 +1,10 @@
 # -*- coding: utf-8 -*-
 from __future__ import annotations
 
+import asyncio
 import importlib
 import json
+import time
 from types import SimpleNamespace
 
 from copaw.config.config import KnowledgeSourceSpec
@@ -10,8 +12,26 @@ from copaw.knowledge.manager import KnowledgeManager
 from tests.fixtures.knowledge_config import make_knowledge_config
 
 
+async def _await_terminal_memify_status(module, job_id: str) -> dict:
+    """memify_run hands back a background job, so a smoke test must poll it."""
+    deadline = time.monotonic() + 3.0
+    last: object = None
+    while time.monotonic() < deadline:
+        result = await module.memify_status(job_id)
+        text = result.content[0]["text"]
+        try:
+            last = json.loads(text)
+        except json.JSONDecodeError:
+            last = text  # "memify job not found" while the row is still landing
+        else:
+            if last.get("status") in {"succeeded", "failed"}:
+                return last
+        await asyncio.sleep(0.05)
+    raise AssertionError(f"memify job {job_id} did not settle: {last}")
+
+
 async def test_graph_query_requires_graph_enabled(monkeypatch) -> None:
-    module = importlib.import_module("copaw.agents.tools.graph_query")
+    module = importlib.import_module("qwenpaw.agents.tools.graph_query")
 
     monkeypatch.setattr(
         module,
@@ -27,7 +47,7 @@ async def test_graph_query_requires_graph_enabled(monkeypatch) -> None:
 
 
 async def test_graph_query_formats_payload(monkeypatch) -> None:
-    module = importlib.import_module("copaw.agents.tools.graph_query")
+    module = importlib.import_module("qwenpaw.agents.tools.graph_query")
     captured: dict[str, object] = {}
 
     class _FakeGraphOpsManager:
@@ -68,7 +88,7 @@ async def test_graph_query_formats_payload(monkeypatch) -> None:
 
 
 async def test_graph_query_rejects_invalid_output_mode(monkeypatch) -> None:
-    module = importlib.import_module("copaw.agents.tools.graph_query")
+    module = importlib.import_module("qwenpaw.agents.tools.graph_query")
 
     monkeypatch.setattr(
         module,
@@ -88,7 +108,7 @@ async def test_graph_query_rejects_invalid_output_mode(monkeypatch) -> None:
 
 
 async def test_memify_run_requires_memify_enabled(monkeypatch) -> None:
-    module = importlib.import_module("copaw.agents.tools.memify_run")
+    module = importlib.import_module("qwenpaw.agents.tools.memify_run")
 
     monkeypatch.setattr(
         module,
@@ -103,7 +123,7 @@ async def test_memify_run_requires_memify_enabled(monkeypatch) -> None:
 
 
 async def test_memify_run_returns_job_payload(monkeypatch) -> None:
-    module = importlib.import_module("copaw.agents.tools.memify_run")
+    module = importlib.import_module("qwenpaw.agents.tools.memify_run")
 
     class _FakeGraphOpsManager:
         def __init__(self, working_dir) -> None:
@@ -134,7 +154,7 @@ async def test_memify_run_returns_job_payload(monkeypatch) -> None:
 
 
 async def test_memify_status_handles_not_found(monkeypatch) -> None:
-    module = importlib.import_module("copaw.agents.tools.memify_status")
+    module = importlib.import_module("qwenpaw.agents.tools.memify_status")
 
     class _FakeGraphOpsManager:
         def __init__(self, working_dir) -> None:
@@ -159,7 +179,7 @@ async def test_memify_status_handles_not_found(monkeypatch) -> None:
 
 
 async def test_triplet_focus_search_requires_enabled(monkeypatch) -> None:
-    module = importlib.import_module("copaw.agents.tools.triplet_focus_search")
+    module = importlib.import_module("qwenpaw.agents.tools.triplet_focus_search")
 
     monkeypatch.setattr(
         module,
@@ -175,7 +195,7 @@ async def test_triplet_focus_search_requires_enabled(monkeypatch) -> None:
 
 
 async def test_triplet_focus_search_formats_payload(monkeypatch) -> None:
-    module = importlib.import_module("copaw.agents.tools.triplet_focus_search")
+    module = importlib.import_module("qwenpaw.agents.tools.triplet_focus_search")
 
     class _FakeGraphOpsManager:
         def __init__(self, working_dir) -> None:
@@ -219,10 +239,10 @@ async def test_graph_tool_chain_smoke_local_engine(
     monkeypatch,
     tmp_path,
 ) -> None:
-    graph_query_module = importlib.import_module("copaw.agents.tools.graph_query")
-    memify_run_module = importlib.import_module("copaw.agents.tools.memify_run")
-    memify_status_module = importlib.import_module("copaw.agents.tools.memify_status")
-    triplet_module = importlib.import_module("copaw.agents.tools.triplet_focus_search")
+    graph_query_module = importlib.import_module("qwenpaw.agents.tools.graph_query")
+    memify_run_module = importlib.import_module("qwenpaw.agents.tools.memify_run")
+    memify_status_module = importlib.import_module("qwenpaw.agents.tools.memify_status")
+    triplet_module = importlib.import_module("qwenpaw.agents.tools.triplet_focus_search")
 
     knowledge_config = make_knowledge_config()
     knowledge_config.enabled = True
@@ -265,8 +285,10 @@ async def test_graph_tool_chain_smoke_local_engine(
     memify_payload = json.loads(memify_result.content[0]["text"])
     assert memify_payload["accepted"] is True
 
-    status_result = await memify_status_module.memify_status(memify_payload["job_id"])
-    status_payload = json.loads(status_result.content[0]["text"])
+    status_payload = await _await_terminal_memify_status(
+        memify_status_module,
+        memify_payload["job_id"],
+    )
     assert status_payload["job_id"] == memify_payload["job_id"]
     assert status_payload["status"] == "succeeded"
 

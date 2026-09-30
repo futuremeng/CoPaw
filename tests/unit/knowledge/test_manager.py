@@ -694,7 +694,7 @@ def test_directory_source_reindex_retains_old_snapshots_and_chunks(tmp_path: Pat
     assert all((manager.root_dir / path).exists() for path in chunk_paths)
 
 
-def test_index_source_writes_ner_files_when_semantic_ready(tmp_path: Path):
+def test_index_source_defers_semantic_artifacts_when_engine_ready(tmp_path: Path):
     config = make_knowledge_config()
     config.index.chunk_size = 10_000
     source = KnowledgeSourceSpec(
@@ -729,42 +729,30 @@ def test_index_source_writes_ner_files_when_semantic_ready(tmp_path: Path):
         manager._source_index_path(source.id).read_text(encoding="utf-8")
     )
     chunk = payload["chunks"][0]
-    syntax_path = manager.root_dir / chunk["syntax_path"]
-    syntax_structured_path = manager.root_dir / chunk["syntax_structured_path"]
-    syntax_annotated_path = manager.root_dir / chunk["syntax_annotated_path"]
 
     assert chunk["ner_status"] == "unavailable"
     assert chunk["ner_entity_count"] == 0
-    assert chunk["ner_input_mode"] == "source_content_fallback"
-    assert chunk["ner_batch_size"] == 32
-    assert chunk["ner_batch_count"] == 1
-    assert chunk["ner_worker_restart_count"] == 0
-    assert chunk["version_id"]
+    assert chunk["ner_input_mode"] == ""
+    assert chunk["ner_reason_code"] == "INDEXING_DEFERRED"
+    assert chunk["ner_reason"] == (
+        "Semantic artifact generation is deferred to graphifying stage."
+    )
     assert chunk["ner_format_version"] == "1.1"
     assert "ner_path" not in chunk
     assert "ner_structured_path" not in chunk
     assert "ner_annotated_path" not in chunk
     assert "ner_stats_path" not in chunk
-    assert chunk["syntax_status"] == "ready"
+    assert chunk["syntax_status"] == "unavailable"
     assert chunk["syntax_format_version"] == "0.2"
-    assert chunk["syntax_sentence_count"] == 1
-    assert chunk["syntax_token_count"] == 3
-    assert "syntax_pos_count" in chunk
-    assert "syntax_pos_tag_type_count" in chunk
-    assert syntax_path.exists()
-    assert syntax_structured_path.exists()
-    assert syntax_annotated_path.exists()
-    syntax_structured = json.loads(syntax_structured_path.read_text(encoding="utf-8"))
-    assert syntax_structured["artifact"] == "syntax_structured"
-    assert syntax_structured["parse_mode"] == "tokenized_only"
-    assert syntax_structured["sentence_count"] == 1
-    assert "pos_count" in syntax_structured
-    assert "pos_tag_type_count" in syntax_structured
-    assert "pos_tag_types" in syntax_structured
-    assert syntax_structured["sentences"][0]["entities"] == []
-    syntax_annotated = syntax_annotated_path.read_text(encoding="utf-8")
-    assert "# Syntax Annotated" in syntax_annotated
-    assert "## Sentence 1" in syntax_annotated
+    assert chunk["syntax_sentence_count"] == 0
+    assert chunk["syntax_token_count"] == 0
+    assert chunk["syntax_pos_count"] == 0
+    assert chunk["syntax_pos_tag_type_count"] == 0
+    assert chunk["syntax_pos_tag_types"] == []
+    assert chunk["syntax_relation_count"] == 0
+    assert "syntax_path" not in chunk
+    assert "syntax_structured_path" not in chunk
+    assert "syntax_annotated_path" not in chunk
 
 
 def test_index_source_writes_pos_files_when_pos_batch_ready(tmp_path: Path):

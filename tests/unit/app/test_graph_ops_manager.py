@@ -924,7 +924,9 @@ def test_graphify_query_prefers_enriched_graph_when_enabled(tmp_path):
             }
         ]
 
-    with patch("copaw.knowledge.graph_ops.graphify_query", _fake_graphify_query):
+    # D-16 moved the implementation to qwenpaw; patching the copaw alias shell
+    # leaves the module's own reference untouched, so the fake would never run.
+    with patch("qwenpaw.knowledge.graph_ops.graphify_query", _fake_graphify_query):
         result = graph_ops.graph_query(
             config=knowledge_config,
             query_mode="template",
