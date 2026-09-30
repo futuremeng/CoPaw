@@ -6,6 +6,7 @@ from pathlib import Path
 from copaw.config.config import Config, KnowledgeSourceSpec
 from copaw.knowledge.local_graph_provider import persist_local_graph, query_local_graph
 from copaw.knowledge.manager import KnowledgeManager
+from tests.fixtures.knowledge_config import make_knowledge_config
 
 
 def test_local_graph_filters_hidden_docs_and_noise_entities(tmp_path: Path):
@@ -19,7 +20,7 @@ def test_local_graph_filters_hidden_docs_and_noise_entities(tmp_path: Path):
         encoding="utf-8",
     )
 
-    config = Config().knowledge
+    config = make_knowledge_config()
     source = KnowledgeSourceSpec(
         id="project-demo-workspace",
         name="Project Demo",
@@ -71,7 +72,7 @@ def test_local_graph_strips_frontmatter_and_key_value_noise(tmp_path: Path):
         encoding="utf-8",
     )
 
-    config = Config().knowledge
+    config = make_knowledge_config()
     source = KnowledgeSourceSpec(
         id="project-demo-workspace",
         name="Project Demo",
@@ -113,7 +114,7 @@ def test_local_graph_skips_code_files(tmp_path: Path):
         encoding="utf-8",
     )
 
-    config = Config().knowledge
+    config = make_knowledge_config()
     source = KnowledgeSourceSpec(
         id="project-demo-workspace",
         name="Project Demo",
@@ -151,7 +152,7 @@ def test_local_graph_ignores_title_only_generic_entities(tmp_path: Path):
         encoding="utf-8",
     )
 
-    config = Config().knowledge
+    config = make_knowledge_config()
     source = KnowledgeSourceSpec(
         id="project-demo-workspace",
         name="Project Demo",
@@ -193,7 +194,7 @@ def test_local_graph_keeps_high_signal_title_entities(tmp_path: Path):
         encoding="utf-8",
     )
 
-    config = Config().knowledge
+    config = make_knowledge_config()
     source = KnowledgeSourceSpec(
         id="project-demo-workspace",
         name="Project Demo",
@@ -227,7 +228,7 @@ def test_local_graph_filters_worklog_explanatory_terms(tmp_path: Path):
         encoding="utf-8",
     )
 
-    config = Config().knowledge
+    config = make_knowledge_config()
     source = KnowledgeSourceSpec(
         id="project-demo-workspace",
         name="Project Demo",
@@ -285,7 +286,7 @@ def test_local_graph_allows_documents_under_hidden_parent_directories(tmp_path: 
         encoding="utf-8",
     )
 
-    config = Config().knowledge
+    config = make_knowledge_config()
     source = KnowledgeSourceSpec(
         id="project-demo-workspace",
         name="Project Demo",
@@ -318,7 +319,7 @@ def test_local_graph_emits_sentence_entity_stats(tmp_path: Path):
         encoding="utf-8",
     )
 
-    config = Config().knowledge
+    config = make_knowledge_config()
     source = KnowledgeSourceSpec(
         id="project-demo-workspace",
         name="Project Demo",
@@ -358,7 +359,7 @@ def test_local_graph_emits_relation_candidates_from_syntax(tmp_path: Path):
         encoding="utf-8",
     )
 
-    config = Config().knowledge
+    config = make_knowledge_config()
     source = KnowledgeSourceSpec(
         id="project-demo-workspace",
         name="Project Demo",
@@ -404,7 +405,7 @@ def test_local_graph_emits_document_level_graphify_before_project_graph(tmp_path
         encoding="utf-8",
     )
 
-    config = Config().knowledge
+    config = make_knowledge_config()
     config.index.chunk_size = 16
     config.index.chunk_overlap = 0
     source = KnowledgeSourceSpec(
@@ -459,7 +460,7 @@ def test_local_graph_all_records_query_returns_full_relation_set(tmp_path: Path)
         encoding="utf-8",
     )
 
-    config = Config().knowledge
+    config = make_knowledge_config()
     source = KnowledgeSourceSpec(
         id="project-demo-workspace",
         name="Project Demo",
@@ -486,7 +487,7 @@ def test_local_graph_all_records_query_returns_full_relation_set(tmp_path: Path)
 
 
 def test_local_graph_empty_documents_cleanup_graphify_manifest(tmp_path: Path):
-    config = Config().knowledge
+    config = make_knowledge_config()
     manager = KnowledgeManager(tmp_path)
     graph_path = tmp_path / "knowledge" / "graphify-out" / "graph.json"
 

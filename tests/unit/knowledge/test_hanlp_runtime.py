@@ -15,6 +15,7 @@ import copaw.knowledge.hanlp_nlp_runtime as hanlp_runtime_module
 
 from copaw.config.config import Config
 from copaw.knowledge.hanlp_nlp_runtime import NLPRuntime
+from tests.fixtures.knowledge_config import make_knowledge_config
 
 
 class _FakeStdout:
@@ -143,7 +144,7 @@ class _SlowPopen:
 def test_probe_reports_unconfigured_sidecar_by_default() -> None:
     runtime = NLPRuntime()
 
-    state = runtime.probe(Config().knowledge)
+    state = runtime.probe(make_knowledge_config())
 
     assert state["status"] == "unavailable"
     assert state["reason_code"] == "HANLP_SIDECAR_UNCONFIGURED"
@@ -151,7 +152,7 @@ def test_probe_reports_unconfigured_sidecar_by_default() -> None:
 
 def test_probe_reports_missing_python_executable(tmp_path: Path) -> None:
     runtime = NLPRuntime()
-    config = Config().knowledge
+    config = make_knowledge_config()
     config.nlp.sidecar_enabled = True
     config.nlp.python_executable = str(tmp_path / "missing-python")
 
@@ -163,7 +164,7 @@ def test_probe_reports_missing_python_executable(tmp_path: Path) -> None:
 
 def test_probe_uses_sidecar_bridge_json() -> None:
     runtime = NLPRuntime()
-    config = Config().knowledge
+    config = make_knowledge_config()
     config.nlp.sidecar_enabled = True
     config.nlp.python_executable = "/bin/python3"
 
@@ -188,7 +189,7 @@ def test_probe_uses_sidecar_bridge_json() -> None:
 
 def test_probe_ignores_legacy_nlp_enabled_when_sidecar_is_configured() -> None:
     runtime = NLPRuntime()
-    config = Config().knowledge
+    config = make_knowledge_config()
     config.nlp.enabled = False
     config.nlp.sidecar_enabled = True
     config.nlp.python_executable = "/bin/python3"
@@ -214,9 +215,9 @@ def test_probe_ignores_legacy_nlp_enabled_when_sidecar_is_configured() -> None:
 
 def test_start_worker_injects_repo_src_into_pythonpath() -> None:
     runtime = NLPRuntime()
-    config = Config().knowledge
-    config.hanlp.enabled = True
-    config.hanlp.python_executable = "/bin/python3"
+    config = make_knowledge_config()
+    config.nlp.enabled = True
+    config.nlp.python_executable = "/bin/python3"
     payload = runtime._config_payload(config)
     captured_kwargs: dict[str, object] = {}
 
@@ -294,9 +295,9 @@ def load(name):
 
 def test_tokenize_returns_tokens_from_sidecar() -> None:
     runtime = NLPRuntime()
-    config = Config().knowledge
-    config.hanlp.enabled = True
-    config.hanlp.python_executable = "/bin/python3"
+    config = make_knowledge_config()
+    config.nlp.enabled = True
+    config.nlp.python_executable = "/bin/python3"
 
     mode_payloads = {
         "probe": {
@@ -326,9 +327,9 @@ def test_tokenize_returns_tokens_from_sidecar() -> None:
 
 def test_model_status_returns_ready_when_sidecar_reports_model_ready() -> None:
     runtime = NLPRuntime()
-    config = Config().knowledge
-    config.hanlp.enabled = True
-    config.hanlp.python_executable = "/bin/python3"
+    config = make_knowledge_config()
+    config.nlp.enabled = True
+    config.nlp.python_executable = "/bin/python3"
 
     mode_payloads = {
         "probe": {
@@ -357,9 +358,9 @@ def test_model_status_returns_ready_when_sidecar_reports_model_ready() -> None:
 
 def test_local_models_status_alias_returns_model_status() -> None:
     runtime = NLPRuntime()
-    config = Config().knowledge
-    config.hanlp.enabled = True
-    config.hanlp.python_executable = "/bin/python3"
+    config = make_knowledge_config()
+    config.nlp.enabled = True
+    config.nlp.python_executable = "/bin/python3"
 
     mode_payloads = {
         "probe": {
@@ -388,9 +389,9 @@ def test_local_models_status_alias_returns_model_status() -> None:
 
 def test_ensure_model_returns_unavailable_when_sidecar_reports_model_failure() -> None:
     runtime = NLPRuntime()
-    config = Config().knowledge
-    config.hanlp.enabled = True
-    config.hanlp.python_executable = "/bin/python3"
+    config = make_knowledge_config()
+    config.nlp.enabled = True
+    config.nlp.python_executable = "/bin/python3"
 
     mode_payloads = {
         "probe": {
@@ -418,9 +419,9 @@ def test_ensure_model_returns_unavailable_when_sidecar_reports_model_failure() -
 
 
 def test_default_task_matrix_contains_l2_baseline_tasks() -> None:
-    config = Config().knowledge
+    config = make_knowledge_config()
 
-    tasks = config.hanlp.task_matrix.tasks
+    tasks = config.nlp.task_matrix.tasks
 
     assert set(tasks) >= {"cor", "ner_msra", "dep", "sdp", "con"}
     assert tasks["cor"].task_name == "coreference_resolution"
@@ -431,9 +432,9 @@ def test_default_task_matrix_contains_l2_baseline_tasks() -> None:
 
 def test_task_status_returns_ready_when_sidecar_reports_task_ready() -> None:
     runtime = NLPRuntime()
-    config = Config().knowledge
-    config.hanlp.enabled = True
-    config.hanlp.python_executable = "/bin/python3"
+    config = make_knowledge_config()
+    config.nlp.enabled = True
+    config.nlp.python_executable = "/bin/python3"
 
     mode_payloads = {
         "probe": {
@@ -462,9 +463,9 @@ def test_task_status_returns_ready_when_sidecar_reports_task_ready() -> None:
 
 def test_run_task_returns_structured_result_from_sidecar() -> None:
     runtime = NLPRuntime()
-    config = Config().knowledge
-    config.hanlp.enabled = True
-    config.hanlp.python_executable = "/bin/python3"
+    config = make_knowledge_config()
+    config.nlp.enabled = True
+    config.nlp.python_executable = "/bin/python3"
 
     mode_payloads = {
         "probe": {
@@ -494,11 +495,11 @@ def test_run_task_returns_structured_result_from_sidecar() -> None:
 
 def test_run_task_uses_task_specific_timeout_and_disables_timeout_retry() -> None:
     runtime = NLPRuntime()
-    config = Config().knowledge
-    config.hanlp.enabled = True
-    config.hanlp.python_executable = "/bin/python3"
-    config.hanlp.tokenize_timeout_sec = 90.0
-    config.hanlp.task_matrix.tasks["ner_msra"].timeout_sec = 12.5
+    config = make_knowledge_config()
+    config.nlp.enabled = True
+    config.nlp.python_executable = "/bin/python3"
+    config.nlp.tokenize_timeout_sec = 90.0
+    config.nlp.task_matrix.tasks["ner_msra"].timeout_sec = 12.5
 
     captured: dict[str, object] = {}
 
@@ -541,11 +542,11 @@ def test_run_task_uses_task_specific_timeout_and_disables_timeout_retry() -> Non
 
 def test_task_status_uses_task_specific_timeout_and_disables_timeout_retry() -> None:
     runtime = NLPRuntime()
-    config = Config().knowledge
-    config.hanlp.enabled = True
-    config.hanlp.python_executable = "/bin/python3"
-    config.hanlp.tokenize_timeout_sec = 90.0
-    config.hanlp.task_matrix.tasks["ner_msra"].timeout_sec = 7.0
+    config = make_knowledge_config()
+    config.nlp.enabled = True
+    config.nlp.python_executable = "/bin/python3"
+    config.nlp.tokenize_timeout_sec = 90.0
+    config.nlp.task_matrix.tasks["ner_msra"].timeout_sec = 7.0
 
     captured: dict[str, object] = {}
 
@@ -587,10 +588,10 @@ def test_task_status_uses_task_specific_timeout_and_disables_timeout_retry() -> 
 def test_run_task_returns_degraded_when_worker_response_times_out() -> None:
     runtime = NLPRuntime()
     runtime._timeout_breaker_threshold = 2
-    config = Config().knowledge
-    config.hanlp.enabled = True
-    config.hanlp.python_executable = "/bin/python3"
-    config.hanlp.task_matrix.tasks["ner_msra"].timeout_sec = 0.01
+    config = make_knowledge_config()
+    config.nlp.enabled = True
+    config.nlp.python_executable = "/bin/python3"
+    config.nlp.task_matrix.tasks["ner_msra"].timeout_sec = 0.01
 
     mode_payloads = {
         "run_task": {
@@ -623,10 +624,10 @@ def test_run_task_short_circuits_after_timeout_breaker_opens() -> None:
     runtime = NLPRuntime()
     runtime._timeout_breaker_threshold = 1
     runtime._timeout_breaker_cooldown_sec = 60.0
-    config = Config().knowledge
-    config.hanlp.enabled = True
-    config.hanlp.python_executable = "/bin/python3"
-    config.hanlp.task_matrix.tasks["ner_msra"].timeout_sec = 0.01
+    config = make_knowledge_config()
+    config.nlp.enabled = True
+    config.nlp.python_executable = "/bin/python3"
+    config.nlp.task_matrix.tasks["ner_msra"].timeout_sec = 0.01
 
     mode_payloads = {
         "run_task": {
@@ -667,9 +668,9 @@ def test_run_task_short_circuits_after_timeout_breaker_opens() -> None:
 
 def test_run_ner_returns_structured_result_from_sidecar() -> None:
     runtime = NLPRuntime()
-    config = Config().knowledge
-    config.hanlp.enabled = True
-    config.hanlp.python_executable = "/bin/python3"
+    config = make_knowledge_config()
+    config.nlp.enabled = True
+    config.nlp.python_executable = "/bin/python3"
 
     mode_payloads = {
         "probe": {
@@ -699,9 +700,9 @@ def test_run_ner_returns_structured_result_from_sidecar() -> None:
 
 def test_run_dep_returns_structured_result_from_sidecar() -> None:
     runtime = NLPRuntime()
-    config = Config().knowledge
-    config.hanlp.enabled = True
-    config.hanlp.python_executable = "/bin/python3"
+    config = make_knowledge_config()
+    config.nlp.enabled = True
+    config.nlp.python_executable = "/bin/python3"
 
     mode_payloads = {
         "probe": {
@@ -1026,9 +1027,9 @@ def tokenize(text):
 
 def test_persistent_worker_reuses_same_pid_between_calls() -> None:
     runtime = NLPRuntime()
-    config = Config().knowledge
-    config.hanlp.enabled = True
-    config.hanlp.python_executable = "/bin/python3"
+    config = make_knowledge_config()
+    config.nlp.enabled = True
+    config.nlp.python_executable = "/bin/python3"
 
     mode_payloads = {
         "probe": {
@@ -1061,9 +1062,9 @@ def test_persistent_worker_reuses_same_pid_between_calls() -> None:
 
 def test_persistent_worker_restarts_on_channel_failure() -> None:
     runtime = NLPRuntime()
-    config = Config().knowledge
-    config.hanlp.enabled = True
-    config.hanlp.python_executable = "/bin/python3"
+    config = make_knowledge_config()
+    config.nlp.enabled = True
+    config.nlp.python_executable = "/bin/python3"
 
     mode_payloads = {
         "probe": {
@@ -1107,9 +1108,9 @@ def test_persistent_worker_restarts_on_channel_failure() -> None:
 
 def test_persistent_worker_restarts_when_config_cache_key_changes() -> None:
     runtime = NLPRuntime()
-    config = Config().knowledge
-    config.hanlp.enabled = True
-    config.hanlp.python_executable = "/bin/python3"
+    config = make_knowledge_config()
+    config.nlp.enabled = True
+    config.nlp.python_executable = "/bin/python3"
 
     mode_payloads = {
         "probe": {
@@ -1133,7 +1134,7 @@ def test_persistent_worker_restarts_when_config_cache_key_changes() -> None:
     ):
         probe_state = runtime.probe(config)
         _, first_state = runtime.tokenize("微软发布", config)
-        config.hanlp.model_id = "MSRA_NER_BERT_BASE_ZH"
+        config.nlp.model_id = "MSRA_NER_BERT_BASE_ZH"
         _, second_state = runtime.tokenize("微软发布", config)
 
     assert int(probe_state["worker_pid"]) == 50101

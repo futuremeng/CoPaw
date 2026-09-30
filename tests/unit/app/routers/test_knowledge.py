@@ -24,6 +24,7 @@ from qwenpaw.app import knowledge_workflow as knowledge_workflow_module
 from copaw.config.config import Config
 from qwenpaw.knowledge import GraphOpsManager, KnowledgeManager
 from qwenpaw.knowledge.knowledge_quantization_architecture import QuantizationArchitectureManager
+from tests.fixtures.knowledge_config import make_knowledge_config
 
 
 @pytest.fixture
@@ -599,7 +600,7 @@ def test_index_source_offloads_indexing_to_thread(
     knowledge_api_client: TestClient,
     monkeypatch,
 ):
-    config_payload = Config().knowledge.model_dump(mode="json")
+    config_payload = make_knowledge_config().model_dump(mode="json")
     config_payload["enabled"] = True
     saved = knowledge_api_client.put("/knowledge/config", json=config_payload)
     assert saved.status_code == 200
@@ -640,7 +641,7 @@ def test_search_knowledge_offloads_search_to_thread(
     knowledge_api_client: TestClient,
     monkeypatch,
 ):
-    config_payload = Config().knowledge.model_dump(mode="json")
+    config_payload = make_knowledge_config().model_dump(mode="json")
     config_payload["enabled"] = True
     saved = knowledge_api_client.put("/knowledge/config", json=config_payload)
     assert saved.status_code == 200
@@ -671,7 +672,7 @@ def test_search_knowledge_passes_scope_filters(
     knowledge_api_client: TestClient,
     monkeypatch,
 ):
-    config_payload = Config().knowledge.model_dump(mode="json")
+    config_payload = make_knowledge_config().model_dump(mode="json")
     config_payload["enabled"] = True
     saved = knowledge_api_client.put("/knowledge/config", json=config_payload)
     assert saved.status_code == 200
@@ -701,7 +702,7 @@ def test_search_knowledge_passes_scope_filters(
 def test_search_knowledge_rejects_invalid_scope_type(
     knowledge_api_client: TestClient,
 ):
-    config_payload = Config().knowledge.model_dump(mode="json")
+    config_payload = make_knowledge_config().model_dump(mode="json")
     config_payload["enabled"] = True
     saved = knowledge_api_client.put("/knowledge/config", json=config_payload)
     assert saved.status_code == 200
@@ -725,7 +726,7 @@ def test_project_pipeline_run_does_not_expose_project_source_to_global_search(
     note_path.parent.mkdir(parents=True, exist_ok=True)
     note_path.write_text("hello", encoding="utf-8")
 
-    config_payload = Config().knowledge.model_dump(mode="json")
+    config_payload = make_knowledge_config().model_dump(mode="json")
     config_payload["enabled"] = True
     config_payload["memify_enabled"] = True
     saved = knowledge_api_client.put("/knowledge/config", json=config_payload)
@@ -797,7 +798,7 @@ def test_register_project_source_exposes_it_to_global_search_and_graph_query(
     project_dir = tmp_path / "projects" / project_id
     project_dir.mkdir(parents=True, exist_ok=True)
 
-    config_payload = Config().knowledge.model_dump(mode="json")
+    config_payload = make_knowledge_config().model_dump(mode="json")
     config_payload["enabled"] = True
     config_payload["graph_query_enabled"] = True
     saved = knowledge_api_client.put("/knowledge/config", json=config_payload)
@@ -866,7 +867,7 @@ def test_graph_query_offloads_query_to_thread(
     knowledge_api_client: TestClient,
     monkeypatch,
 ):
-    config_payload = Config().knowledge.model_dump(mode="json")
+    config_payload = make_knowledge_config().model_dump(mode="json")
     config_payload["enabled"] = True
     config_payload["graph_query_enabled"] = True
     saved = knowledge_api_client.put("/knowledge/config", json=config_payload)
@@ -903,7 +904,7 @@ def test_graph_query_forwards_output_mode(
     knowledge_api_client: TestClient,
     monkeypatch,
 ):
-    config_payload = Config().knowledge.model_dump(mode="json")
+    config_payload = make_knowledge_config().model_dump(mode="json")
     config_payload["enabled"] = True
     config_payload["graph_query_enabled"] = True
     saved = knowledge_api_client.put("/knowledge/config", json=config_payload)
@@ -934,7 +935,7 @@ def test_graph_query_passes_scope_filters(
     knowledge_api_client: TestClient,
     monkeypatch,
 ):
-    config_payload = Config().knowledge.model_dump(mode="json")
+    config_payload = make_knowledge_config().model_dump(mode="json")
     config_payload["enabled"] = True
     config_payload["graph_query_enabled"] = True
     saved = knowledge_api_client.put("/knowledge/config", json=config_payload)
@@ -966,7 +967,7 @@ def test_graph_query_passes_scope_filters(
 def test_graph_query_rejects_invalid_scope_type(
     knowledge_api_client: TestClient,
 ):
-    config_payload = Config().knowledge.model_dump(mode="json")
+    config_payload = make_knowledge_config().model_dump(mode="json")
     config_payload["enabled"] = True
     config_payload["graph_query_enabled"] = True
     saved = knowledge_api_client.put("/knowledge/config", json=config_payload)
@@ -983,7 +984,7 @@ def test_graph_query_fast_preview_bypasses_graph_enabled_flag(
     knowledge_api_client: TestClient,
     monkeypatch,
 ):
-    config_payload = Config().knowledge.model_dump(mode="json")
+    config_payload = make_knowledge_config().model_dump(mode="json")
     config_payload["enabled"] = True
     config_payload["graph_query_enabled"] = False
     saved = knowledge_api_client.put("/knowledge/config", json=config_payload)
@@ -1014,7 +1015,7 @@ def test_graph_query_template_non_fast_downgrades_to_fast_when_graph_disabled(
     knowledge_api_client: TestClient,
     monkeypatch,
 ):
-    config_payload = Config().knowledge.model_dump(mode="json")
+    config_payload = make_knowledge_config().model_dump(mode="json")
     config_payload["enabled"] = True
     config_payload["graph_query_enabled"] = False
     saved = knowledge_api_client.put("/knowledge/config", json=config_payload)
@@ -1056,7 +1057,7 @@ def test_graph_query_template_non_fast_downgrades_to_fast_when_graph_disabled(
 def test_graph_query_cypher_still_requires_graph_enabled(
     knowledge_api_client: TestClient,
 ):
-    config_payload = Config().knowledge.model_dump(mode="json")
+    config_payload = make_knowledge_config().model_dump(mode="json")
     config_payload["enabled"] = True
     config_payload["graph_query_enabled"] = False
     saved = knowledge_api_client.put("/knowledge/config", json=config_payload)
@@ -1074,7 +1075,7 @@ def test_get_memify_job_status_offloads_status_read_to_thread(
     knowledge_api_client: TestClient,
     monkeypatch,
 ):
-    config_payload = Config().knowledge.model_dump(mode="json")
+    config_payload = make_knowledge_config().model_dump(mode="json")
     config_payload["enabled"] = True
     config_payload["memify_enabled"] = True
     saved = knowledge_api_client.put("/knowledge/config", json=config_payload)
@@ -1106,7 +1107,7 @@ def test_run_quality_loop_offloads_run_to_thread(
     knowledge_api_client: TestClient,
     monkeypatch,
 ):
-    config_payload = Config().knowledge.model_dump(mode="json")
+    config_payload = make_knowledge_config().model_dump(mode="json")
     config_payload["enabled"] = True
     config_payload["memify_enabled"] = True
     saved = knowledge_api_client.put("/knowledge/config", json=config_payload)
@@ -1150,7 +1151,7 @@ def test_get_quality_loop_job_status_offloads_status_read_to_thread(
     knowledge_api_client: TestClient,
     monkeypatch,
 ):
-    config_payload = Config().knowledge.model_dump(mode="json")
+    config_payload = make_knowledge_config().model_dump(mode="json")
     config_payload["enabled"] = True
     config_payload["memify_enabled"] = True
     saved = knowledge_api_client.put("/knowledge/config", json=config_payload)
@@ -1290,7 +1291,7 @@ def test_get_project_pipeline_status_does_not_auto_register_project_source(
     project_dir = tmp_path / "projects" / project_id
     project_dir.mkdir(parents=True, exist_ok=True)
 
-    config_payload = Config().knowledge.model_dump(mode="json")
+    config_payload = make_knowledge_config().model_dump(mode="json")
     config_payload["enabled"] = True
     config_payload["memify_enabled"] = True
     saved = knowledge_api_client.put("/knowledge/config", json=config_payload)
@@ -1342,7 +1343,7 @@ def test_run_project_pipeline_offloads_dispatch_to_thread(
     project_dir = tmp_path / "projects" / project_id
     project_dir.mkdir(parents=True, exist_ok=True)
 
-    config_payload = Config().knowledge.model_dump(mode="json")
+    config_payload = make_knowledge_config().model_dump(mode="json")
     config_payload["enabled"] = True
     config_payload["memify_enabled"] = True
     saved = knowledge_api_client.put("/knowledge/config", json=config_payload)
@@ -1402,7 +1403,7 @@ def test_run_project_pipeline_auto_registers_project_source(
     project_dir = tmp_path / "projects" / project_id
     project_dir.mkdir(parents=True, exist_ok=True)
 
-    config_payload = Config().knowledge.model_dump(mode="json")
+    config_payload = make_knowledge_config().model_dump(mode="json")
     config_payload["enabled"] = True
     config_payload["memify_enabled"] = True
     saved = knowledge_api_client.put("/knowledge/config", json=config_payload)
@@ -1466,7 +1467,7 @@ def test_run_project_pipeline_allows_fast_mode_when_memify_disabled(
     project_dir = tmp_path / "projects" / project_id
     project_dir.mkdir(parents=True, exist_ok=True)
 
-    config_payload = Config().knowledge.model_dump(mode="json")
+    config_payload = make_knowledge_config().model_dump(mode="json")
     config_payload["enabled"] = True
     config_payload["memify_enabled"] = False
     saved = knowledge_api_client.put("/knowledge/config", json=config_payload)
@@ -1503,7 +1504,7 @@ def test_run_project_pipeline_returns_operation_metadata(
     project_dir = tmp_path / "projects" / project_id
     project_dir.mkdir(parents=True, exist_ok=True)
 
-    config_payload = Config().knowledge.model_dump(mode="json")
+    config_payload = make_knowledge_config().model_dump(mode="json")
     config_payload["enabled"] = True
     config_payload["memify_enabled"] = True
     saved = knowledge_api_client.put("/knowledge/config", json=config_payload)
@@ -1551,7 +1552,7 @@ def test_run_project_pipeline_returns_flow_run_id_when_bridge_available(
     project_dir = tmp_path / "projects" / project_id
     project_dir.mkdir(parents=True, exist_ok=True)
 
-    config_payload = Config().knowledge.model_dump(mode="json")
+    config_payload = make_knowledge_config().model_dump(mode="json")
     config_payload["enabled"] = True
     config_payload["memify_enabled"] = True
     saved = knowledge_api_client.put("/knowledge/config", json=config_payload)
@@ -1634,7 +1635,7 @@ def test_project_pipeline_status_syncs_flow_run_terminal_state(
     project_dir = tmp_path / "projects" / project_id
     project_dir.mkdir(parents=True, exist_ok=True)
 
-    config_payload = Config().knowledge.model_dump(mode="json")
+    config_payload = make_knowledge_config().model_dump(mode="json")
     config_payload["enabled"] = True
     config_payload["memify_enabled"] = True
     saved = knowledge_api_client.put("/knowledge/config", json=config_payload)
@@ -1736,7 +1737,7 @@ def test_run_project_pipeline_persists_bridge_flow_run_id_for_later_commands(
     project_dir = tmp_path / "projects" / project_id
     project_dir.mkdir(parents=True, exist_ok=True)
 
-    config_payload = Config().knowledge.model_dump(mode="json")
+    config_payload = make_knowledge_config().model_dump(mode="json")
     config_payload["enabled"] = True
     config_payload["memify_enabled"] = True
     saved = knowledge_api_client.put("/knowledge/config", json=config_payload)
@@ -1862,7 +1863,7 @@ def test_project_pipeline_ws_snapshot_recovers_persisted_runtime_meta_after_brid
     project_dir = tmp_path / "projects" / project_id
     project_dir.mkdir(parents=True, exist_ok=True)
 
-    config_payload = Config().knowledge.model_dump(mode="json")
+    config_payload = make_knowledge_config().model_dump(mode="json")
     config_payload["enabled"] = True
     config_payload["memify_enabled"] = True
     saved = knowledge_api_client.put("/knowledge/config", json=config_payload)
@@ -1993,7 +1994,7 @@ def test_project_pipeline_status_syncs_resume_command_to_flow_engine(
     project_dir = tmp_path / "projects" / project_id
     project_dir.mkdir(parents=True, exist_ok=True)
 
-    config_payload = Config().knowledge.model_dump(mode="json")
+    config_payload = make_knowledge_config().model_dump(mode="json")
     config_payload["enabled"] = True
     config_payload["memify_enabled"] = True
     saved = knowledge_api_client.put("/knowledge/config", json=config_payload)
@@ -2340,7 +2341,7 @@ def test_clear_knowledge_removes_sources_and_indexes(
     knowledge_api_client: TestClient,
     tmp_path: Path,
 ):
-    config_payload = Config().knowledge.model_dump(mode="json")
+    config_payload = make_knowledge_config().model_dump(mode="json")
     config_payload["enabled"] = True
     config_payload["sources"] = [
         {
@@ -2397,7 +2398,7 @@ def test_read_file_document_rejects_structured_json(tmp_path: Path):
     json_file.write_text("{\"hello\": \"world\"}", encoding="utf-8")
 
     with pytest.raises(ValueError, match="structured data and is not part of document knowledge"):
-        manager._read_file_document(json_file, Config().knowledge)
+        manager._read_file_document(json_file, make_knowledge_config())
 
 
 def test_read_url_document_skips_json_content(monkeypatch):
@@ -2456,7 +2457,7 @@ def test_collect_project_source_candidates_excludes_pdf(tmp_path: Path):
 def test_get_memify_job_status_requires_memify_enabled(
     knowledge_api_client: TestClient,
 ):
-    config_payload = Config().knowledge.model_dump(mode="json")
+    config_payload = make_knowledge_config().model_dump(mode="json")
     config_payload["enabled"] = True
     config_payload["memify_enabled"] = False
     saved = knowledge_api_client.put("/knowledge/config", json=config_payload)
@@ -2470,7 +2471,7 @@ def test_get_memify_job_status_requires_memify_enabled(
 def test_get_memify_job_status_success(
     knowledge_api_client: TestClient,
 ):
-    knowledge_config = Config().knowledge
+    knowledge_config = make_knowledge_config()
     config_payload = knowledge_config.model_dump(mode="json")
     config_payload["enabled"] = True
     config_payload["memify_enabled"] = True
@@ -2519,7 +2520,7 @@ def test_put_knowledge_config_syncs_running_toggle_and_module_skill(
         lambda enabled: sync_calls.append(enabled),
     )
 
-    config_payload = Config().knowledge.model_dump(mode="json")
+    config_payload = make_knowledge_config().model_dump(mode="json")
     config_payload["enabled"] = False
 
     response = knowledge_api_client.put("/knowledge/config", json=config_payload)
@@ -2540,7 +2541,7 @@ def test_put_knowledge_config_does_not_resync_module_skill_when_toggle_unchanged
         lambda enabled: sync_calls.append(enabled),
     )
 
-    config_payload = Config().knowledge.model_dump(mode="json")
+    config_payload = make_knowledge_config().model_dump(mode="json")
     config_payload["enabled"] = True
 
     response = knowledge_api_client.put("/knowledge/config", json=config_payload)
@@ -2686,7 +2687,7 @@ def test_project_scoped_index_storage_isolated(
     knowledge_api_client: TestClient,
     tmp_path: Path,
 ):
-    config_payload = Config().knowledge.model_dump(mode="json")
+    config_payload = make_knowledge_config().model_dump(mode="json")
     config_payload["enabled"] = True
     saved = knowledge_api_client.put("/knowledge/config", json=config_payload)
     assert saved.status_code == 200
@@ -2736,7 +2737,7 @@ def test_project_scoped_memify_jobs_are_isolated(
     knowledge_api_client: TestClient,
     tmp_path: Path,
 ):
-    config_payload = Config().knowledge.model_dump(mode="json")
+    config_payload = make_knowledge_config().model_dump(mode="json")
     config_payload["enabled"] = True
     config_payload["memify_enabled"] = True
     saved = knowledge_api_client.put("/knowledge/config", json=config_payload)
@@ -2861,7 +2862,7 @@ def test_project_pipeline_status_projects_runtime_operation_metadata(
     project_dir = tmp_path / "projects" / project_id
     project_dir.mkdir(parents=True, exist_ok=True)
 
-    config_payload = Config().knowledge.model_dump(mode="json")
+    config_payload = make_knowledge_config().model_dump(mode="json")
     config_payload["enabled"] = True
     config_payload["memify_enabled"] = True
     saved = knowledge_api_client.put("/knowledge/config", json=config_payload)
@@ -3062,7 +3063,7 @@ def test_project_pipeline_ws_snapshot_includes_latest_run_operation_metadata(
     project_dir = tmp_path / "projects" / project_id
     project_dir.mkdir(parents=True, exist_ok=True)
 
-    config_payload = Config().knowledge.model_dump(mode="json")
+    config_payload = make_knowledge_config().model_dump(mode="json")
     config_payload["enabled"] = True
     config_payload["memify_enabled"] = True
     saved = knowledge_api_client.put("/knowledge/config", json=config_payload)
@@ -3322,7 +3323,7 @@ def test_project_pipeline_run_does_not_auto_register_source_and_persists_state(
         encoding="utf-8",
     )
 
-    config_payload = Config().knowledge.model_dump(mode="json")
+    config_payload = make_knowledge_config().model_dump(mode="json")
     config_payload["enabled"] = True
     config_payload["memify_enabled"] = True
     saved = knowledge_api_client.put("/knowledge/config", json=config_payload)
@@ -3380,7 +3381,7 @@ def test_project_pipeline_run_does_not_auto_register_source_and_persists_state(
 def test_quantization_stage_run_and_stats_query(
     knowledge_api_client: TestClient,
 ):
-    config_payload = Config().knowledge.model_dump(mode="json")
+    config_payload = make_knowledge_config().model_dump(mode="json")
     config_payload["enabled"] = True
     config_payload["memify_enabled"] = True
     saved = knowledge_api_client.put("/knowledge/config", json=config_payload)
@@ -3414,7 +3415,7 @@ def test_quantization_stage_run_and_stats_query(
 def test_quantization_compare_endpoints(
     knowledge_api_client: TestClient,
 ):
-    config_payload = Config().knowledge.model_dump(mode="json")
+    config_payload = make_knowledge_config().model_dump(mode="json")
     config_payload["enabled"] = True
     config_payload["memify_enabled"] = True
     saved = knowledge_api_client.put("/knowledge/config", json=config_payload)
@@ -3499,7 +3500,7 @@ def test_project_pipeline_status_includes_lane_and_quantization_stage_skeleton(
     project_id = "project-pipeline-lane-skeleton"
     (tmp_path / "projects" / project_id).mkdir(parents=True, exist_ok=True)
 
-    config_payload = Config().knowledge.model_dump(mode="json")
+    config_payload = make_knowledge_config().model_dump(mode="json")
     config_payload["enabled"] = True
     config_payload["memify_enabled"] = True
     saved = knowledge_api_client.put("/knowledge/config", json=config_payload)

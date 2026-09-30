@@ -10,6 +10,7 @@ import pytest
 
 from copaw.config.config import Config, KnowledgeSourceSpec
 from copaw.knowledge.manager import KnowledgeManager, process_ner_with_sliding_window
+from tests.fixtures.knowledge_config import make_knowledge_config
 
 
 def test_directory_source_skips_internal_knowledge_artifacts(tmp_path: Path):
@@ -24,7 +25,7 @@ def test_directory_source_skips_internal_knowledge_artifacts(tmp_path: Path):
         encoding="utf-8",
     )
 
-    config = Config().knowledge
+    config = make_knowledge_config()
     source = KnowledgeSourceSpec(
         id="project-demo-workspace",
         name="Project Demo",
@@ -67,7 +68,7 @@ def test_directory_source_skips_hidden_files_and_hidden_directories(tmp_path: Pa
     (project_root / ".hidden" / "secret.md").write_text("hidden content", encoding="utf-8")
     (project_root / "visible.md").write_text("visible content", encoding="utf-8")
 
-    config = Config().knowledge
+    config = make_knowledge_config()
     source = KnowledgeSourceSpec(
         id="project-demo-workspace",
         name="Project Demo",
@@ -97,7 +98,7 @@ def test_directory_source_raw_sync_ignores_internal_knowledge_dir(tmp_path: Path
     (project_root / "docs").mkdir(parents=True, exist_ok=True)
     (project_root / "docs" / "note.md").write_text("hello raw sync", encoding="utf-8")
 
-    config = Config().knowledge
+    config = make_knowledge_config()
     source = KnowledgeSourceSpec(
         id="project-raw-sync-source",
         name="Project Raw Sync Source",
@@ -128,7 +129,7 @@ def test_project_directory_raw_snapshots_strip_redundant_project_prefix(tmp_path
     source_file = project_root / "original" / "note.md"
     source_file.write_text("hello project raw sync", encoding="utf-8")
 
-    config = Config().knowledge
+    config = make_knowledge_config()
     config.index.chunk_size = 10_000
     source = KnowledgeSourceSpec(
         id="project-sybxke-workspace",
@@ -178,7 +179,7 @@ def test_project_directory_raw_snapshots_write_to_top_level_raw_dir(tmp_path: Pa
     source_file = project_root / "aacid__duxiu_files" / "260317_002144.md"
     source_file.write_text("only uploaded once", encoding="utf-8")
 
-    config = Config().knowledge
+    config = make_knowledge_config()
     source = KnowledgeSourceSpec(
         id="project-project-gfc3xo-workspace",
         name="Project Workspace: project-gfc3xo",
@@ -208,7 +209,7 @@ def test_project_directory_unchanged_file_reuses_existing_snapshot(tmp_path: Pat
     source_file = project_root / "aacid__duxiu_files" / "260317_002144.md"
     source_file.write_text("only uploaded once", encoding="utf-8")
 
-    config = Config().knowledge
+    config = make_knowledge_config()
     source = KnowledgeSourceSpec(
         id="project-project-gfc3xo-workspace",
         name="Project Workspace: project-gfc3xo",
@@ -236,7 +237,7 @@ def test_project_directory_unchanged_file_reuses_existing_snapshot(tmp_path: Pat
 
 
 def test_list_sources_include_semantic_uses_lightweight_preview_only(tmp_path: Path, monkeypatch):
-    config = Config().knowledge
+    config = make_knowledge_config()
     source = KnowledgeSourceSpec(
         id="project-project-preview-workspace",
         name="Project Workspace: project-preview",
@@ -276,7 +277,7 @@ def test_list_sources_include_semantic_uses_lightweight_preview_only(tmp_path: P
 
 
 def test_chunk_documents_split_sentences_and_count(tmp_path: Path):
-    config = Config().knowledge
+    config = make_knowledge_config()
     config.index.chunk_size = 10_000
     source = KnowledgeSourceSpec(
         id="sentence-chunk-source",
@@ -314,7 +315,7 @@ def test_chunk_documents_split_sentences_and_count(tmp_path: Path):
 
 
 def test_search_reads_chunk_text_from_chunk_file_when_index_has_no_text(tmp_path: Path):
-    config = Config().knowledge
+    config = make_knowledge_config()
     config.index.chunk_size = 10_000
     source = KnowledgeSourceSpec(
         id="search-chunk-source",
@@ -347,7 +348,7 @@ def test_search_reads_chunk_text_from_chunk_file_when_index_has_no_text(tmp_path
 
 
 def test_search_interlinear_hit_includes_line_index_references(tmp_path: Path):
-    config = Config().knowledge
+    config = make_knowledge_config()
     config.index.chunk_size = 10_000
     source = KnowledgeSourceSpec(
         id="search-interlinear-line-index-source",
@@ -401,7 +402,7 @@ def test_search_interlinear_hit_includes_line_index_references(tmp_path: Path):
 
 
 def test_search_supports_scope_filters(tmp_path: Path):
-    config = Config().knowledge
+    config = make_knowledge_config()
     config.index.chunk_size = 10_000
 
     agent_source = KnowledgeSourceSpec(
@@ -485,7 +486,7 @@ def test_search_supports_scope_filters(tmp_path: Path):
 
 
 def test_search_skips_unregistered_project_workspace_source(tmp_path: Path):
-    config = Config().knowledge
+    config = make_knowledge_config()
 
     workspace_source = KnowledgeSourceSpec(
         id="project-project-demo-workspace",
@@ -576,7 +577,7 @@ def test_search_skips_unregistered_project_workspace_source(tmp_path: Path):
 
 
 def test_process_source_candidates_reads_snapshot_text_without_chunk_text(tmp_path: Path):
-    config = Config().knowledge
+    config = make_knowledge_config()
     config.index.chunk_size = 10_000
     docs_dir = tmp_path / "docs"
     docs_dir.mkdir(parents=True, exist_ok=True)
@@ -619,7 +620,7 @@ def test_directory_source_writes_chunks_under_relative_document_path(tmp_path: P
     docs_dir.mkdir(parents=True, exist_ok=True)
     (docs_dir / "README.md").write_text("第一句。第二句!", encoding="utf-8")
 
-    config = Config().knowledge
+    config = make_knowledge_config()
     config.index.chunk_size = 10_000
     source = KnowledgeSourceSpec(
         id="project-rel-source",
@@ -657,7 +658,7 @@ def test_directory_source_reindex_retains_old_snapshots_and_chunks(tmp_path: Pat
     source_file = docs_dir / "README.md"
     source_file.write_text("alpha version", encoding="utf-8")
 
-    config = Config().knowledge
+    config = make_knowledge_config()
     config.index.chunk_size = 10_000
     source = KnowledgeSourceSpec(
         id="project-retain-source",
@@ -694,7 +695,7 @@ def test_directory_source_reindex_retains_old_snapshots_and_chunks(tmp_path: Pat
 
 
 def test_index_source_writes_ner_files_when_semantic_ready(tmp_path: Path):
-    config = Config().knowledge
+    config = make_knowledge_config()
     config.index.chunk_size = 10_000
     source = KnowledgeSourceSpec(
         id="ner-ready-source",
@@ -767,7 +768,7 @@ def test_index_source_writes_ner_files_when_semantic_ready(tmp_path: Path):
 
 
 def test_index_source_writes_pos_files_when_pos_batch_ready(tmp_path: Path):
-    config = Config().knowledge
+    config = make_knowledge_config()
     config.index.chunk_size = 10_000
     source = KnowledgeSourceSpec(
         id="pos-ready-source",
@@ -841,7 +842,7 @@ def test_index_source_directory_ner_requires_interlinear_without_fallback(tmp_pa
     project_root.mkdir(parents=True, exist_ok=True)
     (project_root / "README.md").write_text("AgentRunner uses ToolDispatcher.", encoding="utf-8")
 
-    config = Config().knowledge
+    config = make_knowledge_config()
     config.index.chunk_size = 10_000
     source = KnowledgeSourceSpec(
         id="project-ner-interlinear-required",
@@ -906,7 +907,7 @@ def test_index_source_project_directory_uses_chunks_input_mode(tmp_path: Path):
     project_root.mkdir(parents=True, exist_ok=True)
     (project_root / "README.md").write_text("AgentRunner uses ToolDispatcher.", encoding="utf-8")
 
-    config = Config().knowledge
+    config = make_knowledge_config()
     config.index.chunk_size = 10_000
     source = KnowledgeSourceSpec(
         id="project-chunks-input-workspace",
@@ -947,7 +948,7 @@ def test_index_source_project_directory_uses_chunks_input_mode(tmp_path: Path):
 
 
 def test_index_source_skips_ner_files_when_semantic_unavailable(tmp_path: Path):
-    config = Config().knowledge
+    config = make_knowledge_config()
     config.index.chunk_size = 10_000
     source = KnowledgeSourceSpec(
         id="ner-unavailable-source",
@@ -999,9 +1000,9 @@ def test_index_source_skips_ner_files_when_semantic_unavailable(tmp_path: Path):
 
 
 def test_index_source_prefers_hanlp_ner_task_mentions_when_available(tmp_path: Path):
-    config = Config().knowledge
+    config = make_knowledge_config()
     config.index.chunk_size = 10_000
-    config.hanlp.enabled = True
+    config.nlp.enabled = True
     source = KnowledgeSourceSpec(
         id="ner-task-source",
         name="NER Task Source",
@@ -1073,9 +1074,9 @@ def test_index_source_prefers_hanlp_ner_task_mentions_when_available(tmp_path: P
 
 
 def test_index_source_accepts_wrapped_hanlp_ner_mentions_payload(tmp_path: Path):
-    config = Config().knowledge
+    config = make_knowledge_config()
     config.index.chunk_size = 10_000
-    config.hanlp.enabled = True
+    config.nlp.enabled = True
     source = KnowledgeSourceSpec(
         id="wrapped-ner-task-source",
         name="Wrapped NER Task Source",
@@ -1130,9 +1131,9 @@ def test_index_source_accepts_wrapped_hanlp_ner_mentions_payload(tmp_path: Path)
 
 
 def test_index_source_accepts_label_keyed_hanlp_ner_payload(tmp_path: Path):
-    config = Config().knowledge
+    config = make_knowledge_config()
     config.index.chunk_size = 10_000
-    config.hanlp.enabled = True
+    config.nlp.enabled = True
     source = KnowledgeSourceSpec(
         id="label-key-ner-task-source",
         name="Label-Key NER Task Source",
@@ -1189,9 +1190,9 @@ def test_index_source_accepts_label_keyed_hanlp_ner_payload(tmp_path: Path):
 
 
 def test_index_source_does_not_fallback_to_semantic_tokens_when_hanlp_ready_but_empty(tmp_path: Path):
-    config = Config().knowledge
+    config = make_knowledge_config()
     config.index.chunk_size = 10_000
-    config.hanlp.enabled = True
+    config.nlp.enabled = True
     source = KnowledgeSourceSpec(
         id="ready-empty-ner-task-source",
         name="Ready Empty NER Task Source",
@@ -1238,9 +1239,9 @@ def test_index_source_does_not_fallback_to_semantic_tokens_when_hanlp_ready_but_
 
 
 def test_index_source_populates_hanlp_syntax_tasks_when_available(tmp_path: Path):
-    config = Config().knowledge
+    config = make_knowledge_config()
     config.index.chunk_size = 10_000
-    config.hanlp.enabled = True
+    config.nlp.enabled = True
     source = KnowledgeSourceSpec(
         id="syntax-task-source",
         name="Syntax Task Source",
@@ -1366,9 +1367,9 @@ def test_normalize_hanlp_dependencies_handles_nested_head_indices(tmp_path: Path
 
 
 def test_index_source_runs_cor_after_ner_and_syntax_uses_original_text(tmp_path: Path):
-    config = Config().knowledge
+    config = make_knowledge_config()
     config.index.chunk_size = 10_000
-    config.hanlp.enabled = True
+    config.nlp.enabled = True
     source = KnowledgeSourceSpec(
         id="cor-ner-syntax-source",
         name="COR NER Syntax Source",
@@ -1461,7 +1462,7 @@ def test_index_source_runs_cor_after_ner_and_syntax_uses_original_text(tmp_path:
 
 
 def test_materialize_semantic_artifacts_does_not_read_chunk_files(tmp_path: Path):
-    config = Config().knowledge
+    config = make_knowledge_config()
     config.index.chunk_size = 10_000
     source = KnowledgeSourceSpec(
         id="semantic-no-chunk-input-source",
@@ -1497,7 +1498,7 @@ def test_materialize_semantic_artifacts_does_not_read_chunk_files(tmp_path: Path
 
 
 def test_write_chunk_tokenize_artifacts_persists_line_aligned_outputs(tmp_path: Path):
-    config = Config().knowledge
+    config = make_knowledge_config()
     config.index.chunk_size = 10_000
     source = KnowledgeSourceSpec(
         id="tokenize-stage-source",
@@ -1564,7 +1565,7 @@ def test_write_chunk_tokenize_artifacts_persists_line_aligned_outputs(tmp_path: 
 
 
 def test_delete_index_removes_ner_files(tmp_path: Path):
-    config = Config().knowledge
+    config = make_knowledge_config()
     config.index.chunk_size = 10_000
     source = KnowledgeSourceSpec(
         id="delete-ner-source",
@@ -1624,7 +1625,7 @@ def test_delete_index_removes_ner_files(tmp_path: Path):
 
 
 def test_get_source_chunk_documents_exposes_syntax_artifacts(tmp_path: Path):
-    config = Config().knowledge
+    config = make_knowledge_config()
     config.index.chunk_size = 10_000
     source = KnowledgeSourceSpec(
         id="syntax-doc-source",
@@ -1665,7 +1666,7 @@ def test_get_source_chunk_documents_exposes_syntax_artifacts(tmp_path: Path):
 
 
 def test_get_source_chunk_documents_reads_snapshot_text_without_chunk_text(tmp_path: Path):
-    config = Config().knowledge
+    config = make_knowledge_config()
     config.index.chunk_size = 10_000
     docs_dir = tmp_path / "docs"
     docs_dir.mkdir(parents=True, exist_ok=True)
@@ -1704,7 +1705,7 @@ def test_get_source_chunk_documents_reads_snapshot_text_without_chunk_text(tmp_p
 
 
 def test_delete_index_removes_chunk_files(tmp_path: Path):
-    config = Config().knowledge
+    config = make_knowledge_config()
     config.index.chunk_size = 10_000
     source = KnowledgeSourceSpec(
         id="delete-chunk-source",
@@ -1729,7 +1730,7 @@ def test_delete_index_removes_chunk_files(tmp_path: Path):
 
 
 def test_index_source_writes_interlinear_and_lightweight_line_stats(tmp_path: Path):
-    config = Config().knowledge
+    config = make_knowledge_config()
     source_file = tmp_path / "note.md"
     source_file.write_text("第一句。Second line 123!第三句？", encoding="utf-8")
     source = KnowledgeSourceSpec(
@@ -1806,7 +1807,7 @@ def test_build_interlinear_artifact_key_omits_source_prefix_for_all_sources(tmp_
 
 
 def test_delete_index_removes_interlinear_and_lightweight_files(tmp_path: Path):
-    config = Config().knowledge
+    config = make_knowledge_config()
     source_file = tmp_path / "cleanup-note.md"
     source_file.write_text("第一句。Second line 123!第三句？", encoding="utf-8")
     source = KnowledgeSourceSpec(
@@ -1859,7 +1860,7 @@ def test_delete_index_removes_interlinear_and_lightweight_files(tmp_path: Path):
 
 
 def test_delete_index_uses_chunk_manifest_when_index_is_missing(tmp_path: Path):
-    config = Config().knowledge
+    config = make_knowledge_config()
     config.index.chunk_size = 10_000
     source = KnowledgeSourceSpec(
         id="manifest-delete-source",
@@ -1889,7 +1890,7 @@ def test_delete_index_uses_chunk_manifest_when_index_is_missing(tmp_path: Path):
 
 
 def test_lightweight_token_count_does_not_depend_on_semantic_tokenizer(tmp_path: Path):
-    config = Config().knowledge
+    config = make_knowledge_config()
     config.index.chunk_size = 10_000
     source = KnowledgeSourceSpec(
         id="lightweight-token-source",
@@ -1987,7 +1988,7 @@ def test_semantic_engine_state_reports_tokenize_runtime_failure(tmp_path: Path):
 
 def test_compute_processing_fingerprint_changes_with_chunk_size(tmp_path: Path):
     manager = KnowledgeManager(tmp_path)
-    config = Config().knowledge
+    config = make_knowledge_config()
     fp1 = manager.compute_processing_fingerprint(config, None)
 
     config.index.chunk_size = config.index.chunk_size + 100
@@ -1997,7 +1998,7 @@ def test_compute_processing_fingerprint_changes_with_chunk_size(tmp_path: Path):
 
 
 def test_get_source_status_needs_reindex_on_stale_index(tmp_path: Path):
-    config = Config().knowledge
+    config = make_knowledge_config()
     config.index.chunk_size = 10_000
     source = KnowledgeSourceSpec(
         id="stale-status-source",
@@ -2024,7 +2025,7 @@ def test_get_source_status_needs_reindex_on_stale_index(tmp_path: Path):
 
 
 def test_get_source_status_needs_reindex_false_after_fresh_index(tmp_path: Path):
-    config = Config().knowledge
+    config = make_knowledge_config()
     source = KnowledgeSourceSpec(
         id="fresh-status-source",
         name="Fresh Source",
@@ -2048,7 +2049,7 @@ def test_directory_source_skips_oversized_file(tmp_path: Path):
     (project_root / "small.md").write_text("small content", encoding="utf-8")
     (project_root / "large.md").write_text("x" * 200, encoding="utf-8")
 
-    config = Config().knowledge
+    config = make_knowledge_config()
     config.index.max_file_size = 64
     source = KnowledgeSourceSpec(
         id="project-oversize-source",
@@ -2120,7 +2121,7 @@ def test_save_uploaded_directory_updates_raw_stats_and_status(tmp_path: Path):
 
 
 def test_get_source_status_uses_chunk_list_length_when_chunk_count_missing(tmp_path: Path):
-    config = Config().knowledge
+    config = make_knowledge_config()
     source = KnowledgeSourceSpec(
         id="missing-chunk-count-source",
         name="Missing Chunk Count Source",
@@ -2147,7 +2148,7 @@ def test_get_source_status_uses_chunk_list_length_when_chunk_count_missing(tmp_p
 
 
 def test_get_source_status_uses_manifest_metrics_when_index_payload_missing(tmp_path: Path):
-    config = Config().knowledge
+    config = make_knowledge_config()
     source = KnowledgeSourceSpec(
         id="missing-index-source",
         name="Missing Index Source",
@@ -2177,7 +2178,7 @@ def test_get_source_status_uses_manifest_metrics_when_index_payload_missing(tmp_
 
 
 def test_get_source_status_falls_back_to_stats_when_interlinear_manifest_missing(tmp_path: Path):
-    config = Config().knowledge
+    config = make_knowledge_config()
     source = KnowledgeSourceSpec(
         id="missing-interlinear-source",
         name="Missing interlinear Source",
@@ -2206,7 +2207,7 @@ def test_index_source_writes_project_file_analysis_stats_files(tmp_path: Path):
     project_root.mkdir(parents=True, exist_ok=True)
     (project_root / "README.md").write_text("第一句。第二句！", encoding="utf-8")
 
-    config = Config().knowledge
+    config = make_knowledge_config()
     source = KnowledgeSourceSpec(
         id="project-project-l1-stats-workspace",
         name="Project Workspace: project-l1-stats",
@@ -2243,7 +2244,7 @@ def test_index_source_writes_project_file_analysis_stats_files(tmp_path: Path):
 
 
 def test_get_source_status_prefers_chunk_manifest_count_over_interlinear_summary(tmp_path: Path):
-    config = Config().knowledge
+    config = make_knowledge_config()
     source = KnowledgeSourceSpec(
         id="chunk-manifest-preferred-source",
         name="Chunk Manifest Preferred Source",
@@ -2282,7 +2283,7 @@ def test_get_source_status_prefers_chunk_manifest_count_over_interlinear_summary
 
 
 def test_semantic_stage_writers_skip_ready_chunks_on_resume(tmp_path: Path, monkeypatch):
-    config = Config().knowledge
+    config = make_knowledge_config()
     source = KnowledgeSourceSpec(
         id="resume-stage-source",
         name="Resume Stage Source",

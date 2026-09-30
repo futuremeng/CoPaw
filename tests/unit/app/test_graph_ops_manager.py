@@ -12,6 +12,7 @@ from copaw.config.config import Config, GraphifyConfig, KnowledgeSourceSpec
 from copaw.knowledge import GraphOpsManager, KnowledgeManager
 from qwenpaw.knowledge.enrichment_pipeline import run_system_knowledge_enrichment
 from qwenpaw.knowledge.graphify_provider import GraphifyNotConfiguredError
+from tests.fixtures.knowledge_config import make_knowledge_config
 
 
 def _build_graphify_text_source() -> KnowledgeSourceSpec:
@@ -91,7 +92,7 @@ def test_graph_query_graphify_with_real_provider(tmp_path):
         ],
         edges=[{"source": "n1", "target": "n2", "relation": "calls", "confidence": "EXTRACTED"}],
     )
-    knowledge_config = Config().knowledge
+    knowledge_config = make_knowledge_config()
     knowledge_config.enabled = True
     knowledge_config.engine = "graphify"
     knowledge_config.graphify.graph_path = str(graph_json)
@@ -121,7 +122,7 @@ def test_graph_query_graphify_with_real_provider(tmp_path):
 
 def test_graph_query_graphify_fallback_when_not_configured(tmp_path):
     """When graph_path is empty and fallback_to_local=True, falls back to local_lexical."""
-    knowledge_config = Config().knowledge
+    knowledge_config = make_knowledge_config()
     knowledge_config.enabled = True
     knowledge_config.engine = "graphify"
     knowledge_config.graphify.graph_path = ""  # not configured
@@ -157,7 +158,7 @@ def test_graph_query_graphify_fallback_when_not_configured(tmp_path):
 
 def test_graph_query_graphify_no_fallback_raises_when_not_configured(tmp_path):
     """When fallback_to_local=False and graph_path empty, raises GraphifyNotConfiguredError."""
-    knowledge_config = Config().knowledge
+    knowledge_config = make_knowledge_config()
     knowledge_config.enabled = True
     knowledge_config.engine = "graphify"
     knowledge_config.graphify.graph_path = ""
@@ -181,7 +182,7 @@ def test_graph_query_graphify_fallback_on_runtime_error(tmp_path):
     """When the provider raises GraphifyError and fallback_to_local=True, falls back."""
     from qwenpaw.knowledge.graphify_provider import GraphifyError
 
-    knowledge_config = Config().knowledge
+    knowledge_config = make_knowledge_config()
     knowledge_config.enabled = True
     knowledge_config.engine = "graphify"
     knowledge_config.graphify.graph_path = str(tmp_path / "ghost.json")  # file will exist but is corrupt
@@ -221,7 +222,7 @@ def test_graph_query_graphify_fallback_on_runtime_error(tmp_path):
 
 
 def test_graph_query_graphify_cypher_mvp_translation(tmp_path):
-    knowledge_config = Config().knowledge
+    knowledge_config = make_knowledge_config()
     knowledge_config.enabled = True
     knowledge_config.engine = "graphify"
 
@@ -247,7 +248,7 @@ def test_graph_query_graphify_cypher_mvp_translation(tmp_path):
 
 def test_run_memify_graphify_dry_run_succeeds(tmp_path):
     """Dry-run memify with a valid dataset_dir should succeed immediately."""
-    knowledge_config = Config().knowledge
+    knowledge_config = make_knowledge_config()
     knowledge_config.enabled = True
     knowledge_config.engine = "graphify"
     knowledge_config.graphify.dataset_dir = str(tmp_path)
@@ -269,7 +270,7 @@ def test_run_memify_graphify_dry_run_succeeds(tmp_path):
 
 def test_run_memify_graphify_no_dataset_dir_gives_failed_status(tmp_path):
     """When dataset_dir is empty, memify should record a failed job."""
-    knowledge_config = Config().knowledge
+    knowledge_config = make_knowledge_config()
     knowledge_config.enabled = True
     knowledge_config.engine = "graphify"
     knowledge_config.graphify.dataset_dir = ""  # not set
@@ -289,7 +290,7 @@ def test_run_memify_graphify_no_dataset_dir_gives_failed_status(tmp_path):
 
 
 def test_local_memify_builds_queryable_graph(tmp_path):
-    knowledge_config = Config().knowledge
+    knowledge_config = make_knowledge_config()
     knowledge_config.enabled = True
     knowledge_config.engine = "local_lexical"
 
@@ -347,7 +348,7 @@ def test_local_memify_builds_queryable_graph(tmp_path):
 
 
 def test_local_memify_emits_path_time_and_version_relations_from_chunk_ner(tmp_path):
-    knowledge_config = Config().knowledge
+    knowledge_config = make_knowledge_config()
     knowledge_config.enabled = True
     knowledge_config.engine = "local_lexical"
 
@@ -421,7 +422,7 @@ def test_local_memify_emits_path_time_and_version_relations_from_chunk_ner(tmp_p
 
 
 def test_local_graph_query_supports_path_time_filter_sort_and_aggregate(tmp_path):
-    knowledge_config = Config().knowledge
+    knowledge_config = make_knowledge_config()
     knowledge_config.enabled = True
     knowledge_config.engine = "local_lexical"
 
@@ -532,7 +533,7 @@ def test_local_graph_query_supports_path_time_filter_sort_and_aggregate(tmp_path
 
 
 def test_local_graph_query_filters_latest_version_and_sorts_by_time(tmp_path):
-    knowledge_config = Config().knowledge
+    knowledge_config = make_knowledge_config()
     knowledge_config.enabled = True
     knowledge_config.engine = "local_lexical"
 
@@ -624,7 +625,7 @@ def test_local_graph_query_filters_latest_version_and_sorts_by_time(tmp_path):
 
 
 def test_local_graph_query_aggregates_by_path(tmp_path):
-    knowledge_config = Config().knowledge
+    knowledge_config = make_knowledge_config()
     knowledge_config.enabled = True
     knowledge_config.engine = "local_lexical"
 
@@ -677,7 +678,7 @@ def test_local_graph_query_aggregates_by_path(tmp_path):
 
 
 def test_local_memify_runs_enrichment_pipeline_and_query_prefers_l2(tmp_path):
-    knowledge_config = Config().knowledge
+    knowledge_config = make_knowledge_config()
     knowledge_config.enabled = True
     knowledge_config.engine = "local_lexical"
     knowledge_config.enrichment_pipeline_enabled = True
@@ -734,7 +735,7 @@ def test_local_memify_runs_enrichment_pipeline_and_query_prefers_l2(tmp_path):
 
 
 def test_graph_query_respects_preferred_output_mode_for_local_engine(tmp_path):
-    knowledge_config = Config().knowledge
+    knowledge_config = make_knowledge_config()
     knowledge_config.enabled = True
     knowledge_config.engine = "local_lexical"
     knowledge_config.enrichment_pipeline_enabled = True
@@ -803,7 +804,7 @@ def test_graph_query_respects_preferred_output_mode_for_local_engine(tmp_path):
 
 
 def test_graph_query_fast_preview_includes_relation_and_evidence_metadata(tmp_path, monkeypatch):
-    knowledge_config = Config().knowledge
+    knowledge_config = make_knowledge_config()
     knowledge_config.enabled = True
     knowledge_config.engine = "local_lexical"
 
@@ -883,7 +884,7 @@ def test_graph_query_fast_preview_includes_relation_and_evidence_metadata(tmp_pa
 
 
 def test_graphify_query_prefers_enriched_graph_when_enabled(tmp_path):
-    knowledge_config = Config().knowledge
+    knowledge_config = make_knowledge_config()
     knowledge_config.enabled = True
     knowledge_config.engine = "graphify"
     knowledge_config.enrichment_pipeline_enabled = True
@@ -943,7 +944,7 @@ def test_graphify_query_prefers_enriched_graph_when_enabled(tmp_path):
 
 
 def test_run_memify_job_exposes_enrichment_fields(tmp_path):
-    knowledge_config = Config().knowledge
+    knowledge_config = make_knowledge_config()
     knowledge_config.enabled = True
     knowledge_config.engine = "local_lexical"
     knowledge_config.enrichment_pipeline_enabled = True
@@ -986,7 +987,7 @@ def test_run_memify_job_exposes_enrichment_fields(tmp_path):
 
 
 def test_maybe_start_quality_self_drive_skips_when_quality_target_met(tmp_path):
-    knowledge_config = Config().knowledge
+    knowledge_config = make_knowledge_config()
     knowledge_config.enabled = True
     knowledge_config.memify_enabled = True
 
@@ -1054,7 +1055,7 @@ def test_pick_latest_memify_result_respects_dataset_scope(tmp_path):
 
 
 def test_quality_loop_persists_reflection_artifacts(tmp_path):
-    knowledge_config = Config().knowledge
+    knowledge_config = make_knowledge_config()
     knowledge_config.enabled = True
     knowledge_config.memify_enabled = True
 
@@ -1132,7 +1133,7 @@ def test_quality_loop_persists_reflection_artifacts(tmp_path):
 
 
 def test_quality_loop_stops_when_agent_gate_requires_review(tmp_path):
-    knowledge_config = Config().knowledge
+    knowledge_config = make_knowledge_config()
     knowledge_config.enabled = True
     knowledge_config.memify_enabled = True
 
