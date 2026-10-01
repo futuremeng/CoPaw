@@ -1,6 +1,6 @@
 # CoPaw 品牌边界（D-22 设计）
 
-- 状态：**待用户复审**（未批准前不改代码）
+- 状态：**阶段 A 已实施**（分支 `wp/12-brand-stage-a`，四条提交见 `git log --oneline wp/02-ownership..wp/12-brand-stage-a`；原拟编号 WP-10 已被"切主"占用，故为 WP-12）；阶段 B 待 WP-06 + S1/S2/S5 探针。原"待用户复审"随阶段 A 的实施结案；本文所有 126/92 的旧读数按 §1.1 末尾的更正块读。
 - 日期：2026-10-01
 - 取代：D-15「可见品牌与分发物包括命令等命名都叫 Copaw」中"把上游既有文字改名"的全部做法
 - 关闭：D-21「界面内正文品牌名」（裁为承认上游界面叫 QwenPaw，理由见 §3.4）
@@ -23,7 +23,7 @@
 `scripts/check_p1_invariants.py` 已经把每个上游文件的 diff 拆成两册，`naming` 的定义就是"一个纯品牌改名：把 `qwenpaw`/`copaw` token（任意大小写）换成占位符后，删行与增行逐字节相同"。所以本规则的可测形式是一条现有指标：
 
 ```
-naming_lines:  126 → 34（阶段 A）→ 0（阶段 B）      现在只承诺"只减不增"，B4 升级为"必须 = 0"
+naming_lines:  122 → 34（阶段 A）→ 0（阶段 B）      现在只承诺"只减不增"，B4 升级为"必须 = 0"
 ```
 
 按这个口径核出来的当前 22 个命名册文件（数据取自 `check_p1_invariants.py --target-ref working --json`，本轮实测）：
@@ -35,7 +35,7 @@ naming_lines:  126 → 34（阶段 A）→ 0（阶段 B）      现在只承诺"
 | `src/qwenpaw/cli/update_cmd.py` | 1 | 0 / 0 | A1 | **是（纯改名，6 条红的根因）** |
 | `src/qwenpaw/app/migration.py` | 3 | 156 / 125 | A1 | 否 |
 | `src/qwenpaw/cli/desktop_cmd.py` | 4 | 212 / 133 | A1 | 否 |
-| `README.md` / `_ja` / `_ru` / `_zh` | 2×4 | 58/17、63/20、65/20、68/17 | A2 | 否（各自还有 60–70 行 fork 自写内容） |
+| `README.md` / `_ja` / `_ru` / `_zh` | 1×4（判定修复前核为 2×4，见下方更正） | 58/17、63/20、65/20、68/17 | A2 | 否（各自还有 60–70 行 fork 自写内容） |
 | `website/public/docs/cli.en.md` | 22 | 2 / 2 | A2 | 否 |
 | `website/public/docs/cli.zh.md` | 23 | 2 / 2 | A2 | 否 |
 | `website/public/docs/desktop.en.md` | 11 | 0 / 2 | A2 | 否 |
@@ -51,6 +51,8 @@ naming_lines:  126 → 34（阶段 A）→ 0（阶段 B）      现在只承诺"
 | `console/src/pages/Login/index.tsx` | 1 | 3 / 2 | B2 | 否 |
 
 合计 naming 126、文件 22（4 个纯改名 + 18 个混合）。**P1 债的准确预期**：阶段 A 后 `naming_lines` 126→34、`naming_files` 4→1、`naming_touched_files` 22→9、**P1 文件数 172→169**（3 个纯改名文件完全离开 P1）；阶段 B 后再退 34 行、`build_win.ps1` 离开 ⇒ **168 文件 / naming_lines 0**。B2 若把 Header 顶栏的自写品牌行也 slot 化，会额外减 behavior，那条不预判数字。
+>
+> **更正（2026-10-01，阶段 A 实施时实测，提交 `860d8abac`）**：上面的 **126 里有 4 行虚账**。`pair_rename_lines` 用"抹掉品牌 token 后逐字节相同"给删行与增行配对，于是**同一行被挪动位置**也会配成一对 —— 4 篇 README 各有 1 对 `old==new` 的 `<img ... alt="QwenPaw Logo" ...>`（fork 重排了头部区块，文字未改）。它不是改名，`copaw_brand.py strip` 对它天然是空操作（`src==dst` 直接跳过）。判定修好后：**真实改名 = 22 文件 / 122 行**，README 每文件从 2 降到 1，阶段 A 实退 **88 行**（`src` 17 + `website/docs` 67 + README 4），而阶段 A 的**终点读数与本表承诺一致**（`naming_lines` 34 / `naming_touched_files` 9 / `files` 169）—— 目的地没错，只是里程表此前多记了 4 行。这条必须修：B4 的门禁是 `naming_lines 必须 = 0`，不修就永久卡在 4。
 
 ---
 
@@ -161,12 +163,12 @@ fork 当前 v1 树：`git grep '<Slot' HEAD -- console/src/layouts` 命中 **0**
 
 ## 5 回滚与删除清单（分两阶段）
 
-### 阶段 A：92 行，不依赖 v2，可独立成一个小 PR（**需你批准后实施**）
+### 阶段 A：88 行，不依赖 v2，已作为 WP-12 实施（原记 92 行，多出的 4 行见 §1.1 更正）
 
 | 步 | 动作 | 判据 |
 |---|---|---|
 | A1 | 退 `src/` 5 文件 17 行（`init_cmd.py` 7、`desktop_cmd.py` 4、`migration.py` 3、`main.py` 2、`update_cmd.py` 1） | `pytest tests/unit/cli/test_cli_update.py` **6 failed → 0**；全量基准 8F → **2F**；`init_cmd.py`/`main.py`/`update_cmd.py` 与 merge-base 逐字节相同 |
-| A2 | 退 docs/website 8 文件 75 行（`cli.zh.md` 23、`cli.en.md` 22、`desktop.{zh,en}.md` 11+11、README×4 各 2） | 这 8 个文件仍在 P1（各自还有 behavior 改动，**不许宣称它们变成未触碰**）；`naming_lines` 126→34 |
+| A2 | 退 docs/website 8 文件 **71 行**（`cli.zh.md` 23、`cli.en.md` 22、`desktop.{zh,en}.md` 11+11、README×4 各 1；原记 75/各 2，那 4 行是 §1.1 更正的移动假阳性） | 这 8 个文件仍在 P1（各自还有 behavior 改动，**不许宣称它们变成未触碰**）；`naming_lines` 122→34 |
 | A3 | `copaw_brand.py export` 重导账册，只剩 34 行（pack 27 + console 7） | CI `copaw_brand.py verify` 仍逐字节通过 |
 | A4 | `check_p1_invariants.py --write-baseline` 重记基线 | `naming_lines` 34 / `naming_files` 1 / `naming_touched_files` 9 / **P1 文件 172→169**，`--check` exit 0 |
 
@@ -202,7 +204,7 @@ fork 当前 v1 树：`git grep '<Slot' HEAD -- console/src/layouts` 命中 **0**
 | S3 | CoPaw 专属界面清单（206 个自有 console 文件里哪些算路由级 CoPaw 界面） | 一份 route → 是否 CoPaw 的表，作为品牌位判定的唯一真源；须回答 Knowledge/Projects/Pipelines/RPA 是否都算 | 0.25d |
 | S4 | CoPaw 插件注册是否早于首次 `AppBrand` 渲染 | 若晚，首屏会闪一下上游品牌；判据是一次真实加载观察 | 0.25d |
 | S5 | `route.replace(pluginId, "core.root", …)` 的**作用域**：能否只替换 CoPaw 自有页而不触及上游路由；以及同名 `replace` 位多插件竞争时注册顺序的实际行为（§3.1 的 `find` ⇒ 单赢家） | 一次真实注册观察：D-12 的默认落地依赖这条；机制已读码（`store.ts` 对 `targetId` 无白名单、`Slot.tsx:31` 用 `find`），**运行行为未验证** | 0.25d |
-| S6 | 阶段 A 退回后、WP-06 之前的 v1 界面真实显示（§6 第 3 条只保护顶栏那 4 行） | 一次 `npm run dev` 目视：确认除顶栏外没有第二处 CoPaw 痕迹被 A 退掉 | 0.25d |
+| S6 | 阶段 A 退回后、WP-06 之前的 v1 界面真实显示（§6 第 3 条只保护顶栏那 4 行） | **已闭环（2026-10-01，阶段 A 实施时）**：结论 = **没有第二处界面痕迹被 A 退掉**。阶段 A 的 changeset 里 `console` 文件数 **0**（`git diff --name-only wp/02-ownership..HEAD -- console` 无输出），所以过渡期界面与阶段 A 之前逐字节相同；实测还在的 7 处：`Header.tsx:169/:174`（顶栏 `alt="CoPaw"` + `<span>CoPaw</span>`）、`Login/index.tsx:100/:103`、`layouts/constants.ts:150-152`、`OptionsPanel/defaultConfig.ts:10`（"Work with CoPaw"）、`console/index.html:14`（`<title>CoPaw Console</title>`）。被 A 退掉的可见 CoPaw 只有 CLI 运行时文案与公开文档：`copaw --version` → `QwenPaw, version 1.1.11b1`、`copaw --help` → `QwenPaw CLI.`、`desktop_cmd.py:357`、`update_cmd.py:716`（前两条用 Click `CliRunner` 实跑取回，不是读源码）。**原计划的 `npm run dev` 目视被这一步替代**：既然 0 个 console 文件被改，浏览器里能看到的与树上必然一致 | 0.25d → 0 |
 | S7 | 维持 `identifier = io.agentscope.qwenpaw.desktop`、只改 `productName` 的安装行为（§6 第 2 条） | 一次真构建 + 覆盖安装：确认是原地升级而非并存新 app，老用户数据可读 | 0.5d |
 
 S1–S4 合计 **约 1.5d**，是阶段 B 的入场券；阶段 A 不依赖任何一条。S5 与 S2 同属阶段 B（可并做），S6 属阶段 A 之后、WP-06 之前的过渡期，S7 属 R3 overlay 落地时。三条都是本轮新加的，来源见迁移计划 §8 未验证 23–25。
@@ -216,7 +218,7 @@ S1–S4 合计 **约 1.5d**，是阶段 B 的入场券；阶段 A 不依赖任�
 - 不改 pip 包名、Docker 镜像名、`qwenpaw` CLI 名（R1 已覆盖）。
 - 不动 `src/copaw/` overlay 与 `console/src/locales/copaw/` —— 它们是 fork 自有文件，本就是新规里 CoPaw 名字该住的地方。
 - 不引入品牌开关/配置项（用户设置开关与实例级开关本轮都不选）。
-- 不影响在进的 WP-02(d)。本 spec 通过后另出实施计划，阶段 A 可插在 WP-02 之后独立成 PR。
+- 不影响在进的 WP-02(d)。实施计划已出并据其执行：**`docs/superpowers/plans/2026-10-01-d22-brand-boundary-stage-a.md`**（阶段 A = 该计划的 Task 1–10，已在分支 `wp/12-brand-stage-a` 完成；阶段 B 的 B1–B4 与 S1/S2/S3/S4/S5/S7 探针写在同一文件的"阶段 B：入场券"一节，等 WP-06 之后另出计划）。**未开 PR**（D-13 + 本轮"先把 CoPaw 整理好"）。
 
 ---
 

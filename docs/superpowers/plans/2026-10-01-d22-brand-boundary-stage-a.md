@@ -1,8 +1,8 @@
-# D-22 品牌边界 · 阶段 A 实施计划（WP-10）
+# D-22 品牌边界 · 阶段 A 实施计划（WP-12；写作时拟号 WP-10，实施时发现该号已被"切主"占用）
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** 按 D-22 把上游文件里的 126 行 `QwenPaw → CoPaw` 改名退掉 **92 行**（阶段 A：`src/` 17 行 + docs/website 75 行），把 `test_cli_update.py` 的 6 条命名税红变成"不再存在"，并把阶段 B 的 6 个未证事实转成可执行 spike。
+**Goal:** 按 D-22 把上游文件里的 `QwenPaw → CoPaw` 改名退掉 **88 行**（阶段 A：`src/` 17 行 + docs/website 71 行。原写"126 退 92"里的 4 行是虚账：README×4 各有 1 对 `old==new` 的同文移动行被 `pair_rename_lines` 误配成改名对，见文末执行记录），把 `test_cli_update.py` 的 6 条命名税红变成"不再存在"，并把阶段 B 的 6 个未证事实转成可执行 spike。
 
 **Architecture:** 退回动作**全部由 fork 自有的账册工具完成，不手工改任何一行文字**。`scripts/copaw_brand.json` 里每对 `old`/`new` 是**整行文本**，`copaw_brand.py strip` 只做整行反向替换，`verify` 保证 strip→apply 逐字节可回放；范围控制用脚本现成的 `--ledger` 参数指向一个只含阶段 A 那 13 个文件的**账册切片**（切片放 `/tmp`，不进仓库）。验收用另一件现成门禁 `scripts/check_p1_invariants.py`，它已经把每个上游文件的 diff 拆成 `naming` / `behavior` 两册，所以"只退改名、没碰到行为"是可测的而不是承诺。
 
@@ -16,8 +16,8 @@
 
 每个任务的隐含要求，逐条来自 spec 或迁移计划红线，冲突时以本节为准：
 
-- **分支**：`wp/10-brand-stage-a`，从 **`wp/02-ownership` 的 HEAD** 分出（不是 `main`）。实测 `wp/01-p1-invariants` 与 `wp/02-ownership` 都**尚未进 main**（`git merge-base --is-ancestor` 两条都 NO），而本计划要重写的门禁基线 `scripts/p1_baseline.json` 是 WP-01 那批提交建立的，从 main 分出来会拿到旧基线。
-- **不开 PR。** D-13 与本轮既定口径：先把 CoPaw 整理好，PR 需要单独明确批准。本计划所有任务的终点是"独立提交 + fast-forward push 到 `origin/wp/10-brand-stage-a`"。fast-forward 推送已预授权；force push / 改历史需先问。
+- **分支**：`wp/12-brand-stage-a`，从 **`wp/02-ownership` 的 HEAD** 分出（不是 `main`）。实测 `wp/01-p1-invariants` 与 `wp/02-ownership` 都**尚未进 main**（`git merge-base --is-ancestor` 两条都 NO），而本计划要重写的门禁基线 `scripts/p1_baseline.json` 是 WP-01 那批提交建立的，从 main 分出来会拿到旧基线。
+- **不开 PR。** D-13 与本轮既定口径：先把 CoPaw 整理好，PR 需要单独明确批准。本计划所有任务的终点是"独立提交 + fast-forward push 到 `origin/wp/12-brand-stage-a`"。fast-forward 推送已预授权；force push / 改历史需先问。
 - **只退 naming，不许动 behavior。** 判据不是口头承诺：每个文件 strip 后 `git diff --numstat` 的 **added 与 removed 必须都等于该文件在账册里的 pair 数**（一行改名 = 一增一减），多出来的任何一行都算越界，停下报告。
 - **不许向 `src/qwenpaw` 或 `console/src` 加 `import copaw` / `copaw` 字样**（WP-01 不变式；`src/copaw` 只能是别名壳）。
 - **不改上游测试**（D-17）；**不许用 `skip` / `xfail` / `filterwarnings` 消红**。阶段 A 之后那 6 条红是"消失"，不是"被屏蔽"——`tests/unit/cli/test_cli_update.py` 必须一行未动。
@@ -76,7 +76,7 @@ website/public/docs/desktop.zh.md 11
 ### Task 1: 建 worktree 与分支，钉住基线读数
 
 **Files:**
-- Create: 分支 `wp/10-brand-stage-a`（worktree `/Users/futuremeng/github/futuremeng/CoPaw-wp10`）
+- Create: 分支 `wp/12-brand-stage-a`（worktree `/Users/futuremeng/github/futuremeng/CoPaw-wp10`）
 - Modify: 无（本任务只读数）
 
 **Interfaces:**
@@ -88,7 +88,7 @@ website/public/docs/desktop.zh.md 11
 
 ```bash
 cd /Users/futuremeng/github/futuremeng/CoPaw-wp02
-git worktree add "$WP10" -b wp/10-brand-stage-a wp/02-ownership
+git worktree add "$WP10" -b wp/12-brand-stage-a wp/02-ownership
 cd "$WP10" && git log --oneline -1     # 期望 07754b2d8（或当时 wp/02-ownership 的更新 HEAD）
 ```
 
@@ -286,6 +286,8 @@ EOF
 ---
 
 ### Task 4: A2 —— 退 docs/website 8 个文件的 75 行改名
+
+> **执行时的更正（见文末执行记录 3）**：本 Task 写作时用的是修复前的判定器读数。**实退 71 行**（`README×4 各 1`，不是各 2）—— 那 4 行是 README 头部同文移动被配成改名对的假阳性，`strip` 对它们是空操作。断言里的 `== 75` 因此在实跑时改成 `== 71`，其余步骤与终点读数（`naming_lines` 34 / `files` 169）不变。下面正文保留原读数作为记录。
 
 **Files:**
 - Modify: `README.md`、`README_ja.md`、`README_ru.md`、`README_zh.md`（各 2）、`website/public/docs/cli.zh.md`(23)、`cli.en.md`(22)、`desktop.en.md`(11)、`desktop.zh.md`(11)
@@ -503,10 +505,11 @@ CI=true $PY scripts/check_namespace_boundaries.py --upstream-ref upstream/main; 
 - [ ] **Step 3: 前端零改动确认**
 
 ```bash
-cd "$WP10" && git diff --name-only $BASE...HEAD -- console | grep . && echo "意外：动了 console" || echo "console 未动 ✓"
+cd "$WP10" && git diff --name-only wp/02-ownership..HEAD -- console | grep . && echo "意外：动了 console" || echo "console 未动 ✓"
 ```
 
 期望：`console 未动 ✓`。
+（**实施时更正**：本步原写 `git diff --name-only $BASE...HEAD -- console`，那是"相对 merge-base"的口径，会把 fork 的全部 console 改动列出来（实测 300+ 文件）从而恒定判红。范围应当是本分支自己那几次提交，即 `wp/02-ownership..HEAD`。实测输出 `console 未动 ✓`。）
 
 ---
 
@@ -515,15 +518,15 @@ cd "$WP10" && git diff --name-only $BASE...HEAD -- console | grep . && echo "意
 - [ ] **Step 1: 推送分支**
 
 ```bash
-cd "$WP10" && git log --oneline wp/02-ownership..HEAD    # 应为 A1/A2/A3/A4 四条
-git push -u origin wp/10-brand-stage-a
+cd "$WP10" && git log --oneline wp/02-ownership..HEAD    # 实施时实得：A1、A2、naming 判定修正（内含 A4 的基线重记）、A3，再加 Task 10 的登记提交
+git push -u origin wp/12-brand-stage-a
 ```
 
 fast-forward 推送已预授权；**不开 PR**（D-13 + 本轮"先把 CoPaw 整理好"口径）。
 
 - [ ] **Step 2: 汇报口径**
 
-一次说完四件事：`naming_lines 126→34`、`P1 文件 172→169`、`test_cli_update 6F→0 且测试文件未被改`、`全量 8F→2F（剩两条是 py3.10 BaseExceptionGroup，归 WP-06）`。
+一次说完四件事：`naming_lines 122→34`（写作时记的 126 含 4 行判定假阳性，实退 88 行而非 92）、`P1 文件 172→169`、`test_cli_update 6F→0 且测试文件未被改`、`全量 8F→2F（剩两条是 py3.10 BaseExceptionGroup，归 WP-06）`。
 
 ---
 
@@ -540,7 +543,7 @@ spec §6 第 3 条的例外**只保护顶栏那几行**。阶段 A 把 CLI 与�
 | `cli/desktop_cmd.py`（4 行，其中 1 行可见） | `click.echo(f"Starting CoPaw app on {url} …")` | `Starting QwenPaw app on …` | `copaw desktop` |
 | `cli/update_cmd.py`（1 行） | `click.echo("Starting CoPaw update...")` | `Starting QwenPaw update...` | `copaw update` |
 
-另有一处非运行时、但面向外部读者：**README×4 与 website 4 篇文档的 75 行**（公开文档站与仓库首页）。
+另有一处非运行时、但面向外部读者：**README×4 与 website 4 篇文档的 71 行**（公开文档站与仓库首页；写作时核为 75 行，其中 4 行是判定假阳性）。
 
 **这不是回归**：D-22 §4 明确"维持上游命名：PyPI `qwenpaw`、Docker、CLI `qwenpaw`（`copaw` 作为已有新增 entry 保留）"。`copaw` 这个**命令名**继续存在（`pyproject.toml:96-99` 的 entry point 是 fork 自加的、属 R2 允许的新增），变的只是命令**说出来的话**。
 
@@ -613,10 +616,11 @@ git status --short   # 期望无输出
 
 ### 阶段 A 之后立刻要做的两件登记
 
-- [ ] **Task 10：把 WP-10 与阶段 A 结果登记进迁移计划**
+- [ ] **Task 10：把 WP-12 与阶段 A 结果登记进迁移计划**
   - Modify: `UPSTREAM_V2_MIGRATION_PLAN.md`
-  - 在 WP 列表里加一行 `### WP-10 品牌边界阶段 A（0.5d，前置 WP-01；D-22）`（编号 10 实测未被使用：现有 WP-00…09、11），并在 §2 的 P2 行按冲突面清单 §4.6/§4.8 的口径改写（那节还挂着一条"命名册 126 行"的旧读数）。
-  - 更新 `docs/copaw-brand-boundary.md` 三处：**(a)** 第 3 行状态改为 `阶段 A 已实施（分支 wp/10-brand-stage-a，四条提交短号见 git log wp/02-ownership..wp/10-brand-stage-a），阶段 B 待 WP-06 + S1/S2/S5`；**(b)** §7 表 S6 行的"待证"补上 Task 9 那句结论；**(c)** §8 最后一行"本 spec 通过后另出实施计划"改为指向 `docs/superpowers/plans/2026-10-01-d22-brand-boundary-stage-a.md`。
+  - 在 WP 列表里加一节 `### WP-12 品牌边界：D-22 的改名退回`（**实施时更正：原写"编号 10 实测未被使用"是错的** —— §5 里 WP-10 = 切主，只是它排在 WP-11 之后，扫列表时漏看了；因此本包改号 WP-12，分支同时 `git branch -m` 更名，worktree 目录名 `CoPaw-wp10` 保留未动）。同时改掉两处旧读数：§0 表 P1 行的"22 文件 / 127 行"、P3 行的"现册 22 文件 / 126 行"，按冲突面清单 §4.6/§4.8 与本计划执行记录写成"阶段 A 前 122 行 → 阶段 A 后 34 行 / 9 文件 / `files` 169"。
+  - 在 §8 已闭环 40 追加 ⑩（阶段 A 的实测账与那 4 行虚账的成因、修法、修后读数），并把 §8 未验证 24（= spec 的 S6）与未验证 26（阶段 A 的回归面）标为已闭环。
+  - 更新 `docs/copaw-brand-boundary.md` 三处：**(a)** 第 3 行状态改为 `阶段 A 已实施（分支 wp/12-brand-stage-a，提交见 git log wp/02-ownership..wp/12-brand-stage-a），阶段 B 待 WP-06 + S1/S2/S5`；**(b)** §7 表 S6 行的"待证"补上 Task 9 那句结论；**(c)** §8 最后一行"本 spec 通过后另出实施计划"改为指向 `docs/superpowers/plans/2026-10-01-d22-brand-boundary-stage-a.md`。§1.1 的 126 读数旁补一条更正块（4 行虚账）。
 
 ---
 
@@ -627,3 +631,33 @@ git status --short   # 期望无输出
 3. **装机名出现真空**只在 B1 顺序颠倒时发生，阶段 A 不碰 `scripts/pack/`，所以本计划无此风险；写在这里是给 B1 那一步的执行者。
 4. **账册缩小后 `verify` 仍是活的门禁**：B4 之前不能删。任何"顺手再退一行 CoPaw"的改动都会让 Task 5 重导的账册与树不符 ⇒ CI 红。
 5. **阶段 A 与 WP-02(d) 无交集**：本计划只动 13 个上游文件的既有行 + 两个账册/基线 JSON，不碰 `src/copaw`、不碰归属矩阵那 12 行。
+
+---
+
+## 执行记录（2026-10-01，分支 `wp/12-brand-stage-a`）
+
+七条与本计划前文不一致的地方，全部是实施时实测出来的，逐条写明原因。**前文的期望值保留原文不删，便于对照。**
+
+1. **Task 1 Step 4 的期望 `--check rc=0` 在起点就不成立（实得 rc=1），且红与阶段 A 无关。** 报的是 `src/qwenpaw/app/runner/__init__.py behavior grew: 38 -> 40` —— `7f8cff1ae`（D-23② 删 runtime-status）为了记录懒加载守卫真实承载的循环导入链，把那个 docstring 从 21 行写到 23 行；同时 `scripts/p1_baseline.json` 还停在 `1525a0a6c`，其后 6 个文件的水位下降（`setup_utils.py` 199/49 → 16/0、`agents.py` −39/−8、`session.py` −6/−69、`runner/models.py` −71、`token_usage/model_wrapper.py` 15 → 0、两个 `chat.ts`）一条都没重记。**修在源头**：在 `wp/02-ownership` 上单独提交 `22e01cca2` 重记基线（docstring 那 2 行是有内容的，不为凑数字删文字），本分支 `--ff-only` 跟上。**教训：改过上游自有文件必须当场跑 `check_p1_invariants.py --check`，跑 pytest 不等于跑门禁。**
+2. **Task 4 Step 1 的期望 `stripped 75`，实得 `stripped 71, 0 unmatched`。** 差的 4 对是 README×4 里 `old==new` 的同一行 `<img ... alt="QwenPaw Logo" ...>`：fork 重排了头部区块，该行一次删除一次新增、文字未改，被 `pair_rename_lines` 的"抹掉品牌 token 后逐字节相同"规则误配成改名对。它不是改名，`strip` 对它天然是空操作（脚本里 `src == dst` 直接 `continue`，既不 done 也不 missing，所以计数会凭空少）。**判定已修**（`860d8abac`：只配对真正改了品牌字样的行），并加 `tests/unit/scripts/test_check_p1_invariants.py` 钉住两种情形。修前/修后同一状态读数：**126 → 122**（阶段 A 前）、**38 → 34**（阶段 A 后）。这条必须修，否则 B4 的 `naming_lines 必须 = 0` 永久卡在 4。
+3. **因此阶段 A 实退 88 行，不是 92 行**：A1 = 17、A2 = 71（`cli.zh` 23 + `cli.en` 22 + `desktop.en` 11 + `desktop.zh` 11 + README×4 各 1）。每文件 `git diff --no-renames --numstat` 都满足 `added == removed ==` 真实改名数，无一行越界；`behavior_added/removed` 在 A1/A2 两个提交里分别是 **14932/2584 → 14932/2584**（判定修正后同一状态为 14936/2588，那 +4 是同文移动归位到 behavior，不是新增侵入）。
+4. **Task 6（A4）与判定修复合并成一个提交。** 判定口径变了，地板必须按新口径重取，所以 `scripts/p1_baseline.json` 在 `860d8abac` 里就重记了；A4 剩下的动作是验证 —— 再跑一次 `--write-baseline` 得到 `wrote scripts/p1_baseline.json (169 files)` 且 `git status --short -- scripts/p1_baseline.json` **无输出**（幂等），`--check` rc=0。绊线如预期成立：`init_cmd.py`/`main.py`/`update_cmd.py` 已不在基线 `files` 里，将来再动它们会直接报 `NEW upstream-owned file touched`。
+5. **Task 7 Step 3 的命令口径写错了**（`$BASE...HEAD` 会把 fork 的全部 console 改动算进来，恒定判红），已就地更正为 `wp/02-ownership..HEAD`；实测输出 `console 未动 ✓`，本分支 changeset 里 console 文件数 **0**。
+6. **Task 9（S6）没有跑 `npm run dev`。** 理由：阶段 A 的 changeset 里 console 文件数为 0，浏览器里能看到的与树上必然逐字节一致，目视只是把已知事实再看一遍。替代做法是给运行时真取回证据：`CliRunner` 实跑 `copaw --version` → `QwenPaw, version 1.1.11b1`、`copaw --help` → `QwenPaw CLI.`，加上 `desktop_cmd.py:357` / `update_cmd.py:716` 两行 echo 已回上游原文；界面侧 7 处 CoPaw 字样（顶栏 2、登录页 2、`constants.ts` 更新说明、`defaultConfig.ts` 的 "Work with CoPaw"、`index.html` 的 `<title>CoPaw Console</title>`）全部还在。**结论：被 A 退掉的可见 CoPaw 只在 CLI 文案与公开文档，界面内没有第二处。** 已写进 spec §7 S6 行。
+7. **编号更正：WP-10 → WP-12。** 本计划 Task 10 原写"编号 10 实测未被使用"是错的 —— §5 里 `### WP-10 切主` 存在，只是排在 WP-11 之后。分支已 `git branch -m` 更名，worktree 目录名 `CoPaw-wp10` 保留（纯路径标签）。
+
+**另外澄清一个基准口径，免得下次误读**：全量 `8F / 3314P` 是**含 `tests/unit/channels`** 的读数（含 channels 收集 3341 项）。Task 7 的命令排除 `channels`（收集 **2091** 项），所以阶段 A 后的 `2 failed, 2071 passed, 4 skipped, 14 xfailed in 804.09s` 与 8F/3314P 是同一棵树的不同口径，不是掉了 1243 个测试。
+
+**最终读数（`wp/12-brand-stage-a` HEAD，全部当场取回）**
+
+| 指标 | 阶段 A 前（判定修正后） | 阶段 A 后 |
+|---|---|---|
+| `naming_lines` | 122 | **34** |
+| `naming_files`（纯改名） | 4 | **1**（`scripts/pack/build_win.ps1`） |
+| `naming_touched_files` | 22 | **9** |
+| P1 `files` | 172 | **169** |
+| `behavior_files` | 168 | **168** |
+| `behavior_added / removed` | 14936 / 2588 | **14936 / 2588** |
+| 账册 | 22 文件 / 122 行 | **9 文件 / 34 行**，`verify` 逐字节通过 |
+| `test_cli_update.py` | 6 failed / 28 passed | **0 failed / 34 passed**（测试文件与 merge-base 逐字节相同） |
+| 全量 `tests/unit`（不含 channels） | 8F（含 channels 口径） | **2F**，两条都是 py3.10 `BaseExceptionGroup` |
