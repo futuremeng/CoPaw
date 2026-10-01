@@ -1,9 +1,10 @@
 # -*- coding: utf-8 -*-
 """Copaw-owned coverage: leaked-thinking repair in the OpenAI stream compat.
 
-``_strip_leaked_thinking_prefix`` and ``_promote_thinking_only_answer`` are fork
-additions to ``qwenpaw.providers.openai_chat_model_compat`` (local models put a
-finished markdown answer into the ``thinking`` channel).  The cases live here so
+``strip_leaked_thinking_prefix`` and ``promote_thinking_only_answer`` live in
+the fork-owned ``qwenpaw.providers.visible_text_compat`` (local models put a
+finished markdown answer into the ``thinking`` channel).  The cases live
+here so
 ``test_openai_stream_toolcall_compat.py`` stays at upstream bytes.
 """
 
@@ -11,9 +12,9 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-from qwenpaw.providers.openai_chat_model_compat import (
-    _promote_thinking_only_answer,
-    _strip_leaked_thinking_prefix,
+from qwenpaw.providers.visible_text_compat import (
+    promote_thinking_only_answer,
+    strip_leaked_thinking_prefix,
 )
 
 
@@ -24,7 +25,7 @@ def test_strip_leaked_thinking_prefix_for_structured_answer() -> None:
         "根据我刚才的读取验证，所有成果都已保存。"
     )
 
-    cleaned = _strip_leaked_thinking_prefix(leaked)
+    cleaned = strip_leaked_thinking_prefix(leaked)
 
     assert cleaned.startswith("## ✅ 当前进展确认 - 没有丢失！")
     assert "Thinking\n" not in cleaned
@@ -33,7 +34,7 @@ def test_strip_leaked_thinking_prefix_for_structured_answer() -> None:
 def test_strip_leaked_thinking_prefix_keeps_normal_text() -> None:
     normal = "Thinking\nI will compare A and B before deciding."
 
-    cleaned = _strip_leaked_thinking_prefix(normal)
+    cleaned = strip_leaked_thinking_prefix(normal)
 
     assert cleaned == normal
 
@@ -53,7 +54,7 @@ def test_promote_thinking_only_structured_answer_to_text() -> None:
         ],
     )
 
-    _promote_thinking_only_answer(parsed)
+    promote_thinking_only_answer(parsed)
 
     assert parsed.content
     assert parsed.content[0]["type"] == "text"
@@ -74,7 +75,7 @@ def test_promote_thinking_only_keeps_internal_draft() -> None:
         ],
     )
 
-    _promote_thinking_only_answer(parsed)
+    promote_thinking_only_answer(parsed)
 
     assert parsed.content
     assert parsed.content[0]["type"] == "thinking"
