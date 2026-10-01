@@ -40,13 +40,15 @@ git diff --no-renames --name-only e111ec6fb upstream/main > /tmp/upstream_change
 | 上游在这 155 个文件上的改动行数 | 75,308 | 冲突的另一侧体量 |
 | 纯改名行数（D-22 品牌税） | 126 行 / 22 文件，其中 4 个文件 | 占侵入量的 **0.7%**，见 `docs/copaw-brand-boundary.md` |
 
+> **2026-10-02 执行回写（本表其余数字仍是 2026-10-01 的第一版读数）**：簇 A 已执行 ⇒ 上表三行同时下修：**fork 侧有逻辑改动的上游文件 168 → 162**、**下次同步必然冲突 155 → 149**、**这 149 个文件上 fork 的改动行数少 304 行**（§3 的 A 簇口径：+302/−2）。全仓 P1-行为从本表读数的 **+15,049/−2,584** 经 **WP-12 阶段 A（退 88 行改名）** 与 **WP-13（本刀 −377/+8）** 两笔下修，现为 **+14,555/−2,576**。命名册 126 行**未变**（簇 A 里 `id.json` 那 2 行是缩进破坏不是改名）。执行后读数用 `--check` 现算，见 §7 顶部那条与迁移计划 §8 已闭环 45。
+
 按 fork 侧改动量分桶：**≤10 行 50 个**（多数可机械搬或还原）、**11–60 行 57 个**（逐条判归属）、**>60 行 48 个**（需要设计，见第 5 节）。
 
 ## 3 按簇分布与处置方向
 
 | 簇 | 文件数 | fork 行 | 上游行 | 上游已删 |
 |---|---|---|---|---|
-| A console/src/locales/*.json（界面文案） | 6 | 304 | 20,850 | 0 |
+| A console/src/locales/*.json（界面文案）**✅ 已执行（WP-13，`wp/13-locale-exit`，见 §8 说明与计划 §8 已闭环 45）** | 6 → **0** | 304 → **0** | 20,850 | 0 |
 | B console/src/plugins（插件宿主） | 2 | 54 | 315 | 0 |
 | C console/src/api（前端 API 客户端） | 15 | 2,356 | 1,569 | 1 |
 | D console/src/pages（前端页面） | 43 | 3,229 | 21,532 | 6 |
@@ -70,7 +72,7 @@ git diff --no-renames --name-only e111ec6fb upstream/main > /tmp/upstream_change
 
 各簇的落点与前置条件：
 
-**A — console/src/locales/*.json（界面文案）**。fork 在此新增 302 行私有文案 key。落点已存在：`console/src/locales/copaw/{projects,pipelines,rpa}/*.json`（18 个 fork 自有文件，+2,762/−0）。把这 6 个文件里的 key 迁过去，6 个冲突文件直接清零。**前置未验证**：v2 `console/src/i18n.ts` 用 `createInstance` + `as const` 硬编码 7 个 loader，全仓无 `addResource`，fork 现在靠改 `i18n.ts` 的 36 行 import 注册 —— 注册面本身也要搬出上游文件。
+**A — console/src/locales/*.json（界面文案）**。fork 在此新增 302 行私有文案 key。落点已存在：`console/src/locales/copaw/{projects,pipelines,rpa}/*.json`（18 个 fork 自有文件，+2,762/−0）。把这 6 个文件里的 key 迁过去，6 个冲突文件直接清零。**前置未验证**：v2 `console/src/i18n.ts` 用 `createInstance` + `as const` 硬编码 7 个 loader，全仓无 `addResource`，fork 现在靠改 `i18n.ts` 的 36 行 import 注册 —— 注册面本身也要搬出上游文件。 → **✅ 已执行（2026-10-02，分支 `wp/13-locale-exit` @ `ee400b053`，WP-13）**：6 个上游 locale 回到 merge-base `e111ec6fb` 字节（`cmp -s` 逐个验等，顺带修掉 `id.json` 的缩进破坏）；302 行私有 key 按**原 key path** 搬进新增的 fork 自有 `console/src/locales/copaw/workbench/*.json`（en/zh 各 134 行、其余 4 语言各 15 行，真根键 4 个 = `nav`/`nlpConfig`/`projects`/`agentConfig`）；注册面搬进 fork 自有 `locales/copaw/register.ts`，`i18n.ts` 从 **+91/−7 降到 +16/−1**、上游 `resources` 字面量字节原样。**P1 实测：172 → 166 文件、行为 168 → 162、侵入新增 +14,932 → +14,555（−377）、上游行删除 −2,584 → −2,576、命名册 126 不变、rc=0。** 那个"前置未验证"现在有答案了，且答案分两半：**插件层拿不到 i18n 句柄**（计划 §8 已闭环 39 ⑧，不变），但 **fork 自有 `console/src` 代码里调 `addResourceBundle(lng,"translation",overlay,true,true)` 确实生效** —— 已闭环 45 ④ 还查出 `deepExtend` 会原地改写 store 里的 `pack`（可能就是 init 按引用拿走的上游 JSON 对象），所以**必须 overlay-only**，否则"零侵入"是假的。等价性由两条独立证明守着（叶子级规范化 JSON 深度比对 6 语言 `VERIFY OK` + fork 自有 `register.test.ts` 19 条）。**残留：`i18n.ts` 那 +16/−1 让簇 G 少 75 行、但让"上游文件改动数 = 0"这条 Gate 仍差 1 个文件。**
 
 **B — console/src/plugins（插件宿主）**。插件宿主代码。落点 = v2 的 `plugins/api.py`（17 个 `register_*`）与 PawApp SDK；不在上游宿主文件里加分支。
 
@@ -82,7 +84,7 @@ git diff --no-renames --name-only e111ec6fb upstream/main > /tmp/upstream_change
 
 **F — console/src/layouts（布局与顶栏）**。布局与顶栏，含品牌可见面（`Header.tsx` 的 `<span>CoPaw</span>`、`index.module.less`）。落点 = v2 的 `<Slot name="header.logo" kind="replace">`（`AppBrand.tsx:297`，上游测试 `index.module.test.ts:38` 钉住）。这是 D-22 阶段 B 的内容，不在阶段 A。
 
-**G — console/src 其它（App.tsx / i18n.ts / utils / styles）**。`App.tsx`（§6.1 在册例外之一）、`i18n.ts`（36 行注册面）、`utils/navigationMode.ts`（§6.1 另一例外）、`styles/layout.css`。`navigationMode.ts` + `App.tsx` 是封闭清单 2 文件，其余要搬。
+**G — console/src 其它（App.tsx / i18n.ts / utils / styles）**。`App.tsx`（§6.1 在册例外之一）、`i18n.ts`（36 行注册面）、`utils/navigationMode.ts`（§6.1 另一例外）、`styles/layout.css`。`navigationMode.ts` + `App.tsx` 是封闭清单 2 文件，其余要搬。 → **部分已执行（2026-10-02，WP-13）**：`i18n.ts` 的注册面已搬进 fork 自有 `locales/copaw/register.ts`，该文件从 **+91/−7 降到 +16/−1**（簇 G 因此从 165 行降到约 90 行，且上游 `resources` 字面量回到字节原样）；剩下那 16 行 = 1 行 import + `resolveInitialLanguage()` + 一行 `registerCopawTranslations(i18n)` 调用，**插件层拿不到 i18n 句柄**（计划 §8 已闭环 39 ⑧）⇒ 这 16 行目前无法搬出上游文件，是 WP-08 Gate"`console/src` 上游文件改动数 = 0"的唯一残留差项。
 
 **H — console 配置（tsconfig / vite / package.json）**。构建配置。`vite.config.ts` +25、`package.json` +21/−13（含 fork 的 `postinstall: patch-chat-flushsync.mjs` 树外 patch，版本锁 `^1.1.64-beta` vs v2 `1.2.0-beta` → 同步时几乎确定失效）。落点 = fork 自有构建包装。
 
@@ -382,6 +384,8 @@ v2 把整个目录改名重写成 `app/chats/`（该路径共 22 个文件、3,1
 
 ## 7 全量 155 行（前 152 行为第一版读数，补录 3 行见 §7.1）
 
+> **2026-10-02 状态更正**：下表是**第一版读数**，不随执行回写。**簇 A 那 6 行（#2–#7）与 #94 `console/src/i18n.ts` 已执行完毕**（WP-13，`wp/13-locale-exit` @ `ee400b053`）—— 6 个 locale 文件已不再是冲突宿主（回到 merge-base 字节），`i18n.ts` 从 +91/−7 降到 +16/−1。执行后的 P1 读数：**166 文件 / +14,681/−2,702 · 行为 162 / +14,555/−2,576 · 命名 4/22/126 · rc=0**（详见 §3 簇 A 那条与迁移计划 §8 已闭环 45）。
+
 | # | 文件 | 簇 | fork | 上游 | fork hunk | v2 存在 | 命名行 |
 |---|---|---|---|---|---|---|---|
 | 1 | `src/qwenpaw/app/routers/agents.py` | I | +4190/−326 | +1690/−136 | 87 | 是 | 0 |
@@ -553,16 +557,16 @@ v2 把整个目录改名重写成 `app/chats/`（该路径共 22 个文件、3,1
 
 ## 8 与其它计划的关系
 
-- **D-22 品牌边界计划**（`docs/superpowers/plans/2026-10-01-d22-brand-boundary.md`，待写）只做 126 行改名还原 + 4 个文件离开冲突表，**不是去债主线**。它的价值是消掉"每次同步都要手工重放的机械税"，并顺手把 `_app.py` 里被硬编码破坏的上游品牌变量 `{PROJECT_NAME}` 还原。
+- **D-22 品牌边界计划**（`docs/superpowers/plans/2026-10-01-d22-brand-boundary.md`，**已写、阶段 A 已实施在 `wp/12-brand-stage-a`**）只做 126 行改名还原 + 4 个文件离开冲突表，**不是去债主线**。它的价值是消掉"每次同步都要手工重放的机械税"，并顺手把 `_app.py` 里被硬编码破坏的上游品牌变量 `{PROJECT_NAME}` 还原。**执行更正：阶段 A 实际退回 88 行 ⇒ 命名册降到 34 行（真实改名 122 而非 126 —— 4 行是"同文移动"假阳性），P1 169 文件 / 行为 168；"126 行全清 + 4 文件离场"是阶段 A+B 的合并目标，不是 A 的读数。**
 - **WP-03/WP-04**（PawApp 化）承接簇 I / C / D / J / K：D-16 已把约 11,000 行实现下沉进 `src/qwenpaw`，所以这些簇现在是"从核心包里往外抽"，比从 `src/copaw` 抽更贵，排期时要把这笔算进去。
 - **WP-06**（升级到 v2，前置条件：Python 下限抬到 3.11）开始前，第 4 节的 18 个文件必须全部有落点，否则同步当天就会静默丢功能。
 - **需要回写 `UPSTREAM_V2_MIGRATION_PLAN.md` §2 的一处判据**：那张表的 P2 行写着"上游删了 `app/mcp/{stateful_client,watcher}.py`、`app/runner/*` 7 个文件、`app/routers/plan.py`，等于上游替我们做了裁决，无需决策"。§4 的逐文件复核推翻了"无需决策"：**上游删掉宿主文件不等于上游删掉需求** —— `tail-user/delete`（v2 全树消息级删除符号命中 0）、`ChatUpdate.meta`（v2 `ChatUpdate` 只有 `name` 且 `extra="forbid"`，而 fork 侧 6 处生产调用在写它）、session 的 `.snapshot` sidecar 这几条需求仍活在 fork 自有的 `AnywhereChat` / `Projects` 界面上，只是失去了后端载体；反过来 `AgentTable` / `Workspace` / plan 前端 / 历史分页那几类跟着走 `CUT` 或 `DROP` 才是对齐。这两类必须分开写，不能再合并成"自动作废"。
-- **簇 A（6 个 locale 文件）是投入产出比最高的一刀**：302 行私有文案搬进 fork 已有的 `console/src/locales/copaw/*`，一次消掉 6 个冲突文件，零功能损失；唯一前置是 v2 的插件翻译注册接缝（`i18n.ts` 全仓无 `addResource`）是否存在 —— 未验证。
+- **簇 A（6 个 locale 文件）是投入产出比最高的一刀**：302 行私有文案搬进 fork 已有的 `console/src/locales/copaw/*`，一次消掉 6 个冲突文件，零功能损失；唯一前置是 v2 的插件翻译注册接缝（`i18n.ts` 全仓无 `addResource`）是否存在 —— 未验证。 → **✅ 已执行（2026-10-02，WP-13，`wp/13-locale-exit` @ `ee400b053`），且这一刀确实兑现了预判：−6 冲突宿主 / −377 侵入行，是本清单里最大单笔削减。** 那个"唯一前置"的答案是**两半**：插件侧注册接缝**不存在**（拿不到 i18n 句柄），但 fork 自有 `console/src` 代码里 overlay-only 的 `addResourceBundle` **可用**，所以落点形态从"等上游接缝"改成"fork 自有 `locales/copaw/register.ts` + `i18n.ts` 留 16 行调用"。零功能损失也实测到了：6 语言叶子级深度合并逐 key 相等 + 19 条 fork 自有测试 + tsc/vitest 与基线同集合。
 - **簇 J / K 搬迁项的落点机制**：`src/copaw` 在 D-16 之后只剩别名壳，fork 自有后端实现的合法落点是 `PluginApi.register_http_router(router, *, prefix, tags)`（**v2 `plugins/api.py:590` / fork 当前树 `plugins/api.py:191`，两棵树行号不同，引用时别混用**；实现体 `plugins/registry.py:141`，路由挂在 `/api` + prefix，`prefix` 非法或被占用直接 raise）与 PawApp（WP-03/04）。这条接缝**已在产运行**：`plugins/bundle/qwenpaw-pet/plugin.py:73` 用 `router.py` 挂 `/qwenpaw-pet`，父 app 由 `set_plugin_http_app` 注入（fork `app/_app.py:355`、v2 `app/_app.py:491`）。前端落点是 fork 自有组件目录（`components/AnywhereChat` 已是先例）+ v2 的 slot 接缝。
 
 ## 9 本清单里的未验证项
 
-1. v2 是否有插件侧注册翻译资源的接缝（决定簇 A 的落点形态）。
+1. ~~v2 是否有插件侧注册翻译资源的接缝（决定簇 A 的落点形态）~~ → **已答，且簇 A 已按答案执行完（2026-10-02，WP-13）**：插件侧接缝**不存在**（`window.QwenPaw` 无 i18n 句柄、插件前端走 Blob URL 动态 import，计划 §8 已闭环 39 ⑧），但 fork 自有 `console/src` 代码里 `addResourceBundle(lng,"translation",overlay,true,true)` **可用且已用于簇 A**。残留的那 16 行 `i18n.ts` 调用不是设计未知，而是上游缺句柄 —— 要消掉只能等上游给插件暴露 i18n（D-13 禁止把"能力请求"当 bug 提）。
 2. ~~v2 的 MCP 实现在哪个路径（决定簇 K 的 1,330 行往哪搬）~~ → **已解决**：`drivers/handlers/{mcp,mcp_stateful_client,mcp_streamable_http}.py` + `drivers/manager.py` + `app/driver_config_watcher.py` + `app/mcp/{config_service,schemas}.py`，详见 §3 簇 K 与 §8 已闭环 33。剩下的不是"落点在哪"，而是 §4.2 那 6 项私有符号各自的 `原生` / `CUT` 判定。
 3. `route.replace(pluginId, "core.root", …)` 的作用域能否只覆盖 CoPaw 自有页面而不触及上游路由（决定簇 D 与 D-12 默认落地界面）。
 4. v2 文档站 `website/` 的页面注册方式（决定簇 S）。
