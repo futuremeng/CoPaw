@@ -713,7 +713,7 @@ def update_cmd(ctx: click.Context, yes: bool) -> None:
     }
     plan_path = _write_worker_plan(plan)
     click.echo("")
-    click.echo("Starting CoPaw update...")
+    click.echo("Starting QwenPaw update...")
 
     if sys.platform == "win32":
         _run_update_worker_detached(plan_path)
