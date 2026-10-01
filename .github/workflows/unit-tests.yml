@@ -10,6 +10,8 @@ on:
       - 'tests/contract/**'
       - 'tests/conftest.py'
       - 'scripts/check_namespace_boundaries.py'
+      - 'scripts/check_copaw_locale_split.py'
+      - 'console/src/locales/**'
       - 'pyproject.toml'
       - '.github/workflows/unit-tests.yml'
   pull_request:
@@ -21,6 +23,8 @@ on:
       - 'tests/contract/**'
       - 'tests/conftest.py'
       - 'scripts/check_namespace_boundaries.py'
+      - 'scripts/check_copaw_locale_split.py'
+      - 'console/src/locales/**'
       - 'pyproject.toml'
       - '.github/workflows/unit-tests.yml'
   workflow_dispatch:
@@ -58,6 +62,11 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
           cache: 'pip'
+
+      # Stdlib-only static check on console/src/locales, so it needs neither the
+      # npm install nor the python deps below.
+      - name: Check CoPaw locale split guard
+        run: python scripts/check_copaw_locale_split.py
 
       - name: Install dependencies
         run: |
