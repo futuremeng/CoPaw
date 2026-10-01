@@ -63,10 +63,6 @@
     "plugins": "プラグイン",
     "acp": "ACP",
     "backups": "バックアップ",
-    "projects": "プロジェクト",
-    "pipelines": "パイプライン",
-    "knowledge": "ナレッジ",
-    "nlp": "NLP",
     "pluginManager": "プラグインマネージャー"
   },
   "debug": {
@@ -188,13 +184,6 @@
     "attribution": "ワークスペースの設計はOpenClawプロジェクトの一部を参考にしています — ありがとう！🐾",
     "saveSuccess": "保存しました",
     "saveFailed": "保存に失敗しました"
-  },
-  "projects": {
-    "workspacePath": "ワークスペースパス",
-    "path": {
-      "workspace": "ワークスペース",
-      "project": "プロジェクト"
-    }
   },
   "skills": {
     "title": "スキル",

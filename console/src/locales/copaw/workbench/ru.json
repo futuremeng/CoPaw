@@ -1,0 +1,15 @@
+{
+  "nav": {
+    "projects": "Проекты",
+    "pipelines": "Пайплайны",
+    "knowledge": "База знаний",
+    "nlp": "NLP"
+  },
+  "projects": {
+    "workspacePath": "Путь рабочей области",
+    "path": {
+      "workspace": "Рабочая область",
+      "project": "Проект"
+    }
+  }
+}

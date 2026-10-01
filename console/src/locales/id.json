@@ -64,12 +64,8 @@
     "voiceTranscription": "Transkripsi Suara",
     "debug": "Debug",
     "plugins": "Plugin",
-  "pluginManager": "Manajer Plugin",
-  "backups": "Cadangan",
-  "projects": "Proyek",
-  "pipelines": "Pipeline",
-  "knowledge": "Pengetahuan",
-  "nlp": "NLP"
+    "pluginManager": "Manajer Plugin",
+    "backups": "Cadangan"
   },
   "header": {
     "changelog": "Catatan Perubahan",
@@ -476,13 +472,6 @@
     "zipOnly": "Hanya file .zip yang didukung untuk unggahan",
     "saveSuccess": "Berhasil disimpan",
     "saveFailed": "Gagal menyimpan"
-  },
-  "projects": {
-    "workspacePath": "Jalur workspace",
-    "path": {
-      "workspace": "Workspace",
-      "project": "Proyek"
-    }
   },
   "cronJobs": {
     "title": "Tugas Cron",

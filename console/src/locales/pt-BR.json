@@ -65,10 +65,6 @@
     "debug": "Depuracao",
     "plugins": "Plugins",
     "backups": "Backups",
-    "projects": "Projetos",
-    "pipelines": "Pipelines",
-    "knowledge": "Conhecimento",
-    "nlp": "NLP",
     "pluginManager": "Gerenciador de Plugins"
   },
   "debug": {
@@ -315,13 +311,6 @@
     "attribution": "Workspace design partly inspired by the OpenClaw project — thank you! 🐾",
     "saveSuccess": "Salvo com sucesso",
     "saveFailed": "Falha ao salvar"
-  },
-  "projects": {
-    "workspacePath": "Caminho do workspace",
-    "path": {
-      "workspace": "Workspace",
-      "project": "Projeto"
-    }
   },
   "agent": {
     "parent": "Configuracoes",

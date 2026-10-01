@@ -63,10 +63,6 @@
     "plugins": "Плагины",
     "acp": "ACP",
     "backups": "Резервные копии",
-    "projects": "Проекты",
-    "pipelines": "Пайплайны",
-    "knowledge": "База знаний",
-    "nlp": "NLP",
     "pluginManager": "Менеджер плагинов"
   },
   "debug": {
@@ -188,13 +184,6 @@
     "attribution": "Дизайн рабочего пространства частично вдохновлён проектом OpenClaw — спасибо! 🐾",
     "saveSuccess": "Сохранено успешно",
     "saveFailed": "Не удалось сохранить"
-  },
-  "projects": {
-    "workspacePath": "Путь рабочей области",
-    "path": {
-      "workspace": "Рабочая область",
-      "project": "Проект"
-    }
   },
   "skills": {
     "title": "Навыки",

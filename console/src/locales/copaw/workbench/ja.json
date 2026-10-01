@@ -1,0 +1,15 @@
+{
+  "nav": {
+    "projects": "プロジェクト",
+    "pipelines": "パイプライン",
+    "knowledge": "ナレッジ",
+    "nlp": "NLP"
+  },
+  "projects": {
+    "workspacePath": "ワークスペースパス",
+    "path": {
+      "workspace": "ワークスペース",
+      "project": "プロジェクト"
+    }
+  }
+}
