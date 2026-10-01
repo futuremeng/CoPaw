@@ -417,9 +417,9 @@ class MCPClientManager:
             setattr(client, "_qwenpaw_rebuild_info", rebuild_info)
             return client
 
-        headers = client_config.headers
+        headers: dict = dict(client_config.headers or {})
+        headers = {k: os.path.expandvars(v) for k, v in headers.items()}
         if headers:
-            headers = {k: os.path.expandvars(v) for k, v in headers.items()}
             # Log headers for debugging auth issues
             safe_headers = {
                 k: (v[:30] + "..." if len(v) > 30 else v)
@@ -435,6 +435,9 @@ class MCPClientManager:
                 "MCP client '%s' has no custom headers",
                 client_config.name,
             )
+
+        # Inject OAuth access token (overrides any manually set Authorization)
+        headers = MCPClientManager._inject_oauth_token(headers, client_config)
 
         transport = client_config.transport
         if transport == "sse":
