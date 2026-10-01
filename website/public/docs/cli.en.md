@@ -1,6 +1,6 @@
 # CLI
 
-`copaw` is the command-line tool for CoPaw. This page is organized from
+`qwenpaw` is the command-line tool for QwenPaw. This page is organized from
 "get-up-and-running" to "advanced management" — read from top to bottom if
 you're new, or jump to the section you need.
 
@@ -13,14 +13,14 @@ you're new, or jump to the section you need.
 
 These are the commands you'll use on day one.
 
-### copaw init
+### qwenpaw init
 
 First-time setup. Walks you through configuration interactively.
 
 ```bash
-copaw init              # Interactive setup (recommended for first time)
-copaw init --defaults   # Non-interactive, use all defaults (good for scripts)
-copaw init --force      # Overwrite existing config files
+qwenpaw init              # Interactive setup (recommended for first time)
+qwenpaw init --defaults   # Non-interactive, use all defaults (good for scripts)
+qwenpaw init --force      # Overwrite existing config files
 ```
 
 **What the interactive flow covers (in order):**
@@ -31,15 +31,15 @@ copaw init --force      # Overwrite existing config files
 3. **Environment variables** — optionally add key-value pairs for tools.
 4. **HEARTBEAT.md** — edit the heartbeat checklist in your default editor.
 
-### copaw app
+### qwenpaw app
 
-Start the CoPaw server. Everything else — channels, cron jobs, the Console
+Start the QwenPaw server. Everything else — channels, cron jobs, the Console
 UI — depends on this.
 
 ```bash
-copaw app                             # Start on 127.0.0.1:8088
-copaw app --reload                    # Auto-reload on code change (dev)
-copaw app --log-level debug           # Verbose logging
+qwenpaw app                             # Start on 127.0.0.1:8088
+qwenpaw app --reload                    # Auto-reload on code change (dev)
+qwenpaw app --log-level debug           # Verbose logging
 ```
 
 | Option        | Default     | Description                                                   |
@@ -50,11 +50,11 @@ copaw app --log-level debug           # Verbose logging
 | `--log-level` | `info`      | `critical` / `error` / `warning` / `info` / `debug` / `trace` |
 | `--workers`   | —           | **[DEPRECATED]** Ignored. CoPaw always uses 1 worker          |
 
-> **Note:** The `--workers` option is deprecated for stability reasons. CoPaw is designed to run with a single worker process. Multi-worker mode can cause issues with in-memory state management and WebSocket connections. This option will be removed in a future version.
+> **Note:** The `--workers` option is deprecated for stability reasons. QwenPaw is designed to run with a single worker process. Multi-worker mode can cause issues with in-memory state management and WebSocket connections. This option will be removed in a future version.
 
 ### Console
 
-Once `copaw app` is running, open `http://127.0.0.1:8088/` in your browser to
+Once `qwenpaw app` is running, open `http://127.0.0.1:8088/` in your browser to
 access the **Console** — a web UI for chat, channels, cron, skills, models,
 and more. See [Console](./console) for a full walkthrough.
 
@@ -65,7 +65,7 @@ If the frontend was not built, the root URL returns a JSON message like `{"messa
 `mkdir -p src/qwenpaw/console && cp -R console/dist/. src/qwenpaw/console/`.
 Docker images and pip packages already include the Console.
 
-### copaw daemon
+### qwenpaw daemon
 
 Inspect status, version, and recent logs without starting a conversation. Same
 behavior as sending `/daemon status` etc. in chat (CLI can show local info when
@@ -73,19 +73,19 @@ the app is not running).
 
 | Command                        | Description                                                                               |
 | ------------------------------ | ----------------------------------------------------------------------------------------- |
-| `copaw daemon status`        | Status (config, working dir, memory manager)                                              |
-| `copaw daemon restart`       | Print instructions (in-chat /daemon restart does in-process reload)                       |
-| `copaw daemon reload-config` | Re-read and validate config (channel/MCP changes need /daemon restart or process restart) |
-| `copaw daemon version`       | Version and paths                                                                         |
-| `copaw daemon logs [-n N]`   | Last N lines of log (default 100; from `qwenpaw.log` in working dir)                      |
+| `qwenpaw daemon status`        | Status (config, working dir, memory manager)                                              |
+| `qwenpaw daemon restart`       | Print instructions (in-chat /daemon restart does in-process reload)                       |
+| `qwenpaw daemon reload-config` | Re-read and validate config (channel/MCP changes need /daemon restart or process restart) |
+| `qwenpaw daemon version`       | Version and paths                                                                         |
+| `qwenpaw daemon logs [-n N]`   | Last N lines of log (default 100; from `qwenpaw.log` in working dir)                      |
 
 **Multi-Agent Support:** All commands support the `--agent-id` parameter (defaults to `default`).
 
 ```bash
-copaw daemon status                     # Default agent status
-copaw daemon status --agent-id abc123   # Specific agent status
-copaw daemon version
-copaw daemon logs -n 50
+qwenpaw daemon status                     # Default agent status
+qwenpaw daemon status --agent-id abc123   # Specific agent status
+qwenpaw daemon version
+qwenpaw daemon logs -n 50
 ```
 
 ### qwenpaw doctor
