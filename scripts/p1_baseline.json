@@ -34,8 +34,8 @@
       "removed": 2
     },
     ".gitignore": {
-      "added": 5,
-      "behavior_added": 5,
+      "added": 4,
+      "behavior_added": 4,
       "behavior_removed": 0,
       "mechanical": false,
       "naming": 0,
@@ -170,8 +170,8 @@
       "removed": 4
     },
     "console/src/api/modules/chat.ts": {
-      "added": 143,
-      "behavior_added": 143,
+      "added": 137,
+      "behavior_added": 137,
       "behavior_removed": 4,
       "mechanical": false,
       "naming": 0,
@@ -234,8 +234,8 @@
       "removed": 3
     },
     "console/src/api/types/chat.ts": {
-      "added": 44,
-      "behavior_added": 44,
+      "added": 17,
+      "behavior_added": 17,
       "behavior_removed": 1,
       "mechanical": false,
       "naming": 0,
@@ -1002,12 +1002,12 @@
       "removed": 4
     },
     "src/qwenpaw/agents/utils/setup_utils.py": {
-      "added": 199,
-      "behavior_added": 199,
-      "behavior_removed": 49,
+      "added": 16,
+      "behavior_added": 16,
+      "behavior_removed": 0,
       "mechanical": false,
       "naming": 0,
-      "removed": 49
+      "removed": 0
     },
     "src/qwenpaw/app/_app.py": {
       "added": 43,
@@ -1106,12 +1106,12 @@
       "removed": 0
     },
     "src/qwenpaw/app/routers/agents.py": {
-      "added": 4229,
-      "behavior_added": 4229,
-      "behavior_removed": 334,
+      "added": 4190,
+      "behavior_added": 4190,
+      "behavior_removed": 326,
       "mechanical": false,
       "naming": 0,
-      "removed": 334
+      "removed": 326
     },
     "src/qwenpaw/app/routers/config.py": {
       "added": 56,
@@ -1162,8 +1162,8 @@
       "removed": 59
     },
     "src/qwenpaw/app/runner/__init__.py": {
-      "added": 21,
-      "behavior_added": 21,
+      "added": 23,
+      "behavior_added": 23,
       "behavior_removed": 17,
       "mechanical": false,
       "naming": 0,
@@ -1186,8 +1186,8 @@
       "removed": 17
     },
     "src/qwenpaw/app/runner/models.py": {
-      "added": 108,
-      "behavior_added": 108,
+      "added": 37,
+      "behavior_added": 37,
       "behavior_removed": 0,
       "mechanical": false,
       "naming": 0,
@@ -1202,12 +1202,12 @@
       "removed": 3
     },
     "src/qwenpaw/app/runner/session.py": {
-      "added": 326,
-      "behavior_added": 326,
-      "behavior_removed": 245,
+      "added": 320,
+      "behavior_added": 320,
+      "behavior_removed": 176,
       "mechanical": false,
       "naming": 0,
-      "removed": 245
+      "removed": 176
     },
     "src/qwenpaw/app/workspace/service_factories.py": {
       "added": 16,
@@ -1346,8 +1346,8 @@
       "removed": 2
     },
     "src/qwenpaw/token_usage/model_wrapper.py": {
-      "added": 15,
-      "behavior_added": 15,
+      "added": 0,
+      "behavior_added": 0,
       "behavior_removed": 8,
       "mechanical": false,
       "naming": 0,
@@ -1387,15 +1387,15 @@
     }
   },
   "totals": {
-    "added": 15404,
-    "behavior_added": 15278,
+    "added": 15058,
+    "behavior_added": 14932,
     "behavior_files": 168,
-    "behavior_removed": 2710,
+    "behavior_removed": 2584,
     "files": 172,
     "mechanical_files": 1,
     "naming_files": 4,
     "naming_lines": 126,
     "naming_touched_files": 22,
-    "removed": 2836
+    "removed": 2710
   }
 }
