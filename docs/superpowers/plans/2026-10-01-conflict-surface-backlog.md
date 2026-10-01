@@ -205,7 +205,7 @@ v2 把整个目录改名重写成 `app/chats/`（该路径共 22 个文件、3,1
 - `CUT`（显式放弃，已写进 D-23）：**免启动 workspace 快路径**（7 行，沿用 D-19）、**`_is_mineru_stdio`**（9 行，roadmap 那行"内置 mineru_mcp"仍留在计划中）、**plan 面板整套**（43 行，上游自己把 `/plan` 关成 stub）、**`.snapshot` sidecar**（信任 v2 的 `safe_json_loads`）。
 - **净删除项（减债，不是搬家）**：chat runtime-status 整套 —— `ChatRuntimeStatus` + `ChatRuntimeStatusBreakdownItem`（`models.py` 108 行的主体）、`runtime_status_store.py`、`model_wrapper.py:25` 那个没人传的参数、前端 `chat.ts:152` 与 `AnywhereChat/index.tsx:1672` 与 `utils/chatRuntimeStatus.ts`、e2e mock `pipeline-design-chat.spec.ts:382`、**runner 包 `__init__.py` 那 38 行懒加载守卫**（它唯一的存在理由就是懒加载 `runtime_status_store`）。
 
-**这 5 条搬迁/原生线的净实现行数仍不给数字** —— 得出它要把 §4.2–§4.4 逐 hunk 记账：`git diff --unified=0` 的 35 个 hunk（session.py）与 68 个 hunk（stateful_client.py）里 `DROP` 与差集交错出现，按文件总量估会把 `DROP` 那半也算进工时。排期前补这一次账目，输入已经缩小到 5 条线 + 1 项净删除，成本可控。
+~~**这 5 条搬迁/原生线的净实现行数仍不给数字**~~ —— **本节当时不给，§4.8 已给出：`搬迁` 394 行 + `原生` 300 行 = 694 行净写作量。** 不给的原因成立过一次：`git diff --unified=0` 的 35 个 hunk（session.py）与 68 个 hunk（stateful_client.py）里 `DROP` 与差集交错出现，按文件总量估会把 `DROP` 那半也算进工时；§4.8 用"逐 added 行归属到最近 `def`/`class` + 混合符号显式拆行区间"把它结掉了，并且**真的拆出三处按文件估会算错的地方**。
 
 这条结论直接反驳了 `UPSTREAM_V2_MIGRATION_PLAN.md` §2 表里那行 P2 判据（"上游删了 `app/runner/*` 7 个文件…等于上游替我们做了裁决，无需决策"）：**上游删掉宿主文件不等于上游删掉了需求**，`tail-user/delete` 与 `ChatUpdate.meta` 的需求在 fork 自有的 `AnywhereChat` / `Projects` 页面上依然活着，只是失去了后端载体。那行判据需要按本节改写（见 §8）。
 
@@ -226,6 +226,46 @@ v2 把整个目录改名重写成 `app/chats/`（该路径共 22 个文件、3,1
 
 - **①③④ 与 plan 面板这 4 项 `CUT` 随 WP-06 同步执行**，不在现树提前动手。理由：它们在 CoPaw **当前** 1.x 树上是**在跑的功能**（冷启动列会话、损坏回滚、mineru 报错提示、plan 面板），现在删等于让现网用户付代价而冲突面并不额外减少 —— WP-06 换基线时"不再重放 fork 改动"本身就是删除，效果相同、零现网成本。
 - **② runtime-status 整套可以在现树立即删**，且应该立即删。它在当前树上不是"没接上"，而是**接了但必然失败**：`loadRuntimeStatus` 只在用户打开那个面板时才发请求（`index.tsx:2402-2409` 的 `if (!runtimeStatusOpen) return`），而后端**整棵树没有这条路由**（`grep runtime-status src/qwenpaw` = 命中 0，只有 `token_usage/model_wrapper.py:25/:33/:85` 那个没人传的参数在引用 recorder），于是每次打开都走 `catch` ⇒ `console.warn` + `setRuntimeStatusError(...)`（`:1680-1687`），触发器徽标从此显示"采集异常"（`:3254` 的 `chat.runtimeStatusError`、`:3449` 的 `chat.runtimeStatusErrorShort`）。e2e 靠 `pipeline-design-chat.spec.ts:382` 的 mock 通过，所以这条**用户可见的坏状态在测试里是隐形的**。删它是纯减债，并顺带让 `runner/__init__.py` 那 38 行懒加载守卫失去承载对象、一并清掉。这一项单独开一个提交，不夹带在任何迁移工作里。删除时别碰 `knowledge/manager.py:3571` 那族 `runtime_status` —— 那是 NER 就绪状态，同名但是活功能。
+
+### 4.8 hunk 级净行数账目（2026-10-01，§9 未验证 7 结案）
+
+方法：`git diff --no-renames --unified=0 e111ec6fb HEAD -- <path>` 取全部 added 行，按 **HEAD 侧的行号归属到最近的 `def`/`class`**（`git show HEAD:<path>` 重建符号表），再对 §4.2/§4.3 的判定表逐符号打标签；混合符号用显式行区间拆分。**账目只算 added 行**（re-implement 的工作量在新增侧；删除侧的 fork 代码在同步时是"不再重放"，零写作量）。
+
+输入 7 个文件（§9-7 那 6 个 + fork 自有新文件 `runtime_status_store.py`，因为它是净删除项的主体）：
+
+| 文件 | added | removed |
+|---|---|---|
+| `app/mcp/stateful_client.py` | 690 | 396 |
+| `app/mcp/manager.py` | 194 | 16 |
+| `app/runner/api.py` | 457 | 34 |
+| `app/runner/models.py` | 108 | 0 |
+| `app/runner/session.py` | 320 | 176 |
+| `app/runner/__init__.py` | 21 | 17 |
+| `app/runner/runtime_status_store.py`（fork 自有） | 382 | 0 |
+| **合计** | **2,172** | **639** |
+
+**分桶读数**：
+
+| 桶 | added 行 | 明细 |
+|---|---|---|
+| `DROP` | **864** | 生命周期与写盘加固 694（`stateful_client.py` 465 / `session.py` 193 / `manager.py` 28 / `api.py` 8）、历史裁剪 89、分页 39（`api.py` 30 + `ChatHistory` 9）、历史预览 26、路由改写 16 |
+| `净删除` | **472** | `runtime_status_store.py` 382 + `models.py` 两模型 69 + `runner/__init__.py` 21（`__getattr__` 12 + 它所在的 9 行懒加载块） |
+| `搬迁` | **394** | tail-user 端点 192（`delete_tail_user_message` 164 + 2 import + `ChatTailUserDelete{Request,Response}` 26）、**tail-user 依赖 134**（见下方"耦合"一条）、stdio 命令解析 64、`ChatUpdate.meta` 4 |
+| `原生` | **300** | MCP 运行状态三件套 148（`@@ -61,0 +68,139 @@` 那一整块 + 6 处 `_failed_keys` 触点 + 启动失败文案 3）、httpx 异常链诊断 152（5 个 helper 133 + `import create_mcp_http_client` + `manager.py:420-437` 的 header 脱敏日志 18） |
+| `CUT` | **142** | 免启动快路径 66（`_resolve_chat_workspace_dir` 6 + `list_chats` 19 + `create_chat` 22 + `get_chat` 分支 11 + 6 import）、`.snapshot` sidecar 49（三方法 41 + 4 处调用点及其 guard）、mineru 27（`_is_mineru_stdio` 7 + `_run_lifecycle:316-335` 的 guard 20） |
+| **总计** | **2,172** | 校验：864+472+394+300+142 = 2,172 = 逐文件 numstat 之和 |
+
+**排期结论：这 18 文件簇里真正要写代码的是 694 行（`搬迁` 394 + `原生` 300），占 fork 侧总量的 32%。其余 1,478 行是"同步时不再重放"，零写作量。**
+
+三条只有拆到 hunk 才看得见的账目修正：
+
+1. **`tail-user` 这条 `搬迁` 线不是 164 行，是 192 + 134。** `delete_tail_user_message` 调 `_load_visible_messages_for_chat`（24）、`_memory_item_to_message_dict`（8）、`_is_user_memory_message`（4）、`_extract_text_from_content`（15），后两者又调 `session.py` 的 `normalize_in_memory_memory_state`（29）+ `_normalize_memory_state_item`（15）+ `_coerce_message_dict`（25）+ `restore_in_memory_memory`（7）。这 134 行在 §4.3 里全部记在 `DROP` 名下 —— 按文件总量估时会把它们算成零成本，**这是 §4.6 那句"按文件总量估会把 `DROP` 那半也算进工时"的具体形态，方向反过来也成立**。**而且这 134 行大概率不该搬**：v2 `chats/api.py:816 get_chat` 已经把消息存储从 `agent.memory`（`InMemoryMemory` 的 `content` 二元组列表）换成 `agent.state.context`（`AgentState.model_validate`，失败退 `chats/utils.py:110 parse_legacy_memory_state`），fork 这套 memory-state 归一化是给 **v1 内存布局**打的补丁，v2 有自己的读路径 ⇒ 搬过去等于在 v2 之上再维护一套 legacy 读法。**代价是 tail-user 端点要按 v2 的形状重写而不是照搬**：读 `AgentState.context`、末位 user 消息的判定与"可见序列 ↔ 持久序列"的索引对齐逻辑（fork 那 164 行的主体，是真实需求逻辑）保留，底下 134 行的存取层换成 v2 原生。给排期的区间因此是 **192（下限，v2 读写路径原生可用）～ 326（上限，需要自带 legacy 归一化）**，取下限的前提是 WP-06 落地时实测 v2 的 `update_session_state`（`chats/session.py:354`，点分路径 + `get_path_lock` + `write_json_atomic_async`）能写回 `agent.state`。
+2. **`_run_lifecycle` 里那 20 行（`stateful_client.py:379-398`）不属于生命周期重写。** 它是 `except FileNotFoundError` 的"stdio 命令找不到"诊断：拼错误消息、给 `uvx`/`uv` 提示、用 `shutil.which` 判断是否在 PATH。它和 `_resolve_stdio_command` 是同一个需求的两半（一个管解析、一个管解析不了时说人话），所以账目里并进 `搬迁/stdio`。**若实施时判定 v2 的 driver 面不需要这条报错，`搬迁` 从 394 降到 374。** 同一函数里另 51 行是生命周期重写，仍在 `DROP`。
+3. **`manager.py` 的 `_build_client`（+43/−14）是个三合一混合符号，其中一条是 fork 引入的上游功能回归。** 拆开：`420-437` header 脱敏调试日志 18 行（记 `原生`）；`439-461` 把 `sse` 强制改写成 `streamable_http` 并 `warnings.filterwarnings` 抑制 agentscope 的 deprecation（23 行，v2 由 drivers 体系接管 transport ⇒ 记 `DROP`，本轮未单独裁）；`416`/`462` 两行 `setattr(client, "_copaw_rebuild_info", …)` 是**纯命名税** —— 上游 merge-base 本来就有 `_qwenpaw_rebuild_info`（`e111ec6fb:manager.py:267/:285`），fork 只是并列加了一个 `CoPaw` 别名的 setattr，这两行归 D-22 阶段 A 退回去。**最重要的一条不是行数而是这个：fork 在同一次改动里删掉了 `MCPClientManager._inject_oauth_token(headers, client_config, …)` 的调用，而该方法仍留在 `manager.py:368` 且全仓零调用者。** 上游 merge-base 在 `_build_client` 里是注入 OAuth token 的（`e111ec6fb:manager.py:274`），fork 换成了 header 调试日志 ⇒ **远程 MCP 的 OAuth token 注入在 CoPaw 现树上已经断了**。它落在 `DROP` 桶里，同步时随"还原上游语义"自愈，但**必须显式检查而不是指望自愈**：v2 不仅保留了这件事，还把它做得更完整 —— `app/mcp/config_service.py:32/:103-111` 走 `mcp_oauth_credential_ref` 的凭证引用体系（`_credential_ref_by_alias_or_kind` + `load_optional_credential`），说明**OAuth 在上游是活的能力，不是打算废弃的旧码**。建议单独立一条现网 bug 复核（不在本 WP 范围内动代码）。
+
+**净删除项的完整尺寸（本 WP 之外的前端侧）**：后端 472 行是精确值；前端另加 `console/src/utils/chatRuntimeStatus.ts` **整文件 313 行**、`api/modules/chat.ts` 里 `getRuntimeStatus` 那 3 行、`pipeline-design-chat.spec.ts:382` 的 mock、以及 `AnywhereChat/index.tsx` 内 **144 处 `runtimeStatus` 引用**（`grep -c`，散布在 `loadRuntimeStatus:1665-1692`、retry `:1695+`、面板门禁 `:2402-2409`、徽标文案 `:3254`/`:3449-3450` 等 6 个区块）。`AnywhereChat` 是 fork 自有文件（+3,806/−0），所以那 144 处不能从文件总量里估，task #36 落地时按区块删。
+
+**这轮账目没覆盖的**：`app/routers/plan.py`、`console/src/pages/Agent/MCP/*`、`console/src/pages/Agent/Workspace/*` 等其余 11 个文件。它们不需要覆盖 —— §4.3/§4.4 已把它们整行判成 `DROP` 或 `CUT`（plan 面板整套 43 行 `CUT`，见 D-23），`原生` 那两条的**新写量**按 v2 接缝另计，不在"存量重放"的口径里。
 
 ## 5 >60 行的 47 个文件（需要设计，不能机械搬；修正后 48 个，补录见 §7.1）
 
@@ -523,4 +563,4 @@ v2 把整个目录改名重写成 `app/chats/`（该路径共 22 个文件、3,1
 4. v2 文档站 `website/` 的页面注册方式（决定簇 S）。
 5. 簇 B 的宿主改动（+54 行）在 v2 的两个接缝面（`plugins/api.py` 的 17 个 `register_*` 与 `pawapp/app.py`）上各自的等价落点。
 6. ~~**§4.5 那 6 项**（v2 的 stdio 可执行文件解析、mineru 依赖是否在用、v2 regenerate 的覆盖面、`AnywhereChat` 的后端端点依赖全表、v2 `/plan` 的落库状态、`register_http_router` 最小插件端点能否被装载）~~ —— **2026-10-01 全部复核完毕，结论见 §4.5**；随之暴露的 4 个开放项也已一次裁完，记为 **D-23（§4.7）**。簇 J / K 的 2,825 行最终账目：**3 条 `搬迁` + 2 条 `原生` + 4 条 `CUT` + 1 项净删除（runtime-status 整套）**，其余 `DROP`。剩下的唯一前置是下一条那条 hunk 级净行数账目。
-7. **§4.6 那 5 条线 + 1 项净删除的 hunk 级账目**：逐 hunk 标 `DROP` / `搬迁` / `原生` / `CUT` / `净删除`，产出排期用的净实现行数。用 §1 的 `git diff --no-renames --unified=0` 命令，输入只限簇 J / K 的 6 个文件（`stateful_client.py`、`manager.py`、`runner/{api,models,session}.py`、`runner/__init__.py`）。
+7. ~~**§4.6 那 5 条线 + 1 项净删除的 hunk 级账目**~~ —— **2026-10-01 做完，结论在 §4.8**：`搬迁` 394 + `原生` 300 = **694 行是 WP-06 的净写作量**，其余 1,478 行是"同步时不再重放"的零成本项。这轮账目另外翻出三件按文件总量估不出来的事：tail-user 那条真实尺寸是 192+134 而不是 164、`_run_lifecycle:379-398` 那 20 行属于 stdio 需求而非生命周期重写、以及 **fork 在 `_build_client` 里摘掉了上游的 OAuth token 注入且方法至今零调用者**（新开的现网复核项，见 §4.8 第 3 条）。
