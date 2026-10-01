@@ -203,7 +203,7 @@ v2 把整个目录改名重写成 `app/chats/`（该路径共 22 个文件、3,1
 - `搬迁`（需求成立、v2 无等价物，必须移到 fork 自有位置）：**`_resolve_stdio_command`**（构造期解析）、**`tail-user/delete`**（168 行）、**`ChatUpdate.meta` 的写路径**（6 处生产调用者）。**共 3 条。**
 - `原生`（需求成立，改成走 v2 接缝重表达）：**MCP 运行时状态三件套**、**httpx 异常链诊断 5 个 helper**。**共 2 条。**
 - `CUT`（显式放弃，已写进 D-23）：**免启动 workspace 快路径**（7 行，沿用 D-19）、**`_is_mineru_stdio`**（9 行，roadmap 那行"内置 mineru_mcp"仍留在计划中）、**plan 面板整套**（43 行，上游自己把 `/plan` 关成 stub）、**`.snapshot` sidecar**（信任 v2 的 `safe_json_loads`）。
-- **净删除项（减债，不是搬家）**：chat runtime-status 整套 —— `ChatRuntimeStatus` + `ChatRuntimeStatusBreakdownItem`（`models.py` 108 行的主体）、`runtime_status_store.py`、`model_wrapper.py:25` 那个没人传的参数、前端 `chat.ts:152` 与 `AnywhereChat/index.tsx:1672` 与 `utils/chatRuntimeStatus.ts`、e2e mock `pipeline-design-chat.spec.ts:382`、**runner 包 `__init__.py` 那 38 行懒加载守卫**（它唯一的存在理由就是懒加载 `runtime_status_store`）。
+- **净删除项（减债，不是搬家）**：chat runtime-status 整套 —— `ChatRuntimeStatus` + `ChatRuntimeStatusBreakdownItem`（`models.py` 108 行的主体）、`runtime_status_store.py`、`model_wrapper.py:25` 那个没人传的参数、前端 `chat.ts:152` 与 `AnywhereChat/index.tsx:1672` 与 `utils/chatRuntimeStatus.ts`、e2e mock `pipeline-design-chat.spec.ts:382`、~~**runner 包 `__init__.py` 那 38 行懒加载守卫**~~（原判"它唯一的存在理由就是懒加载 `runtime_status_store`"已作废，实测守卫另有承载，见 §4.7 执行记录）。
 
 ~~**这 5 条搬迁/原生线的净实现行数仍不给数字**~~ —— **本节当时不给，§4.8 已给出：`搬迁` 394 行 + `原生` 300 行 = 694 行净写作量。** 不给的原因成立过一次：`git diff --unified=0` 的 35 个 hunk（session.py）与 68 个 hunk（stateful_client.py）里 `DROP` 与差集交错出现，按文件总量估会把 `DROP` 那半也算进工时；§4.8 用"逐 added 行归属到最近 `def`/`class` + 混合符号显式拆行区间"把它结掉了，并且**真的拆出三处按文件估会算错的地方**。
 
@@ -216,16 +216,21 @@ v2 把整个目录改名重写成 `app/chats/`（该路径共 22 个文件、3,1
 | # | 裁决 | 放弃的东西 | 如实记下的代价 |
 |---|---|---|---|
 | ① | 免启动 workspace 快路径 `CUT`，沿用 D-19 | `_resolve_chat_workspace_dir` 7 行 | 冷启动打开会话列表要先加载 workspace，这条快路径带来的启动性能收益消失 |
-| ② | chat runtime-status **整套删除**（不是 `CUT` 掉上游改动，是删 fork 自己的死码） | `ChatRuntimeStatus` 两模型 + `runtime_status_store.py` + 前端调用/工具/e2e mock + runner 包 38 行懒加载 | 无。它在当前树上从来没有活过：后端无路由、store 零生产调用者。将来要做 per-chat token/耗时面板时按 v2 的形状（`get_runtime_status()` + typed response + 只读路由）新做 |
+| ② | chat runtime-status **整套删除**（不是 `CUT` 掉上游改动，是删 fork 自己的死码） | `ChatRuntimeStatus` 两模型 + `runtime_status_store.py` + 前端调用/工具/e2e mock（~~+ runner 包 38 行懒加载~~，守卫不随本项删，见下方执行记录） | 无。它在当前树上从来没有活过：后端无路由、store 零生产调用者。将来要做 per-chat token/耗时面板时按 v2 的形状（`get_runtime_status()` + typed response + 只读路由）新做 |
 | ③ | session 的 `.snapshot` sidecar `CUT`，信任上游容错 | 备份回滚这条退路 | 截断写入（写一半掉电）这类 `utils/json_utils.safe_json_loads` 救不回的情况，CoPaw 不再能自愈 |
 | ④ | `_is_mineru_stdio` `CUT`，随 roadmap 一起重做 | 9 行"启动前查 `MINERU_API_KEY`"的清晰报错 | `docs/devops/FORK_ROADMAP.md:22` 那行"内置 mineru_mcp"**保持"计划中"不撤**；真进产品时按 v2 `app/mail/driver_config.py:57 resolve_qwenpawmail_endpoint()` 的形状（构造期解析 + env 覆盖）重写，与 `_resolve_stdio_command` 同批 |
 
-**这四项合起来消掉的冲突面**：`app/runner/{api,models}.py` 里那 7 + 108 行、`session.py` 的 sidecar 三件套、`runner/__init__.py` 的 38 行懒加载、`stateful_client.py` 的 9 行 mineru 分支，以及前端 `chat.ts` / `chatRuntimeStatus.ts` / `AnywhereChat` 消费点 —— 全部不需要在 WP-06 里重放。**这条记录的作用是把它们变成"有意识的放弃"**，下次同步时不再作为"疑似丢失成果"被重新翻出来。
+**这四项合起来消掉的冲突面**：`app/runner/{api,models}.py` 里那 7 + 108 行、`session.py` 的 sidecar 三件套、`stateful_client.py` 的 9 行 mineru 分支，以及前端 `chat.ts` / `chatRuntimeStatus.ts` / `AnywhereChat` 消费点 —— 全部不需要在 WP-06 里重放。（`runner/__init__.py` 的 38 行懒加载**不在其列**，见执行记录。）**这条记录的作用是把它们变成"有意识的放弃"**，下次同步时不再作为"疑似丢失成果"被重新翻出来。
 
 **执行时机要分两类，别顺手一起删**：
 
 - **①③④ 与 plan 面板这 4 项 `CUT` 随 WP-06 同步执行**，不在现树提前动手。理由：它们在 CoPaw **当前** 1.x 树上是**在跑的功能**（冷启动列会话、损坏回滚、mineru 报错提示、plan 面板），现在删等于让现网用户付代价而冲突面并不额外减少 —— WP-06 换基线时"不再重放 fork 改动"本身就是删除，效果相同、零现网成本。
-- **② runtime-status 整套可以在现树立即删**，且应该立即删。它在当前树上不是"没接上"，而是**接了但必然失败**：`loadRuntimeStatus` 只在用户打开那个面板时才发请求（`index.tsx:2402-2409` 的 `if (!runtimeStatusOpen) return`），而后端**整棵树没有这条路由**（`grep runtime-status src/qwenpaw` = 命中 0，只有 `token_usage/model_wrapper.py:25/:33/:85` 那个没人传的参数在引用 recorder），于是每次打开都走 `catch` ⇒ `console.warn` + `setRuntimeStatusError(...)`（`:1680-1687`），触发器徽标从此显示"采集异常"（`:3254` 的 `chat.runtimeStatusError`、`:3449` 的 `chat.runtimeStatusErrorShort`）。e2e 靠 `pipeline-design-chat.spec.ts:382` 的 mock 通过，所以这条**用户可见的坏状态在测试里是隐形的**。删它是纯减债，并顺带让 `runner/__init__.py` 那 38 行懒加载守卫失去承载对象、一并清掉。这一项单独开一个提交，不夹带在任何迁移工作里。删除时别碰 `knowledge/manager.py:3571` 那族 `runtime_status` —— 那是 NER 就绪状态，同名但是活功能。
+- **② runtime-status 整套可以在现树立即删**，且应该立即删。它在当前树上不是"没接上"，而是**接了但必然失败**：`loadRuntimeStatus` 只在用户打开那个面板时才发请求（`index.tsx:2402-2409` 的 `if (!runtimeStatusOpen) return`），而后端**整棵树没有这条路由**（`grep runtime-status src/qwenpaw` = 命中 0，只有 `token_usage/model_wrapper.py:25/:33/:85` 那个没人传的参数在引用 recorder），于是每次打开都走 `catch` ⇒ `console.warn` + `setRuntimeStatusError(...)`（`:1680-1687`），触发器徽标从此显示"采集异常"（`:3254` 的 `chat.runtimeStatusError`、`:3449` 的 `chat.runtimeStatusErrorShort`）。e2e 靠 `pipeline-design-chat.spec.ts:382` 的 mock 通过，所以这条**用户可见的坏状态在测试里是隐形的**。删它是纯减债。这一项单独开一个提交，不夹带在任何迁移工作里。删除时别碰 `knowledge/manager.py:3571` 那族 `runtime_status` —— 那是 NER 就绪状态，同名但是活功能。
+
+**执行记录（2026-10-01，`7f8cff1ae`）**：删掉 11 个文件路径、**1,806 行 / +7**，`tests/unit/{app,knowledge,scripts}` 回到基准 **2F/607P**（那 2 条是 py3.10 无 `BaseExceptionGroup`），`tests/unit/{app/runner,token_usage}` 41P/9XF，`tsc -b --noEmit` 无新增错误。两条原判需要更正：
+
+1. **`runner/__init__.py` 的 38 行懒加载守卫不能删。** 把上游的急加载 `__init__` 搬回来，`import qwenpaw.app.agent_context` 立刻 `ImportError: cannot import name 'get_agent_for_request' from partially initialized module`，`tests/unit/app` 有 **14 个模块收集失败**。链路是 `agent_context → multi_agent_manager → workspace/workspace.py:30 (from ..runner.task_tracker …) → runner/__init__.py (from .api) → api.py:28 (from ..agent_context)` —— 上游在 merge-base 把 `get_agent_for_request` 写在函数内（`api.py:24`），fork 把它提到模块级（还多带两个 helper），这才是环的成因；`runtime_status_store` 从来不是。⇒ **守卫的真实承载是这处 fork 模块级 import，删除动作随 WP-06**（把 import 收回函数内即可同时消掉 `api.py` 的命名/行为差异与这 38 行）。已在 `__init__.py` docstring 里改写成这个真实理由。
+2. **前端比原判更大一圈。** `transientMessages` 状态机（state + `updateTransientMessages` + 7 个调用点 + `pendingUserMessage` 构造）在删掉面板后成为**只写不读**：它唯一的读者是 `transientHistory`/`fallbackHistory` 两个 memo，而这两个 memo 只喂 runtime-status。它藏在 `send()` 与 SSE `finalize()` 的热路径上，属于同一套死码，随本项一并删（`AnywhereChat/index.tsx` −476 行）。
 
 ### 4.8 hunk 级净行数账目（2026-10-01，§9 未验证 7 结案）
 
