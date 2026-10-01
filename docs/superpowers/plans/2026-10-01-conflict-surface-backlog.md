@@ -59,15 +59,15 @@ git diff --no-renames --name-only e111ec6fb upstream/main > /tmp/upstream_change
 | I src/qwenpaw/app/routers（后端 HTTP 路由） | 9 | 5,676 | 5,875 | 1 |
 | J src/qwenpaw/app/runner（会话与消息处理） | 6 | 1,163 | 1,270 | 6（其中 3 个改名到 `app/chats/`） |
 | K src/qwenpaw/app/mcp（MCP 客户端） | 3 | 1,330 | 1,282 | 3 |
-| L src/qwenpaw/app 其它（_app / migration / workspace / flow_engine 等） | 8 | 677 | 3,224 | 0 |
+| L src/qwenpaw/app 其它（_app / migration / workspace / flow_engine 等） | 8 | 677 → **673**（`_app.py` 退 2 加 2 删） | 3,224 | 0 |
 | M src/qwenpaw/agents（agent 工具、记忆、技能、prompt） | 11 | 654 | 3,975 | 0 |
 | N src/qwenpaw/config（配置模型与工具） | 4 | 142 | 3,216 | 0 |
 | O src/qwenpaw/cli（命令行） | 1 | 345 | 141 | 0 |
 | P src/qwenpaw 其它（providers / constant / security / token_usage） | 7 | 249 | 2,899 | 0 |
 | Q scripts/pack（桌面打包） | 2 | 41 | 11 | 0 |
 | R scripts 其它（install.* / README） | 3 | 21 | 43 | 0 |
-| S website/public/docs（文档站正文） | 4 | 12 | 325 | 0 |
-| U .github（CI 与模板） | 2 | 26 | 124 | 0 |
+| S website/public/docs（文档站正文）**✅ 已执行（已闭环 48）** | 4 → **0** | 12 → **0** | 325 | 0 |
+| U .github（CI 与模板）**部分已执行（已闭环 48）** | 2 → **1**（剩 `PULL_REQUEST_TEMPLATE.md` +16，仍是冲突宿主） | 26 → **16** | 124 | 0 |
 | V 仓库根（pyproject / Makefile / CONTRIBUTING / deploy 等） | 10 | 364 | 1,752 | 0 |
 
 各簇的落点与前置条件：
@@ -108,9 +108,9 @@ git diff --no-renames --name-only e111ec6fb upstream/main > /tmp/upstream_change
 
 **R — scripts 其它（install.* / README）**。`scripts/install.bat`(+6/−2 行为 + 2 命名)、`install.sh`(+4/−1)、`install.ps1`(+8)。落点 = fork 自有安装脚本。
 
-**S — website/public/docs（文档站正文）**。文档站正文 4 文件（`cli.{en,zh}.md`、`desktop.{en,zh}.md`），阶段 A 还原 67 行命名后各剩 2 行。落点 = 新建 `website/public/docs/copaw/*` 或 fork 自有页面，需查 v2 文档站的注册方式（未验证）。
+**S — website/public/docs（文档站正文）**。文档站正文 4 文件（`cli.{en,zh}.md`、`desktop.{en,zh}.md`），阶段 A 还原 67 行命名后各剩 2 行。落点 = 新建 `website/public/docs/copaw/*` 或 fork 自有页面，需查 v2 文档站的注册方式（未验证）。 → **✅ 这 4 个文件已于 2026-10-02 退回 merge-base 字节（已闭环 48）**：`cli.*` 剩的那 2 行是纯改名（其中一行引用的正是 `_app.py` 里被硬编码的 console 文案，所以**连同 `_app.py` 的 `{PROJECT_NAME}` 一起还原才自洽**），`desktop.*` 剩的是被删掉的空行。⇒ **簇 S 现在 0 文件**，"新建 `docs/copaw/*`"那条落点问题不再是这 4 行的前置。
 
-**U — .github（CI 与模板）**。.github 2 文件（`frontend-tests.yml` +10 是 fork 的 locale guard 步骤、`ISSUE_TEMPLATE/config.yml` +3）。落点 = fork 自有 workflow 文件（D-22 的 `copaw-desktop.yml` 就是这个模式）。
+**U — .github（CI 与模板）**。.github 2 文件（`frontend-tests.yml` +10 是 fork 的 locale guard 步骤、`ISSUE_TEMPLATE/config.yml` +3）。落点 = fork 自有 workflow 文件（D-22 的 `copaw-desktop.yml` 就是这个模式）。 → **✅ 两笔已于 2026-10-02 清完（已闭环 48）**：locale 守卫整块搬进 fork 自建的 `unit-tests.yml`（脚本 `REPO_ROOT` 取自 `__file__`、只用标准库 ⇒ 与 cwd 和 npm 都无关，放前端 job 没有理由），`paths` 补 `console/src/locales/**` + 脚本自身 ⇒ 触发面不减，`frontend-tests.yml` 回 merge-base 字节；`config.yml` 那 3 行 `contact_links` 是冗余入口（release checklist 模板本体是 fork 新建文件，GitHub 自动列进模板选择器）⇒ 整块退回。⇒ **簇 U 现只剩 `.github` 里那些 fork 新建文件（账外）**。
 
 **V — 仓库根（pyproject / Makefile / CONTRIBUTING / deploy 等）**。仓库根 10 文件（`pyproject.toml` +10 依赖与 package-data、`Makefile`、`CONTRIBUTING*`、`.gitignore`、`deploy/Dockerfile`、`README*` 4 篇）。README 4 篇里 fork 自写章节共 16 行品牌内容属此类；`pyproject.toml` 的 +10 与产品名无关（实测 = 4 行依赖 + 1 行 package-data 等），不要当品牌税处理。
 
@@ -394,6 +394,8 @@ v2 把整个目录改名重写成 `app/chats/`（该路径共 22 个文件、3,1
 ## 7 全量 155 行（前 152 行为第一版读数，补录 3 行见 §7.1）
 
 > **2026-10-02 状态更正**：下表是**第一版读数**，不随执行回写。**簇 A 那 6 行（#2–#7）与 #94 `console/src/i18n.ts` 已执行完毕**（WP-13，`wp/13-locale-exit` @ `ee400b053`）—— 6 个 locale 文件已不再是冲突宿主（回到 merge-base 字节），`i18n.ts` 从 +91/−7 降到 +16/−1。执行后的 P1 读数：**166 文件 / +14,681/−2,702 · 行为 162 / +14,555/−2,576 · 命名 4/22/126 · rc=0**（详见 §3 簇 A 那条与迁移计划 §8 已闭环 45）。
+
+> **2026-10-02 小面簇第一刀（迁移计划 §8 已闭环 48，分支 `wp/integration` @ `e04481ac8` + `1977f2d13`）**：`website/public/docs/{cli.en,cli.zh,desktop.en,desktop.zh}.md` 与 `.github/workflows/frontend-tests.yml` **5 个冲突宿主退回 merge-base 字节** ⇒ **冲突面 147 → 142**（在同一棵树上前后各算一次，不是引用本表第一版数）。另退掉 2 个"只被 fork 改、上游没碰"的文件（`.github/ISSUE_TEMPLATE/config.yml` +3、`.github/workflows/pr-under-review.yml` −2）—— 它们减册不减冲突面。全仓 P1 现读 **154 文件 / +14,574/−2,589 · 行为 153 / +14,540/−2,555 · 命名 1/9/34 · rc=0**。**一条口径纠正**：本表 §2/§3 长期写的"冲突面 149"是 `wp/13-locale-exit` 分支上的读数，`wp/integration` 主线（吃过两条 `fix/*` 之后）的真实值是 **147**。**另一条判据纠正**：这一刀退掉的 4 行文档改名**不在命名册里**（改名配对靠行相似度，markdown 表格行/正文句没配上对），所以"退行数"不能直接读成"命名税下降"。
 
 | # | 文件 | 簇 | fork | 上游 | fork hunk | v2 存在 | 命名行 |
 |---|---|---|---|---|---|---|---|
