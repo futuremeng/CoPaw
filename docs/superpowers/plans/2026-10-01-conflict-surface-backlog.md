@@ -98,7 +98,7 @@ git diff --no-renames --name-only e111ec6fb upstream/main > /tmp/upstream_change
 
 **M — src/qwenpaw/agents（agent 工具、记忆、技能、prompt）**。agents 工具与记忆。含 `audio_transcription.py`(+335/−5，fork 加的本地 whisper 自动安装)、`file_io.py`(+60)、`prompt.py`(+31)。落点 = v2 的 agent 扩展接缝（`register_*` / skill 目录），逐条判。
 
-**N — src/qwenpaw/config（配置模型与工具）**。`config/config.py`(+73/−3)。**已识别的减面机会**：上游该文件里紧挨 `class Config` 之前有一整段连续的 200 行 / 17 个 fork 私有模型（`Knowledge*`、`GraphifyConfig`、`AgentsSquare*`、`SkillsMarket*`），搬到 fork 自有模块 + 留一段 re-export import，可减约 200 行行为侵入并缩小与 v2 的冲突面。
+**N — src/qwenpaw/config（配置模型与工具）**。`config/config.py`(+73/−3)。**这条减面机会已兑现（2026-10-02 在 `wp/integration` 上复核；动作本身是 WP-01 的 `daa0e8e28` + `2fcfb26f1`）**：那 17 个 fork 私有模型（`Knowledge*`、`GraphifyConfig`、`AgentsSquare*`、`SkillsMarket*`）早就搬进了 fork 自有 `src/qwenpaw/config/product_models.py`（**348 行；merge-base 里不存在 ⇒ 是"加了个新文件"，本来就不进冲突面**），`config.py:22` 那段 import 就是它的 re-export。⇒ 簇 N 现存的 +73 行全是**字段级侵入**（7 个 hunk：import 块、`ToolResultPruningConfig`、`AgentProfileRef`、`AgentProfileConfig`、`build_local_agent_tools_config`、`Config` 两处），**没有剩余的机械搬空间**，只能随 WP-06 逐字段判 `DROP`/`搬迁`。
 
 **O — src/qwenpaw/cli（命令行）**。`cli/desktop_cmd.py`(+212/−133)。桌面 CLI 被 fork 大改；v2 侧同文件上游也改了 141 行。落点 = fork 自有 CLI 命令（`src/copaw/cli/*` 已有 `app_command.py` 等先例，entry point `copaw` 是上游自己发布的）。
 
