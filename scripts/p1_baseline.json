@@ -66,36 +66,36 @@
       "removed": 1
     },
     "README.md": {
-      "added": 60,
-      "behavior_added": 58,
-      "behavior_removed": 17,
+      "added": 59,
+      "behavior_added": 59,
+      "behavior_removed": 18,
       "mechanical": false,
-      "naming": 2,
-      "removed": 19
+      "naming": 0,
+      "removed": 18
     },
     "README_ja.md": {
-      "added": 65,
-      "behavior_added": 63,
-      "behavior_removed": 20,
+      "added": 64,
+      "behavior_added": 64,
+      "behavior_removed": 21,
       "mechanical": false,
-      "naming": 2,
-      "removed": 22
+      "naming": 0,
+      "removed": 21
     },
     "README_ru.md": {
-      "added": 67,
-      "behavior_added": 65,
-      "behavior_removed": 20,
+      "added": 66,
+      "behavior_added": 66,
+      "behavior_removed": 21,
       "mechanical": false,
-      "naming": 2,
-      "removed": 22
+      "naming": 0,
+      "removed": 21
     },
     "README_zh.md": {
-      "added": 70,
-      "behavior_added": 68,
-      "behavior_removed": 17,
+      "added": 69,
+      "behavior_added": 69,
+      "behavior_removed": 18,
       "mechanical": false,
-      "naming": 2,
-      "removed": 19
+      "naming": 0,
+      "removed": 18
     },
     "console/index.html": {
       "added": 12,
@@ -1074,12 +1074,12 @@
       "removed": 8
     },
     "src/qwenpaw/app/migration.py": {
-      "added": 159,
+      "added": 156,
       "behavior_added": 156,
       "behavior_removed": 125,
       "mechanical": false,
-      "naming": 3,
-      "removed": 128
+      "naming": 0,
+      "removed": 125
     },
     "src/qwenpaw/app/multi_agent_manager.py": {
       "added": 18,
@@ -1226,36 +1226,12 @@
       "removed": 40
     },
     "src/qwenpaw/cli/desktop_cmd.py": {
-      "added": 216,
+      "added": 212,
       "behavior_added": 212,
       "behavior_removed": 133,
       "mechanical": false,
-      "naming": 4,
-      "removed": 137
-    },
-    "src/qwenpaw/cli/init_cmd.py": {
-      "added": 7,
-      "behavior_added": 0,
-      "behavior_removed": 0,
-      "mechanical": false,
-      "naming": 7,
-      "removed": 7
-    },
-    "src/qwenpaw/cli/main.py": {
-      "added": 2,
-      "behavior_added": 0,
-      "behavior_removed": 0,
-      "mechanical": false,
-      "naming": 2,
-      "removed": 2
-    },
-    "src/qwenpaw/cli/update_cmd.py": {
-      "added": 1,
-      "behavior_added": 0,
-      "behavior_removed": 0,
-      "mechanical": false,
-      "naming": 1,
-      "removed": 1
+      "naming": 0,
+      "removed": 133
     },
     "src/qwenpaw/config/__init__.py": {
       "added": 0,
@@ -1354,48 +1330,48 @@
       "removed": 8
     },
     "website/public/docs/cli.en.md": {
-      "added": 24,
+      "added": 2,
       "behavior_added": 2,
       "behavior_removed": 2,
       "mechanical": false,
-      "naming": 22,
-      "removed": 24
+      "naming": 0,
+      "removed": 2
     },
     "website/public/docs/cli.zh.md": {
-      "added": 25,
+      "added": 2,
       "behavior_added": 2,
       "behavior_removed": 2,
       "mechanical": false,
-      "naming": 23,
-      "removed": 25
+      "naming": 0,
+      "removed": 2
     },
     "website/public/docs/desktop.en.md": {
-      "added": 11,
+      "added": 0,
       "behavior_added": 0,
       "behavior_removed": 2,
       "mechanical": false,
-      "naming": 11,
-      "removed": 13
+      "naming": 0,
+      "removed": 2
     },
     "website/public/docs/desktop.zh.md": {
-      "added": 11,
+      "added": 0,
       "behavior_added": 0,
       "behavior_removed": 2,
       "mechanical": false,
-      "naming": 11,
-      "removed": 13
+      "naming": 0,
+      "removed": 2
     }
   },
   "totals": {
-    "added": 15058,
-    "behavior_added": 14932,
+    "added": 14970,
+    "behavior_added": 14936,
     "behavior_files": 168,
-    "behavior_removed": 2584,
-    "files": 172,
+    "behavior_removed": 2588,
+    "files": 169,
     "mechanical_files": 1,
-    "naming_files": 4,
-    "naming_lines": 126,
-    "naming_touched_files": 22,
-    "removed": 2710
+    "naming_files": 1,
+    "naming_lines": 34,
+    "naming_touched_files": 9,
+    "removed": 2622
   }
 }

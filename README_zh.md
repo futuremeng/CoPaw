@@ -1,7 +1,7 @@
 <div align="center">
 
 
-# CoPaw
+# QwenPaw
 
 <p align="center">
   <img src="console/public/copaw-icon.svg" alt="CoPaw Logo" width="120">
