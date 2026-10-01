@@ -1,9 +1,9 @@
-# 与 upstream 同步的冲突面清单（152 个文件）
+# 与 upstream 同步的冲突面清单（155 个文件）
 
 > **这份文件的用途**：记录"下一次把仓库对齐到 upstream 2.x 时必然会产生合并冲突的文件"，并按搬迁成本分簇排序。它是**输入清单**，不是执行计划；每个簇的实施计划单独写。
 > 判据来自两条总目标：① 最终要与最新 upstream 对齐，并能在保持同步的前提下长出 CoPaw 工作界面；② 短期是"去债 + 保成果"—— 去债 = 缩小与 upstream 的冲突与差异，保成果 = 把对 upstream 的有益修改转移到 CoPaw 自有区域，**而不是直接丢弃**。
 
-**生成时间**：2026-10-01。数据来源：分支 `wp/02-ownership` HEAD `462a1cf0f`，merge-base `e111ec6fb`，upstream 基线 `upstream/main`（= 2.x）。
+**生成时间**：2026-10-01。数据来源：分支 `wp/02-ownership` HEAD `462a1cf0f`，merge-base `e111ec6fb`，upstream 基线 `upstream/main`（= 2.x）。**第 1–4 节在 `297b37b1a` 上做过一次读数修正**（重命名检测，见 §1 那条注），第 4 节同时补了那 18 个文件的逐文件落点判定。
 
 ## 1 口径
 
@@ -11,7 +11,9 @@
 
 1. **上游自有**：该文件在 merge-base `e111ec6fb` 里存在（fork 新建的文件不算，它们不会冲突）；
 2. **fork 侧有逻辑改动**：按 `scripts/check_p1_invariants.py` 的行为/命名分册规则，去掉纯改名后仍有改动行（`behavior_added + behavior_removed > 0`）；
-3. **上游侧也改过**：`git diff e111ec6fb upstream/main -- <path>` 非空。
+3. **上游侧也改过**：`git diff --no-renames e111ec6fb upstream/main -- <path>` 非空。
+
+> **`--no-renames` 是必须的**（本清单第一版踩过这个坑，2026-10-01 修正）：默认 `git diff` 会做重命名检测。上游把 `app/runner/` 改名成 `app/chats/` 时，旧路径只出现在 `R` 行的源端、不进 `--name-only` 输出，于是 `runner/{session,__init__,query_error_dump}.py` 三个文件被误判成"上游没碰"。加 `--no-renames` 后它们变成 `D` + `A` 两条，三个读数从 152 / 16 / 15 修正为 **155 / 13 / 18**。第 2、3、4 节用的是修正后的数；第 5–7 节的分桶表是第一版生成的、少那 3 行，补录见 §7.1。
 
 排除项：`console/package-lock.json`（机械差异，单独处理）。
 
@@ -21,24 +23,24 @@
 # 主仓的 venv 解释器（worktree 没有自己的 venv），路径按本机情况替换
 PY=<主仓 CoPaw>/.venv/bin/python
 CI=true PYTHONPATH=src $PY scripts/check_p1_invariants.py --json > /tmp/p1.json
-git diff --name-only e111ec6fb upstream/main > /tmp/upstream_changed.txt
+git diff --no-renames --name-only e111ec6fb upstream/main > /tmp/upstream_changed.txt
 ```
 
-把 `/tmp/p1.json` 里 `behavior_added + behavior_removed > 0` 的路径与 `/tmp/upstream_changed.txt` 取交集，即下表 152 行。
+把 `/tmp/p1.json` 里 `behavior_added + behavior_removed > 0` 的路径与 `/tmp/upstream_changed.txt` 取交集，即下表 155 行。
 
 ## 2 总量读数
 
 | 项 | 数值 | 含义 |
 |---|---|---|
 | fork 侧有逻辑改动的上游文件 | 168 | 全仓 P1-行为口径（不含 lockfile） |
-| 其中上游在 1.x→2.x 也改过 | **152** | **下次同步必然冲突** |
-| 只被 fork 改、上游没碰 | 16 | 可以原样带走，不产生冲突 |
-| 上游已在 2.x 删除 | **15** | **搬家窗口：不同步就把功能弄丢了** |
-| 这 152 个文件上 fork 的改动行数 | 16,566 | 与全仓 P1-行为 17,633（+15,049/−2,584）同一口径下的子集 |
-| 上游在这 152 个文件上的改动行数 | 74,706 | 冲突的另一侧体量 |
-| 纯改名行数（D-22 品牌税） | 126 行 / 22 文件，其中 4 个文件 | 占侵入量的 **0.8%**，见 `docs/copaw-brand-boundary.md` |
+| 其中上游在 1.x→2.x 也改过 | **155** | **下次同步必然冲突** |
+| 只被 fork 改、上游没碰 | 13 | 可以原样带走，不产生冲突 |
+| 上游已在 2.x 删除 | **18** | 其中 **15 个是真删除（静默丢失）**、3 个是改名（`app/runner/` → `app/chats/`，会以普通冲突出现，看得见） |
+| 这 155 个文件上 fork 的改动行数 | 17,106 | 全仓 P1-行为 17,633（+15,049/−2,584）的子集，差额 527 行在"只被 fork 改"那 13 个文件上 |
+| 上游在这 155 个文件上的改动行数 | 75,308 | 冲突的另一侧体量 |
+| 纯改名行数（D-22 品牌税） | 126 行 / 22 文件，其中 4 个文件 | 占侵入量的 **0.7%**，见 `docs/copaw-brand-boundary.md` |
 
-按 fork 侧改动量分桶：**≤10 行 49 个**（多数可机械搬或还原）、**11–60 行 56 个**（逐条判归属）、**>60 行 47 个**（需要设计，见第 5 节）。
+按 fork 侧改动量分桶：**≤10 行 50 个**（多数可机械搬或还原）、**11–60 行 57 个**（逐条判归属）、**>60 行 48 个**（需要设计，见第 5 节）。
 
 ## 3 按簇分布与处置方向
 
@@ -53,7 +55,7 @@ git diff --name-only e111ec6fb upstream/main > /tmp/upstream_changed.txt
 | G console/src 其它（App.tsx / i18n.ts / utils / styles） | 4 | 165 | 1,284 | 0 |
 | H console 配置（tsconfig / vite / package.json） | 3 | 73 | 245 | 0 |
 | I src/qwenpaw/app/routers（后端 HTTP 路由） | 9 | 5,676 | 5,875 | 1 |
-| J src/qwenpaw/app/runner（会话与消息处理） | 3 | 623 | 668 | 3 |
+| J src/qwenpaw/app/runner（会话与消息处理） | 6 | 1,163 | 1,270 | 6（其中 3 个改名到 `app/chats/`） |
 | K src/qwenpaw/app/mcp（MCP 客户端） | 3 | 1,330 | 1,282 | 3 |
 | L src/qwenpaw/app 其它（_app / migration / workspace / flow_engine 等） | 8 | 677 | 3,224 | 0 |
 | M src/qwenpaw/agents（agent 工具、记忆、技能、prompt） | 11 | 654 | 3,975 | 0 |
@@ -86,9 +88,9 @@ git diff --name-only e111ec6fb upstream/main > /tmp/upstream_changed.txt
 
 **I — src/qwenpaw/app/routers（后端 HTTP 路由）**。后端路由，**单簇侵入最大（5,676 行，其中 `app/routers/agents.py` 一文件 +4,190/−326）**。D-16 已把实现下沉进 `src/qwenpaw`，所以这里剩的是"路由注册 + 上游 agents 路由被改写"。落点 = v2 插件路由（`plugins/registry.py` 硬拼 `/api` 前缀，`register_middleware` 是请求级不是 ASGI ⇒ 拿不到顶层 mount，已实测）。这一簇需要 WP-03/04 的 PawApp 化设计，不能机械搬。
 
-**J — src/qwenpaw/app/runner（会话与消息处理）**。`runner/api.py`、`command_dispatch.py`、`models.py` **三个文件在 v2 里全部不存在**（上游删了 768 行）。fork 在此的 623 行改动必须在同步前搬到 fork 自有模块，否则同步当天功能消失。v2 的对应实现是 `src/qwenpaw/agents/command_handler.py`。
+**J — src/qwenpaw/app/runner（会话与消息处理）**。上游把整个 `app/runner/` 换成了 `app/chats/`：**22 个文件、3,187 行删除**。fork 有改动的那 6 个里 3 个（`session.py` / `__init__.py` / `query_error_dump.py`）被 v2 改名带走（同步时是普通冲突，看得见），另外 3 个（`api.py` / `command_dispatch.py` / `models.py`）是重写后当作删除处理（属于静默丢失那 15 个）。逐文件判定见 §4.2 —— 结论比"整簇要搬"轻得多：绝大部分 fork 改动已被 v2 用别的实现覆盖（`DROP`），真正需要搬的是 `tail-user/delete` 端点、`ChatUpdate.meta` 和 session 的 `.snapshot` sidecar 三件。
 
-**K — src/qwenpaw/app/mcp（MCP 客户端）**。`app/mcp/{manager,stateful_client,watcher}.py` **三个文件在 v2 里全部不存在**（上游删了 1,282 行），而 fork 在 `stateful_client.py` 里有 +690/−396。与 J 同一性质：搬家窗口正在关闭。v2 的 MCP 实现落点要先查清（未验证）。
+**K — src/qwenpaw/app/mcp（MCP 客户端）**。`app/mcp/{manager,stateful_client,watcher}.py` **三个文件在 v2 里全部不存在**（上游删了 1,282 行），而 fork 在 `stateful_client.py` 里有 +690/−396。**v2 的落点已查清**（`UPSTREAM_V2_MIGRATION_PLAN.md` §8 已闭环 33）：MCP 被收敛进 driver 体系 —— `drivers/handlers/{mcp,mcp_stateful_client,mcp_streamable_http}.py`（`mcp_stateful_client.py` 1,084 行，`_MCPClientMixin` / `StdIOStatefulClient` / `HttpStatefulClient` 同名同位）+ `drivers/manager.py` + `app/driver_config_watcher.py` + 配置面 `app/mcp/{config_service,schemas}.py`。fork 的六项私有能力（`refresh_client_status` / `failed_keys` / `_probe_client_capabilities` / `_resolve_stdio_command` / httpx 异常链诊断 / 配置 mtime 快照热重载）在 v2 全树**逐符号命中 0** ⇒ 这一簇不存在"重放 patch"，只有 `原生`（走 v2 接缝重表达）与 `CUT` 两种标签。
 
 **L — src/qwenpaw/app 其它（_app / migration / workspace / flow_engine 等）**。`_app.py`(+43/−15)、`migration.py`(+156/−125)、`agent_config_watcher.py`(+221/−110)、`agent_context.py`(+59/−33)、`workspace/*`、`multi_agent_manager.py`。这一簇混杂：`_app.py` 的两行是 D-22 品牌 patch（还原即可），其余逐条判归属。
 
@@ -110,31 +112,81 @@ git diff --name-only e111ec6fb upstream/main > /tmp/upstream_changed.txt
 
 **V — 仓库根（pyproject / Makefile / CONTRIBUTING / deploy 等）**。仓库根 10 文件（`pyproject.toml` +10 依赖与 package-data、`Makefile`、`CONTRIBUTING*`、`.gitignore`、`deploy/Dockerfile`、`README*` 4 篇）。README 4 篇里 fork 自写章节共 16 行品牌内容属此类；`pyproject.toml` 的 +10 与产品名无关（实测 = 4 行依赖 + 1 行 package-data 等），不要当品牌税处理。
 
-## 4 搬家窗口：上游在 2.x 已删除的 15 个文件
+## 4 搬家窗口：上游在 2.x 删除或改名的 18 个文件
 
-这一组最紧急。fork 的改动落在上游已经决定不存在的文件上，**一旦同步到 2.x，这些改动连同它们实现的功能会一起消失**，而且不是靠合并冲突能发现的（没有文件可冲突）。
+这一组最紧急。fork 的改动落在上游已经决定不再以原路径存在的文件上，**一旦同步到 2.x，这些改动连同它们实现的功能会一起消失**，其中真删除那 15 个连合并冲突都不会产生（没有文件可冲突，静默丢失）。
 
-| 文件 | fork 改动 | 上游在 2.x 的动作 | 备注 |
+本节给出逐文件落点判定。**标签口径**（与 `UPSTREAM_V2_MIGRATION_PLAN.md` §4 一致）：`DROP` = 上游已用另一套实现覆盖同一件事，删掉 fork 改动不丢用户可见功能；`原生` = 需求仍然成立，但要改成走 v2 的扩展接缝重表达；`搬迁` = 需求成立且 v2 无等价物，实现必须移到 fork 自有位置；`CUT` = 显式放弃并写进决策记录。
+
+### 4.1 总量
+
+| 分组 | 文件数 | fork 改动行 | 上游删除行 |
 |---|---|---|---|
-| `src/qwenpaw/app/mcp/stateful_client.py` | +690/−396 | −665（文件删除） | v2 的 MCP 实现落点未查 |
-| `src/qwenpaw/app/runner/api.py` | +457/−34 | −233（文件删除） | v2 对应实现是 `agents/command_handler.py` |
-| `src/qwenpaw/app/mcp/manager.py` | +194/−16 | −286（文件删除） | 与 stateful_client 同批 |
-| `console/src/pages/Settings/Agents/components/AgentTable.tsx` | +100/−60 | −248（文件删除） |  |
-| `src/qwenpaw/app/runner/models.py` | +108/−0 | −103（文件删除） | 同上 |
-| `console/src/pages/Agent/Workspace/components/useAgentsData.ts` | +58/−24 | −296（文件删除） |  |
-| `src/qwenpaw/app/mcp/watcher.py` | +26/−8 | −331（文件删除） | 与 stateful_client 同批 |
-| `src/qwenpaw/app/runner/command_dispatch.py` | +7/−17 | −332（文件删除） | 同上 |
-| `console/src/api/modules/plan.ts` | +16/−7 | −115（文件删除） |  |
-| `console/src/components/PlanPanel/index.tsx` | +13/−5 | −216（文件删除） |  |
-| `console/src/pages/Agent/Workspace/components/FileListPanel.tsx` | +8/−6 | −126（文件删除） |  |
-| `console/src/pages/Agent/Workspace/index.tsx` | +12/−0 | −208（文件删除） |  |
-| `console/src/pages/Agent/Workspace/index.module.less` | +9/−2 | −655（文件删除） |  |
-| `console/src/pages/Chat/components/ChatSessionDrawer/index.tsx` | +5/−5 | −613（文件删除） |  |
-| `src/qwenpaw/app/routers/plan.py` | +2/−0 | −176（文件删除） | fork 在此只加 2 行，但整条 plan 路由的上游载体没了 |
+| 真删除（静默丢失） | 15 | 2,285 | 4,603 |
+| 改名到 `app/chats/`（普通冲突，看得见） | 3 | 540 | 602 |
+| 合计 | **18** | **2,825** | **5,205** |
 
-这 15 个文件的 fork 改动合计 **2,285 行**（上游侧删除 4,603 行）。重头三处正好是三整个簇：**`app/mcp` 簇 3 个文件 1,330 行（1,086 / 210 / 34）全部落在已删除文件上**、**`app/runner` 簇 3 个文件 623 行（491 / 24 / 108）全部落在已删除文件上**、`console/src/pages/Agent/Workspace` 4 个文件 119 行（+87/−32）全部被上游删除。
+三个整簇正好落在这里：`app/mcp` 3 文件 1,330 行、`app/runner` 6 文件 1,163 行、`console/src/pages/Agent/Workspace` 4 文件 119 行。
 
-## 5 >60 行的 47 个文件（需要设计，不能机械搬）
+### 4.2 后端：`app/mcp`（3 文件 / 1,330 行）
+
+v2 的落点已查清（`UPSTREAM_V2_MIGRATION_PLAN.md` §8 已闭环 33）：MCP 被重构进 driver 体系 —— `drivers/handlers/{mcp,mcp_stateful_client,mcp_streamable_http}.py`（`mcp_stateful_client.py` 1,084 行，`_MCPClientMixin` / `StdIOStatefulClient` / `HttpStatefulClient` 同名同位）+ `drivers/manager.py` + `app/driver_config_watcher.py` + 配置面 `app/mcp/{config_service,schemas}.py`。
+
+| fork 改动内容 | v2 对应物 | 判定 |
+|---|---|---|
+| 重写客户端生命周期：取消 `_MCPClientMixin`，在两个 client 类里各自内联 `_run_lifecycle` / `connect` / `close` / `list_tools` / `call_tool`（`stateful_client.py` 那 +690/−396 的主体） | v2 保留 `_MCPClientMixin` 并把同一问题做得更深：`_is_transport_error:76`、`_is_401_error:97`、`_SessionGoneError:121`、不可取消任务处理 `_discard_task_result:108` / `_gather_uncancelled:147`、会话 RPC 排空 `_drain_session_rpcs:685`、熔断 `_circuit_open_error:828`、断连后取缓存 `_cached_tools_if_disconnected:817` | `DROP`（上游换了地基，fork 的重写无处可重放，也不该重放） |
+| 配置热重载：`_read_mtime_ns` + `_snapshot_async`（`watcher.py` 26/8） | `app/driver_config_watcher.py` 已是快照差分热重载（`_last_snapshot:40`、`current == self._last_snapshot:80` 后做差分） | `DROP`（本轮新确认，把已闭环 33 的"六项"降为五项） |
+| 运行时状态三件套 `refresh_client_status` / `failed_keys` / `_probe_client_capabilities`（`manager.py` 194/16） | v2 全树命中 0；v2 的"活跃"概念是 `ensure_driver_active`，不是面向控制台的状态展示 | `原生` 或 `CUT`，逐项判；控制台那半按已闭环 33 的结论对着 `drivers/adapters/{mcp_console,mcp_card_builder}.py` 重做，而不是补 fork 那版 `pages/Agent/MCP/*` |
+| `_resolve_stdio_command`（PATH → 当前解释器 bin 目录的可执行文件解析，跨混部 Python 环境） | 命中 0 | 待 §4.5 第 1 项复核后判 `搬迁` / `DROP` |
+| `_is_mineru_stdio`（对 `mineru-mcp` 启动参数的特例判断） | 命中 0 | `CUT` 或 `搬迁`，取决于 mineru 是否仍是 CoPaw 的在用依赖 —— 属产品问题，需用户裁 |
+| httpx 异常链诊断 5 个 helper（`_iter_leaf_exceptions` / `_extract_http_status_error` / `_summarize_exception_chain` / `_extract_request_url` / `_log_http_lifecycle_exception`） | 命中 0；v2 有 `credentials/providers.py:135 _is_transient_oauth_status` 但只处理 OAuth 重试分类 | `原生`（走 v2 日志/错误面）或 `CUT`；注意 fork 那 2 条在册红 `test_mcp_stateful_client.py::…BaseExceptionGroup…` 会随 Python 3.11 前置动作自动消失（§8 已闭环 38） |
+
+### 4.3 后端：`app/runner`（6 文件 / 1,163 行）
+
+v2 把整个目录改名重写成 `app/chats/`（该路径共 22 个文件、3,187 行删除）。会话与聊天 API 的落点是 `app/chats/{api,models,session,manager,repo,utils,query_error_dump}.py`，命令派发落到 `agents/command_handler.py`。
+
+| fork 改动内容 | v2 对应物 | 判定 |
+|---|---|---|
+| **历史消息裁剪**：`_truncate_chat_history_messages`（把 `plugin_call_output` 的 `data.output` 截到阈值）、`_compact_chat_history_messages`（隐藏 `plugin_call` / `plugin_call_output`）、`_paginate_chat_history_messages`、`_is_tool_trace_message*` —— `api.py:41-133`，93 行 | v2 把这件事搬到前端并加了回归测试：`console/src/pages/Chat/sessionApi/index.ts:34` 认 `plugin_call_output`、`:219` 把 system + `plugin_call_output` 映射为 role `tool` 并剥 metadata；`console/src/pages/Chat/tests/testLargeSession.test.ts` 专为 issue #5479（>500KB 会话打开报错）钉住数据变换层 | `DROP`（同一个用户可见问题，上游已 own） |
+| **历史预览与 legacy 解析**：`_load_chat_history_preview_from_memory_state` / `_memory_item_to_message_dict` / `_is_user_memory_message` / `_extract_text_from_content` —— `api.py:134-211`，78 行 | v2 `app/chats/api.py:817 get_chat` 直接读 `agent.state.context`（`AgentState.model_validate`），失败回退 `parse_legacy_memory_state`（`app/chats/utils.py:110`） | `DROP` |
+| **chat 级 workspace 解析**：`_resolve_chat_workspace_dir`（未加载 workspace 时直读 `chats.json`）—— `api.py:216-222`，7 行 | v2 `chats/api.py:55 get_workspace` 仍要求已启动 workspace；免启动快路径与 D-19 砍掉的 cron 快路径同族（WP-01 已把 `test_list_chats_reads_repo_without_loading_workspace` 归到同一族） | 需用户裁：沿用 D-19 = `CUT`；要保 = 走 `register_http_router` 自建只读端点，不再改上游路由 |
+| **历史分页**：`get_chat(offset, limit)`（`api.py:350`）+ `ChatHistory.total/offset/limit/has_more`（`models.py`） | v2 `GET /chats/{chat_id}` 无分页参数，`ChatHistory` 无这四个字段 | `搬迁`（消费方是 fork 自有的 `components/AnywhereChat`，见 §4.4） |
+| **删除末尾用户消息**：`POST /{chat_id}/tail-user/delete` + `ChatTailUserDeleteRequest/Response` —— `api.py:462-629`，168 行 | v2 命中 0；v2 前端有 SDK 自带 regenerate，按消息身份而非文本（`console/src/pages/Chat/index.tsx:3227,3312`） | `搬迁`，除非 §4.5 第 3 项复核证明 v2 regenerate 覆盖同一用户意图 |
+| **`ChatUpdate.meta`** | v2 `ChatSpec.meta` 存在（`chats/models.py:132`），但 `ChatUpdate`（`:180`）只有 `name` / `pinned` / `group_id` 且 `extra="forbid"` ⇒ 同步后 fork 的 `chat.ts clearChatMeta`（PUT 带 `meta:{}`）会 422 | `搬迁`（fork 前端 `chat.ts:159` 与 `AnywhereChat` 在写这个字段，是真契约差集） |
+| **运行时状态模型**：`ChatRuntimeStatus` + `ChatRuntimeStatusBreakdownItem`（`models.py` 108 行的主体） | **实测这条不是"丢失的成果"，而是没做完的功能**：前端调用点存在（`console/src/api/modules/chat.ts:151` → `GET /console/chats/{id}/runtime-status`），但后端 `app/routers/console.py` 的路由清单里**没有**该路径（全仓 `runtime-status` 只命中前端调用与 `console/e2e/pipeline-design-chat.spec.ts:382` 的 mock）；`app/runner/runtime_status_store.py` 的 `RuntimeStatusRecorder` / `persist_runtime_status` / `set_current_runtime_status_context` **零生产调用者**（`token_usage/model_wrapper.py:25` 收 `runtime_status_recorder=None`，无人传） | 单独裁"补完 or 删除"；无论哪条，都不该计入搬家量 |
+| **命令派发**：`command_dispatch.py` +7/−17 —— fork 删掉了 `/plan <描述>` 的透传例外、把 `/stop, /approval` 缩成 `/stop`、用 `restore_in_memory_memory` 替换 `runner.context_manager.get_agent_context()` | v2 `agents/command_handler.py:153` **保留与 merge-base 相同的 plan 透传判断**，`SYSTEM_COMMANDS` 含 `plan` / `history` / `compact_str` / `auto_memory_status`（`:117-129`），短期记忆住在 `agent.state`（`:244` 注释）与 `agents/context/scroll/` 一整套 | `DROP`，全部还原上游语义（fork 那几行是给 v1 内存布局打的补丁，且砍掉 `/approval` 与 v2 的 approval 体系相冲） |
+| **session 写盘加固**：`_get_file_lock` + `os.replace` 原子写 + `_parse_json_with_recovery` | v2 `chats/session.py` 已用 `utils/io_utils.get_path_lock`（`io_utils.py:58`，键是 `resolve` 后的规范路径，比 fork 的原始路径键更稳）与 `write_json_atomic_async`（`:459`），损坏 JSON 恢复已是上游一等模块 `utils/json_utils.safe_json_loads`（文件头 "JSON utilities with corruption recovery"）；`sanitize_filename`、`migrate_legacy_weixin_session_files` 也都进了 v2 `chats/session.py:31/:100` | `DROP` |
+| **session `.snapshot` sidecar**：`_get_snapshot_path` / `_mirror_snapshot_unlocked` / `_restore_from_snapshot_unlocked`（写完镜像一份、主文件损坏或缺失时从 sidecar 恢复） | v2 全树 `.snapshot` 命中 0，sidecar 概念不存在 | `搬迁` 或 `CUT`：v2 `SafeJSONSession` 是上游文件，挂 patch 违 D-8 ⇒ 要保就得在 fork 侧包一层 session 实现并接管注入点。这是真实的数据损坏自愈能力，需用户裁 |
+| **runner 包懒加载**：`__init__.py` 的 `__getattr__`（38 行，为的是导入 `runtime_status_store` 时不牵进 `runner.py`） | v2 `app/chats/__init__.py`（R067）另有其形状 | 随上面那条 runtime-status 的功能裁决一起处置 |
+| **错误转储时间戳**：`query_error_dump.py` 的 `UTC` 常量与 `datetime.now(UTC).isoformat().replace("+00:00","Z")`（6 行） | 该文件 v2 **R100 = 逐字节未改** | `DROP`（与上游写法语义等价，只差亚秒精度） |
+
+### 4.4 前端：9 个文件
+
+| 文件 | fork 改动的实质 | v2 的替代界面 | 判定 |
+|---|---|---|---|
+| `pages/Settings/Agents/components/AgentTable.tsx`（160 行） | 两个展示列（内建/自定义、builtin 特性标签）+ `system_protected` 编辑与启停保护 | `Settings/Agents/components/AgentGallery.tsx`（配 `reorder.ts`、`AgentBackendFields.tsx`、`CopyAgentModal.tsx`）。驱动这两个列的 `is_builtin` / `builtin_kind` / `builtin_label` / `system_protected` 四个字段已由 §8 已闭环 35 判 **全部 `CUT`**（v2 用 `template_id`(`config/config.py:2328`) + `ManagedAgentProfileSpec.app_id` 派生）；`system_protected` 另受 D-14 约束；`is_builtin` 在 v2 后端 7 处、**前端 0 处** | `CUT`。若 CoPaw 仍要"内建/自定义"标签，那是 WP-07 在 AgentGallery 之上的 fork 自有扩展，不是把这 160 行搬过去 |
+| `pages/Agent/Workspace/{index.tsx,index.module.less,components/FileListPanel.tsx,components/useAgentsData.ts}`（4 文件 / 119 行） | 初始化竞态守卫（`cancelled` 标志）、加载空态 `Spin`、切换 workspace 后重选同一文件、容器 padding 与滚动 | `console/src/features/files-workspace/`（`FilesWorkspace.tsx` / `FilesDrawer.tsx`（`:123` AbortController）/ `FilesNavigator.tsx` / `MemoryGraphView.tsx` / `directorySources.ts`），并带 `FilesWorkspace.revalidation.test.tsx` 与 `.pending-diff.test.tsx` | `DROP`：上游把失效重校验做成了有测试钉住的实现，fork 这三类守卫已被覆盖 |
+| `pages/Chat/components/ChatSessionDrawer/index.tsx`（10 行） | 给 5 个 `(s) => …` 回调补 `IAgentScopeRuntimeWebUISession` 显式类型（服务 fork 的 tsc 严格度），**零产品行为** | v2 已删该目录（会话抽屉改为 `chats` 前端体系） | `DROP` |
+| `components/PlanPanel/index.tsx` + `api/modules/plan.ts` + `app/routers/plan.py`（43 行） | 只做一件事：把 plan 从全局作用域改成 **agent 作用域**（`/agents/{agentId}/plan/{current,config,stream}`）；`plan.py` 那 2 行是 `workspace.config.plan is None` 的空值保护 | v2 删了 `routers/plan.py`、`PlanPanel/`、`api/modules/plan.ts`，且 `PlanConfigResponse` / `get_plan_config` 在 v2 **全树命中 0**；v2 只保留 `/plan` 作为会话命令（`agents/command_handler.py:129/:153`）与 locales 里的残留文案键 | `CUT`：保留 43 行没有意义 —— 要保 plan 面板等于 fork 自己重做整套（router + SSE + 面板 + i18n）。"agent 作用域"这条设计意见留档，但按 D-13 不提 PR（这是设计差异，不是明确 bug） |
+
+### 4.5 判定前必须复核的 6 项
+
+这 6 项没查完之前，上面已经可以执行的判定是：**全部 `DROP` 项** —— 前端那 9 个文件、§4.3 的历史裁剪 / 历史预览 / 写盘加固 / 命令派发 / `query_error_dump.py` / runner 包懒加载、§4.2 的客户端生命周期重写与配置热重载。它们的判据是"v2 里有同名或同职责实现 + 符号命中数实测"，不依赖下面的复核。需要复核才能定案的是全部 `搬迁` / `原生` 标签那几行，加上免启动 workspace 快路径与 runtime-status 这两个待裁项。
+
+1. v2 起 stdio MCP 进程的可执行文件解析路径（`drivers/handlers/mcp.py` 的 spawn 段）—— 决定 `_resolve_stdio_command` 是 `DROP` 还是 `搬迁`；
+2. mineru 依赖在 CoPaw 当前功能面是否还在用 —— 决定 `_is_mineru_stdio`；
+3. v2 regenerate（`Chat/index.tsx:3227/:3312`）能否覆盖"编辑最后一句重发"的用户意图 —— 决定 `tail-user/delete`；
+4. fork 自有 `components/AnywhereChat` 依赖的后端端点全表（分页 / 预览 / runtime-status / tail-delete / project-dir）—— 决定搬迁端点集合的大小；这份清单必须靠读 `AnywhereChat` 的 `chatApi.*` 调用点生成，不能猜；
+5. v2 `/plan` 命令的落库状态（`command_handler.py:1579 _process_plan`）—— 决定 plan 面板有没有可能改为读原生状态；
+6. `src/copaw` 在 D-16 之后只剩别名壳，fork 自有后端实现的合法落点是 v2 的 `PluginApi.register_http_router`（`plugins/api.py:590`，路由挂在 `/api` + prefix）与 PawApp（WP-03/04）—— 需实测一个最小插件端点能否被 qwenpaw 装载。
+
+### 4.6 净结论
+
+这 18 个文件 2,825 行里，**绝大部分是补丁形态的重写**（客户端生命周期、写盘加固、历史裁剪、命令派发补丁、竞态守卫、前端展示列），v2 用另一套实现覆盖了同一批问题，因此判 `DROP`，不产生搬家工作。真正需要搬或需要裁的只有 8 项：**MCP 运行时状态三件套**、**`_resolve_stdio_command`**、**`_is_mineru_stdio`**、**httpx 异常链诊断 5 个 helper**、**历史分页**、**`tail-user/delete`**、**`ChatUpdate.meta`**、**session 的 `.snapshot` sidecar**；外加 2 项需要用户裁决（免启动 workspace 快路径、runtime-status 这套没做完的功能）。**这 10 条线的净实现行数没有在本清单里给数字** —— 得出它需要把 §4.2–§4.4 那些表逐 hunk 记账，`git diff --unified=0` 的 35 个 hunk（session.py）和 68 个 hunk（stateful_client.py）里 `DROP` 与差集是交错出现的，按文件总量估会把 `DROP` 那半也算进工时。排期前用 §1 那条命令补一次 hunk 级账目。
+
+这条结论直接反驳了 `UPSTREAM_V2_MIGRATION_PLAN.md` §2 表里那行 P2 判据（"上游删了 `app/runner/*` 7 个文件…等于上游替我们做了裁决，无需决策"）：**上游删掉宿主文件不等于上游删掉了需求**，`tail-user/delete` 与历史分页的需求在 fork 自有 `AnywhereChat` 上依然活着，只是失去了后端载体。那行判据需要按本节改写（见 §8）。
+
+## 5 >60 行的 47 个文件（需要设计，不能机械搬；修正后 48 个，补录见 §7.1）
 
 | 文件 | fork | 上游 |
 |---|---|---|
@@ -186,7 +238,7 @@ git diff --name-only e111ec6fb upstream/main > /tmp/upstream_changed.txt
 | `console/src/pages/Agent/MCP/useMCP.ts` | +71/−10 | +73/−18 |
 | `console/src/api/types/skill.ts` | +73/−0 | +70/−11 |
 
-## 6 ≤10 行的 49 个文件（便宜项，优先做）
+## 6 ≤10 行的 49 个文件（便宜项，优先做；修正后 50 个，补录见 §7.1）
 
 每个文件的 fork 改动都在 10 行以内，处置后可以从冲突表里划掉；**判据统一**：还原或搬迁后，`git diff e111ec6fb..upstream/main` 与该文件的 fork 差异中不再含 fork 逻辑行。
 
@@ -242,7 +294,7 @@ git diff --name-only e111ec6fb upstream/main > /tmp/upstream_changed.txt
 | `website/public/docs/desktop.en.md` | +0/−2 | +32/−33 | 11 |
 | `website/public/docs/desktop.zh.md` | +0/−2 | +30/−31 | 11 |
 
-## 7 全量 152 行
+## 7 全量 155 行（前 152 行为第一版读数，补录 3 行见 §7.1）
 
 | # | 文件 | 簇 | fork | 上游 | fork hunk | v2 存在 | 命名行 |
 |---|---|---|---|---|---|---|---|
@@ -399,17 +451,34 @@ git diff --name-only e111ec6fb upstream/main > /tmp/upstream_changed.txt
 | 151 | `console/src/pages/Settings/Agents/components/index.ts` | D | +1/−0 | +2/−1 | 1 | 是 | 0 |
 | 152 | `console/src/api/types/index.ts` | C | +2/−0 | +1/−0 | 2 | 是 | 0 |
 
+### 7.1 补录：被重命名检测漏掉的 3 行（2026-10-01 修正）
+
+下表口径同 §7（fork = `behavior_added/behavior_removed`，上游 = 该路径在 `--no-renames` 下的删除行数）。这 3 行的"上游已删"是**改名**而非真删除，落点见 §4.3：
+
+| # | 文件 | 簇 | fork | 上游 | fork hunk | v2 存在 | 命名行 |
+|---|---|---|---|---|---|---|---|
+| 153 | `src/qwenpaw/app/runner/session.py` | J | +320/−176 | +0/−468 | 35 | **改名到 `app/chats/session.py`**（R071） | 0 |
+| 154 | `src/qwenpaw/app/runner/__init__.py` | J | +21/−17 | +0/−30 | 7 | **改名到 `app/chats/__init__.py`**（R067） | 0 |
+| 155 | `src/qwenpaw/app/runner/query_error_dump.py` | J | +3/−3 | +0/−104 | 2 | **改名到 `app/chats/query_error_dump.py`（R100，逐字节未变）** | 0 |
+
+编号从 153 顺排是为了不打乱 §7 那 152 行已被别处引用的行号；按本表"上游行数降序"的排序键，这三行分别应落在上游 ≈470 / ≈105 / ≈30 的位置。
+
+分桶变化：`>60` 47 → **48**（session.py）、`11–60` 56 → **57**（`__init__.py`）、`≤10` 49 → **50**（`query_error_dump.py`）。
+
 ## 8 与其它计划的关系
 
 - **D-22 品牌边界计划**（`docs/superpowers/plans/2026-10-01-d22-brand-boundary.md`，待写）只做 126 行改名还原 + 4 个文件离开冲突表，**不是去债主线**。它的价值是消掉"每次同步都要手工重放的机械税"，并顺手把 `_app.py` 里被硬编码破坏的上游品牌变量 `{PROJECT_NAME}` 还原。
 - **WP-03/WP-04**（PawApp 化）承接簇 I / C / D / J / K：D-16 已把约 11,000 行实现下沉进 `src/qwenpaw`，所以这些簇现在是"从核心包里往外抽"，比从 `src/copaw` 抽更贵，排期时要把这笔算进去。
-- **WP-06**（升级到 v2，前置条件：Python 下限抬到 3.11）开始前，第 4 节的 15 个文件必须全部有落点，否则同步当天就会静默丢功能。
+- **WP-06**（升级到 v2，前置条件：Python 下限抬到 3.11）开始前，第 4 节的 18 个文件必须全部有落点，否则同步当天就会静默丢功能。
+- **需要回写 `UPSTREAM_V2_MIGRATION_PLAN.md` §2 的一处判据**：那张表的 P2 行写着"上游删了 `app/mcp/{stateful_client,watcher}.py`、`app/runner/*` 7 个文件、`app/routers/plan.py`，等于上游替我们做了裁决，无需决策"。§4 的逐文件复核推翻了"无需决策"：**上游删掉宿主文件不等于上游删掉需求** —— `tail-user/delete`、历史分页、`ChatUpdate.meta`、session 的 `.snapshot` sidecar 这几条需求仍活在 fork 自有的 `console/src/components/AnywhereChat` 等界面上，只是失去了后端载体；反过来 `AgentTable` / `Workspace` / plan 前端那几簇确实是上游自己把功能撤了，跟着 `CUT` 才是对齐。这两类必须分开写，不能再合并成"自动作废"。
 - **簇 A（6 个 locale 文件）是投入产出比最高的一刀**：302 行私有文案搬进 fork 已有的 `console/src/locales/copaw/*`，一次消掉 6 个冲突文件，零功能损失；唯一前置是 v2 的插件翻译注册接缝（`i18n.ts` 全仓无 `addResource`）是否存在 —— 未验证。
+- **簇 J / K 搬迁项的落点机制**：`src/copaw` 在 D-16 之后只剩别名壳，fork 自有后端实现的合法落点是 v2 的 `PluginApi.register_http_router(router, prefix, tags)`（`plugins/api.py:590`，路由挂在 `/api` + prefix）与 PawApp（WP-03/04）。前端落点是 fork 自有组件目录（`components/AnywhereChat` 已是先例）+ v2 的 slot 接缝。
 
 ## 9 本清单里的未验证项
 
 1. v2 是否有插件侧注册翻译资源的接缝（决定簇 A 的落点形态）。
-2. v2 的 MCP 实现在哪个路径（决定簇 K 的 1,330 行往哪搬）。
+2. ~~v2 的 MCP 实现在哪个路径（决定簇 K 的 1,330 行往哪搬）~~ → **已解决**：`drivers/handlers/{mcp,mcp_stateful_client,mcp_streamable_http}.py` + `drivers/manager.py` + `app/driver_config_watcher.py` + `app/mcp/{config_service,schemas}.py`，详见 §3 簇 K 与 §8 已闭环 33。剩下的不是"落点在哪"，而是 §4.2 那 6 项私有符号各自的 `原生` / `CUT` 判定。
 3. `route.replace(pluginId, "core.root", …)` 的作用域能否只覆盖 CoPaw 自有页面而不触及上游路由（决定簇 D 与 D-12 默认落地界面）。
 4. v2 文档站 `website/` 的页面注册方式（决定簇 S）。
 5. 簇 B 的宿主改动（+54 行）在 v2 的两个接缝面（`plugins/api.py` 的 17 个 `register_*` 与 `pawapp/app.py`）上各自的等价落点。
+6. **§4.5 那 6 项**（v2 的 stdio 可执行文件解析、mineru 依赖是否在用、v2 regenerate 的覆盖面、`AnywhereChat` 的后端端点依赖全表、v2 `/plan` 的落库状态、`register_http_router` 最小插件端点能否被装载）—— 它们是簇 J / K 那 2,825 行能否闭环的唯一前置，比簇 A 的 302 行文案更紧急。
