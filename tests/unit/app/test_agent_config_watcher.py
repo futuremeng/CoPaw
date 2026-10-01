@@ -1,6 +1,13 @@
 # -*- coding: utf-8 -*-
+"""Guard the graceful-reload behaviour of ``AgentConfigWatcher``.
+
+The watcher must delegate to ``MultiAgentManager.reload_agent`` (which
+drains in-flight tasks) instead of swapping managers in place.
+"""
 
 import asyncio
+import os
+import time
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -9,79 +16,136 @@ import pytest
 from qwenpaw.app import agent_config_watcher as watcher_module
 
 
-@pytest.mark.asyncio
-async def test_agent_config_watcher_start_offloads_snapshot(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-):
-    watcher = watcher_module.AgentConfigWatcher(
+class _Section:
+    def __init__(self, payload):
+        self._payload = payload
+
+    def model_dump(self, mode="python"):
+        return dict(self._payload)
+
+
+class _Config:
+    def __init__(self, channels, heartbeat):
+        self.channels = channels
+        self.heartbeat = heartbeat
+
+
+class _FakeManager:
+    def __init__(self):
+        self.reloaded: list[str] = []
+
+    async def reload_agent(self, agent_id: str) -> bool:
+        self.reloaded.append(agent_id)
+        return True
+
+
+def _make_watcher(tmp_path: Path, manager):
+    return watcher_module.AgentConfigWatcher(
         agent_id="default",
         workspace_dir=tmp_path,
-        channel_manager=None,
+        workspace=SimpleNamespace(_manager=manager),
         poll_interval=0.01,
     )
 
-    original_to_thread = watcher_module.asyncio.to_thread
-    calls: list[tuple[object, tuple[object, ...]]] = []
 
-    async def fake_to_thread(func, /, *args, **kwargs):
-        calls.append((func, args))
-        return await original_to_thread(func, *args, **kwargs)
+def _patch_config_loader(monkeypatch, configs):
+    monkeypatch.setattr(
+        watcher_module,
+        "load_agent_config",
+        lambda _: next(configs),
+    )
 
-    monkeypatch.setattr(watcher, "_snapshot", lambda: None)
-    monkeypatch.setattr(watcher_module.asyncio, "to_thread", fake_to_thread)
 
-    await watcher.start()
-    await watcher.stop()
-
-    assert calls
-    assert calls[0][1] == ()
+def _touch(config_path: Path) -> None:
+    stamp = time.time() + 5.0
+    os.utime(config_path, (stamp, stamp))
 
 
 @pytest.mark.asyncio
-async def test_agent_config_watcher_check_offloads_stat_and_load(
+async def test_watcher_delegates_change_to_graceful_reload(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ):
     config_path = tmp_path / "agent.json"
     config_path.write_text("{}", encoding="utf-8")
+    manager = _FakeManager()
+    watcher = _make_watcher(tmp_path, manager)
 
-    watcher = watcher_module.AgentConfigWatcher(
-        agent_id="default",
-        workspace_dir=tmp_path,
-        channel_manager=None,
-        poll_interval=0.01,
+    configs = iter(
+        [
+            _Config(_Section({"a": 1}), _Section({"every": "1h"})),
+            _Config(_Section({"a": 2}), _Section({"every": "1h"})),
+        ],
     )
-    watcher._last_mtime_ns = 1
+    _patch_config_loader(monkeypatch, configs)
 
-    original_to_thread = watcher_module.asyncio.to_thread
-    calls: list[tuple[object, tuple[object, ...]]] = []
+    watcher._snapshot()
+    assert manager.reloaded == []
 
-    async def fake_to_thread(func, /, *args, **kwargs):
-        calls.append((func, args))
-        return await original_to_thread(func, *args, **kwargs)
-
-    monkeypatch.setattr(watcher_module.asyncio, "to_thread", fake_to_thread)
-    monkeypatch.setattr(watcher_module, "load_agent_config", lambda _agent_id: SimpleNamespace(channels=None, heartbeat=None))
-
+    _touch(config_path)
     await watcher._check()
 
-    assert len(calls) >= 2
-    assert calls[0][1] == (config_path,)
-    assert calls[1][1] == ("default",)
+    assert manager.reloaded == ["default"]
+    assert watcher._disabled is True
 
 
 @pytest.mark.asyncio
-async def test_agent_config_watcher_poll_loop_preserves_cancelled_error(
+async def test_watcher_ignores_rewrite_of_same_sections(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ):
-    watcher = watcher_module.AgentConfigWatcher(
-        agent_id="default",
-        workspace_dir=tmp_path,
-        channel_manager=None,
-        poll_interval=0,
+    config_path = tmp_path / "agent.json"
+    config_path.write_text("{}", encoding="utf-8")
+    manager = _FakeManager()
+    watcher = _make_watcher(tmp_path, manager)
+
+    def _config():
+        return _Config(_Section({"a": 1}), _Section({"every": "1h"}))
+
+    monkeypatch.setattr(
+        watcher_module,
+        "load_agent_config",
+        lambda _: _config(),
     )
+
+    watcher._snapshot()
+    _touch(config_path)
+    await watcher._check()
+
+    assert manager.reloaded == []
+    assert watcher._disabled is False
+
+
+@pytest.mark.asyncio
+async def test_watcher_skips_reload_without_manager(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    config_path = tmp_path / "agent.json"
+    config_path.write_text("{}", encoding="utf-8")
+    watcher = _make_watcher(tmp_path, None)
+
+    configs = iter(
+        [
+            _Config(_Section({"a": 1}), _Section({"every": "1h"})),
+            _Config(_Section({"a": 2}), _Section({"every": "1h"})),
+        ],
+    )
+    _patch_config_loader(monkeypatch, configs)
+
+    watcher._snapshot()
+    _touch(config_path)
+    await watcher._check()
+
+    assert watcher._disabled is False
+
+
+@pytest.mark.asyncio
+async def test_poll_loop_preserves_cancelled_error(
+    tmp_path: Path,
+    monkeypatch,
+):
+    watcher = _make_watcher(tmp_path, _FakeManager())
 
     async def fake_check():
         raise asyncio.CancelledError()
