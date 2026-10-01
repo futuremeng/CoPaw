@@ -49,6 +49,7 @@ jobs:
               prNumber = context.payload.pull_request.number;
               prAuthor = context.payload.pull_request.user.login;
             }
+
             core.info(`Processing from @${commenter} (type: ${commenterType}) on PR #${prNumber} by @${prAuthor}`);
 
             // Ignore bots
@@ -125,3 +126,4 @@ jobs:
                 core.warning(`Failed to add label: ${error.message}`);
               }
             }
+

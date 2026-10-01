@@ -81,9 +81,11 @@ A: 这通常是因为系统缺少 **Microsoft WebView2** 运行时（部分 Wind
 安装完成后重启应用即可。
 
 **Q: 应用启动后没有反应？**
+
 A: 使用 "QwenPaw Desktop (Debug)" 模式启动，查看终端输出的错误信息
 
 **Q: 如何卸载？**
+
 A: 在 Windows 设置 → 应用 → 已安装的应用 → 找到 "QwenPaw Desktop" → 卸载
 
 **Q: 安装包是否安全？**

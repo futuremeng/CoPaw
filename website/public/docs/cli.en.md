@@ -48,7 +48,7 @@ qwenpaw app --log-level debug           # Verbose logging
 | `--port`      | `8088`      | Bind port                                                     |
 | `--reload`    | off         | Auto-reload on file changes (dev only)                        |
 | `--log-level` | `info`      | `critical` / `error` / `warning` / `info` / `debug` / `trace` |
-| `--workers`   | —           | **[DEPRECATED]** Ignored. CoPaw always uses 1 worker          |
+| `--workers`   | —           | **[DEPRECATED]** Ignored. QwenPaw always uses 1 worker        |
 
 > **Note:** The `--workers` option is deprecated for stability reasons. QwenPaw is designed to run with a single worker process. Multi-worker mode can cause issues with in-memory state management and WebSocket connections. This option will be removed in a future version.
 
@@ -58,7 +58,7 @@ Once `qwenpaw app` is running, open `http://127.0.0.1:8088/` in your browser to
 access the **Console** — a web UI for chat, channels, cron, skills, models,
 and more. See [Console](./console) for a full walkthrough.
 
-If the frontend was not built, the root URL returns a JSON message like `{"message": "CoPaw web console is not available."}` but the API still works.
+If the frontend was not built, the root URL returns a JSON message like `{"message": "QwenPaw Web Console is not available."}` but the API still works.
 
 **To build the frontend:** in the project's `console/` directory run
 `npm ci && npm run build`, then copy the output to the package directory:

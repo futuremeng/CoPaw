@@ -44,7 +44,7 @@ qwenpaw app --log-level debug           # 详细日志
 | `--port`      | `8088`      | 绑定端口                                                      |
 | `--reload`    | 关闭        | 文件变动时自动重载（仅开发用）                                |
 | `--log-level` | `info`      | `critical` / `error` / `warning` / `info` / `debug` / `trace` |
-| `--workers`   | —           | **[已废弃]** 将被忽略，CoPaw 始终使用 1 个 worker             |
+| `--workers`   | —           | **[已废弃]** 将被忽略，QwenPaw 始终使用 1 个 worker           |
 
 > **说明：** `--workers` 选项因稳定性原因已废弃。QwenPaw 被设计为单 worker 进程运行。多 worker 模式会导致内存状态管理和 WebSocket 连接出现问题。此选项将在未来版本中移除。
 
@@ -53,7 +53,7 @@ qwenpaw app --log-level debug           # 详细日志
 `qwenpaw app` 启动后，在浏览器打开 `http://127.0.0.1:8088/` 即可进入 **控制台** ——
 一个用于对话、频道、定时任务、技能、模型等的 Web 管理界面。详见 [控制台](./console)。
 
-若未构建前端，根路径会返回类似 `{"message": "CoPaw web console is not available."}` 的提示信息（实际文案可能调整），API 仍可正常使用。
+若未构建前端，根路径会返回类似 `{"message": "QwenPaw Web Console is not available."}` 的提示信息（实际文案可能调整），API 仍可正常使用。
 
 **构建方式：** 在项目 `console/` 目录下执行 `npm ci && npm run build`，
 然后将构建产物复制到包目录：

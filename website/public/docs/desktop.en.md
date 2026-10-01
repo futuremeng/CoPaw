@@ -81,9 +81,11 @@ Download and install it from the Microsoft website:
 Restart the application after installation.
 
 **Q: Application doesn't respond after launch?**
+
 A: Use "QwenPaw Desktop (Debug)" mode to view terminal output for error messages
 
 **Q: How to uninstall?**
+
 A: Go to Windows Settings → Apps → Installed apps → Find "QwenPaw Desktop" → Uninstall
 
 **Q: Is the installer safe?**
