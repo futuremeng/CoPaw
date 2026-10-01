@@ -892,6 +892,14 @@ register_prompt_section · register_skill_provider(skills_dir, *, enabled_by_def
     - **⑧ 本轮作废的一份草稿（写进纪律，别复述它的数字）**：一版未运行的计划补丁脚本里含 **857 行 / 24 文件 / 19 个纯命名** 三个未经实测的聚合数，以及"上游自有文件零可见品牌字样"（被 ⑤ 直接证伪）和"`replace` 只换插件自己注册过的实现、上游界面永不覆盖"（把 ⑥ 的单赢家机制读成了插件级隔离）两条未核实断言。**正确读数是 ② 的 126 / 22 / 4。** 触发的是 §7 的"先验证再断言"：聚合数必须由脚本当场产出才能进文档。
     - **⑨ 与 WP-08 的冲突已在计划里就地改写**：WP-08 第 1 步原文"18 新增 + 6 改动上游文件全部丢弃"与 D-22 的 R2 冲突 ⇒ 改为"6 个被 fork 改过的上游 locale 文件回字节，18 个 fork 自有 `locales/copaw/*` 保留为 Copaw 界面文案落点"。
 
+41. **远程 MCP 的 OAuth 注入回归：复核 + 修复（2026-10-02，冲突面 §4.8-3 的结案）**：
+    - **① 判据（实测，非推断）**：`_build_client` 是全仓唯一读 `client_cfg.oauth.access_token` 的路径，fork 版里 `_inject_oauth_token` 零调用者（`git grep -n "_inject_oauth_token(" HEAD` 只剩定义处）；merge-base `e111ec6fb:app/mcp/manager.py:274` 有这笔调用。于是 `mcp_oauth.py:545-590 _persist_tokens` 走完 PKCE 写进配置的 token 无消费者 ⇒ UI 报授权成功、`oauth_status` 报 `authorized:true`，请求却不带 `Authorization` ⇒ 远程 server 401。
+    - **② 丢失方式是"合并事故"而非取舍**：`git log -S` 只显示上游新增它的那笔（`-S` 会简化 merge diff），改用 `git log -m -S` 才看见 fork 的 merge 链（`cc58edfd3 Merge upstream/main into main` 一族）⇒ 没有任何决策记录过这件事，这也是它能在文档里隐身的原因。
+    - **③ 为什么零告警**：token→header 这条路径全仓无测试覆盖；唯一的 OAuth 测试在 `tests/integration/test_mcp_oauth.py`（上游自有、fork 未改、测的是 404/错误页），而 `unit-tests.yml` 只跑 `tests/unit`。**新增 `tests/unit/app/test_mcp_oauth_injection.py` 4 条**（空 headers 也注入 / 覆盖手工 `Authorization` 且不改动 `config.headers` / 过期 token 不注入 / `expandvars` 与注入共存），先红后绿。
+    - **④ 修复的 P1 账（`--check` 实测，不是断言）**：分支 `fix/mcp-oauth-injection`（基点 `wp/02-ownership`）提交 `0ea653fef`；`manager.py` 相对 merge-base 由 `+194/−16` 变 `+194/−13` ⇒ 单文件 behavior **210 → 207**、全库 `behavior_added` **14,932 不变**、`behavior_removed` **2,584 → 2,581**，`--check` 保持 **rc=0 且基线未改**。做法是把 headers 构造还原成 merge-base 形态并退掉一处空行，让净增 invasive 归零；fork 自加的脱敏调试日志保留（删它属于丢成果）。
+    - **⑤ 一条工具事实（写进门禁纪律）**：`check_p1_invariants.py` 的 `--target-ref` 默认 `HEAD`，**未提交的改动对门禁完全不可见**；要量在写的改动必须 `--target-ref working --check`。上一笔提交因此先量出 `+1` 才退回零增形态。
+    - **⑥ 遗留与边界**：`rebuild_info` 从 merge-base 起就不带 `oauth` ⇒ `agents/react_agent.py:728-765 _rebuild_mcp_client` 的重连路径仍丢 token，这是**上游既有缺口、不记在 fork 账上**；v2 已删除 `app/mcp/manager.py` 并改用 `app/mcp/config_service.py` + `drivers/credentials/bindings.py:91` 的 credential binding ⇒ 本修复只对 v1 树有效，WP-06 落地时随文件消失。**未开 PR**（D-13 允许"明确的 bug"提 PR，但开 PR 仍需签字）。
+
 ### 仍未验证（别当结论用）
 
 1. ~~`managed_service` 能否承载 fork 的 sidecar 形态~~ → **已闭环，且结论是"这个问题问错了"**（见上面已闭环 13，§5 WP-04）。~~剩下的唯一实作未知：**`dependency` 的自定义 probe 能否表达 fork 现有的"NLP 运行时是否 ready / 模型是否已下载"这类状态**~~ → **已闭环（上面已闭环 32）**：`PawApp.dependency(..., probe: DependencyProbe, lifecycle: DependencyLifecycle|None)` 与 `managed_service(expose_dependency=True, runtime_remediation=...)` 生成的 `DependencyHealth(health, lifecycle, error_code, message, remediation)` 足以承载该状态；`managed_service`/`dependency` 都在 **PawApp SDK 面**（`pawapp/app.py:636,726`）而非 `PluginApi` 面。
