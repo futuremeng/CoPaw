@@ -1,8 +1,10 @@
 # -*- coding: utf-8 -*-
 """Runner package exports.
 
-Keep imports lazy so submodules like runtime_status_store can be imported
-without pulling in runner.py during package initialization.
+Imports stay lazy because ``api.py`` imports ``..agent_context`` at module
+level, which cycles back through ``agent_context -> multi_agent_manager ->
+workspace -> runner``. Upstream avoids this by importing the agent_context
+helpers inside its dependency functions.
 """
 
 from importlib import import_module

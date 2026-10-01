@@ -18,19 +18,13 @@ class TokenRecordingModelWrapper(ChatModelBase):
 
     _usage_by_session: dict[str, dict[str, Any]] = {}
 
-    def __init__(
-        self,
-        provider_id: str,
-        model: ChatModelBase,
-        runtime_status_recorder=None,
-    ) -> None:
+    def __init__(self, provider_id: str, model: ChatModelBase) -> None:
         super().__init__(
             model_name=getattr(model, "model_name", "unknown"),
             stream=getattr(model, "stream", True),
         )
         self._model = model
         self._provider_id = provider_id
-        self._runtime_status_recorder = runtime_status_recorder
 
     def _record_usage(self, usage: ChatUsage | None) -> None:
         """Enqueue a usage event synchronously — never blocks the caller."""
@@ -82,15 +76,6 @@ class TokenRecordingModelWrapper(ChatModelBase):
         structured_model: Type[BaseModel] | None = None,
         **kwargs: Any,
     ) -> ChatResponse | AsyncGenerator[ChatResponse, None]:
-        if self._runtime_status_recorder is not None:
-            try:
-                await self._runtime_status_recorder.record(
-                    messages=messages,
-                    tools=tools,
-                )
-            except Exception:
-                pass
-
         result = await self._model(
             messages=messages,
             tools=tools,

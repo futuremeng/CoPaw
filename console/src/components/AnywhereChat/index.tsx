@@ -10,7 +10,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import * as ReactDOM from "react-dom";
 import { createPortal } from "react-dom";
 import { Button, Empty, Modal, Popover, Spin, Tooltip, message } from "antd";
-import { CopyOutlined, DashboardOutlined, DeleteOutlined, FileMarkdownOutlined } from "@ant-design/icons";
+import { CopyOutlined, DeleteOutlined, FileMarkdownOutlined } from "@ant-design/icons";
 import { SparkAttachmentLine, SparkHistoryLine, SparkNewChatFill, SparkSearchLine } from "@agentscope-ai/icons";
 import { useTranslation } from "react-i18next";
 import defaultConfig, { getDefaultConfig } from "../../pages/Chat/OptionsPanel/defaultConfig";
@@ -35,16 +35,9 @@ import type {
   AgentsRunningConfig,
   ChatSpec,
   ChatHistory,
-  Message,
-  ChatRuntimeStatus,
   ModelInfo,
   ProviderInfo,
 } from "../../api/types";
-import {
-  deriveRuntimeStatusSnapshot,
-  formatTokenCount,
-  mergeRuntimeStatusSnapshot,
-} from "../../utils/chatRuntimeStatus";
 import { IconButton } from "@agentscope-ai/design";
 import {
   buildModelError,
@@ -120,8 +113,6 @@ interface ApprovalMessageData {
   timeoutSeconds: number;
 }
 
-const RUNTIME_STATUS_RETRY_DELAY_MS = 1500;
-const RUNTIME_STATUS_MAX_RETRIES = 2;
 const AUTO_CONTINUE_MAX_ATTEMPTS = 2;
 const AUTO_CONTINUE_MIN_INCREMENT_CHARS = 32;
 const FLUSH_SYNC_PATCH_FLAG = "__copaw_relaxed_flush_sync_patched__";
@@ -881,16 +872,11 @@ export default function AnywhereChat({
   const [activeModels, setActiveModels] = useState<ActiveModelsInfo | null>(null);
   const [runningConfig, setRunningConfig] = useState<AgentsRunningConfig | null>(null);
   const [chatHistory, setChatHistory] = useState<ChatHistory | null>(null);
-  const [runtimeStatusFromApi, setRuntimeStatusFromApi] = useState<ChatRuntimeStatus | null>(null);
-  const [runtimeStatusOpen, setRuntimeStatusOpen] = useState(false);
   const [historyPopoverOpen, setHistoryPopoverOpen] = useState(false);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyChats, setHistoryChats] = useState<ChatSpec[]>([]);
   const [currentChatName, setCurrentChatName] = useState("");
   const [isChatStreaming, setIsChatStreaming] = useState(false);
-  const [lastRuntimeStatusUpdatedAt, setLastRuntimeStatusUpdatedAt] = useState<number | null>(null);
-  const [runtimeStatusError, setRuntimeStatusError] = useState<string | null>(null);
-  const [transientMessages, setTransientMessages] = useState<Message[]>([]);
   const [recoveredTailUserDraft, setRecoveredTailUserDraft] = useState("");
   const [isDeletingTailUser, setIsDeletingTailUser] = useState(false);
   const [tailUserActionHost, setTailUserActionHost] = useState<HTMLElement | null>(null);
@@ -902,11 +888,8 @@ export default function AnywhereChat({
   const draftRef = useRef("");
   const userMessagesCacheRef = useRef<string[]>([]);
   const cachedMessageCountRef = useRef(0);
-  const runtimeStatusRequestInFlight = useRef(false);
   const sessionIdRef = useRef(sessionId);
   const backendSessionIdRef = useRef(sessionId);
-  const runtimeStatusRetryTimerRef = useRef<number | null>(null);
-  const runtimeStatusRetryCountRef = useRef(0);
   const reconnectAttemptedSessionIdRef = useRef<string | null>(null);
   const handledAutoAttachIdRef = useRef("");
   const recoveredTailUserKeyRef = useRef("");
@@ -1477,11 +1460,6 @@ export default function AnywhereChat({
     }
   }, [resolveCurrentChatName, sessionId]);
 
-  const updateTransientMessages = useCallback((messages: Message[]) => {
-    setTransientMessages(messages);
-    setLastRuntimeStatusUpdatedAt(Date.now());
-  }, []);
-
   const loadRuntimeInputs = useCallback(async () => {
     try {
       const [providers, activeModelConfig, runtimeConfig] = await Promise.all([
@@ -1637,82 +1615,14 @@ export default function AnywhereChat({
         setChatHistory(history);
       }
 
-      setRuntimeStatusError(null);
-      setLastRuntimeStatusUpdatedAt(Date.now());
     } catch (error) {
       console.warn("AnywhereChat: failed to load chat history", error);
       if (sessionIdRef.current !== requestedSessionId) {
         return;
       }
-      setRuntimeStatusError(
-        error instanceof Error ? error.message : t("chat.runtimeStatusUnknownError", "未知错误"),
-      );
       setChatHistory(null);
     }
   }, [sessionId, t]);
-
-  const clearRuntimeStatusRetry = useCallback(() => {
-    if (runtimeStatusRetryTimerRef.current !== null) {
-      window.clearTimeout(runtimeStatusRetryTimerRef.current);
-      runtimeStatusRetryTimerRef.current = null;
-    }
-  }, []);
-
-  const loadRuntimeStatus = useCallback(async (): Promise<ChatRuntimeStatus | null> => {
-    if (!sessionId) {
-      setRuntimeStatusFromApi(null);
-      return null;
-    }
-    if (runtimeStatusRequestInFlight.current) {
-      return null;
-    }
-    const requestedSessionId = sessionId;
-    runtimeStatusRequestInFlight.current = true;
-    try {
-      const snapshot = await chatApi.getRuntimeStatus(requestedSessionId);
-      if (sessionIdRef.current !== requestedSessionId) {
-        return null;
-      }
-      setRuntimeStatusFromApi(snapshot ?? null);
-      setRuntimeStatusError(null);
-      setLastRuntimeStatusUpdatedAt(Date.now());
-      return snapshot ?? null;
-    } catch (error) {
-      console.warn("AnywhereChat: failed to load runtime status", error);
-      if (sessionIdRef.current !== requestedSessionId) {
-        return null;
-      }
-      setRuntimeStatusError(
-        error instanceof Error ? error.message : t("chat.runtimeStatusUnknownError", "未知错误"),
-      );
-      setRuntimeStatusFromApi(null);
-      return null;
-    } finally {
-      runtimeStatusRequestInFlight.current = false;
-    }
-  }, [sessionId, t]);
-
-  const loadRuntimeStatusWithRetry = useCallback(async () => {
-    clearRuntimeStatusRetry();
-    const snapshot = await loadRuntimeStatus();
-    const shouldRetry =
-      runtimeStatusOpen &&
-      sessionIdRef.current === sessionId &&
-      !isChatStreaming &&
-      !!snapshot &&
-      snapshot.snapshot_source === "empty_baseline" &&
-      runtimeStatusRetryCountRef.current < RUNTIME_STATUS_MAX_RETRIES;
-
-    if (!shouldRetry) {
-      return snapshot;
-    }
-
-    runtimeStatusRetryCountRef.current += 1;
-    runtimeStatusRetryTimerRef.current = window.setTimeout(() => {
-      void loadRuntimeStatusWithRetry();
-    }, RUNTIME_STATUS_RETRY_DELAY_MS);
-    return snapshot;
-  }, [clearRuntimeStatusRetry, isChatStreaming, loadRuntimeStatus, runtimeStatusOpen, sessionId]);
 
   const copyAsText = useCallback(async (response: CopyableResponse) => {
     const payload = extractCopyableText(response) || stripMarkdownSyntax(extractRawMarkdownText(response));
@@ -1794,21 +1704,16 @@ export default function AnywhereChat({
     recoveredTailUserKeyRef.current = "";
     dismissedTailUserKeyRef.current = "";
     setRecoveredTailUserDraft("");
-    clearRuntimeStatusRetry();
-    runtimeStatusRetryCountRef.current = 0;
     void loadCurrentChatName();
     setRefreshKey((prev) => prev + 1);
     setChatHistory(null);
-    setRuntimeStatusFromApi(null);
-    setRuntimeStatusError(null);
-    setTransientMessages([]);
     historyIndexRef.current = -1;
     draftRef.current = "";
     userMessagesCacheRef.current = [];
     cachedMessageCountRef.current = 0;
     setShowAllApprovals(false);
 
-  }, [clearRuntimeStatusRetry, loadCurrentChatName, sessionId]);
+  }, [loadCurrentChatName, sessionId]);
 
   useEffect(() => {
     if (!autoAttachRequest?.id) {
@@ -2246,10 +2151,6 @@ export default function AnywhereChat({
       setTailUserActionHost(null);
       setTailUserActionMessageId("");
       await loadChatHistory();
-      if (runtimeStatusOpen) {
-        runtimeStatusRetryCountRef.current = 0;
-        await loadRuntimeStatusWithRetry();
-      }
     } catch (error) {
       message.error(
         error instanceof Error
@@ -2266,9 +2167,7 @@ export default function AnywhereChat({
   }, [
     isDeletingTailUser,
     loadChatHistory,
-    loadRuntimeStatusWithRetry,
     recoveredTailUserDraft,
-    runtimeStatusOpen,
     sessionId,
     setDraftInputValue,
     t,
@@ -2398,82 +2297,6 @@ export default function AnywhereChat({
     setTailUserActionMessageId(lastVisibleUserMessageId);
   }, [lastVisibleUserMessageId]);
 
-  useEffect(() => {
-    if (!runtimeStatusOpen) {
-      clearRuntimeStatusRetry();
-      runtimeStatusRetryCountRef.current = 0;
-      return;
-    }
-
-    runtimeStatusRetryCountRef.current = 0;
-    void loadRuntimeStatusWithRetry();
-
-    return () => {
-      clearRuntimeStatusRetry();
-    };
-  }, [
-    clearRuntimeStatusRetry,
-    loadRuntimeStatusWithRetry,
-    runtimeStatusOpen,
-    sessionId,
-  ]);
-
-  const transientHistory = useMemo<ChatHistory | null>(
-    () =>
-      transientMessages.length > 0
-        ? {
-            messages: transientMessages,
-            status: isChatStreaming ? "running" : chatHistory?.status,
-            total: transientMessages.length,
-          }
-        : null,
-    [chatHistory?.status, isChatStreaming, transientMessages],
-  );
-
-  const fallbackHistory = useMemo<ChatHistory | null>(() => {
-    if (!transientMessages.length) {
-      return chatHistory;
-    }
-    return {
-      ...chatHistory,
-      messages: [...(chatHistory?.messages || []), ...transientMessages],
-      total: (chatHistory?.messages?.length || 0) + transientMessages.length,
-    };
-  }, [chatHistory, transientMessages]);
-
-  const runtimeStatus = useMemo(() => {
-    if (runtimeStatusFromApi) {
-      return mergeRuntimeStatusSnapshot(runtimeStatusFromApi, {
-        providers: providerList,
-        activeModels,
-        runningConfig,
-        chatHistory: transientHistory,
-      }, {
-        expectedAgentId: selectedAgent || null,
-        expectedChatId: sessionId || null,
-        expectedSnapshotStage: "pre_model_call",
-      });
-    }
-
-    return deriveRuntimeStatusSnapshot({
-      providers: providerList,
-      activeModels,
-      runningConfig,
-      chatHistory: fallbackHistory,
-    });
-  }, [
-    activeModels,
-    fallbackHistory,
-    providerList,
-    runningConfig,
-    runtimeStatusFromApi,
-    selectedAgent,
-    sessionId,
-    transientHistory,
-  ]);
-
-  const runtimeStatusMeta = runtimeStatusFromApi || runtimeStatus;
-
   const singleSessionApi = useMemo(
     () => ({
       getSessionList: async () => {
@@ -2592,12 +2415,7 @@ export default function AnywhereChat({
               const finalize = () => {
                 setIsChatStreaming(false);
                 reconnectAttemptedSessionIdRef.current = null;
-                updateTransientMessages([]);
                 void loadChatHistory();
-                if (runtimeStatusOpen) {
-                  runtimeStatusRetryCountRef.current = 0;
-                  void loadRuntimeStatusWithRetry();
-                }
               };
 
               const pump = (): void => {
@@ -2706,16 +2524,6 @@ export default function AnywhereChat({
           : lastInput;
       const session = rewrittenInput[0]?.session || {};
       const optimisticText = extractUserTextFromInput(rewrittenInput[0]);
-      const optimisticContent = rewrittenInput[0]?.content;
-      const pendingUserMessage: Message | null =
-        optimisticText || Array.isArray(optimisticContent)
-          ? {
-              role: String(rewrittenInput[0]?.role || "user"),
-              content: Array.isArray(optimisticContent)
-                ? optimisticContent
-                : optimisticText,
-            }
-          : null;
       if (optimisticText) {
         dismissedTailUserKeyRef.current = "";
         setRecoveredTailUserDraft("");
@@ -2756,11 +2564,9 @@ export default function AnywhereChat({
       });
 
       setIsChatStreaming(true);
-      updateTransientMessages(pendingUserMessage ? [pendingUserMessage] : []);
 
       if (!response.ok || !response.body) {
         setIsChatStreaming(false);
-        updateTransientMessages([]);
         return response;
       }
 
@@ -2789,12 +2595,7 @@ export default function AnywhereChat({
         }
         finalized = true;
         setIsChatStreaming(false);
-        updateTransientMessages([]);
         void loadChatHistory();
-        if (runtimeStatusOpen) {
-          runtimeStatusRetryCountRef.current = 0;
-          void loadRuntimeStatusWithRetry();
-        }
       };
 
       if (onAssistantTurnCompleted) {
@@ -2828,19 +2629,6 @@ export default function AnywhereChat({
                 latestRenderable = JSON.parse(
                   JSON.stringify(renderableResponse),
                 ) as StreamResponseData;
-
-                const partialAssistantText = extractAssistantText(latestRenderable);
-                updateTransientMessages(
-                  [
-                    pendingUserMessage,
-                    partialAssistantText
-                      ? {
-                          role: "assistant",
-                          content: partialAssistantText,
-                        }
-                      : null,
-                  ].filter(Boolean) as Message[],
-                );
               }
 
               if (!isFinalResponseStatus(responseData.status)) {
@@ -3010,16 +2798,13 @@ export default function AnywhereChat({
     },
     [
       loadChatHistory,
-      loadRuntimeStatusWithRetry,
       onAssistantTurnCompleted,
       persistStreamSession,
-      runtimeStatusOpen,
       runningConfig?.auto_continue_enabled,
       planEnabled,
       selectedAgent,
       sessionId,
       t,
-      updateTransientMessages,
     ],
   );
 
@@ -3240,220 +3025,6 @@ export default function AnywhereChat({
     welcomePromptsWhenEmpty,
   ]);
 
-  const runtimeStatusContent = useMemo(() => {
-    const systemItems = runtimeStatus.breakdown.filter((item) => item.section === "system");
-    const userItems = runtimeStatus.breakdown.filter((item) => item.section === "user");
-    const hasFrontendLiveContribution = transientMessages.length > 0;
-    const hasPreciseBackendSnapshot = runtimeStatusFromApi?.snapshot_source === "runtime_push";
-    const hasEmptyBackendBaseline = runtimeStatusFromApi?.snapshot_source === "empty_baseline";
-    const snapshotAgentLabel = runtimeStatusMeta.agent_id || t("chat.runtimeStatusFrontendLive", "frontend-live");
-    const snapshotChatLabel = runtimeStatusMeta.chat_id || t("chat.runtimeStatusFrontendLive", "frontend-live");
-    const snapshotScopeLabel = runtimeStatusMeta.scope_level || "unknown";
-    const snapshotStageLabel = runtimeStatusMeta.snapshot_stage || "unknown";
-    const snapshotSourceRawLabel = runtimeStatusMeta.snapshot_source || "unknown";
-    const samplingStatusLabel = runtimeStatusError
-      ? t("chat.runtimeStatusError", "采集异常")
-      : hasEmptyBackendBaseline
-        ? t("chat.runtimeStatusWaitingBackend", "等待后端采样")
-        : lastRuntimeStatusUpdatedAt
-        ? t("chat.runtimeStatusHealthy", "采集正常")
-        : t("chat.runtimeStatusPending", "等待首次采样");
-    const samplingStatusColor = runtimeStatusError
-      ? "#ff7875"
-      : hasEmptyBackendBaseline
-        ? "#faad14"
-        : lastRuntimeStatusUpdatedAt
-        ? "#95de64"
-        : "rgba(255,255,255,0.5)";
-    const statusSourceLabel = hasPreciseBackendSnapshot
-      ? hasFrontendLiveContribution
-        ? t("chat.runtimeStatusHybrid", "后端 + 前端实时")
-        : t("chat.runtimeStatusPrecise", "后端精确统计")
-      : hasEmptyBackendBaseline
-        ? t("chat.runtimeStatusEstimatedPendingBackend", "前端估算（等待后端采样）")
-      : t("chat.runtimeStatusEstimated", "前端估算");
-    const statusSourceColor = hasPreciseBackendSnapshot
-      ? hasFrontendLiveContribution
-        ? "#69b1ff"
-        : "#95de64"
-      : hasEmptyBackendBaseline
-        ? "#faad14"
-      : "#faad14";
-    const lastUpdatedLabel = lastRuntimeStatusUpdatedAt
-      ? new Date(lastRuntimeStatusUpdatedAt).toLocaleTimeString([], {
-          hour12: false,
-          hour: "2-digit",
-          minute: "2-digit",
-          second: "2-digit",
-        })
-      : t("chat.runtimeStatusPending", "等待首次采样");
-
-    const renderItem = (label: string, tokens: number, ratio: number) => (
-      <div
-        key={label}
-        style={{
-          display: "grid",
-          gridTemplateColumns: "1fr auto auto",
-          gap: 8,
-          alignItems: "center",
-          fontSize: 12,
-        }}
-      >
-        <span style={{ color: "rgba(255,255,255,0.88)" }}>{label}</span>
-        <span style={{ color: "rgba(255,255,255,0.6)" }}>{formatTokenCount(tokens)}</span>
-        <span style={{ color: "rgba(255,255,255,0.88)" }}>{(ratio * 100).toFixed(1)}%</span>
-      </div>
-    );
-
-    const renderMetaRow = (label: string, value: string, testId: string) => (
-      <div
-        key={label}
-        style={{
-          display: "grid",
-          gridTemplateColumns: "92px 1fr",
-          gap: 8,
-          alignItems: "start",
-          fontSize: 11,
-        }}
-      >
-        <span style={{ color: "rgba(255,255,255,0.5)" }}>{label}</span>
-        <span
-          data-testid={testId}
-          style={{
-            color: "rgba(255,255,255,0.82)",
-            fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
-            wordBreak: "break-all",
-          }}
-        >
-          {value}
-        </span>
-      </div>
-    );
-
-    return (
-      <div style={{ width: 340, display: "flex", flexDirection: "column", gap: 12 }}>
-        <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-          <span style={{ fontSize: 12, color: "rgba(255,255,255,0.6)", textTransform: "uppercase", letterSpacing: 0.6 }}>
-            {t("chat.runtimeStatusWindow", "上下文窗口")}
-          </span>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
-            <span style={{ fontSize: 18, fontWeight: 600, color: "#fff" }}>
-              {formatTokenCount(runtimeStatus.used_tokens)}/{formatTokenCount(runtimeStatus.context_window_tokens)} {t("chat.runtimeStatusTokens", "个令牌")}
-            </span>
-            <span style={{ fontSize: 18, fontWeight: 700, color: runtimeStatus.used_ratio >= 0.8 ? "#ff7875" : "#95de64" }}>
-              {(runtimeStatus.used_ratio * 100).toFixed(1)}%
-            </span>
-          </div>
-          <div style={{ height: 8, borderRadius: 999, background: "rgba(255,255,255,0.12)", overflow: "hidden" }}>
-            <div
-              style={{
-                width: `${Math.min(100, runtimeStatus.used_ratio * 100)}%`,
-                height: "100%",
-                background: runtimeStatus.used_ratio >= 0.8 ? "#ff7875" : "linear-gradient(90deg, #69b1ff, #95de64)",
-              }}
-            />
-          </div>
-          <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: "rgba(255,255,255,0.72)" }}>
-            <span>{t("chat.runtimeStatusReserved", "保留用于响应")}</span>
-            <span>{formatTokenCount(runtimeStatus.reserved_response_tokens)}</span>
-          </div>
-          <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: "rgba(255,255,255,0.72)" }}>
-            <span>{t("chat.runtimeStatusRemaining", "剩余可用")}</span>
-            <span>{formatTokenCount(runtimeStatus.remaining_tokens)}</span>
-          </div>
-        </div>
-
-        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-          <span style={{ fontSize: 12, color: "rgba(255,255,255,0.6)", textTransform: "uppercase", letterSpacing: 0.6 }}>
-            {t("chat.runtimeStatusSystem", "System")}
-          </span>
-          {systemItems.map((item) => renderItem(item.label, item.tokens, item.ratio))}
-        </div>
-
-        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-          <span style={{ fontSize: 12, color: "rgba(255,255,255,0.6)", textTransform: "uppercase", letterSpacing: 0.6 }}>
-            {t("chat.runtimeStatusUserContext", "User Context")}
-          </span>
-          {userItems.map((item) => renderItem(item.label, item.tokens, item.ratio))}
-        </div>
-
-        <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: "rgba(255,255,255,0.5)" }}>
-          <span>{runtimeStatus.profile_label}</span>
-          <span>{runtimeStatus.model_id || runtimeStatus.provider_id || "unknown"}</span>
-        </div>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 11 }}>
-          <span style={{ color: "rgba(255,255,255,0.5)" }}>
-            {t("chat.runtimeStatusSource", "统计来源")}
-          </span>
-          <span
-            style={{
-              color: statusSourceColor,
-              fontWeight: 600,
-            }}
-          >
-            {statusSourceLabel}
-          </span>
-        </div>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 11 }}>
-          <span style={{ color: "rgba(255,255,255,0.5)" }}>
-            {t("chat.runtimeStatusUpdatedAt", "上次更新时间")}
-          </span>
-          <span style={{ color: "rgba(255,255,255,0.72)" }}>
-            {lastUpdatedLabel}
-          </span>
-        </div>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 11 }}>
-          <span style={{ color: "rgba(255,255,255,0.5)" }}>
-            {t("chat.runtimeStatusSampling", "采集状态")}
-          </span>
-          <span
-            title={runtimeStatusError || undefined}
-            style={{ color: samplingStatusColor }}
-          >
-            {samplingStatusLabel}
-          </span>
-        </div>
-
-        <div style={{ display: "flex", flexDirection: "column", gap: 8, paddingTop: 4, borderTop: "1px solid rgba(255,255,255,0.08)" }}>
-          <span style={{ fontSize: 12, color: "rgba(255,255,255,0.6)", textTransform: "uppercase", letterSpacing: 0.6 }}>
-            {t("chat.runtimeStatusSnapshotMeta", "Snapshot Boundary")}
-          </span>
-          {renderMetaRow(t("chat.runtimeStatusSnapshotSource", "后端源"), snapshotSourceRawLabel, "runtime-status-meta-source")}
-          {renderMetaRow(t("chat.runtimeStatusSnapshotStage", "采样阶段"), snapshotStageLabel, "runtime-status-meta-stage")}
-          {renderMetaRow(t("chat.runtimeStatusSnapshotScope", "归属层级"), snapshotScopeLabel, "runtime-status-meta-scope")}
-          {renderMetaRow(t("chat.runtimeStatusSnapshotAgent", "Agent"), snapshotAgentLabel, "runtime-status-meta-agent")}
-          {renderMetaRow(t("chat.runtimeStatusSnapshotChat", "Chat"), snapshotChatLabel, "runtime-status-meta-chat")}
-        </div>
-      </div>
-    );
-  }, [
-    lastRuntimeStatusUpdatedAt,
-    runtimeStatus,
-    runtimeStatusError,
-    runtimeStatusFromApi,
-    runtimeStatusMeta,
-    transientMessages,
-    t,
-  ]);
-
-  const runtimeTriggerTone = runtimeStatusError
-    ? "#ff7875"
-    : runtimeStatusFromApi?.snapshot_source === "empty_baseline"
-      ? "#faad14"
-      : lastRuntimeStatusUpdatedAt
-      ? "#95de64"
-      : isDark
-        ? "rgba(255,255,255,0.88)"
-        : "rgba(0,0,0,0.88)";
-
-  const runtimeTriggerLabel = runtimeStatusError
-    ? t("chat.runtimeStatusErrorShort", "异常")
-    : runtimeStatusFromApi?.snapshot_source === "empty_baseline"
-      ? t("chat.runtimeStatusPendingShort", "等待")
-      : lastRuntimeStatusUpdatedAt
-      ? t("chat.runtimeStatusHealthyShort", "正常")
-      : t("chat.runtimeStatusPendingShort", "等待");
-
   const historyPopoverContent = useMemo(() => {
     if (historyLoading) {
       return (
@@ -3584,49 +3155,6 @@ export default function AnywhereChat({
         </div>
         <div className={styles.headerRight}>
           <ModelSelector />
-          <Popover
-            trigger="click"
-            placement="bottomRight"
-            open={runtimeStatusOpen}
-            onOpenChange={(open) => {
-              setRuntimeStatusOpen(open);
-            }}
-            content={runtimeStatusContent}
-            styles={{
-              body: {
-                borderRadius: 12,
-                background: isDark ? "rgba(20,22,28,0.96)" : "rgba(20,22,28,0.96)",
-                boxShadow: "0 16px 48px rgba(0,0,0,0.24)",
-                padding: 14,
-              },
-            }}
-          >
-            <Button
-              data-testid="runtime-status-trigger"
-              size="small"
-              type="text"
-              aria-label={t("chat.runtimeStatus", "运行状态")}
-              title={runtimeStatusError || undefined}
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: 6,
-                borderRadius: 999,
-                border: "1px solid rgba(255,255,255,0.12)",
-                background: isDark ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.04)",
-                color: runtimeTriggerTone,
-                paddingInline: 10,
-              }}
-            >
-              <DashboardOutlined />
-              <span style={{ fontSize: 12, fontWeight: 600 }}>
-                {(runtimeStatus.used_ratio * 100).toFixed(1)}%
-              </span>
-              <span style={{ fontSize: 11, fontWeight: 500 }}>
-                {runtimeTriggerLabel}
-              </span>
-            </Button>
-          </Popover>
           {planEnabled ? (
             <Tooltip title={t("plan.title", "Plan")} mouseEnterDelay={0.3}>
               <IconButton

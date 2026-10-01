@@ -11,33 +11,6 @@ type ApiMockOptions = {
   }>;
 };
 
-function buildRuntimeStatusSnapshot(chatId: string) {
-  return {
-    scope_level: "chat",
-    snapshot_source: "runtime_push",
-    snapshot_stage: "pre_model_call",
-    agent_id: "default",
-    session_id: chatId,
-    user_id: "default",
-    chat_id: chatId,
-    context_window_tokens: 32000,
-    used_tokens: 4000,
-    used_ratio: 0.125,
-    reserved_response_tokens: 2048,
-    remaining_tokens: 25952,
-    model_id: "qwen3.5:27b",
-    provider_id: "ollama",
-    profile_label: "Local runtime",
-    breakdown: [
-      { key: "system-instructions", label: "System Instructions", tokens: 1200, ratio: 0.0375, section: "system" },
-      { key: "tool-definitions", label: "Tool Definitions", tokens: 1800, ratio: 0.05625, section: "system" },
-      { key: "messages", label: "Messages", tokens: 1000, ratio: 0.03125, section: "user" },
-      { key: "tool-results", label: "Tool Results", tokens: 0, ratio: 0, section: "user" },
-      { key: "files", label: "Files", tokens: 0, ratio: 0, section: "user" },
-    ],
-  };
-}
-
 async function setupApiMocks(page: Page, options: ApiMockOptions = {}) {
   const { conflictScenario = false, projectTemplateSteps } = options;
   let createdChatCount = 0;
@@ -379,17 +352,6 @@ async function setupApiMocks(page: Page, options: ApiMockOptions = {}) {
       return;
     }
 
-    const runtimeStatusMatch = pathname.match(/^\/api\/console\/chats\/([^/]+)\/runtime-status$/);
-    if (runtimeStatusMatch && route.request().method() === "GET") {
-      const chatId = decodeURIComponent(runtimeStatusMatch[1]);
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify(buildRuntimeStatusSnapshot(chatId)),
-      });
-      return;
-    }
-
     if (pathname.startsWith("/api/chats/")) {
       await route.fulfill({
         status: 200,
@@ -538,41 +500,6 @@ test("behavior: each pipeline create opens a new chat id", async ({ page }) => {
   expect(secondChatId).toBeTruthy();
 
   expect(secondChatId).not.toBe(firstChatId);
-});
-
-test("behavior: runtime status panel does not reuse previous chat ownership after new chat", async ({ page }) => {
-  test.setTimeout(90_000);
-
-  await setupApiMocks(page);
-
-  await page.goto("/pipelines");
-
-  const openDesignBtn = page.getByTestId("pipeline-open-design-chat");
-  await expect(openDesignBtn).toBeVisible({ timeout: 30_000 });
-
-  const createChatRequestFirst = page.waitForRequest((request) => {
-    return request.method() === "POST" && request.url().includes("/api/chats");
-  });
-  await openDesignBtn.click();
-  await createChatRequestFirst;
-
-  const runtimeStatusTrigger = page.getByTestId("runtime-status-trigger");
-  await expect(runtimeStatusTrigger).toBeVisible({ timeout: 20_000 });
-  await runtimeStatusTrigger.click();
-
-  await expect(page.getByTestId("runtime-status-meta-chat")).toHaveText("created-chat-1", { timeout: 20_000 });
-  await expect(page.getByTestId("runtime-status-meta-agent")).toHaveText("default", { timeout: 20_000 });
-  await expect(page.getByTestId("runtime-status-meta-source")).toHaveText("runtime_push", { timeout: 20_000 });
-
-  const createChatRequestSecond = page.waitForRequest((request) => {
-    return request.method() === "POST" && request.url().includes("/api/chats");
-  });
-  await page.getByRole("button", { name: /New Chat/i }).click();
-  await createChatRequestSecond;
-
-  await expect(page.getByTestId("runtime-status-meta-chat")).toHaveText("created-chat-2", { timeout: 20_000 });
-  await expect(page.getByTestId("runtime-status-meta-agent")).toHaveText("default", { timeout: 20_000 });
-  await expect(page.getByTestId("runtime-status-meta-chat")).not.toHaveText("created-chat-1", { timeout: 20_000 });
 });
 
 test("behavior: new pipeline edit starts clean and does not restore legacy prefilled steps", async ({ page }) => {
