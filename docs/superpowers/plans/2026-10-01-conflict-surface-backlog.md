@@ -94,7 +94,7 @@ git diff --no-renames --name-only e111ec6fb upstream/main > /tmp/upstream_change
 
 **K — src/qwenpaw/app/mcp（MCP 客户端）**。`app/mcp/{manager,stateful_client,watcher}.py` **三个文件在 v2 里全部不存在**（上游删了 1,282 行），而 fork 在 `stateful_client.py` 里有 +690/−396。**v2 的落点已查清**（`UPSTREAM_V2_MIGRATION_PLAN.md` §8 已闭环 33）：MCP 被收敛进 driver 体系 —— `drivers/handlers/{mcp,mcp_stateful_client,mcp_streamable_http}.py`（`mcp_stateful_client.py` 1,084 行，`_MCPClientMixin` / `StdIOStatefulClient` / `HttpStatefulClient` 同名同位）+ `drivers/manager.py` + `app/driver_config_watcher.py` + 配置面 `app/mcp/{config_service,schemas}.py`。fork 那六项私有能力里，**配置 mtime 快照热重载已被 v2 的 `app/driver_config_watcher.py` 覆盖（`DROP`）**，其余五项（`refresh_client_status` / `failed_keys` / `_probe_client_capabilities` / `_resolve_stdio_command` / httpx 异常链诊断）在 v2 全树**逐符号命中 0** ⇒ 这一簇不存在"重放 patch"，只有 `搬迁`（`_resolve_stdio_command`，搬到构造 endpoint 配置那一层）、`原生`（走 v2 接缝重表达）与 `CUT` 三种标签。
 
-**L — src/qwenpaw/app 其它（_app / migration / workspace / flow_engine 等）**。`_app.py`(+43/−15)、`migration.py`(+156/−125)、`agent_config_watcher.py`(+221/−110)、`agent_context.py`(+59/−33)、`workspace/*`、`multi_agent_manager.py`。这一簇混杂：`_app.py` 的两行是 D-22 品牌 patch（还原即可），其余逐条判归属。
+**L — src/qwenpaw/app 其它（_app / migration / workspace / flow_engine 等）**。`_app.py`(+43/−15)、`migration.py`(+156/−125)、~~`agent_config_watcher.py`(+221/−110)~~ → **0/0（2026-10-02 已闭环 52 整文件退回字节，已退出本表与冲突面；归属见迁移计划已闭环 52 ⑤：那 221 行是 fork 坏合并复活的“上游 #4064 之前”实现，四类归属全部零保留价值）**、`agent_context.py`(+59/−33)、`workspace/*`、`multi_agent_manager.py`。这一簇混杂：`_app.py` 的两行是 D-22 品牌 patch（还原即可），其余逐条判归属。
 
 **M — src/qwenpaw/agents（agent 工具、记忆、技能、prompt）**。agents 工具与记忆。含 `audio_transcription.py`(+335/−5，fork 加的本地 whisper 自动安装)、`file_io.py`(+60)、`prompt.py`(+31)。落点 = v2 的 agent 扩展接缝（`register_*` / skill 目录），逐条判。
 
@@ -319,7 +319,7 @@ v2 把整个目录改名重写成 `app/chats/`（该路径共 22 个文件、3,1
 | `console/src/pages/Agent/MCP/index.tsx` | +87/−144 | +155/−40 |
 | `console/src/api/modules/agent.ts` | +363/−17 | +35/−3 |
 | `console/src/pages/Settings/Agents/components/AgentTable.tsx` | +100/−60 | +0/−248 |
-| `src/qwenpaw/app/agent_config_watcher.py` | +221/−110 | +51/−24 |
+| `src/qwenpaw/app/agent_config_watcher.py` ~~+221/−110~~ → **0/0**（2026-10-02 已闭环 52 整文件退回字节，已退出本表与冲突面） | ~~+51/−24~~（纯上游 v1→v2） |
 | `README.md` | +58/−17 | +177/−141 |
 | `console/src/pages/Agent/Workspace/components/useAgentsData.ts` | +58/−24 | +0/−296 |
 | `src/qwenpaw/agents/utils/audio_transcription.py` | +335/−5 | +2/−1 |
@@ -399,6 +399,8 @@ v2 把整个目录改名重写成 `app/chats/`（该路径共 22 个文件、3,1
 
 > **2026-10-02 簇 P / 簇 I 两刀（迁移计划 §8 已闭环 50 / 51，分支 `wp/integration`）**：`providers/openai_chat_model_compat.py` **+114/−11 → +8/−0**（110 行 leaked-thinking 实现搬进 fork 自有新文件 `providers/visible_text_compat.py`，被盖掉的上游 issue #4185 守卫从 merge-base 逐字节贴回）⇒ 册 154 文件不变、**冲突面 142 → 142**（宿主仍有 8 行行为行，且上游 v1→v2 自己改了 685 行）。`app/routers/tools.py` **+28/−111 → 0/0**（整文件退回 merge-base 字节，本表 **#48 那行就此失效**）⇒ **P1 154 → 153 文件 / +14,367 → +14,339 / −2,445 → −2,334 · 行为 153 → 152 / +14,333 → +14,305 / −2,411 → −2,300 · 命名 1/9/34 · mechanical 1 · rc=0**，**冲突面 142 → 141**（本计划以来第一次真正减面），这 141 个文件的 fork 侧行为行 **16,222 → 16,083**。⇒ 本表那句"在册文件数 ≠ 冲突面"现在有了正面用例：**只有把某个宿主的 fork 行为行退到 0，它才退出冲突面**；只减册内行数而不归零的（簇 A/O/P）面不动。
 
+> **2026-10-02 簇 L 第一刀（迁移计划 §8 已闭环 52，分支 `wp/integration`）**：`src/qwenpaw/app/agent_config_watcher.py` **+221/−110 → 0/0**（整文件退回 merge-base 字节；`service_factories.py` 构造点同步退回 `workspace=ws`，该文件 **16/1 → 14/0**）+ 删掉 fork 复活的 `src/qwenpaw/agents/hooks/memory_compaction.py`（**191 行**）与 `hooks/__init__.py` 那 3 行 re-export（**3/0 → 0/0**）⇒ **P1 153 → 151 文件 · 行为 152 → 150 · +14,339 → +14,113 · −2,334 → −2,223 · 命名 1/9/34 没动 · rc=0**，**冲突面 141 → 140**（同一棵树前后各算一次；上一条那句手法第二次生效），这 140 个文件的 fork 侧行为行 **16,083 → 15,749**。**本刀真正的收益是一条新账**：`memory_compaction.py` 在 merge-base 与 v2 **都不存在** ⇒ 它是 out-of-book 的 fork 新文件，**P1 门禁的“上游自有文件被改”判据一条都扫不到它**，它带着一个本树不存在的配置字段（`memory_summary`）进了 6 个月、零检查会红。⇒ 这类债的判据见 §9 第 8 条。
+
 | # | 文件 | 簇 | fork | 上游 | fork hunk | v2 存在 | 命名行 |
 |---|---|---|---|---|---|---|---|
 | 1 | `src/qwenpaw/app/routers/agents.py` | I | +4190/−326 | +1690/−136 | 87 | 是 | 0 |
@@ -463,7 +465,7 @@ v2 把整个目录改名重写成 `app/chats/`（该路径共 22 个文件、3,1
 | 60 | `console/src/pages/Agent/MCP/index.tsx` | D | +87/−144 | +155/−40 | 30 | 是 | 0 |
 | 61 | `console/src/api/modules/agent.ts` | C | +363/−17 | +35/−3 | 13 | 是 | 0 |
 | 62 | `console/src/pages/Settings/Agents/components/AgentTable.tsx` | D | +100/−60 | +0/−248 | 8 | **否** | 0 |
-| 63 | `src/qwenpaw/app/agent_config_watcher.py` | L | +221/−110 | +51/−24 | 35 | 是 | 0 |
+| ~~63~~ | ~~`src/qwenpaw/app/agent_config_watcher.py`~~ | L | ~~+221/−110~~ → **0/0**（已闭环 52 退回字节并退出冲突面） | ~~+51/−24~~ | 35 | 是 | 0 |
 | 64 | `src/qwenpaw/config/utils.py` | N | +25/−0 | +272/−108 | 4 | 是 | 0 |
 | 65 | `README.md` | V | +58/−17 | +177/−141 | 4 | 是 | 2 |
 | 66 | `console/src/api/request.test.ts` | C | +58/−0 | +329/−3 | 2 | 是 | 0 |
@@ -586,3 +588,6 @@ v2 把整个目录改名重写成 `app/chats/`（该路径共 22 个文件、3,1
 5. 簇 B 的宿主改动（+54 行）在 v2 的两个接缝面（`plugins/api.py` 的 17 个 `register_*` 与 `pawapp/app.py`）上各自的等价落点。
 6. ~~**§4.5 那 6 项**（v2 的 stdio 可执行文件解析、mineru 依赖是否在用、v2 regenerate 的覆盖面、`AnywhereChat` 的后端端点依赖全表、v2 `/plan` 的落库状态、`register_http_router` 最小插件端点能否被装载）~~ —— **2026-10-01 全部复核完毕，结论见 §4.5**；随之暴露的 4 个开放项也已一次裁完，记为 **D-23（§4.7）**。簇 J / K 的 2,825 行最终账目：**3 条 `搬迁` + 2 条 `原生` + 4 条 `CUT` + 1 项净删除（runtime-status 整套）**，其余 `DROP`。剩下的唯一前置是下一条那条 hunk 级净行数账目。
 7. ~~**§4.6 那 5 条线 + 1 项净删除的 hunk 级账目**~~ —— **2026-10-01 做完，结论在 §4.8**：`搬迁` 394 + `原生` 300 = **694 行是 WP-06 的净写作量**，其余 1,478 行是"同步时不再重放"的零成本项。这轮账目另外翻出三件按文件总量估不出来的事：tail-user 那条真实尺寸是 192+134 而不是 164、`_run_lifecycle:379-398` 那 20 行属于 stdio 需求而非生命周期重写、以及 **fork 在 `_build_client` 里摘掉了上游的 OAuth token 注入且方法至今零调用者**（新开的现网复核项，见 §4.8 第 3 条）—— **该复核项 2026-10-02 结案：回归确认存在，已在 `fix/mcp-oauth-injection`（提交 `0ea653fef`）修复并补测，记录在 §4.8 末尾的结案块**。
+
+
+8. **（2026-10-02 已闭环 52 新开）“复活上游已删文件”的全仓扫描未做**：判据 = 对 `src/qwenpaw/**` 与 `console/src/**` 里**fork 新增、merge-base 与 v2 均无同名文件**的 out-of-book 文件，逐个跑 `git log --oneline e111ec6fb -- <path>`；**merge-base 历史里存在过同名文件 ⇒ 复活嫌疑**，再查它依赖的调用契约（字段名 / 方法名）在当前树是否还存在。已闭环 52 ②③ 两处死码用的正是同一套旧契约（`memory_summary` 字段、`reschedule_memory()` 方法，全仓零定义）⇒ 这条判据要先测一轮命中率，才知道值不值得做成脚本。未跑。
