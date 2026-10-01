@@ -77,8 +77,7 @@ def tools_api_client(
     return TestClient(app), agent_config
 
 
-@pytest.mark.xfail(strict=True, reason="P1-BEHAVIOR-LOST: list_tools 的 icon 回退 _DEFAULT_TOOL_ICON 补丁随同步丢失，上游实现回退为空字符串")
-def test_list_tools_falls_back_to_default_icon_for_missing_config(
+def test_list_tools_falls_back_to_empty_icon_for_missing_config(
     tools_api_client: tuple[TestClient, AgentProfileConfig],
 ) -> None:
     client, _agent_config = tools_api_client
@@ -90,10 +89,10 @@ def test_list_tools_falls_back_to_default_icon_for_missing_config(
     search_tool = next(
         item for item in payload if item["name"] == "skill_market_search"
     )
-    assert search_tool["icon"] == "🔧"
+    assert search_tool["icon"] == ""
 
 
-def test_toggle_tool_returns_default_icon_when_config_icon_is_missing(
+def test_toggle_tool_returns_empty_icon_when_config_icon_is_missing(
     tools_api_client: tuple[TestClient, AgentProfileConfig],
 ) -> None:
     client, agent_config = tools_api_client
@@ -101,12 +100,15 @@ def test_toggle_tool_returns_default_icon_when_config_icon_is_missing(
     response = client.patch("/tools/skill_market_search/toggle")
 
     assert response.status_code == 200
-    assert response.json()["icon"] == "🔧"
+    assert response.json()["icon"] == ""
     assert agent_config.tools is not None
-    assert agent_config.tools.builtin_tools["skill_market_search"].enabled is False
+    assert (
+        agent_config.tools.builtin_tools["skill_market_search"].enabled
+        is False
+    )
 
 
-def test_update_async_execution_returns_default_icon_when_missing(
+def test_update_async_execution_returns_the_configured_icon(
     tools_api_client: tuple[TestClient, AgentProfileConfig],
 ) -> None:
     client, agent_config = tools_api_client
@@ -117,7 +119,7 @@ def test_update_async_execution_returns_default_icon_when_missing(
     )
 
     assert response.status_code == 200
-    assert response.json()["icon"] == "💻"
+    assert response.json()["icon"] == "\U0001F4BB"
     assert agent_config.tools is not None
     assert (
         agent_config.tools.builtin_tools[
@@ -126,10 +128,71 @@ def test_update_async_execution_returns_default_icon_when_missing(
     )
 
 
-def test_update_async_execution_returns_default_icon_for_missing_icon(
+class _FakePluginRegistry:
+    """Stand in for the plugin manifest source used by _build_tool_info."""
+
+    _manifest = {
+        "meta": {
+            "tools": [
+                {
+                    "name": "skill_market_search",
+                    "requires_config": True,
+                    "config_fields": [
+                        {
+                            "name": "api_key",
+                            "label": "API key",
+                            "type": "password",
+                        },
+                    ],
+                },
+            ],
+        },
+    }
+
+    def get_plugin_id_for_tool(self, tool_name: str) -> str | None:
+        if tool_name == "skill_market_search":
+            return "skill_market"
+        return None
+
+    def get_plugin_manifest(self, plugin_id: str) -> dict | None:
+        if plugin_id == "skill_market":
+            return dict(self._manifest)
+        return None
+
+
+def _patch_registry(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        "qwenpaw.plugins.registry.PluginRegistry",
+        _FakePluginRegistry,
+    )
+
+
+def test_toggle_tool_returns_manifest_config_metadata(
     tools_api_client: tuple[TestClient, AgentProfileConfig],
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     client, agent_config = tools_api_client
+    assert agent_config.tools is not None
+    agent_config.tools.builtin_tools["skill_market_search"].config = {
+        "api_key": "secret-value",
+    }
+    _patch_registry(monkeypatch)
+
+    response = client.patch("/tools/skill_market_search/toggle")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["requires_config"] is True
+    assert [field["name"] for field in payload["config_fields"]] == ["api_key"]
+    assert payload["config_values"] == {"api_key": "***"}
+
+
+def test_update_async_execution_returns_manifest_config_metadata(
+    tools_api_client: tuple[TestClient, AgentProfileConfig],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    client, _agent_config = tools_api_client
+    _patch_registry(monkeypatch)
 
     response = client.patch(
         "/tools/skill_market_search/async-execution",
@@ -137,6 +200,6 @@ def test_update_async_execution_returns_default_icon_for_missing_icon(
     )
 
     assert response.status_code == 200
-    assert response.json()["icon"] == "🔧"
-    assert agent_config.tools is not None
-    assert agent_config.tools.builtin_tools["skill_market_search"].async_execution is True
+    payload = response.json()
+    assert payload["requires_config"] is True
+    assert [field["name"] for field in payload["config_fields"]] == ["api_key"]

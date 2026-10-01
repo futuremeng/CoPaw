@@ -56,14 +56,14 @@ git diff --no-renames --name-only e111ec6fb upstream/main > /tmp/upstream_change
 | F console/src/layouts（布局与顶栏） | 5 | 135 | 3,490 | 0 |
 | G console/src 其它（App.tsx / i18n.ts / utils / styles） | 4 | 165 | 1,284 | 0 |
 | H console 配置（tsconfig / vite / package.json） | 3 | 73 | 245 | 0 |
-| I src/qwenpaw/app/routers（后端 HTTP 路由） | 9 | 5,676 | 5,875 | 1 |
+| I src/qwenpaw/app/routers（后端 HTTP 路由） | 9 → **8**（`tools.py` 已整文件退出册） | 5,676 → **5,537** | 5,875（**未重算**：tools.py 的上游侧 259/115 = 374 行仍含在内，重算时应减） | 1 |
 | J src/qwenpaw/app/runner（会话与消息处理） | 6 | 1,163 | 1,270 | 6（其中 3 个改名到 `app/chats/`） |
 | K src/qwenpaw/app/mcp（MCP 客户端） | 3 | 1,330 | 1,282 | 3 |
 | L src/qwenpaw/app 其它（_app / migration / workspace / flow_engine 等） | 8 | 677 → **673**（`_app.py` 退 2 加 2 删） | 3,224 | 0 |
 | M src/qwenpaw/agents（agent 工具、记忆、技能、prompt） | 11 | 654 | 3,975 | 0 |
 | N src/qwenpaw/config（配置模型与工具） | 4 | 142 | 3,216 | 0 |
-| O src/qwenpaw/cli（命令行） | 1 | 345 | 141 | 0 |
-| P src/qwenpaw 其它（providers / constant / security / token_usage） | 7 | 249 | 2,899 | 0 |
+| O src/qwenpaw/cli（命令行） | 1 | 345 → **111**（`desktop_cmd.py` 整文件退回字节后只留 fork 的清理能力 111 行；已闭环 49） | 141 | 0 |
+| P src/qwenpaw 其它（providers / constant / security / token_usage） | 7 | 249 → **132**（`openai_chat_model_compat.py` 125 → 8，实现搬进 fork 自有 `providers/visible_text_compat.py`） | 2,899（未重算） | 0 |
 | Q scripts/pack（桌面打包） | 2 | 41 | 11 | 0 |
 | R scripts 其它（install.* / README） | 3 | 21 | 43 | 0 |
 | S website/public/docs（文档站正文）**✅ 已执行（已闭环 48）** | 4 → **0** | 12 → **0** | 325 | 0 |
@@ -88,7 +88,7 @@ git diff --no-renames --name-only e111ec6fb upstream/main > /tmp/upstream_change
 
 **H — console 配置（tsconfig / vite / package.json）**。构建配置。`vite.config.ts` +25、`package.json` +21/−13（含 fork 的 `postinstall: patch-chat-flushsync.mjs` 树外 patch，版本锁 `^1.1.64-beta` vs v2 `1.2.0-beta` → 同步时几乎确定失效）。落点 = fork 自有构建包装。
 
-**I — src/qwenpaw/app/routers（后端 HTTP 路由）**。后端路由，**单簇侵入最大（5,676 行，其中 `app/routers/agents.py` 一文件 +4,190/−326）**。D-16 已把实现下沉进 `src/qwenpaw`，所以这里剩的是"路由注册 + 上游 agents 路由被改写"。落点 = v2 插件路由（`plugins/registry.py` 硬拼 `/api` 前缀，`register_middleware` 是请求级不是 ASGI ⇒ 拿不到顶层 mount，已实测）。这一簇需要 WP-03/04 的 PawApp 化设计，不能机械搬。
+**I — src/qwenpaw/app/routers（后端 HTTP 路由）**。后端路由，**单簇侵入最大（5,676 行，其中 `app/routers/agents.py` 一文件 +4,190/−326）**。D-16 已把实现下沉进 `src/qwenpaw`，所以这里剩的是"路由注册 + 上游 agents 路由被改写"。落点 = v2 插件路由（`plugins/registry.py` 硬拼 `/api` 前缀，`register_middleware` 是请求级不是 ASGI ⇒ 拿不到顶层 mount，已实测）。这一簇需要 WP-03/04 的 PawApp 化设计，不能机械搬。 → **第一刀已执行（2026-10-02，`wp/integration`，计划 §8 已闭环 51）：`app/routers/tools.py` +28/−111 → 0/0，整文件退回 merge-base 字节并退出 P1 册与冲突面**。它是第 5 个"替换型 hunk"：fork 把上游从插件 manifest 读 `requires_config` / `config_fields` / `config_values`（含 password 掩码）的富 `_build_tool_info` 换成 6 行单参 stub，111 行删除里 96 行是那个函数体；`git grep` 确认 v2 仍保留富版本（`upstream/main:src/qwenpaw/app/routers/tools.py:143`）⇒ 回归而非重构。症状是**用户可见的**：`ToolInfo` 那三个字段模型仍声明，`response_model` 于是把 `requires_config=false` / `config_fields=null` 序列化出去，而 `console/src/pages/Agent/Tools/useTools.ts:44-51` 在 PATCH 成功后 `{ ...t, ...result }` ⇒ 列表页真好值被 stub 默认值覆盖，"配置"入口消失到刷新为止；**这两个前端文件对 merge-base 的 fork diff 都是空的**，责任全在后端。图标回退 `_DEFAULT_TOOL_ICON` 那 4 行判 `DROP`（四条证据见已闭环 51 ④，含"前端 `tools.ts:22` 把 `icon: string` 声明成必填 ⇒ 想要 🔧 只能往上游文件加行"）。这一刀同时**第一次真正缩小冲突面：142 → 141**，该簇 fork 侧行为行 16,222 → 16,083。⇒ **新增一条可复用的减面手法**：对"fork 只是替换了上游实现、且替换没换来任何东西"的文件，**退回字节直到 `git diff --no-renames e111ec6fb -- <path>` 为空**，该文件就按判据（行为行 > 0）退出冲突面；前面几刀（簇 A/O/P）都在册上减行但面不动，正是因为宿主仍有非零行为行。**本簇剩余 8 个文件仍以 `agents.py`（+4,190/−326）为大头，按原判定要等 WP-03/04 设计。**
 
 **J — src/qwenpaw/app/runner（会话与消息处理）**。上游把整个 `app/runner/` 换成了 `app/chats/`：**22 个文件、3,187 行删除**。fork 有改动的那 6 个里 3 个（`session.py` / `__init__.py` / `query_error_dump.py`）被 v2 改名带走（同步时是普通冲突，看得见），另外 3 个（`api.py` / `command_dispatch.py` / `models.py`）是重写后当作删除处理（属于静默丢失那 15 个）。逐文件判定见 §4.3 —— 结论比"整簇要搬"轻得多：绝大部分 fork 改动已被 v2 用别的实现覆盖（`DROP`，含本轮改判的**历史分页**），真正需要搬的是 `tail-user/delete` 端点与 `ChatUpdate.meta` 的写路径两件，`.snapshot` sidecar 与 chat runtime-status 各待一项用户裁决。
 
@@ -307,7 +307,7 @@ v2 把整个目录改名重写成 `app/chats/`（该路径共 22 个文件、3,1
 | `src/qwenpaw/app/workspace/workspace.py` | +36/−40 | +521/−121 |
 | `src/qwenpaw/app/channels/dingtalk/channel.py` | +74/−1 | +414/−50 |
 | `README_ja.md` | +63/−20 | +230/−209 |
-| `src/qwenpaw/app/routers/tools.py` | +28/−111 | +259/−115 |
+| `src/qwenpaw/app/routers/tools.py` ~~+28/−111~~ → **0/0**（2026-10-02 已闭环 51 整文件退回字节，已退出本表与冲突面） | ~~+28/−111~~ | +259/−115（纯上游 v1→v2） |
 | `README_zh.md` | +68/−17 | +192/−223 |
 | `src/qwenpaw/app/mcp/manager.py` | +194/−16 | +0/−286 |
 | `src/qwenpaw/cli/desktop_cmd.py` | +212/−133 | +104/−37 |
@@ -396,6 +396,8 @@ v2 把整个目录改名重写成 `app/chats/`（该路径共 22 个文件、3,1
 > **2026-10-02 状态更正**：下表是**第一版读数**，不随执行回写。**簇 A 那 6 行（#2–#7）与 #94 `console/src/i18n.ts` 已执行完毕**（WP-13，`wp/13-locale-exit` @ `ee400b053`）—— 6 个 locale 文件已不再是冲突宿主（回到 merge-base 字节），`i18n.ts` 从 +91/−7 降到 +16/−1。执行后的 P1 读数：**166 文件 / +14,681/−2,702 · 行为 162 / +14,555/−2,576 · 命名 4/22/126 · rc=0**（详见 §3 簇 A 那条与迁移计划 §8 已闭环 45）。
 
 > **2026-10-02 小面簇第一刀（迁移计划 §8 已闭环 48，分支 `wp/integration` @ `e04481ac8` + `1977f2d13`）**：`website/public/docs/{cli.en,cli.zh,desktop.en,desktop.zh}.md` 与 `.github/workflows/frontend-tests.yml` **5 个冲突宿主退回 merge-base 字节** ⇒ **冲突面 147 → 142**（在同一棵树上前后各算一次，不是引用本表第一版数）。另退掉 2 个"只被 fork 改、上游没碰"的文件（`.github/ISSUE_TEMPLATE/config.yml` +3、`.github/workflows/pr-under-review.yml` −2）—— 它们减册不减冲突面。全仓 P1 现读 **154 文件 / +14,574/−2,589 · 行为 153 / +14,540/−2,555 · 命名 1/9/34 · rc=0**。**一条口径纠正**：本表 §2/§3 长期写的"冲突面 149"是 `wp/13-locale-exit` 分支上的读数，`wp/integration` 主线（吃过两条 `fix/*` 之后）的真实值是 **147**。**另一条判据纠正**：这一刀退掉的 4 行文档改名**不在命名册里**（改名配对靠行相似度，markdown 表格行/正文句没配上对），所以"退行数"不能直接读成"命名税下降"。
+
+> **2026-10-02 簇 P / 簇 I 两刀（迁移计划 §8 已闭环 50 / 51，分支 `wp/integration`）**：`providers/openai_chat_model_compat.py` **+114/−11 → +8/−0**（110 行 leaked-thinking 实现搬进 fork 自有新文件 `providers/visible_text_compat.py`，被盖掉的上游 issue #4185 守卫从 merge-base 逐字节贴回）⇒ 册 154 文件不变、**冲突面 142 → 142**（宿主仍有 8 行行为行，且上游 v1→v2 自己改了 685 行）。`app/routers/tools.py` **+28/−111 → 0/0**（整文件退回 merge-base 字节，本表 **#48 那行就此失效**）⇒ **P1 154 → 153 文件 / +14,367 → +14,339 / −2,445 → −2,334 · 行为 153 → 152 / +14,333 → +14,305 / −2,411 → −2,300 · 命名 1/9/34 · mechanical 1 · rc=0**，**冲突面 142 → 141**（本计划以来第一次真正减面），这 141 个文件的 fork 侧行为行 **16,222 → 16,083**。⇒ 本表那句"在册文件数 ≠ 冲突面"现在有了正面用例：**只有把某个宿主的 fork 行为行退到 0，它才退出冲突面**；只减册内行数而不归零的（簇 A/O/P）面不动。
 
 | # | 文件 | 簇 | fork | 上游 | fork hunk | v2 存在 | 命名行 |
 |---|---|---|---|---|---|---|---|
