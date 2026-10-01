@@ -138,8 +138,15 @@ def pair_rename_lines(
         if not BRAND_RE.search(line):
             continue
         bucket = pool.get(_normalize(line))
-        if bucket:
-            pairs.append((bucket.pop(0), line))
+        if not bucket:
+            continue
+        # A byte-identical pair is one upstream line moved within the file, not
+        # a brand rename: it cannot be replayed and it inflates naming_lines.
+        for index, old in enumerate(bucket):
+            if old != line:
+                del bucket[index]
+                pairs.append((old, line))
+                break
     return pairs
 
 
