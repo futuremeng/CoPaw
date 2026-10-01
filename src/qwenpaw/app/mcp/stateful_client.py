@@ -39,9 +39,9 @@ logger = logging.getLogger(__name__)
 
 
 def _iter_leaf_exceptions(exc: BaseException):
-    """Yield leaf exceptions, unwrapping ExceptionGroup recursively."""
-    if isinstance(exc, BaseExceptionGroup):
-        for sub_exc in exc.exceptions:
+    """Yield leaf exceptions, unwrapping any grouped exception recursively."""
+    if sub_excs := getattr(exc, "exceptions", ()):
+        for sub_exc in sub_excs:
             yield from _iter_leaf_exceptions(sub_exc)
         return
     yield exc
