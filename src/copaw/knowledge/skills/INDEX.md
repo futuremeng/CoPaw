@@ -32,6 +32,6 @@ To view or use these skills, reference the `SKILL.md` file in the corresponding 
 ## Related Skill Directories
 
 For other agent skills (including pipeline orchestration), see:
-- `src/copaw/agents/skills/` — Agent-level skills (e.g., pipeline, browser, file operations)
-- `src/copaw/skills_market/` — Community and marketplace skills
+- `src/qwenpaw/agents/skills/` — Agent-level skills (e.g., pipeline, browser, file operations)
+- `src/qwenpaw/skills_market/` — Community and marketplace skills
 

@@ -63,8 +63,8 @@ Release PR only. Non-release PR can skip this section.
 
 - [ ] I followed `RELEASE.md` (and `RELEASE_zh.md` if needed)
 - [ ] 我已按 `RELEASE.md`（如需要也参考 `RELEASE_zh.md`）执行发布流程
-- [ ] `src/copaw/__version__.py` is updated with the target version
-- [ ] 我已将目标版本更新到 `src/copaw/__version__.py`
+- [ ] `src/qwenpaw/__version__.py` is updated with the target version
+- [ ] 我已将目标版本更新到 `src/qwenpaw/__version__.py`
 - [ ] I validated version format (PEP 440)
 - [ ] 我已校验版本格式（PEP 440）
 - [ ] I completed a release checklist issue using `.github/ISSUE_TEMPLATE/6-release_checklist.md`

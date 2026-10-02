@@ -32,7 +32,7 @@ pytest
 
 Update version in a single source of truth:
 
-- `src/copaw/__version__.py`
+- `src/qwenpaw/__version__.py`
 
 Example:
 
@@ -43,7 +43,7 @@ __version__ = "0.0.8"
 Validate version format:
 
 ```bash
-python -c "from packaging.version import Version; from copaw.__version__ import __version__; Version(__version__); print(__version__)"
+python -c "from packaging.version import Version; from qwenpaw.__version__ import __version__; Version(__version__); print(__version__)"
 ```
 
 ## 3. Local Build Smoke Test (Recommended)
@@ -66,7 +66,7 @@ bash scripts/docker_build.sh copaw:release-smoke
 ```bash
 git checkout main
 git pull origin main
-git add src/copaw/__version__.py
+git add src/qwenpaw/__version__.py
 git commit -m "chore(release): bump version to X.Y.Z"
 git push origin main
 ```

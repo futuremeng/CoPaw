@@ -32,7 +32,7 @@ pytest
 
 版本号单一来源：
 
-- `src/copaw/__version__.py`
+- `src/qwenpaw/__version__.py`
 
 示例：
 
@@ -43,7 +43,7 @@ __version__ = "0.0.8"
 校验版本号格式：
 
 ```bash
-python -c "from packaging.version import Version; from copaw.__version__ import __version__; Version(__version__); print(__version__)"
+python -c "from packaging.version import Version; from qwenpaw.__version__ import __version__; Version(__version__); print(__version__)"
 ```
 
 ## 3. 本地构建冒烟（推荐）
@@ -66,7 +66,7 @@ bash scripts/docker_build.sh copaw:release-smoke
 ```bash
 git checkout main
 git pull origin main
-git add src/copaw/__version__.py
+git add src/qwenpaw/__version__.py
 git commit -m "chore(release): bump version to X.Y.Z"
 git push origin main
 ```

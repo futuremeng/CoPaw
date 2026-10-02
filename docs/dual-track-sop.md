@@ -120,8 +120,8 @@ git push -u origin feat/fork/<topic>
 
 ### 7.1 适合 upstream
 
-- `src/copaw/app/runner/runner.py`（503 降级处理）
-- `src/copaw/providers/retry_chat_model.py`（重试与可观测性）
+- `src/qwenpaw/app/runner/runner.py`（503 降级处理：该补丁原写在 `src/copaw/app/runner/runner.py`，已随上游 rebrand 同步 `bcaeb9062` 丢失，现状由 `tests/unit/app/runner/test_runner.py` 的 `P1-BEHAVIOR-LOST` 标记锁定）
+- `src/qwenpaw/providers/retry_chat_model.py`（重试与可观测性）
 - `scripts/bootstrap_dev.sh`（开发启动脚本）
 - `scripts/README.md`（脚本说明）
 - `pyproject.toml`（依赖补齐）

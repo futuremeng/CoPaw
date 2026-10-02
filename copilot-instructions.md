@@ -18,7 +18,7 @@ Agent 技能库内置流程编排指南 `pipeline-orchestration-specification`�
 - 验证流程 JSON 格式（schema validation）
 - 组建流程最佳实践（pipeline composition patterns）
 
-位置：`src/copaw/agents/skills/pipeline/`
+位置：`src/qwenpaw/agents/skills/pipeline/`
 - `SKILL.md` — 完整规范、JSON schema、验证规则、最佳实践
 - `example-*.json` — 常见模式参考实现（简单线性、质量门、双语对齐、分析报告）
 
@@ -97,10 +97,10 @@ checklist:
 
 ```bash
 # 查看完整规范
-cat src/copaw/agents/skills/pipeline/SKILL.md
+cat src/qwenpaw/agents/skills/pipeline/SKILL.md
 
 # 查看示例流程
-cat src/copaw/agents/skills/pipeline/example-*.json
+cat src/qwenpaw/agents/skills/pipeline/example-*.json
 ```
 
 ---

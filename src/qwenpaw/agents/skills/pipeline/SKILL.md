@@ -488,7 +488,7 @@ See the examples in this skill directory for full JSON templates.
 
 ## Related Skills & References
 
-- **Agents Skills Directory** — View other available agent skills at `src/copaw/agents/skills/`
+- **Agents Skills Directory** — View other available agent skills at `src/qwenpaw/agents/skills/`
 - **Pipeline Runtime Debugging** — For troubleshooting failures in running pipelines.
 - **Agent Task Definition** — To define step implementations in agent code.
 

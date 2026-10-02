@@ -10,7 +10,7 @@ This directory contains specialized agent skills for CoPaw operations.
 
 **Purpose:** Authoritative reference for CoPaw pipeline JSON schema, validation rules, step kinds, and composition best practices.
 
-**Location:** `src/copaw/agents/skills/pipeline/`
+**Location:** `src/qwenpaw/agents/skills/pipeline/`
 
 **When to use:**
 - Creating or editing pipeline templates
@@ -64,5 +64,5 @@ metadata:
 ## Related Directories
 
 - `src/copaw/knowledge/skills/` — Knowledge module skills (e.g., knowledge search assistant)
-- `src/copaw/skills_market/` — Marketplace and community skills
+- `src/qwenpaw/skills_market/` — Marketplace and community skills
 - `copilot-instructions.md` — Agent instructions and skill activation rules

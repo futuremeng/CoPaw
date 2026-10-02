@@ -33,7 +33,7 @@ assignees: []
 
 ## Release Publish
 
-- [ ] `src/copaw/__version__.py` updated
+- [ ] `src/qwenpaw/__version__.py` updated
 - [ ] Version format validated (PEP 440)
 - [ ] Tag created and GitHub Release published
 - [ ] Pre-release flag set correctly if applicable
