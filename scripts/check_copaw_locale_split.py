@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 import json
+import re
 import sys
 from pathlib import Path
 from typing import Any
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 CONSOLE_LOCALES = REPO_ROOT / "console" / "src" / "locales"
+SWITCHER = REPO_ROOT / "console" / "src" / "components" / "LanguageSwitcher" / "index.tsx"
 LANGS = ("en", "zh", "ja", "ru", "pt-BR", "id")
 
 
@@ -60,6 +62,18 @@ for lang in LANGS:
             errors.append(
                 f"split locale node is empty: {split_path.relative_to(REPO_ROOT)} -> {'.'.join(pointer)}"
             )
+
+switcher_keys: set[str] = set()
+if SWITCHER.exists():
+    switcher_keys = set(re.findall(r'key:\s*"([^"]+)"', SWITCHER.read_text(encoding="utf-8")))
+else:
+    errors.append(f"missing language switcher: {SWITCHER.relative_to(REPO_ROOT)}")
+
+for lang in LANGS:
+    if lang not in switcher_keys:
+        errors.append(
+            f"locale bundle {lang}.json ships but has no entry in the language switcher"
+        )
 
 if errors:
     for item in errors:
