@@ -10,36 +10,12 @@
       "removed": 0
     },
     "README.md": {
-      "added": 29,
-      "behavior_added": 29,
-      "behavior_removed": 4,
+      "added": 7,
+      "behavior_added": 7,
+      "behavior_removed": 0,
       "mechanical": false,
       "naming": 0,
-      "removed": 4
-    },
-    "README_ja.md": {
-      "added": 34,
-      "behavior_added": 34,
-      "behavior_removed": 4,
-      "mechanical": false,
-      "naming": 0,
-      "removed": 4
-    },
-    "README_ru.md": {
-      "added": 36,
-      "behavior_added": 36,
-      "behavior_removed": 4,
-      "mechanical": false,
-      "naming": 0,
-      "removed": 4
-    },
-    "README_zh.md": {
-      "added": 36,
-      "behavior_added": 36,
-      "behavior_removed": 4,
-      "mechanical": false,
-      "naming": 0,
-      "removed": 4
+      "removed": 0
     },
     "console/index.html": {
       "added": 12,
@@ -1171,15 +1147,15 @@
     }
   },
   "totals": {
-    "added": 13986,
-    "behavior_added": 13952,
-    "behavior_files": 144,
-    "behavior_removed": 2073,
-    "files": 145,
+    "added": 13858,
+    "behavior_added": 13824,
+    "behavior_files": 141,
+    "behavior_removed": 2057,
+    "files": 142,
     "mechanical_files": 1,
     "naming_files": 1,
     "naming_lines": 34,
     "naming_touched_files": 9,
-    "removed": 2107
+    "removed": 2091
   }
 }
