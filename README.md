@@ -1,34 +1,13 @@
 <div align="center">
 
+<p align="center">
+  <img src="console/public/copaw-icon.svg" alt="CoPaw" width="120"><br>
+  <b>CoPaw</b> — this fork adds a project-knowledge stack on top of QwenPaw: fast / nlp / agentic processing lanes,<br>
+  HanLP sidecar runtime, knowledge-dock workflow tabs, community Skills Marketplace source integration.<br>
+  Overview: <a href="docs/copaw-overview.md">docs/copaw-overview.md</a>
+</p>
+
 # QwenPaw
-
-<p align="center">
-  <img src="console/public/copaw-icon.svg" alt="CoPaw Logo" width="120">
-</p>
-
- [[中文](README_zh.md)] [[日本語](README_ja.md)] [[Русский](README_ru.md)]
-
-<p align="center"><b>CoPaw Extension Modules</b></p>
-
-<p align="center">
-  1. Project Knowledge Processing lanes: fast / nlp / agentic<br>
-  2. HanLP sidecar runtime support<br>
-  3. Knowledge dock workflow tabs: Explore / Sources / Processing / Outputs / Health / Settings<br>
-  4. Community Skills Marketplace source integration
-</p>
-
-
-<p align="center">
-  <img src="console/public/dingtalk.jpg" alt="CoPaw Dingtalk Group" width="300">
-</p>
-
-## QwenPaw
-
-<p align="center"><b>Upstream QwenPaw</b></p>
-
-<p align="center">
-  <img src="https://gw.alicdn.com/imgextra/i1/O1CN01sens5C1TuwioeGexL_!!6000000002443-55-tps-771-132.svg" alt="QwenPaw Logo" width="120">
-</p>
 
 [![GitHub Repo](https://img.shields.io/badge/GitHub-Repo-black.svg?logo=github)](https://github.com/agentscope-ai/QwenPaw)
 [![PyPI](https://img.shields.io/pypi/v/qwenpaw?color=3775A9&label=PyPI&logo=pypi)](https://pypi.org/project/qwenpaw/)
@@ -44,8 +23,11 @@
 [![X](https://img.shields.io/badge/X-Follow_Us-black.svg?logo=x)](https://x.com/agentscope_ai)
 [![DingTalk](https://img.shields.io/badge/DingTalk-Join_Us-orange.svg)](https://qr.dingtalk.com/action/joingroup?code=v1,k1,OmDlBXpjW+I2vWjKDsjvI9dhcXjGZi3bQiojOq3dlDw=&_dt_no_comment=1&origin=11)
 
-[[Documentation](https://qwenpaw.agentscope.io/)]
+[[Documentation](https://qwenpaw.agentscope.io/)] [[中文](README_zh.md)] [[日本語](README_ja.md)] [[Русский](README_ru.md)]
 
+<p align="center">
+  <img src="https://gw.alicdn.com/imgextra/i1/O1CN01sens5C1TuwioeGexL_!!6000000002443-55-tps-771-132.svg" alt="QwenPaw Logo" width="120">
+</p>
 
 <p align="center"><b>Works for you, grows with you.</b></p>
 

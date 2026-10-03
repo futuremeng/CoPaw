@@ -1,6 +1,6 @@
 # CoPaw 品牌边界（D-22 设计）
 
-- 状态：**阶段 A 已实施**（分支 `wp/12-brand-stage-a`，四条提交见 `git log --oneline wp/02-ownership..wp/12-brand-stage-a`；原拟编号 WP-10 已被"切主"占用，故为 WP-12）；阶段 B 待 WP-06 + S1/S2/S5 探针。原"待用户复审"随阶段 A 的实施结案；本文所有 126/92 的旧读数按 §1.1 末尾的更正块读。
+- 状态：**阶段 A 已实施**（分支 `wp/12-brand-stage-a`，四条提交见 `git log --oneline wp/02-ownership..wp/12-brand-stage-a`；原拟编号 WP-10 已被"切主"占用，故为 WP-12）；阶段 B 待 WP-06 + S1/S2/S5 探针。原"待用户复审"随阶段 A 的实施结案；本文所有 126/92 的旧读数按 §1.1 末尾的更正块读。**2026-10-03 复审真正结案**：唯一的开放项是仓库 README banner，裁定见 §6.1（选项 B），同时用 R2 射程条款修掉了 R2 字面与 §5 A2-① 的矛盾。
 - 日期：2026-10-01
 - 取代：D-15「可见品牌与分发物包括命令等命名都叫 Copaw」中"把上游既有文字改名"的全部做法
 - 关闭：D-21「界面内正文品牌名」（裁为承认上游界面叫 QwenPaw，理由见 §3.4）
@@ -16,6 +16,7 @@
 
 - **R1（禁改名）** 上游自有文件（在 base-ref `e111ec6fb` 已存在）里，不许把上游既有文字中的 `QwenPaw` 改成 `CoPaw` —— 文案、docstring、logo 引用、注册表键、安装包名都不改。**这条只管"改名"，不管"新增"**：在上游自有文件里新写的行落在 `behavior` 册，由 D-8 与封闭清单管，不归本规则管（判别式见 §1.1，这正是现有脚本的口径）。
 - **R2（正面表述）** `CoPaw` 这个名字应当只出现在 **fork 自有文件**（base-ref 不存在）里，或经 **上游原生接缝**（`<Slot>` replace/fill、`hostSdk` / PawApp setter、`provider.getConfig` 覆写、`route.replace`）注入。
+  - **射程（2026-10-03 裁定，见 §6.1）**：R2 只管两类事 —— **改名**（把上游既有文字里的 `QwenPaw` 换成 `CoPaw`）与**界面品牌注入**（console 侧可见品牌位必须走接缝）。**上游自有文件里"新写的"行不在 R2 射程内**（典型 = 仓库 README 顶部的 fork banner），它按 D-8 / P1-行为册计价管理，不按违规处理。这条裁定修掉了 R2 字面与 §5 A2-① 之间的原有矛盾。
 - **R3（分发物）** 分发物的命名由 **fork 自有的构建 overlay** 决定，实现方式不许是"改上游构建脚本"。
 
 ### 1.1 判别式（不需要新脚本）
@@ -192,6 +193,30 @@ fork 当前 v1 树：`git grep '<Slot' HEAD -- console/src/layouts` 命中 **0**
 3. **过渡期唯一例外：顶栏 CoPaw 保留到 B2。** 依据两条实测：v1 树在 `console/src/layouts` 下没有任何顶栏品牌接缝（§3.3，`<Slot>` 0 命中、无 `AppBrand.tsx`），且 fork 的 console 测试**没有一条断言品牌字样**（`grep -rln 'QwenPaw\|CoPaw' console/src --include='*.test.ts' --include='*.test.tsx'` = 0 命中），所以这 7 个 console 命名 pair 一条红都不造成；今天就退只会让产品在过渡期完全没有 CoPaw 痕迹。**这条例外的范围只到顶栏**：Chat 侧的 `welcome.avatar` / `theme.leftHeader` 在 v1 已有配置面，不受本条例外保护。
 
 补一条不需要裁的事实核对：`scripts/install.bat` 的 `echo To uninstall, run: copaw uninstall` 是**真命令**（`copaw` 与 `qwenpaw` 共享全部核心命令，见 `src/copaw/cli/main.py:12-21`；`uninstall` 在 `src/qwenpaw/cli/uninstall_cmd.py:46`）。B1 退它只是把指令收回上游入口，不产生错误说明。
+
+### 6.1 仓库 README banner 的裁定（2026-10-03，#29 复审的实际开放项）
+
+阶段 A 的 §5 A2-① 只退了 4 行**改名**，明写"fork 自写的 CoPaw 内容不动"，于是把真正的选择留在了原地：**四篇上游 README 顶部那整块 banner 要不要继续钉在上游文件里**。本轮核完价格后裁定为**选项 B（banner 只保首页）**。
+
+**为什么这不是 R1/R2 违规、而是一个纯价目问题**：R1 只管改名，R2 的射程见 §1 的射程条款（只管改名与界面注入），所以 banner 在法律上一直是允许的；裁决点只在"值不值"。原有的矛盾（R2 字面 vs §5 A2-①）由射程条款消除，不需要修改任何一方对 banner 的处置。
+
+**现算的价目（`check_p1_invariants.py --json` ∩ 上游 1.x→2.x 也改过该文件）**：
+
+| 文件 | fork 侧在册 | 上游 v2 自己改了多少 |
+|---|---|---|
+| `README.md` | +29/−4 | +177/−141 |
+| `README_zh.md` | +36/−4 | +192/−223 |
+| `README_ja.md` | +34/−4 | +230/−209 |
+| `README_ru.md` | +36/−4 | +203/−182 |
+
+三条实测事实决定了 B 优于"全保留"：① **四篇的 fork diff 整段就是 banner**（`-U0` 逐 hunk 看过，没夹带别的内容）⇒ 退回零内容损失；② 那 4 行删除**全是重排 churn**（fork 把上游的 logo 块挪到自己新加的 `## QwenPaw` 小标题下），买到 0 收益、只把冲突坐实；③ **上游 v2 对这些文件是近乎逐行重写**，且新增的两个 badge 与 trendshift 图落在**同一处头部区**（`README.md` 上游 hunk `@@ -15,6 +15,9 @@`，紧挨 fork 删掉的语言链接行）⇒ banner 的真实成本不是 135 行，是"每次同步在重写过的头部里手工重贴 4 次"。
+
+**裁定内容**：
+1. **GitHub 首页是这四篇里唯一有传播价值的渲染面**（仓库首页只渲染 `README.md`，另三篇需用户主动点语言链接）⇒ 接受"非英文 README 不再挂 CoPaw"这个可见性收缩，`README_zh/_ja/_ru.md` 逐字节退回 merge-base ⇒ **3 个宿主退出冲突面**。
+2. `README.md` 保留一个**紧凑加性** banner，且**不再动上游任何一行**（恢复被挪走的上游 logo 块与语言链接行）⇒ 该宿主从 +29/−4 降到个位数行为行，仍留在面上。
+3. banner 的完整内容（四行能力清单、社区二维码、上游指认）搬进 **fork 自有 `docs/copaw-overview.md`** —— 这正是已闭环 58 那条硬规则的适用现场："写'无落点 ⇒ 保留在册'之前必须举出已查过的 fork 自有归宿"。
+4. 搬过去前先核**时效**：四行能力清单本轮逐条对上现树符号 —— `app/routers/agents_pipeline_core.py:2840` 的 `{"fast","nlp","agentic"}`、`app/routers/sidecar.py` + `knowledge_hanlp_tasks.py`、`console/src/pages/Agent/Projects/ProjectDetailPage.tsx:741` 的 `KnowledgeDockTabKey`（Explore/Sources/Processing/Outputs/Health/Settings）、`app/routers/skills.py:69-72` 的 `SkillsMarket*` ⇒ 全部 live，不是沉没文案。
+
 
 ---
 

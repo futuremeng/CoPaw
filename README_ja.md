@@ -1,37 +1,6 @@
 <div align="center">
 
-
 # QwenPaw
-
-<p align="center">
-  <img src="console/public/copaw-icon.svg" alt="CoPaw Logo" width="120">
-</p>
-
-
-[[English](README.md)] [[中文](README_zh.md)] [[Русский](README_ru.md)]
-
-<p align="center"><b>CoPaw 拡張モジュール</b></p>
-
-<p align="center">
-  1. プロジェクト知識処理の並列レーン: fast / nlp / agentic<br>
-  2. HanLP sidecar ランタイム対応<br>
-  3. ナレッジドックのワークフロータブ: Explore / Sources / Processing / Outputs / Health / Settings<br>
-  4. コミュニティ Skills Marketplace ソース統合
-</p>
-
-
-<p align="center">
-  <img src="console/public/dingtalk.jpg" alt="CoPaw Dingtalk Group" width="300">
-</p>
-
-
-## QwenPaw
-
-<p align="center"><b>Upstream QwenPaw</b></p>
-
-<p align="center">
-  <img src="https://gw.alicdn.com/imgextra/i1/O1CN01sens5C1TuwioeGexL_!!6000000002443-55-tps-771-132.svg" alt="QwenPaw Logo" width="120">
-</p>
 
 [![GitHub Repo](https://img.shields.io/badge/GitHub-Repo-black.svg?logo=github)](https://github.com/agentscope-ai/QwenPaw)
 [![PyPI](https://img.shields.io/pypi/v/qwenpaw?color=3775A9&label=PyPI&logo=pypi)](https://pypi.org/project/qwenpaw/)
@@ -47,10 +16,11 @@
 [![X](https://img.shields.io/badge/X-Follow_Us-black.svg?logo=x)](https://x.com/agentscope_ai)
 [![DingTalk](https://img.shields.io/badge/DingTalk-Join_Us-orange.svg)](https://qr.dingtalk.com/action/joingroup?code=v1,k1,OmDlBXpjW+I2vWjKDsjvI9dhcXjGZi3bQiojOq3dlDw=&_dt_no_comment=1&origin=11)
 
-[[ドキュメント](https://qwenpaw.agentscope.io/)] 
+[[ドキュメント](https://qwenpaw.agentscope.io/)] [[English](README.md)] [[中文](README_zh.md)] [[Русский](README_ru.md)]
 
-
-
+<p align="center">
+  <img src="https://gw.alicdn.com/imgextra/i1/O1CN01sens5C1TuwioeGexL_!!6000000002443-55-tps-771-132.svg" alt="QwenPaw Logo" width="120">
+</p>
 
 <p align="center"><b>あなたのために働き、あなたとともに成長する。</b></p>
 
