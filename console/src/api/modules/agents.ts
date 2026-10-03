@@ -56,7 +56,6 @@ import type {
   RpaTemplatePackageDocument,
   ReorderAgentsResponse,
 } from "../types/agents";
-import type { MdFileInfo, MdFileContent } from "../types/workspace";
 
 function encodeProjectFilePathSegment(part: string): string {
   // Encode dots as well to avoid proxy dotfile filters on segments like ".knowledge".
@@ -112,28 +111,6 @@ export const agentsApi = {
         body: JSON.stringify({ enabled }),
       },
     ),
-
-  // Agent workspace files
-  listAgentFiles: (agentId: string) =>
-    request<MdFileInfo[]>(`/agents/${agentId}/files`),
-
-  readAgentFile: (agentId: string, filename: string) =>
-    request<MdFileContent>(
-      `/agents/${agentId}/files/${encodeURIComponent(filename)}`,
-    ),
-
-  writeAgentFile: (agentId: string, filename: string, content: string) =>
-    request<{ written: boolean; filename: string }>(
-      `/agents/${agentId}/files/${encodeURIComponent(filename)}`,
-      {
-        method: "PUT",
-        body: JSON.stringify({ content }),
-      },
-    ),
-
-  // Agent memory files
-  listAgentMemory: (agentId: string) =>
-    request<MdFileInfo[]>(`/agents/${agentId}/memory`),
 
   // Agent project files
   listProjectFiles: (agentId: string, projectId: string) =>
