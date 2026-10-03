@@ -175,7 +175,6 @@ export function useMCP() {
     }
 
     setQueuedRefreshKeys([]);
-    await refreshClients();
   }, [clients, refreshClients]);
 
   return {
