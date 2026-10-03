@@ -1105,6 +1105,14 @@
       "naming": 0,
       "removed": 3
     },
+    "src/qwenpaw/app/runner/runner.py": {
+      "added": 19,
+      "behavior_added": 19,
+      "behavior_removed": 0,
+      "mechanical": false,
+      "naming": 0,
+      "removed": 0
+    },
     "src/qwenpaw/app/runner/session.py": {
       "added": 320,
       "behavior_added": 320,
@@ -1219,11 +1227,11 @@
     }
   },
   "totals": {
-    "added": 13994,
-    "behavior_added": 13960,
-    "behavior_files": 150,
+    "added": 14013,
+    "behavior_added": 13979,
+    "behavior_files": 151,
     "behavior_removed": 2077,
-    "files": 151,
+    "files": 152,
     "mechanical_files": 1,
     "naming_files": 1,
     "naming_lines": 34,

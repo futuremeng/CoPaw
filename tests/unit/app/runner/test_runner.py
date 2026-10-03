@@ -25,6 +25,8 @@ class _DummyAgent:
     def __init__(self, *args, **kwargs) -> None:
         _ = args, kwargs
         self.interrupted = False
+        self.toolkit = SimpleNamespace(skills={})
+        self.model = SimpleNamespace(model_name="dummy-model")
         _DummyAgent.last_instance = self
 
     async def register_mcp_clients(self) -> None:
@@ -80,7 +82,6 @@ class _DummySession(SafeJSONSession):
         self.saved = True
 
 
-@pytest.mark.xfail(strict=True, reason="P1-BEHAVIOR-LOST: fork 补丁写在 src/copaw/app/runner/runner.py，随上游 rebrand 同步 bcaeb9062（copaw->qwenpaw）丢失，src/qwenpaw/app/runner/runner.py 无对应实现（transient 503 重试与友好错误消息）")
 async def test_query_handler_returns_retryable_error_msg(
     monkeypatch,
 ) -> None:
@@ -104,11 +105,11 @@ async def test_query_handler_returns_retryable_error_msg(
     monkeypatch.setattr(
         runner_module,
         "load_agent_config",
-        lambda _agent_id: SimpleNamespace(),
+        lambda _agent_id: _fake_agent_config(),
     )
     monkeypatch.setattr(
         runner_module,
-        "stream_printing_messages",
+        "_stream_printing_messages_interruptible",
         _failing_stream_printing_messages,
     )
     monkeypatch.setattr(
@@ -150,7 +151,6 @@ async def test_query_handler_returns_retryable_error_msg(
     assert cast(_DummySession, runner.session).saved is True
 
 
-@pytest.mark.xfail(strict=True, reason="P1-BEHAVIOR-LOST: fork 补丁写在 src/copaw/app/runner/runner.py，随上游 rebrand 同步 bcaeb9062（copaw->qwenpaw）丢失，src/qwenpaw/app/runner/runner.py 无对应实现（remote protocol error 友好消息）")
 async def test_query_handler_remote_protocol_error_gets_friendly_msg(
     monkeypatch,
 ) -> None:
@@ -177,11 +177,11 @@ async def test_query_handler_remote_protocol_error_gets_friendly_msg(
     monkeypatch.setattr(
         runner_module,
         "load_agent_config",
-        lambda _agent_id: SimpleNamespace(),
+        lambda _agent_id: _fake_agent_config(),
     )
     monkeypatch.setattr(
         runner_module,
-        "stream_printing_messages",
+        "_stream_printing_messages_interruptible",
         _failing_stream_printing_messages,
     )
     monkeypatch.setattr(
@@ -223,7 +223,17 @@ async def test_query_handler_remote_protocol_error_gets_friendly_msg(
     assert cast(_DummySession, runner.session).saved is True
 
 
-@pytest.mark.xfail(strict=True, reason="P1-BEHAVIOR-LOST: fork 补丁写在 src/copaw/app/runner/runner.py，随上游 rebrand 同步 bcaeb9062（copaw->qwenpaw）丢失，src/qwenpaw/app/runner/runner.py 无对应实现（可中断 stream 取消处理）")
+def _fake_agent_config():
+    """Minimal agent config shape query_handler reads before running."""
+    return SimpleNamespace(
+        running=SimpleNamespace(shell_command_executable=None),
+        coding_mode=None,
+        plan=None,
+        language="zh",
+    )
+
+
+@pytest.mark.xfail(strict=True, reason="P1-BEHAVIOR-LOST（可中断 stream 取消收尾）：fork 版在 cancel 时静默 return，v2 现抛 AgentException('Task has been cancelled!')（runner.py 的 CancelledError 分支）；推翻上游这条属产品决策，未单方面改；丢失点是 deca2612a（2026-05-13 merge upstream/main 取了 upstream 侧），不是 bcaeb9062 rebrand")
 async def test_query_handler_cancelled_stops_gracefully(monkeypatch) -> None:
     from qwenpaw.app.runner import runner as runner_module
 
@@ -245,11 +255,11 @@ async def test_query_handler_cancelled_stops_gracefully(monkeypatch) -> None:
     monkeypatch.setattr(
         runner_module,
         "load_agent_config",
-        lambda _agent_id: SimpleNamespace(),
+        lambda _agent_id: _fake_agent_config(),
     )
     monkeypatch.setattr(
         runner_module,
-        "stream_printing_messages",
+        "_stream_printing_messages_interruptible",
         _cancelled_stream_printing_messages,
     )
 
@@ -283,7 +293,6 @@ async def test_query_handler_cancelled_stops_gracefully(monkeypatch) -> None:
     assert cast(_DummyAgent, _DummyAgent.last_instance).interrupted is True
 
 
-@pytest.mark.xfail(strict=True, reason="P1-BEHAVIOR-LOST: fork 补丁写在 src/copaw/app/runner/runner.py，随上游 rebrand 同步 bcaeb9062（copaw->qwenpaw）丢失，src/qwenpaw/app/runner/runner.py 无对应实现（MCP 连接错误抑制）")
 async def test_query_handler_suppresses_mcp_connection_error(
     monkeypatch,
 ) -> None:
@@ -310,11 +319,11 @@ async def test_query_handler_suppresses_mcp_connection_error(
     monkeypatch.setattr(
         runner_module,
         "load_agent_config",
-        lambda _agent_id: SimpleNamespace(),
+        lambda _agent_id: _fake_agent_config(),
     )
     monkeypatch.setattr(
         runner_module,
-        "stream_printing_messages",
+        "_stream_printing_messages_interruptible",
         _failing_stream_printing_messages,
     )
 
@@ -346,7 +355,7 @@ async def test_query_handler_suppresses_mcp_connection_error(
     assert cast(_DummySession, runner.session).saved is True
 
 
-@pytest.mark.xfail(strict=True, reason="P1-BEHAVIOR-LOST: fork 补丁写在 src/copaw/app/runner/runner.py，随上游 rebrand 同步 bcaeb9062（copaw->qwenpaw）丢失，src/qwenpaw/app/runner/runner.py 无对应实现（stream_query 取消收尾）")
+@pytest.mark.xfail(strict=True, reason="P1-BEHAVIOR-LOST（stream_query 取消收尾）：cancel 现在冒出 3 个 failed 事件，fork 版把它收成 completed；与上一条同源：随 deca2612a（2026-05-13）一起丢失")
 async def test_stream_query_cancelled_finishes_without_failed_event(
     monkeypatch,
 ) -> None:
@@ -371,11 +380,11 @@ async def test_stream_query_cancelled_finishes_without_failed_event(
     monkeypatch.setattr(
         runner_module,
         "load_agent_config",
-        lambda _agent_id: SimpleNamespace(),
+        lambda _agent_id: _fake_agent_config(),
     )
     monkeypatch.setattr(
         runner_module,
-        "stream_printing_messages",
+        "_stream_printing_messages_interruptible",
         _cancelled_stream_printing_messages,
     )
 
@@ -405,7 +414,7 @@ async def test_stream_query_cancelled_finishes_without_failed_event(
     assert all(getattr(event, "error", None) is None for event in events)
 
 
-@pytest.mark.xfail(strict=True, reason="P1-BEHAVIOR-LOST: fork 补丁写在 src/copaw/app/runner/runner.py，随上游 rebrand 同步 bcaeb9062（copaw->qwenpaw）丢失，src/qwenpaw/app/runner/runner.py 无对应实现（context overflow -> compaction 重试，原 commit d6557ea1d）")
+@pytest.mark.xfail(strict=True, reason="P1-BEHAVIOR-LOST（context overflow -> compaction 重试，原 d6557ea1d）：重试循环随 deca2612a（2026-05-13 merge upstream/main 取 upstream 侧）丢失；fork 依赖的 MemoryCompactionHook 已被上游 #3548 删除（已闭环 52 删掉其复活壳），要按 v2 LightContextManager.compact_context 重锚并验证历史回写")
 async def test_query_handler_context_overflow_retries_once(
     monkeypatch,
 ) -> None:
@@ -447,11 +456,11 @@ async def test_query_handler_context_overflow_retries_once(
     monkeypatch.setattr(
         runner_module,
         "load_agent_config",
-        lambda _agent_id: SimpleNamespace(),
+        lambda _agent_id: _fake_agent_config(),
     )
     monkeypatch.setattr(
         runner_module,
-        "stream_printing_messages",
+        "_stream_printing_messages_interruptible",
         _stream_with_one_overflow,
     )
 
@@ -486,7 +495,6 @@ async def test_query_handler_context_overflow_retries_once(
     assert state["calls"] == 2
 
 
-@pytest.mark.xfail(strict=True, reason="P1-BEHAVIOR-LOST: fork 补丁写在 src/copaw/app/runner/runner.py，随上游 rebrand 同步 bcaeb9062（copaw->qwenpaw）丢失，src/qwenpaw/app/runner/runner.py 无对应实现（context overflow 友好消息）")
 async def test_query_handler_context_overflow_returns_friendly_msg(
     monkeypatch,
 ) -> None:
@@ -514,11 +522,11 @@ async def test_query_handler_context_overflow_returns_friendly_msg(
     monkeypatch.setattr(
         runner_module,
         "load_agent_config",
-        lambda _agent_id: SimpleNamespace(),
+        lambda _agent_id: _fake_agent_config(),
     )
     monkeypatch.setattr(
         runner_module,
-        "stream_printing_messages",
+        "_stream_printing_messages_interruptible",
         _always_overflow_stream,
     )
     monkeypatch.setattr(
@@ -558,3 +566,76 @@ async def test_query_handler_context_overflow_returns_friendly_msg(
     assert "上下文窗口已满" in text
     assert "/compact" in text
     assert "copaw_query_error_overflow.json" in text
+
+
+async def test_query_handler_tool_call_parse_error_gets_friendly_msg(
+    monkeypatch,
+) -> None:
+    from qwenpaw.app.runner import runner as runner_module
+
+    async def _no_approval(session_id: str, query: str | None):
+        _ = session_id, query
+        return None, False, None
+
+    async def _failing_stream(*args, **kwargs):
+        _ = args, kwargs
+        raise RuntimeError(
+            "Failed to parse input, parameters cannot be extracted: "
+            'the model emitted an XML-style tool_call payload"',
+        )
+        yield  # pragma: no cover
+
+    runner = AgentRunner()
+    runner.session = _DummySession()
+    cast(Any, runner)._resolve_pending_approval = _no_approval
+
+    monkeypatch.setattr(runner_module, "QwenPawAgent", _DummyAgent)
+    monkeypatch.setattr(
+        runner_module, "build_env_context", lambda **kwargs: kwargs
+    )
+    monkeypatch.setattr(
+        runner_module,
+        "load_agent_config",
+        lambda _agent_id: _fake_agent_config(),
+    )
+    monkeypatch.setattr(
+        runner_module,
+        "_stream_printing_messages_interruptible",
+        _failing_stream,
+    )
+    monkeypatch.setattr(
+        runner_module,
+        "write_query_error_dump",
+        lambda **kwargs: "/tmp/copaw_query_error_parse.json",
+    )
+
+    msgs = [
+        Msg(
+            name="user",
+            role="user",
+            content=[TextBlock(type="text", text="继续")],
+        ),
+    ]
+    request = cast(
+        AgentRequest,
+        SimpleNamespace(
+            session_id="session-1",
+            user_id="user-1",
+            channel="console",
+        ),
+    )
+
+    results = []
+    stream = cast(
+        AsyncIterator[tuple[Msg, bool]],
+        cast(Any, runner).query_handler(msgs, request=request),
+    )
+    async for msg, last in stream:
+        results.append((msg, last))
+
+    assert len(results) == 1
+    msg, last = results[0]
+    text = cast(str, msg.get_text_content() or "")
+    assert last is True
+    assert "不接受工具调用格式" in text
+    assert "copaw_query_error_parse.json" in text

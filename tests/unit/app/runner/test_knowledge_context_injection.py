@@ -55,7 +55,7 @@ class _DummySession(SafeJSONSession):
         _ = session_id, user_id, state_modules_mapping
 
 
-@pytest.mark.xfail(strict=True, reason="P1-BEHAVIOR-LOST: fork 补丁写在 src/copaw/app/runner/runner.py，随上游 rebrand 同步 bcaeb9062（copaw->qwenpaw）丢失，src/qwenpaw/app/runner/runner.py 无对应实现（知识库上下文注入，原 commit dc6337ad0/bcd405ddb）")
+@pytest.mark.xfail(strict=True, reason="P1-BEHAVIOR-LOST（知识库上下文注入，原 dc6337ad0/bcd405ddb）：随 deca2612a（2026-05-13 merge upstream/main 取 upstream 侧）丢失，不是 bcaeb9062 rebrand；恢复落点取决于知识层 (A) 留 src/qwenpaw / (B) 改造 PawApp 的裁决（迁移计划未验 27），不在 runner 单文件里补")
 async def test_query_handler_does_not_inject_knowledge_context(monkeypatch) -> None:
     from qwenpaw.app.runner import runner as runner_module
 
@@ -131,7 +131,7 @@ async def test_query_handler_does_not_inject_knowledge_context(monkeypatch) -> N
     assert captured[0].role == "user"
 
 
-@pytest.mark.xfail(strict=True, reason="P1-BEHAVIOR-LOST: fork 补丁写在 src/copaw/app/runner/runner.py，随上游 rebrand 同步 bcaeb9062（copaw->qwenpaw）丢失，src/qwenpaw/app/runner/runner.py 无对应实现（知识库上下文注入，原 commit dc6337ad0/bcd405ddb）")
+@pytest.mark.xfail(strict=True, reason="P1-BEHAVIOR-LOST（知识库上下文注入，原 dc6337ad0/bcd405ddb）：随 deca2612a（2026-05-13 merge upstream/main 取 upstream 侧）丢失，不是 bcaeb9062 rebrand；恢复落点取决于知识层 (A) 留 src/qwenpaw / (B) 改造 PawApp 的裁决（迁移计划未验 27），不在 runner 单文件里补")
 async def test_query_handler_skips_knowledge_context_when_disabled(monkeypatch) -> None:
     from qwenpaw.app.runner import runner as runner_module
 

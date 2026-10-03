@@ -26,6 +26,7 @@ from .command_dispatch import (
     run_command_path,
 )
 from .query_error_dump import write_query_error_dump
+from .query_error_resilience import classify_query_error
 from .mission_dispatch import (
     maybe_handle_mission_command,
     detect_active_mission_phase,
@@ -975,6 +976,24 @@ class AgentRunner(Runner):
                     converted.args = (
                         f"{converted.args[0]}{suffix}",
                     ) + converted.args[1:]
+
+            disposition = classify_query_error(
+                e,
+                agent_name=self.agent_name,
+                debug_dump_path=debug_dump_path,
+            )
+            if disposition.suppress:
+                logger.warning(
+                    "Suppressing MCP connectivity error in query output;"
+                    " session_id=%s user_id=%s channel=%s",
+                    session_id,
+                    user_id,
+                    channel,
+                )
+                return
+            if disposition.message is not None:
+                yield disposition.message, True
+                return
             raise converted from e
         finally:
             if agent is not None and session_state_loaded:
