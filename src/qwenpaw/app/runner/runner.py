@@ -26,7 +26,10 @@ from .command_dispatch import (
     run_command_path,
 )
 from .query_error_dump import write_query_error_dump
-from .query_error_resilience import classify_query_error
+from .query_error_resilience import (
+    classify_query_error,
+    retry_on_context_overflow,
+)
 from .mission_dispatch import (
     maybe_handle_mission_command,
     detect_active_mission_phase,
@@ -907,9 +910,16 @@ class AgentRunner(Runner):
                     ):
                         yield msg, last
             else:
-                async for msg, last in _stream_printing_messages_interruptible(
-                    agents=[agent],
-                    coroutine_task=agent(msgs),
+                stream_printing = _stream_printing_messages_interruptible
+                async for msg, last in retry_on_context_overflow(
+                    agent=agent,
+                    channel=channel,
+                    session_id=session_id,
+                    stream_factory=lambda: stream_printing(
+                        agents=[agent],
+                        coroutine_task=agent(msgs),
+                    ),
+                    user_id=user_id,
                 ):
                     yield msg, last
 

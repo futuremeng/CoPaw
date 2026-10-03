@@ -5,17 +5,22 @@ The fork shipped this behaviour on top of the runner's error path before an
 upstream sync dropped it.  Transient provider failures, transport errors, MCP
 connectivity noise, rejected tool-call formats and context overflow each end
 the turn with a readable bilingual chat message (or silently, for MCP noise)
-instead of surfacing as an unknown-agent failure.
+instead of surfacing as an unknown-agent failure.  A context overflow first
+compacts the agent's own history and replays the turn once.
 """
 from __future__ import annotations
 
+import logging
 import re
+from collections.abc import AsyncGenerator, AsyncIterator, Callable
 from dataclasses import dataclass
-from typing import Optional
+from typing import Any, Optional
 
 from agentscope.message import Msg, TextBlock
 
 from ...constant import LLM_MAX_RETRIES
+
+logger = logging.getLogger(__name__)
 
 _TRANSIENT_UPSTREAM_STATUS_CODES = {429, 500, 502, 503, 504}
 
@@ -194,6 +199,78 @@ def is_context_overflow_error(exc: BaseException) -> bool:
         if any(pattern in text for pattern in _CONTEXT_OVERFLOW_PATTERNS):
             return True
     return False
+
+
+async def force_context_compaction(agent: Any) -> bool:
+    """Run one round of the agent's own compaction; report whether it bit.
+
+    ``pre_reasoning`` is the in-tree replacement for the retired
+    ``MemoryCompactionHook``.  Only an observable shrink (a new summary or a
+    shorter history) counts as success, so a no-op does not cost a second
+    doomed request.
+    """
+    memory = getattr(agent, "memory", None)
+    context_manager = getattr(agent, "context_manager", None)
+    if memory is None or context_manager is None:
+        return False
+
+    try:
+        before_summary = memory.get_compressed_summary() or ""
+        before_history = await memory.get_memory(prepend_summary=False)
+        await context_manager.pre_reasoning(agent, {})
+        after_summary = memory.get_compressed_summary() or ""
+        after_history = await memory.get_memory(prepend_summary=False)
+    except Exception as exc:
+        logger.warning(
+            "Forced context compaction attempt failed: %s",
+            exc,
+        )
+        return False
+
+    if after_summary != before_summary:
+        return True
+    return len(after_history) < len(before_history)
+
+
+async def retry_on_context_overflow(
+    *,
+    stream_factory: Callable[[], AsyncIterator[tuple[Msg, bool]]],
+    agent: Any,
+    session_id: str,
+    user_id: str,
+    channel: str,
+) -> AsyncGenerator[tuple[Msg, bool], None]:
+    """Replay a turn once after compacting when the provider overflows.
+
+    Partial output already streamed to the chat disqualifies a retry; the
+    second attempt would repeat it verbatim.
+    """
+    retry_budget = 1
+    streamed_any = False
+
+    while True:
+        try:
+            async for msg, last in stream_factory():
+                streamed_any = True
+                yield msg, last
+            return
+        except Exception as exc:
+            if (
+                streamed_any
+                or retry_budget <= 0
+                or not is_context_overflow_error(exc)
+            ):
+                raise
+            if not await force_context_compaction(agent):
+                raise
+            retry_budget -= 1
+            logger.warning(
+                "Context overflow detected; compacted memory and retrying "
+                "once. session_id=%s user_id=%s channel=%s",
+                session_id,
+                user_id,
+                channel,
+            )
 
 
 def _detail_suffix(debug_dump_path: Optional[str]) -> str:

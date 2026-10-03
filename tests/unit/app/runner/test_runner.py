@@ -414,10 +414,10 @@ async def test_stream_query_cancelled_finishes_without_failed_event(
     assert all(getattr(event, "error", None) is None for event in events)
 
 
-@pytest.mark.xfail(strict=True, reason="P1-BEHAVIOR-LOST（context overflow -> compaction 重试，原 d6557ea1d）：重试循环随 deca2612a（2026-05-13 merge upstream/main 取 upstream 侧）丢失；fork 依赖的 MemoryCompactionHook 已被上游 #3548 删除（已闭环 52 删掉其复活壳），要按 v2 LightContextManager.compact_context 重锚并验证历史回写")
 async def test_query_handler_context_overflow_retries_once(
     monkeypatch,
 ) -> None:
+    from qwenpaw.app.runner import query_error_resilience
     from qwenpaw.app.runner import runner as runner_module
 
     async def _no_approval(session_id: str, query: str | None):
@@ -449,7 +449,11 @@ async def test_query_handler_context_overflow_retries_once(
     runner = AgentRunner()
     runner.session = _DummySession()
     cast(Any, runner)._resolve_pending_approval = _no_approval
-    cast(Any, runner)._force_context_compaction = _force_compact
+    monkeypatch.setattr(
+        query_error_resilience,
+        "force_context_compaction",
+        _force_compact,
+    )
 
     monkeypatch.setattr(runner_module, "QwenPawAgent", _DummyAgent)
     monkeypatch.setattr(runner_module, "build_env_context", lambda **kwargs: kwargs)
