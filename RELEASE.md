@@ -140,3 +140,13 @@ Avoid deleting published package versions from public registries unless strictly
 Use the release issue template to track each release execution:
 
 - `.github/ISSUE_TEMPLATE/6-release_checklist.md`
+
+### 10.1 Release PR content checklist
+
+Release PRs only. Non-release PRs can skip this subsection.
+
+- [ ] I followed `RELEASE.md` (and `RELEASE_zh.md` if needed).
+- [ ] `src/qwenpaw/__version__.py` is updated with the target version.
+- [ ] I validated the version format (PEP 440).
+- [ ] I completed a release checklist issue using `.github/ISSUE_TEMPLATE/6-release_checklist.md`.
+- [ ] I verified the target release type (stable/prerelease/post) and tag naming.

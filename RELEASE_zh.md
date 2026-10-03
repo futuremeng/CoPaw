@@ -140,3 +140,13 @@ Docker 标签逻辑定义在 `.github/workflows/docker-release.yml`：
 每次发布可使用以下 issue 模板进行过程留痕：
 
 - `.github/ISSUE_TEMPLATE/6-release_checklist.md`
+
+### 10.1 发布类 PR 内容清单
+
+仅发布类 PR 需要勾选，非发布 PR 可跳过本节。
+
+- [ ] 我已按 `RELEASE.md`（如需要也参考 `RELEASE_zh.md`）执行发布流程。
+- [ ] 我已将目标版本更新到 `src/qwenpaw/__version__.py`。
+- [ ] 我已校验版本格式（PEP 440）。
+- [ ] 我已使用 `.github/ISSUE_TEMPLATE/6-release_checklist.md` 创建并完成发布检查清单 issue。
+- [ ] 我已确认发布类型（stable/prerelease/post）与 tag 命名。

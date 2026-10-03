@@ -102,6 +102,14 @@ git push -u origin feat/upstream/<topic>
 - from: `futuremeng:feat/upstream/<topic>`
 - to: `agentscope-ai:main`
 
+### 5.4 PR 内容模板与自查（必做）
+
+- 标准 PR 内容模板固定为：`.github/PULL_REQUEST_TEMPLATE.md`。
+- 生成 PR 描述前，必须先按该模板逐项自查：Type of Change、Component(s) Affected、Checklist、Testing、Local Verification Evidence。
+- 自查完成后再按同一模板结构生成并提交 PR 描述；禁止省略模板关键区块。
+- 若实际未执行某项检查（例如 `pre-commit` 或 `pytest`），必须在模板对应位置明确标注"未执行"，不得留空或默认勾选通过。
+- 发布类 PR 另需按 [`RELEASE.md`](../RELEASE.md) / [`RELEASE_zh.md`](../RELEASE_zh.md) 第 10 节的发布清单自查，见该节而非本节。
+
 ## 6. 仅保留在 fork 的功能
 
 ```bash

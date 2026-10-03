@@ -96,7 +96,6 @@ Run only the locale split guard:
 
 ```bash
 python scripts/check_copaw_locale_split.py
-make check-locale-split
 ```
 
 - Verifies split CoPaw locale files exist and are non-empty.

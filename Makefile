@@ -1,6 +1,6 @@
 # CoPaw Test & Coverage Makefile
 
-.PHONY: test test-unit test-contract test-integration test-channel test-channel-contract coverage-full clean check-locale-split
+.PHONY: test test-unit test-contract test-integration test-channel test-channel-contract coverage-full clean
 
 # Python path
 PYTHON := python
@@ -32,10 +32,6 @@ coverage-full:
 # Check contract coverage for all channels
 check-contracts:
 	$(PYTHON) scripts/check_channel_contracts.py
-
-# Check split CoPaw locale guard
-check-locale-split:
-	$(PYTHON) scripts/check_copaw_locale_split.py
 
 # Clean generated files
 clean:
