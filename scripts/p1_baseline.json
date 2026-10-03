@@ -1,14 +1,6 @@
 {
   "base_ref": "e111ec6fb",
   "files": {
-    ".github/ISSUE_TEMPLATE/config.yml": {
-      "added": 3,
-      "behavior_added": 3,
-      "behavior_removed": 0,
-      "mechanical": false,
-      "naming": 0,
-      "removed": 0
-    },
     ".github/PULL_REQUEST_TEMPLATE.md": {
       "added": 16,
       "behavior_added": 16,
@@ -16,22 +8,6 @@
       "mechanical": false,
       "naming": 0,
       "removed": 0
-    },
-    ".github/workflows/frontend-tests.yml": {
-      "added": 10,
-      "behavior_added": 10,
-      "behavior_removed": 0,
-      "mechanical": false,
-      "naming": 0,
-      "removed": 0
-    },
-    ".github/workflows/pr-under-review.yml": {
-      "added": 0,
-      "behavior_added": 0,
-      "behavior_removed": 2,
-      "mechanical": false,
-      "naming": 0,
-      "removed": 2
     },
     ".gitignore": {
       "added": 4,
@@ -66,36 +42,36 @@
       "removed": 1
     },
     "README.md": {
-      "added": 59,
-      "behavior_added": 59,
-      "behavior_removed": 18,
+      "added": 29,
+      "behavior_added": 29,
+      "behavior_removed": 4,
       "mechanical": false,
       "naming": 0,
-      "removed": 18
+      "removed": 4
     },
     "README_ja.md": {
-      "added": 64,
-      "behavior_added": 64,
-      "behavior_removed": 21,
+      "added": 34,
+      "behavior_added": 34,
+      "behavior_removed": 4,
       "mechanical": false,
       "naming": 0,
-      "removed": 21
+      "removed": 4
     },
     "README_ru.md": {
-      "added": 66,
-      "behavior_added": 66,
-      "behavior_removed": 21,
+      "added": 36,
+      "behavior_added": 36,
+      "behavior_removed": 4,
       "mechanical": false,
       "naming": 0,
-      "removed": 21
+      "removed": 4
     },
     "README_zh.md": {
-      "added": 69,
-      "behavior_added": 69,
-      "behavior_removed": 18,
+      "added": 36,
+      "behavior_added": 36,
+      "behavior_removed": 4,
       "mechanical": false,
       "naming": 0,
-      "removed": 18
+      "removed": 4
     },
     "console/index.html": {
       "added": 12,
@@ -322,12 +298,12 @@
       "removed": 5
     },
     "console/src/i18n.ts": {
-      "added": 91,
-      "behavior_added": 91,
-      "behavior_removed": 7,
+      "added": 16,
+      "behavior_added": 16,
+      "behavior_removed": 1,
       "mechanical": false,
       "naming": 0,
-      "removed": 7
+      "removed": 1
     },
     "console/src/layouts/Header.tsx": {
       "added": 8,
@@ -368,54 +344,6 @@
       "mechanical": false,
       "naming": 0,
       "removed": 4
-    },
-    "console/src/locales/en.json": {
-      "added": 128,
-      "behavior_added": 128,
-      "behavior_removed": 0,
-      "mechanical": false,
-      "naming": 0,
-      "removed": 0
-    },
-    "console/src/locales/id.json": {
-      "added": 13,
-      "behavior_added": 13,
-      "behavior_removed": 2,
-      "mechanical": false,
-      "naming": 0,
-      "removed": 2
-    },
-    "console/src/locales/ja.json": {
-      "added": 11,
-      "behavior_added": 11,
-      "behavior_removed": 0,
-      "mechanical": false,
-      "naming": 0,
-      "removed": 0
-    },
-    "console/src/locales/pt-BR.json": {
-      "added": 11,
-      "behavior_added": 11,
-      "behavior_removed": 0,
-      "mechanical": false,
-      "naming": 0,
-      "removed": 0
-    },
-    "console/src/locales/ru.json": {
-      "added": 11,
-      "behavior_added": 11,
-      "behavior_removed": 0,
-      "mechanical": false,
-      "naming": 0,
-      "removed": 0
-    },
-    "console/src/locales/zh.json": {
-      "added": 128,
-      "behavior_added": 128,
-      "behavior_removed": 0,
-      "mechanical": false,
-      "naming": 0,
-      "removed": 0
     },
     "console/src/pages/Agent/Config/components/LightContextCard.tsx": {
       "added": 2,
@@ -905,14 +833,6 @@
       "naming": 0,
       "removed": 2
     },
-    "src/qwenpaw/agents/hooks/__init__.py": {
-      "added": 3,
-      "behavior_added": 3,
-      "behavior_removed": 0,
-      "mechanical": false,
-      "naming": 0,
-      "removed": 0
-    },
     "src/qwenpaw/agents/memory/agent_md_manager.py": {
       "added": 4,
       "behavior_added": 4,
@@ -1010,20 +930,12 @@
       "removed": 0
     },
     "src/qwenpaw/app/_app.py": {
-      "added": 43,
-      "behavior_added": 43,
-      "behavior_removed": 15,
+      "added": 41,
+      "behavior_added": 41,
+      "behavior_removed": 13,
       "mechanical": false,
       "naming": 0,
-      "removed": 15
-    },
-    "src/qwenpaw/app/agent_config_watcher.py": {
-      "added": 221,
-      "behavior_added": 221,
-      "behavior_removed": 110,
-      "mechanical": false,
-      "naming": 0,
-      "removed": 110
+      "removed": 13
     },
     "src/qwenpaw/app/agent_context.py": {
       "added": 59,
@@ -1052,10 +964,10 @@
     "src/qwenpaw/app/mcp/manager.py": {
       "added": 194,
       "behavior_added": 194,
-      "behavior_removed": 16,
+      "behavior_removed": 13,
       "mechanical": false,
       "naming": 0,
-      "removed": 16
+      "removed": 13
     },
     "src/qwenpaw/app/mcp/stateful_client.py": {
       "added": 690,
@@ -1074,12 +986,12 @@
       "removed": 8
     },
     "src/qwenpaw/app/migration.py": {
-      "added": 156,
-      "behavior_added": 156,
-      "behavior_removed": 125,
+      "added": 160,
+      "behavior_added": 160,
+      "behavior_removed": 75,
       "mechanical": false,
       "naming": 0,
-      "removed": 125
+      "removed": 75
     },
     "src/qwenpaw/app/multi_agent_manager.py": {
       "added": 18,
@@ -1145,14 +1057,6 @@
       "naming": 0,
       "removed": 4
     },
-    "src/qwenpaw/app/routers/tools.py": {
-      "added": 28,
-      "behavior_added": 28,
-      "behavior_removed": 111,
-      "mechanical": false,
-      "naming": 0,
-      "removed": 111
-    },
     "src/qwenpaw/app/routers/workspace.py": {
       "added": 105,
       "behavior_added": 105,
@@ -1210,12 +1114,12 @@
       "removed": 176
     },
     "src/qwenpaw/app/workspace/service_factories.py": {
-      "added": 16,
-      "behavior_added": 16,
-      "behavior_removed": 1,
+      "added": 14,
+      "behavior_added": 14,
+      "behavior_removed": 0,
       "mechanical": false,
       "naming": 0,
-      "removed": 1
+      "removed": 0
     },
     "src/qwenpaw/app/workspace/workspace.py": {
       "added": 36,
@@ -1226,20 +1130,12 @@
       "removed": 40
     },
     "src/qwenpaw/cli/desktop_cmd.py": {
-      "added": 212,
-      "behavior_added": 212,
-      "behavior_removed": 133,
+      "added": 111,
+      "behavior_added": 111,
+      "behavior_removed": 0,
       "mechanical": false,
       "naming": 0,
-      "removed": 133
-    },
-    "src/qwenpaw/config/__init__.py": {
-      "added": 0,
-      "behavior_added": 0,
-      "behavior_removed": 2,
-      "mechanical": false,
-      "naming": 0,
-      "removed": 2
+      "removed": 0
     },
     "src/qwenpaw/config/config.py": {
       "added": 73,
@@ -1282,12 +1178,12 @@
       "removed": 2
     },
     "src/qwenpaw/providers/openai_chat_model_compat.py": {
-      "added": 114,
-      "behavior_added": 114,
-      "behavior_removed": 11,
+      "added": 8,
+      "behavior_added": 8,
+      "behavior_removed": 0,
       "mechanical": false,
       "naming": 0,
-      "removed": 11
+      "removed": 0
     },
     "src/qwenpaw/providers/openai_provider.py": {
       "added": 11,
@@ -1320,58 +1216,18 @@
       "mechanical": false,
       "naming": 0,
       "removed": 2
-    },
-    "src/qwenpaw/token_usage/model_wrapper.py": {
-      "added": 0,
-      "behavior_added": 0,
-      "behavior_removed": 8,
-      "mechanical": false,
-      "naming": 0,
-      "removed": 8
-    },
-    "website/public/docs/cli.en.md": {
-      "added": 2,
-      "behavior_added": 2,
-      "behavior_removed": 2,
-      "mechanical": false,
-      "naming": 0,
-      "removed": 2
-    },
-    "website/public/docs/cli.zh.md": {
-      "added": 2,
-      "behavior_added": 2,
-      "behavior_removed": 2,
-      "mechanical": false,
-      "naming": 0,
-      "removed": 2
-    },
-    "website/public/docs/desktop.en.md": {
-      "added": 0,
-      "behavior_added": 0,
-      "behavior_removed": 2,
-      "mechanical": false,
-      "naming": 0,
-      "removed": 2
-    },
-    "website/public/docs/desktop.zh.md": {
-      "added": 0,
-      "behavior_added": 0,
-      "behavior_removed": 2,
-      "mechanical": false,
-      "naming": 0,
-      "removed": 2
     }
   },
   "totals": {
-    "added": 14970,
-    "behavior_added": 14936,
-    "behavior_files": 168,
-    "behavior_removed": 2588,
-    "files": 169,
+    "added": 13994,
+    "behavior_added": 13960,
+    "behavior_files": 150,
+    "behavior_removed": 2077,
+    "files": 151,
     "mechanical_files": 1,
     "naming_files": 1,
     "naming_lines": 34,
     "naming_touched_files": 9,
-    "removed": 2622
+    "removed": 2111
   }
 }
