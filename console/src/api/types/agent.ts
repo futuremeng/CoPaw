@@ -16,35 +16,6 @@ export interface ContextCompactConfig {
   compact_with_thinking_block: boolean;
 }
 
-export interface ToolResultCompactConfig {
-  enabled: boolean;
-  recent_n: number;
-  old_max_bytes: number;
-  recent_max_bytes: number;
-  retention_days: number;
-}
-
-export interface MemorySummaryConfig {
-  memory_summary_enabled: boolean;
-  force_memory_search: boolean;
-  force_max_results: number;
-  force_min_score: number;
-  rebuild_memory_index_on_start: boolean;
-}
-
-export interface EmbeddingConfig {
-  backend: string;
-  api_key: string;
-  base_url: string;
-  model_name: string;
-  dimensions: number;
-  enable_cache: boolean;
-  use_dimensions: boolean;
-  max_cache_size: number;
-  max_input_length: number;
-  max_batch_size: number;
-}
-
 export interface LightContextCompactConfig {
   enabled: boolean;
   compact_threshold_ratio: number;
@@ -152,9 +123,6 @@ export interface AgentsRunningConfig {
   knowledge_long_text_min_chars: number;
   knowledge_chunk_size: number;
   context_compact: ContextCompactConfig;
-  tool_result_compact: ToolResultCompactConfig;
-  memory_summary: MemorySummaryConfig;
-  embedding_config: EmbeddingConfig;
   memory_manager_backend: "remelight" | string;
   reme_light_memory_config?: ReMeLightMemoryConfig;
   approval_level?: string;
