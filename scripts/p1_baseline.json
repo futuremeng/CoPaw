@@ -1,14 +1,6 @@
 {
   "base_ref": "e111ec6fb",
   "files": {
-    ".github/PULL_REQUEST_TEMPLATE.md": {
-      "added": 16,
-      "behavior_added": 16,
-      "behavior_removed": 0,
-      "mechanical": false,
-      "naming": 0,
-      "removed": 0
-    },
     ".gitignore": {
       "added": 4,
       "behavior_added": 4,
@@ -16,30 +8,6 @@
       "mechanical": false,
       "naming": 0,
       "removed": 0
-    },
-    "CONTRIBUTING.md": {
-      "added": 7,
-      "behavior_added": 7,
-      "behavior_removed": 0,
-      "mechanical": false,
-      "naming": 0,
-      "removed": 0
-    },
-    "CONTRIBUTING_zh.md": {
-      "added": 7,
-      "behavior_added": 7,
-      "behavior_removed": 0,
-      "mechanical": false,
-      "naming": 0,
-      "removed": 0
-    },
-    "Makefile": {
-      "added": 5,
-      "behavior_added": 5,
-      "behavior_removed": 1,
-      "mechanical": false,
-      "naming": 0,
-      "removed": 1
     },
     "README.md": {
       "added": 29,
@@ -754,8 +722,8 @@
       "removed": 1
     },
     "scripts/README.md": {
-      "added": 152,
-      "behavior_added": 152,
+      "added": 151,
+      "behavior_added": 151,
       "behavior_removed": 1,
       "mechanical": false,
       "naming": 0,
@@ -1227,15 +1195,15 @@
     }
   },
   "totals": {
-    "added": 14026,
-    "behavior_added": 13992,
-    "behavior_files": 151,
-    "behavior_removed": 2080,
-    "files": 152,
+    "added": 13990,
+    "behavior_added": 13956,
+    "behavior_files": 147,
+    "behavior_removed": 2079,
+    "files": 148,
     "mechanical_files": 1,
     "naming_files": 1,
     "naming_lines": 34,
     "naming_touched_files": 9,
-    "removed": 2114
+    "removed": 2113
   }
 }
