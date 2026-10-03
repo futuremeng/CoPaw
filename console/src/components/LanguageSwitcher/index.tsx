@@ -22,6 +22,7 @@ const LANGUAGE_LIST: LanguageConfig[] = [
   { key: "ja", label: "日本語", icon: <SparkJapanLine /> },
   { key: "ru", label: "Русский", icon: <SparkRusLine /> },
   { key: "pt-BR", label: "Português (Brasil)", icon: <SparkEnglish02Line /> },
+  { key: "id", label: "Bahasa Indonesia", icon: <SparkEnglish02Line /> },
 ];
 
 const KNOWN_LANG_KEYS = new Set(LANGUAGE_LIST.map((lang) => lang.key));

@@ -42,7 +42,7 @@ export const ChannelCard = React.memo(function ChannelCard({
       onMouseEnter={() => setIsHover(true)}
       onMouseLeave={() => setIsHover(false)}
       className={getCardClassNames()}
-      styles={{ body: { padding: 24 } }}
+      bodyStyle={{ padding: 24 }}
     >
       {/* Top section: Icon and Status */}
       <div className={styles.cardTopSection}>

@@ -244,7 +244,7 @@ export const createColumns = (
               </div>
             }
             placement="topLeft"
-            styles={{ body: { maxWidth: 400 } }}
+            overlayInnerStyle={{ maxWidth: 400 }}
           >
             <code className={styles.codeLink}>{truncatedText}</code>
           </Tooltip>
