@@ -95,13 +95,32 @@ def test_refresh_route_503_without_manager(client_factory) -> None:
     assert client.post("/mcp/demo/refresh-status").status_code == 503
 
 
+def _route_pairs(routes) -> set:
+    """Flatten a router tree to (path, method) pairs.
+
+    Newer FastAPI keeps an included router as a lazy wrapper instead of
+    flattening it into APIRoute objects, so the walk has to follow it.
+    """
+    pairs = set()
+    stack = list(routes)
+    while stack:
+        route = stack.pop()
+        path = getattr(route, "path", None)
+        methods = getattr(route, "methods", None)
+        if path and methods:
+            pairs.update((path, method) for method in methods)
+        for nested in ("routes", "original_router"):
+            child = getattr(route, nested, None)
+            if child is not None:
+                stack.extend(getattr(child, "routes", None) or [])
+    return pairs
+
+
 def test_refresh_route_registered_on_shared_router() -> None:
     """Guards the registration itself: the defect was a half-landed feature."""
     from qwenpaw.app.routers import router as shared_router
 
-    paths = {
-        (route.path, method)
-        for route in shared_router.routes
-        for method in getattr(route, "methods", ())
-    }
-    assert ("/mcp/{client_key:path}/refresh-status", "POST") in paths
+    assert (
+        "/mcp/{client_key:path}/refresh-status",
+        "POST",
+    ) in _route_pairs(shared_router.routes)
