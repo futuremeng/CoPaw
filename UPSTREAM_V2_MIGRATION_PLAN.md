@@ -318,7 +318,6 @@ ImportError: cannot import name 'validate_cron_trigger' from 'qwenpaw.app.crons.
 - PR 的**唯一**用途收窄为"**修 qwenpaw 自身的明确 bug**"。这类 PR 不承载 Copaw 功能，因此不存在"合并前功能缺失"的问题；它的价值是降低未来冲突面、让 sync 更便宜。§0.2 第 3 条与 §6.1 约束 2 按此改写。**但别高估这条窄通道**：按同一份数据，`fix(` 类 13 个也只合进 1 个（`#1467` 那类 bugfix PR 同样 CLOSED），所以 bug PR 也只能当"顺手清债"，**任何 Gate 与排期都不许把"上游会合"当作依赖**。
 - **§6.1 那笔 patch 因此确定是永久税**（见 §6.1 约束 2）：不再存在"等上游合并 mode-registry PR"这条退出路径，`/wb` 的两个前端文件改动按**每次同步手工重放**来评估与承受。
 
-
 ---
 
 ## 3. 上游 v2 扩展契约（已读代码验证）
@@ -444,7 +443,6 @@ register_prompt_section · register_skill_provider(skills_dir, *, enabled_by_def
 ---
 
 ## 4. fork 资产 → v2 承接点映射
-
 
 | fork 子系统 | 规模 | v2 承接方式 | 初判 |
 | --- | --- | --- | --- |
@@ -691,7 +689,6 @@ register_prompt_section · register_skill_provider(skills_dir, *, enabled_by_def
 
 **被这笔例外换来的东西**：URL 体现第三种模式、工作台可完全脱离 console chrome、与桌面模式切换体验同质。
 **它额外引入的风险**：`navigationMode.ts` 位于鉴权/路由主干（`getPostLoginHref` 决定登录后落点），是 §2.1 认定的 P1 破坏风险最高的位置之一 —— 因此 Gate 3 与 Gate 5（WP-11）不是可选项。
-
 
 ### 仍然只能你定
 
@@ -1058,7 +1055,6 @@ register_prompt_section · register_skill_provider(skills_dir, *, enabled_by_def
     - **⑥ 读数（`--target-ref working --check`，rc=0）**：**P1 154 → 153 文件 · +14,367 → +14,339 · −2,445 → −2,334**；行为 **153 → 152 文件 · +14,333 → +14,305 · −2,411 → −2,300**；命名 1 纯 / 9 沾 / 34 行（没动）；mechanical 1。**冲突面 142 → 141** —— 该文件对 merge-base 归零 ⇒ 按判据（行为行 > 0）直接退出冲突面，**这是本计划以来第一刀真正缩小冲突面**（前几刀减册不减面）。这 141 个文件的 fork 侧行为行 **16,222 → 16,083**。对 v2 的同步面：该文件从 143/259 变成 **纯上游 v1→v2 差异 259/115**（fork 侧零贡献 ⇒ WP-06 到这个文件**没有东西可重放**）。
     - **⑦ 验证与"没跑的"**：`tests/unit/app/routers` **236P**；`tests/unit` 不含 channels 全量 py3.10 **2,093P / 0F / 4 skipped / 13 xfailed**、py3.12 **同读数**（2,091 → 2,093 = 本刀 +2；14 xfailed → 13 = ⑤ 摘掉一条）；`check_namespace_boundaries` **PASSED**；`git diff --no-renames --stat e111ec6fb -- <path>` = **空**（逐字节相同）；`flake8` 新写的测试文件 rc=0，该文件**残留 2 条既有 E501（第 48/53 行，早于本刀、在未改动区域）** ⇒ 本刀没新增超长行。**没跑的**：浏览器里真实复现 ② 的"配置入口消失"（需要起 dev server 并配一个带 password 字段的插件 manifest；本机 `console/node_modules` 是跨 worktree 共享符号链接，跑 vite 会污染别的分支的 transform 缓存，见冲突面记忆第 4 条）⇒ ② 的证据是"源码逐句 + 前端文件零 fork diff + 红→绿测试"，不是端到端。GitHub CI 实跑没有；含 channels 的全量口径同样没跑（`channels` 与本刀无关）。
 
-
 52. **（簇 L 第一刀：`app/agent_config_watcher.py` 221/110 → 0/0，并删掉 `agents/hooks/memory_compaction.py` 191 行死壳）分支 `wp/integration`（已推、未开 PR）—— 冲突面 141 → 140（第二次真减面），同时挖出一类门禁看不见的债：坏合并把上游早已删掉的实现"复活"了**
     - **① 两笔同源，都不是 fork 的能力，是坏合并的残留。** `agents/hooks/memory_compaction.py` = 上游 **`5d5efdb7a feat(memory): rebuild memory & context (#3548)`** 删掉的 226 行文件，被 fork 的 **`742cf22b4 "fix runtime compatibility after upstream merge"`** 原地复活成 191 行旧副本（`git log --oneline e111ec6fb -- <path>` 三条命中，最上面那条就是 #3548）。`app/agent_config_watcher.py` = **`6782dd603 "Merge upstream/main into main (keep fork conflict resolutions)"`** 取了 ours 侧，undo 掉上游 **`01750d9e3 fix(reload): route AgentConfigWatcher through reload_agent for graceful task draining (#4064)`**。⇒ **#3548 与 #4064 都是 merge-base 的祖先**，也就是上游在我们就基之前就换掉了这两套实现，树里带的是**已被替换的旧实现 + 旧实现被替换时才消失的调用契约**。
     - **② 决定性证据不是"看起来没人用"，是"不可能有人用"：两处都在读一个这棵树里不存在的配置字段。** `memory_compaction.py:153` 读 `running_config.memory_summary.memory_summary_enabled`，watcher 的 `_memory_job_hash()` / `_apply_memory_job_change()` 读 `getattr(agent_config, "memory_summary", None)`。实测：`AgentsRunningConfig` 上 **`AttributeError: 'AgentsRunningConfig' object has no attribute 'memory_summary'`**、`AgentProfileConfig` 的 extra fields 为空，全仓 `git grep memory_summary -- src` 只有这**三处 fork 写的读方**、零定义点。⇒ 那三行永远拿到 `None`。
@@ -1100,6 +1096,7 @@ register_prompt_section · register_skill_provider(skills_dir, *, enabled_by_def
     - **⑥ 第四条盲区：写好了但从未被收集的测试。** `tests/unit/app/routers/test_agents_pipeline_core.py` 里 `test_build_run_observability_aggregates_rpa_metrics` **缩进在另一个 test 函数体内**（`:490`，4 空格），pytest 永不收集它；且它调的 `_build_run_observability` 不在该文件的 import 块里，真跑会 `NameError` ⇒ **这条 fork 的 RPA observability 聚合断言六个月没执行过**。本刀把它提到模块级 + 补 import，实测**通过**（说明被测行为本身是对的，丢的只是验证）。⇒ 与前两条账同族：**门禁（在册改动）与冲突面（会不会撞）都扫不到"fork 自有文件里的 fork 自有错误"**，本刀又添一型（缩进错导致零收集）。
     - **⑦ 本刀的指标意义：`migration.py` 从来不在冲突面上，所以"删除量审计队列"和"冲突面"是两个不同的靶子。** 实测：`git diff --no-renames --name-only e111ec6fb upstream/main` **不含** `src/qwenpaw/app/migration.py`（v2 有该文件、但 1.x→2.x 没碰它）⇒ 按冲突面三条口径它不进表，尽管册内它带着 **125 行上游删除**。同族的还有 `agents_pipeline_core.py`（merge-base ABSENT，fork 新文件）。**结论**：只按"会不会冲突"排序去债，会系统性漏掉"**上游没碰的文件上的删除行**"这一类 —— 零冲突压力、纯能力丢失、永远不上榜。⇒ 删除量审计队列（下一节）按册内 `behavior_removed` 排序，与冲突面清单并列维护，**不可互相代替**。
     - **⑧ 队列进度与读数。** 四项删除量：**`session.py` 176 行已审完、判不动刀**（`sanitize_filename` 仍在 `:170`；`migrate_legacy_weixin_session_files` 仍在 `:566`，它是 fork 重写版，把 `weixin--` 改名成 `wechat--` 且**目标已存在则跳过**，丢掉了上游的 `_WEIXIN_LEGACY_ARCHIVE_DIR` 归档 —— 与本树的 `sessions/<channel>/<file>` 布局自洽（`session.py:305-328` 读取时会从扁平路径拷一次），且全树无人 glob sessions 目录 ⇒ 残留是惰性垃圾不是回归；**注意 v2 删掉整个文件 ⇒ 这是搬家窗口**）；**`migration.py` 125 → 75**（册内条目 `156/125 → 160/75`，per-file 求和口径 added +4 / removed −50，与 aggregate 报的 −84 差在聚合算法不做简单求和）；剩 **`app/mcp/stateful_client.py` 396**（v2 删整文件，与已闭环 33 同一笔搬家）与 **`app/routers/agents.py` 326**（需 WP-03/04 设计）。**全册**：`151 文件 / 行为 150 / +13,994−2,077 / 命名 1·9·34 / mechanical 1 / --check rc=0`（HEAD 与 working 各算一次，**一致**）。**冲突面**：140 文件 / fork 侧行为行 15,564（HEAD、working 两次同读）。**没跑**：含 channels 口径（基准 3,334P，49 后未重跑）、任何前端命令、GitHub CI 实跑；`migration.py:885` 那条**既有** `E501 (86>79)` 仍在（不改，避免把格式 churn 混进本刀）。
+    - **⑨ 把第 ② 根轴算到底：全仓"上游没碰、却被 fork 删了行"的文件只剩 8 个 / 85 行，这根轴就此抽干。** 判据 = 册内 `behavior_removed > 0` 且路径**不在** `git diff --no-renames --name-only e111ec6fb upstream/main` 输出里（排除 lockfile）。实测清单：**`app/migration.py` 75**（本刀后剩余）、`scripts/pack/build_macos.sh` 2、`scripts/wheel_build.sh` 2、`console/tsconfig.app.json` 2、`scripts/README.md` 1、`agents/skills/multi_agent_collaboration-zh/SKILL.md` 1、`scripts/pack/desktop.nsi` 1、`security/skill_scanner/data/default_policy.yaml` 1。**⇒ 这根轴的存量比原以为的小两个数量级**（不是"几千行待审"，而是"审完一个文件就见底"）。剩余 75 行的逐条归属已完成：它们是 merge-base `_do_ensure_qa_agent` 里 `build_agent_template(...)` 那条模板化创建路径（含 `QA_AGENT_TEMPLATE` import、`_DEFAULT_AGENT_NAME/_DESCRIPTION` 两个常量、5 行 legacy-disable 段落 docstring），fork 换成 spec 驱动的 `_build_builtin_agent_config(spec, language)`（`migration.py:817-835`）—— **同类第 ④ 类（真新能力）**，字段形状对齐（`channels/mcp/heartbeat/tools` 一一对应，`tools=spec.tools_builder()`、`skill_names`、`md_template_id=spec.template_key`）。**一处真实差异照记**：上游路径会写 `template_id=template_id`（`config/config.py:1169` 该字段仍在），fork 版**不设** ⇒ 内置 agent 的 `template_id` 为 `None`，这正是 D-22 记忆里"`is_builtin` 零 patch 推导落点 = v2 `template_id`"那条 WP-06 账的同源缺口，**不在本刀改**。`build_agent_template` 本身没变成死码（活消费者 `cli/agents_cmd.py:598`）。
 
 ### 仍未验证（别当结论用）
 
@@ -1130,7 +1127,6 @@ register_prompt_section · register_skill_provider(skills_dir, *, enabled_by_def
 26. **（D-22 阶段 A 的回归面）退回 92 行（实退 88 行，见 ⑩）是否会引入新的红**：`update_cmd.py` 那 1 行预期让 6 条变绿（已闭环 40 ④，已复现），但 `website/public/docs/*` 的 67 行与 `app/migration.py` 3 行、`cli/desktop_cmd.py` 4 行是否被其他测试或 CI 文案断言引用，**未逐条 grep 生产调用点**（按纪律：文件名与文档不是证据）。**→ 已闭环（WP-12 阶段 A，见已闭环 40 ⑩）：全量 `tests/unit` 除两条 py3.10 `BaseExceptionGroup` 外 0 红，`test_cli_update.py` 6F→0F，没有任何测试或 CI 步骤断言那 71 行文档文案。（那 2 条红现由已闭环 47 结清 ⇒ 这条读数是彻底的 0 红，不再带豁免。）**
 27. **（已闭环 42 的 ⑤ 新开）知识层落点 (B)「改造成 PawApp」的运行时前提未实测**：`KnowledgeManager` / `GraphOpsManager` 现在是**进程内常驻单例**，由 `app/knowledge_workflow.py`、`app/project_knowledge_watcher.py` 和 `config` 的 `knowledge:` 字段共同持有；要验的是 **PawApp 的 `dependency` probe 能否表达"进程内常驻对象"的就绪态**（不是再判一次有没有 HTTP sidecar —— 已闭环 13 已判 DuckDB 是进程内库）、以及 **`register_workspace_created_hook` 能否替代 watcher 的建库时机**。两条都不是设计问题而是调用时机问题：`on_workspace_created` 只在 workspace 启动后 fire（未验 4 已读到），watcher 现在却是按项目路径增量建库。**这条不验完，§4 的 `knowledge` 行只能停在标签 `copaw` + 落点 (A)。** 另一条同源风险：`knowledge_workflow.py` 依赖 `app/builtin_agents`、`app/flow_engine*`、`app/routers/agents_pipeline_core` 这些 fork 兄弟模块，而 v2 已把消息/工作区模型换成 `agent.state/context`（冲突面清单 §4.8-1）⇒ 那 6,916 行的搬运**不能按零成本计**，落 (B) 前要先按 v2 形状重锚一次。
 28. **（已闭环 43 的 ① 新开）`console/package.json` 那条 `postinstall: node scripts/patch-chat-flushsync.mjs` 的漂移未验**：脚本改写 `@agentscope-ai/chat` 编译产物里的 `flushSync` 用法（fork 自有 `console/scripts/patch-chat-flushsync.mjs`，5,300 B），锚点是**字符串级**的。要验的三件事：(a) 上游 SDK 从 fork 现在装的版本换到 v2 的 `1.2.0-beta.1789540479556` 后，那个 `flushSync` 性能问题**是否仍然存在**（问题不在就该整条删）；(b) 脚本在锚点失配时打印 `already applied` 并 **exit 0** —— 这是静默失效，属实测已知（§2.1.2），但**没有实测过"失配后前端行为到底退化成什么"**；(c) 该 patch 是否与其他 `node_modules` 后处理（v2 若引入自己的 postinstall）互相覆盖。这条同时是 **WP-08 Gate 的一条红线**（"`console/package.json` 里没有改写 `node_modules` 的 postinstall"）与 D-7 的"树外 patch"判例：只要它还在，fork 的 console 构建结果就**不由 lockfile 决定**。探针约 0.5d，**必须在 WP-08 第一步之前跑**。
-
 
 ---
 
