@@ -13,6 +13,8 @@
 2. **fork 侧有逻辑改动**：按 `scripts/check_p1_invariants.py` 的行为/命名分册规则，去掉纯改名后仍有改动行（`behavior_added + behavior_removed > 0`）；
 3. **上游侧也改过**：`git diff --no-renames e111ec6fb upstream/main -- <path>` 非空。
 
+> **"面侧行为行"这个度量与第 2 条取数同口径**：总行数 = 进门禁 `--json` 的这些文件的 `behavior_added + behavior_removed` 之和，**不是** `git diff --numstat` 的加删之和。两者在 `wp/integration @ bb42257f5` 的同一 131 文件上是 **15,409 vs 15,427**，差的 18 行正是被门禁剥掉的命名行，逐宿主为 `console/index.html`(+2)、`console/src/layouts/Header.tsx`(+2)、`console/src/layouts/constants.ts`(+6)、`console/src/pages/Chat/OptionsPanel/defaultConfig.ts`(+2)、`console/src/pages/Login/index.tsx`(+2)、`scripts/install.bat`(+4)。**引用面行数必须说明用的是门禁侧**，否则同树复核会造出一个假差异（与上面那条 `--no-renames` 的教训同型：算式要按指标自己的定义来，不要自造）。
+
 > **`--no-renames` 是必须的**（本清单第一版踩过这个坑，2026-10-01 修正）：默认 `git diff` 会做重命名检测。上游把 `app/runner/` 改名成 `app/chats/` 时，旧路径只出现在 `R` 行的源端、不进 `--name-only` 输出，于是 `runner/{session,__init__,query_error_dump}.py` 三个文件被误判成"上游没碰"。加 `--no-renames` 后它们变成 `D` + `A` 两条，三个读数从 152 / 16 / 15 修正为 **155 / 13 / 18**。第 2、3、4 节用的是修正后的数；第 5–7 节的分桶表是第一版生成的、少那 3 行，补录见 §7.1。
 
 排除项：`console/package-lock.json`（机械差异，单独处理）。
