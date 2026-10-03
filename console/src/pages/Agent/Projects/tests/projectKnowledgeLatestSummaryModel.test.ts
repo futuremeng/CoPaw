@@ -3,18 +3,7 @@ import {
   buildProjectKnowledgeLatestSummaryModel,
   buildProjectKnowledgeLatestSummaryModelFromState,
 } from "../utils/projectKnowledgeLatestSummaryModel";
-
-const t = (
-  _key: string,
-  maybeFallbackOrOptions?: string | Record<string, unknown>,
-  maybeOptions?: Record<string, unknown>,
-): string => {
-  const fallback = typeof maybeFallbackOrOptions === "string" ? maybeFallbackOrOptions : "";
-  const options = (typeof maybeFallbackOrOptions === "object"
-    ? maybeFallbackOrOptions
-    : maybeOptions) as Record<string, unknown> | undefined;
-  return fallback.replace(/\{\{(\w+)\}\}/g, (_match, name: string) => String(options?.[name] ?? ""));
-};
+import { t } from "./projectKnowledgeLocaleTranslate";
 
 describe("projectKnowledgeLatestSummaryModel", () => {
   it("builds latest summary parts from direct step inputs", () => {

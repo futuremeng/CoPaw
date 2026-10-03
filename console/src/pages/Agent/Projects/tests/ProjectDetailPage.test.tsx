@@ -104,6 +104,17 @@ const {
     activeKnowledgeTask: null,
     activeKnowledgeTasks: [],
     syncState: null,
+    projectSourceId: "",
+    projectSources: [],
+    selectedSourceId: "",
+    sourceContentById: {},
+    sourceContentLoadingById: {},
+    loadSourceContent: vi.fn().mockResolvedValue(undefined),
+    graphQueryMode: "template",
+    graphResult: null,
+    quantMetrics: {},
+    runGraphQuery: vi.fn().mockResolvedValue(null),
+    setGraphQueryText: vi.fn(),
   },
   realtimeControllerState: {
     status: "connected",
@@ -139,7 +150,10 @@ const {
   },
 }));
 
-vi.mock("antd", async () => {
+vi.mock("antd", async (importOriginal) => {
+  // Only the containers the assertions depend on are replaced; every other antd
+  // export stays real so newly pulled-in child components cannot crash the page render.
+  const actual = await importOriginal<typeof import("antd")>();
   const Splitter = ({ children }: PropsWithChildren) => <div>{children}</div>;
   Splitter.Panel = ({ children }: PropsWithChildren) => <div>{children}</div>;
 
@@ -156,6 +170,7 @@ vi.mock("antd", async () => {
   );
 
   return {
+    ...actual,
     Alert: ({ children, message }: PropsWithChildren<{ message?: ReactNode }>) => <div>{message}{children}</div>,
     Badge: ({ children }: PropsWithChildren) => <div>{children}</div>,
     Button: ({ children, onClick }: PropsWithChildren<{ onClick?: () => void }>) => <button type="button" onClick={onClick}>{children}</button>,

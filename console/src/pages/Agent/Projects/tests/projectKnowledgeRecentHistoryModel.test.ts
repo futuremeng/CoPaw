@@ -5,18 +5,7 @@ import {
   buildProjectKnowledgeSourcesRecentHistorySections,
   buildProjectKnowledgeSourcesRecentHistorySectionsFromState,
 } from "../utils/projectKnowledgeRecentHistoryModel";
-
-const t = (
-  _key: string,
-  maybeFallbackOrOptions?: string | Record<string, unknown>,
-  maybeOptions?: Record<string, unknown>,
-): string => {
-  const fallback = typeof maybeFallbackOrOptions === "string" ? maybeFallbackOrOptions : "";
-  const options = (typeof maybeFallbackOrOptions === "object"
-    ? maybeFallbackOrOptions
-    : maybeOptions) as Record<string, unknown> | undefined;
-  return fallback.replace(/\{\{(\w+)\}\}/g, (_match, name: string) => String(options?.[name] ?? ""));
-};
+import { t } from "./projectKnowledgeLocaleTranslate";
 
 describe("projectKnowledgeRecentHistoryModel", () => {
   it("builds processing recent history sections", () => {
