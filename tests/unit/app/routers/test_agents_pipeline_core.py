@@ -15,13 +15,16 @@ from qwenpaw.app.routers.agents_pipeline_core import (
     _create_project_pipeline_run,
     _append_collab_event,
     _apply_real_step_results,
+    _build_run_observability,
     _execute_project_pipeline_run,
     _get_pipeline_draft,
     _import_platform_template_to_project,
     _list_platform_flow_templates,
+    _list_project_pipeline_runs,
     _pipeline_flow_memory_path,
     _pipeline_md_path,
     _parse_pipeline_template_doc,
+    _project_pipeline_dirs,
     _save_agent_pipeline_template_with_md,
     _transition_run_status,
     _transition_step_status,
@@ -485,53 +488,53 @@ def test_status_transition_guards_reject_invalid_transitions():
     with pytest.raises(ValueError):
         _transition_step_status("succeeded", "running")
 
-    def test_build_run_observability_aggregates_rpa_metrics():
-        run = PipelineRunDetail(
-            id="run-rpa-obs",
-            project_id="project-rpa",
-            template_id="tpl-rpa",
-            status="succeeded",
-            created_at="2026-01-01T00:00:00Z",
-            updated_at="2026-01-01T00:00:10Z",
-            parameters={},
-            artifacts=["browser/rpa/ebook/page-001.png"],
-            steps=[
-                PipelineRunStep(
-                    id="step-1",
-                    name="Open",
-                    kind="task",
-                    status="succeeded",
-                    metrics={
-                        "rpa_runtime": True,
-                        "rpa_actions_executed": 3,
-                        "rpa_stop_condition_failures": 1,
-                        "rpa_action_duration_ms_total": 120.5,
-                        "rpa_action_count_by_kind": {
-                            "browser.open": 1,
-                            "browser.screenshot": 2,
-                        },
+def test_build_run_observability_aggregates_rpa_metrics():
+    run = PipelineRunDetail(
+        id="run-rpa-obs",
+        project_id="project-rpa",
+        template_id="tpl-rpa",
+        status="succeeded",
+        created_at="2026-01-01T00:00:00Z",
+        updated_at="2026-01-01T00:00:10Z",
+        parameters={},
+        artifacts=["browser/rpa/ebook/page-001.png"],
+        steps=[
+            PipelineRunStep(
+                id="step-1",
+                name="Open",
+                kind="task",
+                status="succeeded",
+                metrics={
+                    "rpa_runtime": True,
+                    "rpa_actions_executed": 3,
+                    "rpa_stop_condition_failures": 1,
+                    "rpa_action_duration_ms_total": 120.5,
+                    "rpa_action_count_by_kind": {
+                        "browser.open": 1,
+                        "browser.screenshot": 2,
                     },
-                    evidence=[],
-                ),
-                PipelineRunStep(
-                    id="step-2",
-                    name="Validate",
-                    kind="validation",
-                    status="succeeded",
-                    metrics={},
-                    evidence=[],
-                ),
-            ],
-            flow_version="0.1.0",
-        )
+                },
+                evidence=[],
+            ),
+            PipelineRunStep(
+                id="step-2",
+                name="Validate",
+                kind="validation",
+                status="succeeded",
+                metrics={},
+                evidence=[],
+            ),
+        ],
+        flow_version="0.1.0",
+    )
 
-        observability = _build_run_observability(run)
-        assert observability.rpa_runtime_steps == 1
-        assert observability.rpa_actions_executed == 3
-        assert observability.rpa_stop_condition_failures == 1
-        assert observability.rpa_action_duration_ms_total == 120.5
-        assert observability.rpa_action_count_by_kind["browser.open"] == 1
-        assert observability.rpa_action_count_by_kind["browser.screenshot"] == 2
+    observability = _build_run_observability(run)
+    assert observability.rpa_runtime_steps == 1
+    assert observability.rpa_actions_executed == 3
+    assert observability.rpa_stop_condition_failures == 1
+    assert observability.rpa_action_duration_ms_total == 120.5
+    assert observability.rpa_action_count_by_kind["browser.open"] == 1
+    assert observability.rpa_action_count_by_kind["browser.screenshot"] == 2
 
 def test_apply_real_step_results_rpa_runtime_branch(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     project_dir = tmp_path / "project-rpa"
@@ -588,3 +591,32 @@ def test_apply_real_step_results_rpa_runtime_branch(tmp_path: Path, monkeypatch:
     assert step.metrics.get("rpa_loop_iterations") == 2
     assert step.metrics.get("warning_count") == 0
     assert calls and calls[0][0] == "screenshot"
+
+
+def test_list_project_pipeline_runs_reads_manifest_dir(tmp_path: Path):
+    _, templates_dir, runs_dir = _project_pipeline_dirs(tmp_path)
+    (templates_dir / "demo-pipeline.json").write_text(
+        json.dumps({"id": "demo-pipeline", "name": "Demo", "steps": []}),
+        encoding="utf-8",
+    )
+    run_dir = runs_dir / "run-1"
+    run_dir.mkdir(parents=True)
+    (run_dir / "run_manifest.json").write_text(
+        json.dumps(
+            {
+                "run_id": "run-1",
+                "pipeline_id": "demo-pipeline",
+                "status": "succeeded",
+                "started_at": "2026-04-01T00:00:00",
+                "ended_at": "2026-04-01T00:01:00",
+                "steps": [],
+            },
+        ),
+        encoding="utf-8",
+    )
+
+    runs = _list_project_pipeline_runs(tmp_path)
+
+    assert [run.id for run in runs] == ["run-1"]
+    assert runs[0].template_id == "demo-pipeline"
+    assert runs[0].status == "succeeded"

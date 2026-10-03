@@ -4256,7 +4256,6 @@ def _list_project_pipeline_runs(project_dir: Path) -> list[PipelineRunSummary]:
                     updated_at=run_detail.updated_at,
                     focus_chat_id=run_detail.focus_chat_id,
                     focus_type=run_detail.focus_type,
-                    executor=str(node.get("executor") or "").strip(),
                     focus_path=run_detail.focus_path,
                 ),
             )
