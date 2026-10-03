@@ -252,10 +252,10 @@
     "console/src/components/LanguageSwitcher/index.tsx": {
       "added": 1,
       "behavior_added": 1,
-      "behavior_removed": 3,
+      "behavior_removed": 2,
       "mechanical": false,
       "naming": 0,
-      "removed": 3
+      "removed": 2
     },
     "console/src/components/PlanPanel/index.tsx": {
       "added": 13,
@@ -388,10 +388,10 @@
     "console/src/pages/Agent/Skills/components/index.ts": {
       "added": 1,
       "behavior_added": 1,
-      "behavior_removed": 1,
+      "behavior_removed": 0,
       "mechanical": false,
       "naming": 0,
-      "removed": 1
+      "removed": 0
     },
     "console/src/pages/Agent/Skills/index.module.less": {
       "added": 5,
@@ -521,14 +521,6 @@
       "naming": 0,
       "removed": 8
     },
-    "console/src/pages/Control/Channels/components/ChannelCard.tsx": {
-      "added": 1,
-      "behavior_added": 1,
-      "behavior_removed": 1,
-      "mechanical": false,
-      "naming": 0,
-      "removed": 1
-    },
     "console/src/pages/Control/Channels/components/ChannelDrawer.tsx": {
       "added": 15,
       "behavior_added": 15,
@@ -545,14 +537,6 @@
       "naming": 0,
       "removed": 2
     },
-    "console/src/pages/Control/CronJobs/components/columns.tsx": {
-      "added": 1,
-      "behavior_added": 1,
-      "behavior_removed": 1,
-      "mechanical": false,
-      "naming": 0,
-      "removed": 1
-    },
     "console/src/pages/Control/Heartbeat/index.tsx": {
       "added": 6,
       "behavior_added": 6,
@@ -560,14 +544,6 @@
       "mechanical": false,
       "naming": 0,
       "removed": 12
-    },
-    "console/src/pages/Control/Sessions/index.tsx": {
-      "added": 1,
-      "behavior_added": 1,
-      "behavior_removed": 1,
-      "mechanical": false,
-      "naming": 0,
-      "removed": 1
     },
     "console/src/pages/Login/index.tsx": {
       "added": 4,
@@ -1186,24 +1162,24 @@
       "removed": 1
     },
     "src/qwenpaw/security/tool_guard/guardians/file_guardian.py": {
-      "added": 3,
-      "behavior_added": 3,
-      "behavior_removed": 2,
+      "added": 2,
+      "behavior_added": 2,
+      "behavior_removed": 1,
       "mechanical": false,
       "naming": 0,
-      "removed": 2
+      "removed": 1
     }
   },
   "totals": {
-    "added": 13990,
-    "behavior_added": 13956,
-    "behavior_files": 147,
-    "behavior_removed": 2079,
-    "files": 148,
+    "added": 13986,
+    "behavior_added": 13952,
+    "behavior_files": 144,
+    "behavior_removed": 2073,
+    "files": 145,
     "mechanical_files": 1,
     "naming_files": 1,
     "naming_lines": 34,
     "naming_touched_files": 9,
-    "removed": 2113
+    "removed": 2107
   }
 }
