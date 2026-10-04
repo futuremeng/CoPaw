@@ -78,11 +78,18 @@ for lang in LANGS:
 
 CONSOLE_SRC = REPO_ROOT / "console" / "src"
 OVERLAY_GROUPS = ("projects", "pipelines", "rpa", "workbench")
-# Only these four roots are i18n namespaces.  Storage keys such as
+# Only these paths are i18n keys.  Storage keys such as
 # "copaw.navigation.trace" or "copaw.project.knowledge.trend.v1" live outside
 # them, so restricting the roots keeps the scan from treating cache keys as copy.
+# "projects." is a bare root the fork's own pages read (conflict-surface knife 70);
+# every other bare root is upstream-owned or not yet closed.
 OVERLAY_KEY_RE = re.compile(
-    r'["\'](copaw\.(?:projects|pipelines|rpa|workbench)\.[A-Za-z0-9_.]+?)["\']'
+    r'["\']((?:copaw\.(?:projects|pipelines|rpa|workbench)|projects)'
+    r'\.[A-Za-z0-9_.]+?)["\']'
+)
+# A literal such as "projects.json" is a file name, not a key.
+FILE_NAME_RE = re.compile(
+    r"\.(?:json|ya?ml|ts|tsx|js|jsx|py|md|txt|css|less|svg|png|jpe?g|gif|sh|html|csv)$"
 )
 
 
@@ -125,7 +132,10 @@ def production_translation_keys() -> dict[str, list[str]]:
             if ".test." in filename or rel.as_posix() == "locales/copaw/register.ts":
                 continue
             for match in OVERLAY_KEY_RE.finditer(path.read_text(encoding="utf-8")):
-                found.setdefault(match.group(1), []).append(rel.as_posix())
+                key = match.group(1)
+                if FILE_NAME_RE.search(key):
+                    continue
+                found.setdefault(key, []).append(rel.as_posix())
     return found
 
 
@@ -145,6 +155,30 @@ for key in sorted(en_overlay - zh_overlay):
 for key in sorted(zh_overlay - en_overlay):
     errors.append(f"copaw overlay key exists in zh but not en: {key}")
 
+
+def bare_overlay_keys(lang: str) -> set[str]:
+    keys: set[str] = set()
+    for group in OVERLAY_GROUPS:
+        path = CONSOLE_LOCALES / "copaw" / group / f"{lang}.json"
+        if path.exists():
+            keys |= {k for k in flatten(load_json(path)) if not k.startswith("copaw.")}
+    return keys
+
+
+# addResourceBundle(lng, "translation", overlay, true, true) deep-merges, so a bare
+# overlay root that matches an upstream base-locale path silently replaces upstream
+# copy instead of adding fork copy.
+for lang in ("en", "zh"):
+    base_path = CONSOLE_LOCALES / f"{lang}.json"
+    if not base_path.exists():
+        continue
+    shadowed = bare_overlay_keys(lang) & flatten(load_json(base_path))
+    for key in sorted(shadowed):
+        errors.append(
+            f"copaw overlay key {key} shadows the same path in the upstream base locale "
+            f"({lang}.json); overlay copy must stay additive"
+        )
+
 if errors:
     for item in errors:
         print(f"ERROR: {item}")
@@ -152,5 +186,5 @@ if errors:
 
 print(
     "CoPaw locale split check passed "
-    f"({len(call_sites)} production copaw.* keys, {len(en_overlay)} overlay keys en/zh)"
+    f"({len(call_sites)} production gated keys, {len(en_overlay)} overlay keys en/zh)"
 )
