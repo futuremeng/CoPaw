@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 import sys
 from pathlib import Path
@@ -75,9 +76,81 @@ for lang in LANGS:
             f"locale bundle {lang}.json ships but has no entry in the language switcher"
         )
 
+CONSOLE_SRC = REPO_ROOT / "console" / "src"
+OVERLAY_GROUPS = ("projects", "pipelines", "rpa", "workbench")
+# Only these four roots are i18n namespaces.  Storage keys such as
+# "copaw.navigation.trace" or "copaw.project.knowledge.trend.v1" live outside
+# them, so restricting the roots keeps the scan from treating cache keys as copy.
+OVERLAY_KEY_RE = re.compile(
+    r'["\'](copaw\.(?:projects|pipelines|rpa|workbench)\.[A-Za-z0-9_.]+?)["\']'
+)
+
+
+def flatten(node: Any, prefix: str = "") -> set[str]:
+    if isinstance(node, dict):
+        return {
+            key
+            for child_key, child in node.items()
+            for key in flatten(child, f"{prefix}.{child_key}" if prefix else child_key)
+        }
+    return {prefix} if prefix else set()
+
+
+def overlay_keys(lang: str) -> set[str]:
+    keys: set[str] = set()
+    for group in OVERLAY_GROUPS:
+        path = CONSOLE_LOCALES / "copaw" / group / f"{lang}.json"
+        if path.exists():
+            keys |= flatten(load_json(path))
+    return keys
+
+
+def resolvable_keys(lang: str) -> set[str]:
+    base_path = CONSOLE_LOCALES / f"{lang}.json"
+    keys = overlay_keys(lang)
+    if base_path.exists():
+        keys |= flatten(load_json(base_path))
+    return keys
+
+
+def production_translation_keys() -> dict[str, list[str]]:
+    found: dict[str, list[str]] = {}
+    for dirpath, dirnames, filenames in os.walk(CONSOLE_SRC):
+        dirnames[:] = [d for d in dirnames if d != "tests"]
+        for filename in filenames:
+            if not filename.endswith((".ts", ".tsx")):
+                continue
+            path = Path(dirpath) / filename
+            rel = path.relative_to(CONSOLE_SRC)
+            if ".test." in filename or rel.as_posix() == "locales/copaw/register.ts":
+                continue
+            for match in OVERLAY_KEY_RE.finditer(path.read_text(encoding="utf-8")):
+                found.setdefault(match.group(1), []).append(rel.as_posix())
+    return found
+
+
+call_sites = production_translation_keys()
+for lang in ("en", "zh"):
+    available = resolvable_keys(lang)
+    for key in sorted(k for k in call_sites if k not in available):
+        errors.append(
+            f"translation key {key} is read by production code but missing from the {lang} bundle "
+            f"(sites: {', '.join(sorted(set(call_sites[key])))})"
+        )
+
+en_overlay = overlay_keys("en")
+zh_overlay = overlay_keys("zh")
+for key in sorted(en_overlay - zh_overlay):
+    errors.append(f"copaw overlay key exists in en but not zh: {key}")
+for key in sorted(zh_overlay - en_overlay):
+    errors.append(f"copaw overlay key exists in zh but not en: {key}")
+
 if errors:
     for item in errors:
         print(f"ERROR: {item}")
     sys.exit(1)
 
-print("CoPaw locale split check passed")
+print(
+    "CoPaw locale split check passed "
+    f"({len(call_sites)} production copaw.* keys, {len(en_overlay)} overlay keys en/zh)"
+)
