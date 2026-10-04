@@ -87,10 +87,6 @@ OVERLAY_KEY_RE = re.compile(
     r'["\']((?:copaw\.(?:projects|pipelines|rpa|workbench)|projects)'
     r'\.[A-Za-z0-9_.]+?)["\']'
 )
-# A literal such as "projects.json" is a file name, not a key.
-FILE_NAME_RE = re.compile(
-    r"\.(?:json|ya?ml|ts|tsx|js|jsx|py|md|txt|css|less|svg|png|jpe?g|gif|sh|html|csv)$"
-)
 
 
 def flatten(node: Any, prefix: str = "") -> set[str]:
@@ -132,10 +128,7 @@ def production_translation_keys() -> dict[str, list[str]]:
             if ".test." in filename or rel.as_posix() == "locales/copaw/register.ts":
                 continue
             for match in OVERLAY_KEY_RE.finditer(path.read_text(encoding="utf-8")):
-                key = match.group(1)
-                if FILE_NAME_RE.search(key):
-                    continue
-                found.setdefault(key, []).append(rel.as_posix())
+                found.setdefault(match.group(1), []).append(rel.as_posix())
     return found
 
 
