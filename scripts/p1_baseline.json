@@ -138,12 +138,12 @@
       "removed": 5
     },
     "console/src/api/types/agent.ts": {
-      "added": 30,
-      "behavior_added": 30,
-      "behavior_removed": 11,
+      "added": 31,
+      "behavior_added": 31,
+      "behavior_removed": 10,
       "mechanical": false,
       "naming": 0,
-      "removed": 11
+      "removed": 10
     },
     "console/src/api/types/agents.ts": {
       "added": 617,
@@ -468,6 +468,22 @@
     "console/src/pages/Chat/index.module.less": {
       "added": 103,
       "behavior_added": 103,
+      "behavior_removed": 0,
+      "mechanical": false,
+      "naming": 0,
+      "removed": 0
+    },
+    "console/src/pages/Chat/index.tsx": {
+      "added": 2,
+      "behavior_added": 2,
+      "behavior_removed": 2,
+      "mechanical": false,
+      "naming": 0,
+      "removed": 2
+    },
+    "console/src/pages/Chat/sessionApi/index.ts": {
+      "added": 15,
+      "behavior_added": 15,
       "behavior_removed": 0,
       "mechanical": false,
       "naming": 0,
@@ -1147,15 +1163,15 @@
     }
   },
   "totals": {
-    "added": 13654,
-    "behavior_added": 13620,
-    "behavior_files": 141,
-    "behavior_removed": 2054,
-    "files": 142,
+    "added": 13672,
+    "behavior_added": 13638,
+    "behavior_files": 143,
+    "behavior_removed": 2055,
+    "files": 144,
     "mechanical_files": 1,
     "naming_files": 1,
     "naming_lines": 34,
     "naming_touched_files": 9,
-    "removed": 2088
+    "removed": 2089
   }
 }
