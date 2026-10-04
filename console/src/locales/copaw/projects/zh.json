@@ -187,7 +187,21 @@
           "agenticHint": "多智能体协作与质量环迭代，提供最高质量产物。",
           "runStructuredFlow": "运行结构化流程",
           "openStructuredDetail": "查看结构化加工",
-          "openImageDetail": "查看图像占位状态"
+          "openImageDetail": "查看图像占位状态",
+          "globalOverviewHint": "项目全局占位指标，后续会继续细化。",
+          "layerDataPreprocessL3": "增强审校已复用标准化输入，未发现预处理缺口。",
+          "layerLexicalL3": "增强审校已复核结构化层的分词与词性一致性。",
+          "layerSyntaxL3": "增强审校已复核句法依存结构与句子覆盖。",
+          "layerSemanticL3": "增强审校已复核实体与语义关系的一致性。",
+          "quantStageL1": "来源层",
+          "quantStageL2": "结构化层",
+          "quantStageL3": "增强层",
+          "rerunLayer": "重跑该层",
+          "runFullFlow": "运行文档流程",
+          "tokenizeLineProgress": "分词行数",
+          "tokenizeProgressTitle": "分词进度",
+          "tokenizeProgressEmpty": "暂无分词进度",
+          "tokenizeRunningDocs": "运行中文档"
         },
         "entities": "实体数",
         "signalRelations": "Relations",
@@ -305,7 +319,9 @@
           "originManual": "手工",
           "originCandidate": "候选",
           "addStructured": "加入结构化源",
-          "addImage": "加入图像源"
+          "addImage": "加入图像源",
+          "addDocument": "加入文档源",
+          "remove": "移除"
         },
         "signalSnapshots": "Snapshots",
         "signalTokens": "Lightweight Tokens",
@@ -333,7 +349,78 @@
         "sourcesFileListTitle": "知识文件",
         "sourcesFileListHint": "可进行知识加工的文件列表",
         "sourcesFileListEmpty": "暂无可进行知识加工的文件",
-        "semanticEngineCode": "Code"
+        "semanticEngineCode": "Code",
+        "columnPath": "路径",
+        "actions": {
+          "refresh": "刷新"
+        },
+        "control": {
+          "title": "流水线控制",
+          "pause": "暂停",
+          "resume": "继续",
+          "cancel": "取消",
+          "pauseSuccess": "流水线已暂停",
+          "resumeSuccess": "流水线已继续",
+          "cancelSuccess": "流水线已取消",
+          "commandFailed": "流水线控制指令执行失败",
+          "flowRunLabel": "流程运行：{{id}}",
+          "flowRunMissing": "暂未获得 flow run id，在运行关联建立前控制指令可能失败。"
+        },
+        "errorRecovery": {
+          "workflowStep": "步骤级失败：检查步骤产物与依据，再从失败步骤重试。",
+          "executionLoop": "执行循环失败：查看后端运行日志，然后重跑完整项目流水线。",
+          "flowControl": "流程控制失败：核对暂停/继续/取消指令的状态与流程运行状态。",
+          "generic": "检测到流水线异常：请先查看运行详情再重试。"
+        },
+        "graphEntityType": {
+          "document": "文档",
+          "entity": "实体",
+          "path": "路径",
+          "version": "版本",
+          "snapshot": "快照"
+        },
+        "graphRelationType": {
+          "mentions": "提及",
+          "co_occurs_with": "共现"
+        },
+        "autoSinkAgentMissing": "当前项目没有可用 Agent，无法保存该设置。",
+        "autoSinkEnabled": "已开启新增文档自动加工",
+        "autoSinkDisabled": "已关闭新增文档自动加工",
+        "autoSinkUpdateFailed": "更新自动加工设置失败",
+        "sourceId": "源 ID",
+        "sourceRegistered": "已注册",
+        "sourceNotRegistered": "未注册",
+        "sourceRegisterSuccess": "已注册项目知识源",
+        "emptyQuery": "请先输入查询内容。",
+        "queryFailed": "知识查询失败。",
+        "queryModeTemplate": "模板",
+        "queryModeCypherMvp": "Cypher（预览版）",
+        "queryPlaceholder": "输入 Cypher 查询，或先选择一个模板",
+        "signalDocuments": "文档数",
+        "signalChunks": "切块数",
+        "signalIndexedCoverage": "索引覆盖率",
+        "signalsTitle": "知识信号",
+        "signalDelta": "变化 {{value}}",
+        "trendRange7d": "近 7 天",
+        "trendRange30d": "近 30 天",
+        "trendNotEnough": "历史快照不足，暂无法绘制趋势。",
+        "syncGraphStats": "图谱：{{nodes}} 节点 / {{relations}} 关系",
+        "syncScheduledFor": "计划于 {{time}}",
+        "syncTrigger": "最近触发：{{trigger}}",
+        "syncRecentError": "最近错误 {{code}}（来源 {{source}}）",
+        "processingStatusNotProcessed": "未加工",
+        "processingStatusProcessing": "正在加工",
+        "processingStatusCompleted": "已完成",
+        "triggerModeAutomatic": "自动",
+        "triggerModeManual": "手动",
+        "runtimeTaskProjectPipeline": "项目流水线",
+        "runtimeTaskMemify": "图谱构建",
+        "runtimeTaskQualityLoop": "质量环",
+        "runtimeTaskHistoryBackfill": "历史回填",
+        "runtimeTaskGeneric": "知识任务",
+        "insightNeedRegister": "将本项目注册为文档源后，其切块才能被知识查询命中。",
+        "insightNeedExplore": "执行一次图谱查询，验证已构建的实体与关系。",
+        "insightHealthy": "知识库状态良好：文档、切块与关系均已就绪。"
       }
     }
   }

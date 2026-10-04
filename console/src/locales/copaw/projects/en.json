@@ -187,7 +187,21 @@
           "agenticHint": "Agentic Hint",
           "runStructuredFlow": "Run Structured Flow",
           "openStructuredDetail": "View Structured Processing",
-          "openImageDetail": "View Image Placeholder"
+          "openImageDetail": "View Image Placeholder",
+          "globalOverviewHint": "Project-level placeholder metrics; per-source detail comes next.",
+          "layerDataPreprocessL3": "Enhanced review reused the normalized inputs; no preprocessing gap detected.",
+          "layerLexicalL3": "Enhanced review reconciled tokens and POS labels against the structured layer.",
+          "layerSyntaxL3": "Enhanced review reconciled dependency structures and sentence coverage.",
+          "layerSemanticL3": "Enhanced review reconciled entities and semantic relations for the graph.",
+          "quantStageL1": "Sources",
+          "quantStageL2": "Structured",
+          "quantStageL3": "Enhanced",
+          "rerunLayer": "Rerun Layer",
+          "runFullFlow": "Run Document Flow",
+          "tokenizeLineProgress": "Tokenize lines",
+          "tokenizeProgressTitle": "Tokenize progress",
+          "tokenizeProgressEmpty": "No tokenize progress yet",
+          "tokenizeRunningDocs": "Running docs"
         },
         "entities": "Entities",
         "signalRelations": "Relations",
@@ -305,7 +319,9 @@
           "originManual": "Manual",
           "originCandidate": "Candidate",
           "addStructured": "Add to Structured Sources",
-          "addImage": "Add to Image Sources"
+          "addImage": "Add to Image Sources",
+          "addDocument": "Add to Document Sources",
+          "remove": "Remove"
         },
         "signalSnapshots": "Snapshots",
         "signalTokens": "Lightweight Tokens",
@@ -333,7 +349,78 @@
         "sourcesFileListTitle": "Knowledge Files",
         "sourcesFileListHint": "Files available for knowledge processing",
         "sourcesFileListEmpty": "No knowledge files found",
-        "semanticEngineCode": "Code"
+        "semanticEngineCode": "Code",
+        "columnPath": "Path",
+        "actions": {
+          "refresh": "Refresh"
+        },
+        "control": {
+          "title": "Pipeline control",
+          "pause": "Pause",
+          "resume": "Resume",
+          "cancel": "Cancel",
+          "pauseSuccess": "Pipeline paused",
+          "resumeSuccess": "Pipeline resumed",
+          "cancelSuccess": "Pipeline cancelled",
+          "commandFailed": "Pipeline control command failed",
+          "flowRunLabel": "Flow run: {{id}}",
+          "flowRunMissing": "Flow run id is not available yet. Commands may fail until a run is bridged."
+        },
+        "errorRecovery": {
+          "workflowStep": "Step-level failure: review step outputs/evidence, then retry from the failed step.",
+          "executionLoop": "Execution-loop failure: check backend runtime logs, then re-run the full project pipeline.",
+          "flowControl": "Flow-control failure: verify pause/resume/cancel command transitions and flow run state.",
+          "generic": "Pipeline failure detected: inspect runtime details before retrying."
+        },
+        "graphEntityType": {
+          "document": "Document",
+          "entity": "Entity",
+          "path": "Path",
+          "version": "Version",
+          "snapshot": "Snapshot"
+        },
+        "graphRelationType": {
+          "mentions": "Mentions",
+          "co_occurs_with": "Co-occurs with"
+        },
+        "autoSinkAgentMissing": "No agent is available for this project, so the setting could not be saved.",
+        "autoSinkEnabled": "Auto document workflow enabled",
+        "autoSinkDisabled": "Auto document workflow disabled",
+        "autoSinkUpdateFailed": "Failed to update the auto document workflow setting",
+        "sourceId": "Source ID",
+        "sourceRegistered": "Registered",
+        "sourceNotRegistered": "Not registered",
+        "sourceRegisterSuccess": "Project knowledge source registered",
+        "emptyQuery": "Enter a query before running it.",
+        "queryFailed": "Knowledge query failed.",
+        "queryModeTemplate": "Template",
+        "queryModeCypherMvp": "Cypher (MVP)",
+        "queryPlaceholder": "Enter a Cypher query, or pick a template first",
+        "signalDocuments": "Documents",
+        "signalChunks": "Chunks",
+        "signalIndexedCoverage": "Indexed Coverage",
+        "signalsTitle": "Knowledge Signals",
+        "signalDelta": "Δ {{value}}",
+        "trendRange7d": "Last 7 days",
+        "trendRange30d": "Last 30 days",
+        "trendNotEnough": "Not enough history snapshots to draw a trend yet.",
+        "syncGraphStats": "Graph: {{nodes}} nodes / {{relations}} relations",
+        "syncScheduledFor": "Scheduled for {{time}}",
+        "syncTrigger": "Last trigger: {{trigger}}",
+        "syncRecentError": "Recent error {{code}} from {{source}}",
+        "processingStatusNotProcessed": "Not processed",
+        "processingStatusProcessing": "Processing",
+        "processingStatusCompleted": "Completed",
+        "triggerModeAutomatic": "Automatic",
+        "triggerModeManual": "Manual",
+        "runtimeTaskProjectPipeline": "Project Pipeline",
+        "runtimeTaskMemify": "Graph Build",
+        "runtimeTaskQualityLoop": "Quality Loop",
+        "runtimeTaskHistoryBackfill": "History Backfill",
+        "runtimeTaskGeneric": "Knowledge Task",
+        "insightNeedRegister": "Register this project as a document source so its chunks can be queried.",
+        "insightNeedExplore": "Run a graph query to verify the entities and relations already built.",
+        "insightHealthy": "Knowledge base looks healthy: documents, chunks and relations are all available."
       }
     }
   }

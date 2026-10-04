@@ -390,7 +390,7 @@ export function getProcessingStatusLabel(t: Translate, status?: string): string 
     indexing: t("copaw.projects.knowledge.processingStatusProcessing", "正在加工"),
     graphifying: t("copaw.projects.knowledge.processingStatusProcessing", "正在加工"),
     succeeded: t("copaw.projects.knowledge.processingStatusCompleted", "已完成"),
-    failed: t("copaw.projects.knowledge.processingStatusCompleted", "已完成"),
+    failed: t("copaw.projects.knowledge.syncStage.failed", "失败"),
   };
 
   return statusMap[status] || String(status);

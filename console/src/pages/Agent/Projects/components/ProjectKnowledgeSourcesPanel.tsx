@@ -269,12 +269,12 @@ export default function ProjectKnowledgeSourcesPanel(props: ProjectKnowledgeSour
               }}
             >
               {isManual
-                ? t("copaw.projects.knowledge.sources.remove", "Remove")
+                ? t("copaw.projects.knowledge.sourcesPanel.remove", "Remove")
                 : record.category === "structured"
                   ? t("copaw.projects.knowledge.sourcesPanel.addStructured", "Add to Structured Sources")
                   : record.category === "image"
                     ? t("copaw.projects.knowledge.sourcesPanel.addImage", "Add to Image Sources")
-                    : t("copaw.projects.knowledge.sources.add", "Add to Document Sources")}
+                    : t("copaw.projects.knowledge.sourcesPanel.addDocument", "Add to Document Sources")}
             </Button>
           </div>
         );

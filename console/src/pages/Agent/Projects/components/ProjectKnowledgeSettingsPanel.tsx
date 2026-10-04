@@ -322,10 +322,7 @@ export default function ProjectKnowledgeSettingsPanel(
             </Typography.Text>
             <Typography.Text type="secondary">
               {flowRunId
-                ? t(
-                  "copaw.projects.knowledge.control.flowRunLabel",
-                  `Flow run: ${flowRunId}`,
-                )
+                ? t("copaw.projects.knowledge.control.flowRunLabel", { id: flowRunId })
                 : t(
                   "copaw.projects.knowledge.control.flowRunMissing",
                   "Flow run id is not available yet. Commands may fail until a run is bridged.",
