@@ -470,6 +470,21 @@ class SessionApi implements IAgentScopeRuntimeWebUISessionAPI {
   }
 
   /**
+   * Drop the cached pending user message for a session and its resolved
+   * backend id. Required after the tail user message is deleted server-side:
+   * patchLastUserMessage would otherwise re-inject the cached text during
+   * reconnect, making the deleted message reappear. Returns whether an id was
+   * supplied.
+   */
+  removeLastUserMessage(sessionId: string): boolean {
+    if (!sessionId) return false;
+    clearPendingUserMessage(sessionId);
+    const realId = this.getRealIdForSession(sessionId);
+    if (realId) clearPendingUserMessage(realId);
+    return true;
+  }
+
+  /**
    * Deduplicates concurrent getSessionList calls so that two parallel
    * invocations share one network request and write sessionList only once,
    * preserving any realId mappings that were already resolved.

@@ -45,7 +45,6 @@ interface ProjectChatPanelProps {
   onSelectRunHistoryChat: (chatId: string) => void;
   onOpenManualRecoverDialog?: () => void;
   onAssistantTurnCompleted?: () => void;
-  projectAgentContext?: string;
 }
 
 function ProjectChatPanel({
@@ -66,7 +65,6 @@ function ProjectChatPanel({
   onSelectRunHistoryChat,
   onOpenManualRecoverDialog,
   onAssistantTurnCompleted,
-  projectAgentContext,
 }: ProjectChatPanelProps) {
   const { t } = useTranslation();
   void selectedRunId;

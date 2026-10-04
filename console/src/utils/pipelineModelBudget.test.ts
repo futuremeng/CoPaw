@@ -40,6 +40,7 @@ describe("pipelineModelBudget", () => {
       },
       runningConfig: {
         max_iters: 50,
+        shell_command_executable: "",
         llm_retry_enabled: true,
         llm_max_retries: 2,
         llm_backoff_base: 1,
@@ -108,6 +109,7 @@ describe("pipelineModelBudget", () => {
       },
       runningConfig: {
         max_iters: 50,
+        shell_command_executable: "",
         llm_retry_enabled: true,
         llm_max_retries: 2,
         llm_backoff_base: 1,

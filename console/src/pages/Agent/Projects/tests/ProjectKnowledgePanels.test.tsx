@@ -223,7 +223,9 @@ function buildKnowledgeState(): ProjectKnowledgeState {
     semanticLoadingBySourceId: {},
     loadSourceSemantic: vi.fn().mockResolvedValue(undefined),
     changedFilesNormalized: [],
-  } as ProjectKnowledgeState;
+    addManualSourcePath: vi.fn().mockResolvedValue(undefined),
+    removeManualSourcePath: vi.fn().mockResolvedValue(undefined),
+  };
 }
 
 function buildProjectFiles(): AgentProjectFileInfo[] {

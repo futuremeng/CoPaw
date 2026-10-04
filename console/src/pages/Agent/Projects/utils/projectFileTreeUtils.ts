@@ -122,27 +122,6 @@ export function collectDirectoryKeys(
   return keys;
 }
 
-export function collectVisibleLeafKeys(
-  nodes: { key: string; children?: { key: string; children?: unknown[] }[] }[],
-  expandedKeySet: Set<string>,
-): string[] {
-  const keys: string[] = [];
-  const walk = (items: { key: string; children?: unknown[] }[]) => {
-    for (const item of items) {
-      const isDirectory = Boolean(item.children && item.children.length > 0);
-      if (!isDirectory) {
-        keys.push(String(item.key));
-        continue;
-      }
-      if (expandedKeySet.has(String(item.key))) {
-        walk(item.children as { key: string; children?: unknown[] }[]);
-      }
-    }
-  };
-  walk(nodes);
-  return keys;
-}
-
 export function resolveRangePaths(
   paths: string[],
   anchorPath: string,

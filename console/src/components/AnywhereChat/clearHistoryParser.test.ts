@@ -3,6 +3,7 @@ import {
   payloadCompletesResponse,
   payloadRequestsHistoryClear,
 } from "./clearHistoryParser";
+import { describe, expect, test } from "vitest";
 
 describe("clearHistoryParser", () => {
   test("messageRequestsHistoryClear supports top-level metadata flag", () => {

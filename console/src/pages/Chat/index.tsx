@@ -701,7 +701,7 @@ export default function ChatPage() {
   useEffect(() => {
     let cancelled = false;
     planApi
-      .getPlanConfig()
+      .getPlanConfig(selectedAgent)
       .then((cfg) => {
         if (!cancelled) setPlanEnabled(cfg.enabled);
       })
@@ -1259,7 +1259,7 @@ export default function ChatPage() {
         allowSpeech: whisperChecked && !whisperEnabled,
         prefix: whisperEnabled ? (
           <WhisperSpeechButton
-            ref={whisperSpeechRef}
+            buttonRef={whisperSpeechRef}
             onTranscription={handleWhisperTranscription}
           />
         ) : undefined,

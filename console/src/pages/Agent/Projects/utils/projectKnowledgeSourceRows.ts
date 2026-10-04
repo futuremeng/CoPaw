@@ -12,15 +12,6 @@ export interface ProjectKnowledgeSourceRow {
   category: "document" | "structured" | "image";
 }
 
-const DOCUMENT_EXTENSIONS = new Set([
-  "md",
-  "mdx",
-  "txt",
-  "markdown",
-  "rst",
-  "log",
-]);
-
 const STRUCTURED_EXTENSIONS = new Set([
   "json",
   "jsonl",

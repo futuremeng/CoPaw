@@ -47,7 +47,6 @@ import {
   normalizeTreeKeys,
   compareTreePathDepth,
   collectDirectoryKeys,
-  collectVisibleLeafKeys,
   resolveRangePaths,
   resolveProjectFileStage,
   isAgentProjectFile,
@@ -705,7 +704,12 @@ export default function ProjectFileTree({
   // Tree select handler
   const handleTreeSelect = useCallback((
     keys: Key[],
-    info: { node?: { key?: Key; isLeaf?: boolean }; nativeEvent?: MouseEvent },
+    info: {
+      node?: { key?: Key; isLeaf?: boolean };
+      // Only the modifier keys are read, so accept both the React synthetic
+      // event and the native event antd hands to Tree#onSelect.
+      nativeEvent?: { metaKey?: boolean; ctrlKey?: boolean; shiftKey?: boolean };
+    },
   ) => {
     const key = String(keys[0] || info.node?.key || "");
     if (!key || info.node?.isLeaf === false) return;

@@ -368,7 +368,6 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 const PROJECT_GRAPH_QUERY_TOP_K = 200;
 const HIGH_ORDER_OUTPUT_MODES: ProjectKnowledgeProcessingMode[] = ["agentic", "nlp"];
 const PROCESSING_STALE_AFTER_MS = 15_000;
-const PROJECT_KNOWLEDGE_STEP_STATS_HISTORY_LIMIT = 5;
 
 function resolveExecutionForLayer(layer: ProjectKnowledgeLayerKey): {
   mode: ProjectKnowledgeProcessingMode;
@@ -1510,35 +1509,6 @@ function deriveModeOutputs(
   };
 }
 
-function normalizeProjectId(value: unknown): string {
-  return String(value || "").trim().toLowerCase();
-}
-
-function parseSourceSortTimestamp(source: KnowledgeSourceItem): number {
-  const indexedAt = Date.parse(String(source.status?.indexed_at || "").trim());
-  if (Number.isFinite(indexedAt) && indexedAt > 0) {
-    return indexedAt;
-  }
-  const remoteUpdatedAt = Date.parse(String(source.status?.remote_updated_at || "").trim());
-  if (Number.isFinite(remoteUpdatedAt) && remoteUpdatedAt > 0) {
-    return remoteUpdatedAt;
-  }
-  return 0;
-}
-
-function compareProjectSourceFreshness(left: KnowledgeSourceItem, right: KnowledgeSourceItem): number {
-  const timestampDiff = parseSourceSortTimestamp(right) - parseSourceSortTimestamp(left);
-  if (timestampDiff !== 0) {
-    return timestampDiff;
-  }
-  const leftLocation = String(left.location || left.name || left.id || "").trim().toLowerCase();
-  const rightLocation = String(right.location || right.name || right.id || "").trim().toLowerCase();
-  if (leftLocation !== rightLocation) {
-    return leftLocation.localeCompare(rightLocation);
-  }
-  return String(left.id || "").trim().toLowerCase().localeCompare(String(right.id || "").trim().toLowerCase());
-}
-
 function isSameHeaderSignals(
   left: ProjectKnowledgeHeaderSignals,
   right: ProjectKnowledgeHeaderSignals,
@@ -1717,7 +1687,15 @@ export function useProjectKnowledgeState(
         tags: ["manual"],
         summary: "",
         project_id: params.projectId,
-        status: undefined,
+        // deriveSourceQuantBaseMetrics reads item.status.indexed unguarded,
+        // so a manual source needs a real "never indexed" status object.
+        status: {
+          indexed: false,
+          indexed_at: null,
+          document_count: 0,
+          chunk_count: 0,
+          error: null,
+        },
       }));
       setProjectSources(sources);
       setProjectStepStats(EMPTY_PROJECT_KNOWLEDGE_STEP_STATS);

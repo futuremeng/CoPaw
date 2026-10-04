@@ -99,6 +99,8 @@ export interface AgentsRunningConfig {
   max_iters: number;
   auto_continue_on_text_only?: boolean;
   shell_command_timeout?: number;
+  shell_command_executable: string;
+  max_input_length?: number;
   auto_continue_enabled?: boolean;
   llm_retry_enabled: boolean;
   llm_max_retries: number;

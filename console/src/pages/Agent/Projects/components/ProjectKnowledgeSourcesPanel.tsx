@@ -132,7 +132,7 @@ export default function ProjectKnowledgeSourcesPanel(props: ProjectKnowledgeSour
       stage: manualMeta?.stage || fromCandidate?.stage || "manual",
       contentType: manualMeta?.contentType || fromCandidate?.contentType || "-",
       size: manualMeta?.size || fromCandidate?.size || 0,
-      modifiedTime: manualMeta?.modifiedTime || fromCandidate?.modifiedTime,
+      modifiedTime: manualMeta?.modifiedTime || fromCandidate?.modifiedTime || "",
       category: manualMeta?.category || fromCandidate?.category || classifyKnowledgeSourceCategory(path),
     };
   }).filter((row) => !isExcludedKnowledgeSourcePath(row.path));

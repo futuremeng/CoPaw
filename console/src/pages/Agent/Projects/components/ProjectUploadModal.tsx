@@ -162,7 +162,8 @@ export default function ProjectUploadModal({
             return false;
           }}
           onRemove={(file) => {
-            const relativePath = normalizeRelativePath(file as File);
+            const nativeFile = file.originFileObj ?? (file as unknown as File);
+            const relativePath = normalizeRelativePath(nativeFile);
             stagedUploadsRef.current = stagedUploadsRef.current.filter(
               (item) => !(item.relativePath === relativePath && item.file.size === file.size),
             );

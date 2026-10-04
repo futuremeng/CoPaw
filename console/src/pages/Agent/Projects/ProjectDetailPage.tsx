@@ -92,13 +92,11 @@ import {
   type TreeDisplayMode,
 } from "./utils/projectLayoutPrefs";
 import type { ProjectFileFilterKey } from "./utils/filtering";
-import { computeProjectFileInventorySummary, isRecentlyUpdatedFile } from "./utils/metrics";
 import { isBuiltInProjectFile } from "./utils/builtInFiles";
 import type {
   AgentProjectSummary,
   AgentProjectFileInfo,
   AgentProjectFileQueryRequest,
-  AgentProjectFileQuerySummary,
   AgentProjectFileSummary,
   AgentProjectFileTreeNode,
   ProjectPipelineArtifactRecord,
@@ -369,16 +367,6 @@ function getCurrentAgent(
   return agents.find((agent) => agent.id === selectedAgent);
 }
 
-function formatBytes(size: number): string {
-  if (size < 1024) {
-    return `${size} B`;
-  }
-  if (size < 1024 * 1024) {
-    return `${(size / 1024).toFixed(1)} KB`;
-  }
-  return `${(size / (1024 * 1024)).toFixed(1)} MB`;
-}
-
 function toProjectFileInfo(node: AgentProjectFileTreeNode): AgentProjectFileInfo {
   return {
     filename: node.filename,
@@ -446,19 +434,6 @@ function formatRunTimeLabel(raw: string): string {
   const mm = String(parsed.getMinutes()).padStart(2, "0");
   const ss = String(parsed.getSeconds()).padStart(2, "0");
   return `${y}-${m}-${d} ${hh}:${mm}:${ss}`;
-}
-
-function buildProjectWorkspaceSummary(params: {
-  projectName: string;
-  projectDescription: string;
-  workspaceDir: string;
-}): string {
-  const safeDescription = params.projectDescription.trim() || "暂无项目简介";
-  return [
-    `项目：${params.projectName}`,
-    `简介：${safeDescription}`,
-    `工作区：${params.workspaceDir || "-"}`,
-  ].join("\n");
 }
 
 function buildProjectWorkspaceChatPath(projectId: string, chatId: string): string {
@@ -620,41 +595,6 @@ function resolveNerStructuredArtifactPath(
   return candidates[0];
 }
 
-function countFromRecord(record: Record<string, number> | undefined, key: string): number {
-  return Math.max(0, Number(record?.[key] || 0));
-}
-
-function buildVisibleSummaryFromQuerySummary(
-  querySummary: AgentProjectFileQuerySummary,
-  files: AgentProjectFileInfo[],
-) {
-  const totalFiles = Math.max(0, Number(querySummary.total_matched || querySummary.returned || 0));
-  const totalFileBytes = files.reduce((sum, item) => sum + Math.max(0, Number(item.size || 0)), 0);
-  const averageFileBytes = totalFiles > 0 ? totalFileBytes / totalFiles : 0;
-  const nowMs = Date.now();
-  const recentlyUpdatedFiles = files.reduce(
-    (sum, item) => sum + (isRecentlyUpdatedFile(item.modified_time, nowMs) ? 1 : 0),
-    0,
-  );
-
-  return {
-    totalFiles,
-    originalFiles: countFromRecord(querySummary.stage_counts, "original"),
-    intermediateFiles: countFromRecord(querySummary.stage_counts, "intermediate"),
-    artifactFiles: countFromRecord(querySummary.stage_counts, "artifact"),
-    knowledgeMetrics: {
-      totalFiles,
-      markdownFiles: countFromRecord(querySummary.content_type_counts, "markdown"),
-      textFiles: countFromRecord(querySummary.content_type_counts, "text"),
-      scriptFiles: countFromRecord(querySummary.content_type_counts, "script"),
-      otherTypeFiles: countFromRecord(querySummary.content_type_counts, "other"),
-      recentlyUpdatedFiles,
-      averageFileBytes,
-      totalFileBytes,
-    },
-  };
-}
-
 export default function ProjectDetailPage() {
   const { t, i18n } = useTranslation();
   const translateWithFallback = useCallback(
@@ -681,8 +621,6 @@ export default function ProjectDetailPage() {
 
   const [resolvedProjectRequestId, setResolvedProjectRequestId] = useState("");
   const [projectFiles, setProjectFiles] = useState<AgentProjectFileInfo[]>([]);
-  const [projectFilesQuerySummary, setProjectFilesQuerySummary] =
-    useState<AgentProjectFileQuerySummary | null>(null);
   const [projectTreeNodes, setProjectTreeNodes] = useState<AgentProjectFileTreeNode[]>([]);
   const [projectFileSummary, setProjectFileSummary] = useState<AgentProjectFileSummary | null>(null);
   const [knownProjectFilesByPath, setKnownProjectFilesByPath] =
@@ -691,16 +629,11 @@ export default function ProjectDetailPage() {
   const [treeExpandedKeys, setTreeExpandedKeys] = useState<string[]>([]);
   const [staleProjectTreeDirectoryPaths, setStaleProjectTreeDirectoryPaths] = useState<string[]>([]);
   const [latestUpdatedFilePath, setLatestUpdatedFilePath] = useState("");
-  const [workbenchSyncNotice, setWorkbenchSyncNotice] = useState<{
-    changedPaths: string[];
-    updatedAt: number;
-  } | null>(null);
   const [fileContent, setFileContent] = useState("");
   const [charStatsContent, setCharStatsContent] = useState("");
   const [nerStructuredContent, setNerStructuredContent] = useState("");
   const [filesLoading, setFilesLoading] = useState(false);
   const [projectTreeLoading, setProjectTreeLoading] = useState(false);
-  const [contentLoading, setContentLoading] = useState(false);
 
   const [pipelineTemplates, setPipelineTemplates] = useState<
     ProjectPipelineTemplateInfo[]
@@ -727,7 +660,6 @@ export default function ProjectDetailPage() {
   const [manualRecoverCandidates, setManualRecoverCandidates] = useState<ChatSpec[]>([]);
   const [manualRecoverChatId, setManualRecoverChatId] = useState("");
   const [chatStarting, setChatStarting] = useState(false);
-  const [projectAgentContext, setProjectAgentContext] = useState("");
   const [selectedStepId, setSelectedStepId] = useState("");
   const [deletingProject, setDeletingProject] = useState(false);
   const [deletingProjectPaths, setDeletingProjectPaths] = useState<string[]>([]);
@@ -877,41 +809,6 @@ export default function ProjectDetailPage() {
       ).catch(() => undefined);
     };
   }, [currentAgent?.id, projectAgentFacade, selectedProject?.id]);
-
-  useEffect(() => {
-    const agentId = currentAgent?.id;
-    const projectId = selectedProject?.id;
-    if (!agentId || !projectId) {
-      setProjectAgentContext("");
-      return;
-    }
-    const projectAdapter = projectWorkspaceFacade.getProjectAdapter(projectId);
-    if (!projectAdapter) {
-      setProjectAgentContext("");
-      return;
-    }
-    let cancelled = false;
-    void (async () => {
-      const results = await Promise.allSettled([
-        projectAdapter.readText(".agent/AGENTS.md"),
-        projectAdapter.readText(".agent/PROJECT.md"),
-      ]);
-      if (cancelled) {
-        return;
-      }
-      const parts: string[] = [];
-      if (results[0].status === "fulfilled" && results[0].value?.content) {
-        parts.push(`=== .agent/AGENTS.md ===\n${results[0].value.content}`);
-      }
-      if (results[1].status === "fulfilled" && results[1].value?.content) {
-        parts.push(`=== .agent/PROJECT.md ===\n${results[1].value.content}`);
-      }
-      setProjectAgentContext(parts.join("\n\n"));
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [currentAgent?.id, projectWorkspaceFacade, selectedProject?.id]);
 
   // Sync project ID header for backend project context injection
   useEffect(() => {
@@ -1348,18 +1245,6 @@ export default function ProjectDetailPage() {
     [effectiveProjectFiles, projectFileSummary?.visible_files],
   );
 
-  const visibleProjectFiles = useMemo(
-    () => effectiveProjectFiles.filter((item) => !isBuiltInProjectFile(item.path)),
-    [effectiveProjectFiles],
-  );
-
-  const visibleProjectSummary = useMemo(
-    () => projectFilesQuerySummary
-      ? buildVisibleSummaryFromQuerySummary(projectFilesQuerySummary, projectFiles)
-      : computeProjectFileInventorySummary(visibleProjectFiles),
-    [projectFiles, projectFilesQuerySummary, visibleProjectFiles],
-  );
-
   const flushWorkspaceResize = useCallback((sizes: number[]) => {
     if (sizes.length !== 3) {
       return;
@@ -1450,21 +1335,6 @@ export default function ProjectDetailPage() {
 
     setKnowledgeModuleCollapsed(!nextExpanded);
   }, []);
-
-  const projectWorkspaceSummary = useMemo(
-    () => buildProjectWorkspaceSummary({
-      projectName: selectedProject?.name || routeProjectId || "-",
-      projectDescription: selectedProject?.description || "",
-      workspaceDir: selectedProject?.workspace_dir || currentAgent?.workspace_dir || "",
-    }),
-    [
-      currentAgent?.workspace_dir,
-      routeProjectId,
-      selectedProject?.description,
-      selectedProject?.name,
-      selectedProject?.workspace_dir,
-    ],
-  );
 
   const priorityFilePaths = useMemo(
     () => selectSeedSourceFiles(effectiveProjectFiles.map((item) => item.path)),
@@ -1597,16 +1467,6 @@ export default function ProjectDetailPage() {
           ignored: item.ignored,
         }));
       setProjectFiles(filteredFiles);
-      setProjectFilesQuerySummary({
-        total_matched: queryResponse.summary.totalMatched,
-        returned: queryResponse.summary.returned,
-        offset: queryResponse.summary.offset,
-        limit: queryResponse.summary.limit,
-        builtin_count: queryResponse.summary.builtinCount || 0,
-        ignored_count: queryResponse.summary.ignoredCount || 0,
-        stage_counts: queryResponse.summary.stageCounts || {},
-        content_type_counts: queryResponse.summary.contentTypeCounts || {},
-      });
       // Keep a superset cache so selection does not get invalidated by transient file-tree filters.
       setKnownProjectFilesByPath((prev) => ({
         ...prev,
@@ -1633,7 +1493,6 @@ export default function ProjectDetailPage() {
     } catch (err) {
       console.error("failed to load project files", err);
       setProjectFiles([]);
-      setProjectFilesQuerySummary(null);
       setError(
         t("projects.loadFilesFailed"),
       );
@@ -1812,11 +1671,9 @@ export default function ProjectDetailPage() {
   useLeaveConfirmGuard({ enabled: shouldBlockLeave, confirmText: leaveConfirmText });
 
   const loadFileContent = useCallback(async (
-    agentId: string,
     project: AgentProjectSummary,
     filePath: string,
   ) => {
-    setContentLoading(true);
     setFileContent("");
     try {
       const resolved = await resolveProjectRequestCandidate({
@@ -1842,13 +1699,10 @@ export default function ProjectDetailPage() {
           "Unable to preview this file. It might be binary or inaccessible.",
         ),
       );
-    } finally {
-      setContentLoading(false);
     }
   }, [projectWorkspaceFacade, resolvedProjectRequestId, routeProjectId, t]);
 
   const fetchProjectFileSnippet = useCallback(async (
-    agentId: string,
     project: AgentProjectSummary,
     filePath: string,
   ): Promise<string> => {
@@ -2456,7 +2310,6 @@ export default function ProjectDetailPage() {
   useEffect(() => {
     setResolvedProjectRequestId("");
     setProjectFiles([]);
-    setProjectFilesQuerySummary(null);
     setProjectTreeNodes([]);
     setProjectFileSummary(null);
     setKnownProjectFilesByPath({});
@@ -2464,7 +2317,6 @@ export default function ProjectDetailPage() {
     setTreeExpandedKeys([]);
     setStaleProjectTreeDirectoryPaths([]);
     setLatestUpdatedFilePath("");
-    setWorkbenchSyncNotice(null);
     setFileContent("");
     setPipelineTemplates([]);
     setPipelineRuns([]);
@@ -2654,7 +2506,6 @@ export default function ProjectDetailPage() {
       return;
     }
     if (!isPreviewablePath(selectedFilePath)) {
-      setContentLoading(false);
       setFileContent(
         t(
           "projects.previewLoadFailed",
@@ -2663,7 +2514,7 @@ export default function ProjectDetailPage() {
       );
       return;
     }
-    void loadFileContent(currentAgent.id, selectedProject, selectedFilePath);
+    void loadFileContent(selectedProject, selectedFilePath);
   }, [currentAgent, selectedProject, selectedFilePath, loadFileContent, t]);
 
   useEffect(() => {
@@ -2936,7 +2787,6 @@ export default function ProjectDetailPage() {
   }, [selectedProject]);
 
   const handleSelectArtifactFile = useCallback(async (path: string) => {
-    setWorkbenchSyncNotice(null);
     const normalizedPath = normalizeProjectArtifactPath(path);
     if (!normalizedPath) {
       return;
@@ -3919,7 +3769,6 @@ export default function ProjectDetailPage() {
             selectedFiles.slice(0, 4).map(async (item) => {
               try {
                 const excerpt = await fetchProjectFileSnippet(
-                  currentAgent.id,
                   selectedProject,
                   item.path,
                 );
@@ -4281,7 +4130,6 @@ export default function ProjectDetailPage() {
       onSelectRunHistoryChat={selectRunChatSession}
       onOpenManualRecoverDialog={handleOpenManualRecoverDialogFromChat}
       onAssistantTurnCompleted={handleAssistantTurnCompletedFromChat}
-        projectAgentContext={projectAgentContext}
       />
     ), [
       activeDesignChatId,
@@ -4295,7 +4143,6 @@ export default function ProjectDetailPage() {
       handleStartDesignChat,
       handleStartRunChat,
       handleStartWorkspaceChat,
-      projectAgentContext,
       projectChatMode,
       projectFileCount,
       selectWorkspaceChatSession,
