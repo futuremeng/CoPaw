@@ -4556,6 +4556,7 @@ export default function ProjectDetailPage() {
                             selectedAttachPaths={selectedAttachPaths}
                             treeFilterQuery={projectFileSearchQuery}
                             selectedMetricFilter={selectedMetricFilter}
+                            onMetricFilterChange={setSelectedMetricFilter}
                             activeStage={activeStage}
                             treeDisplayMode={treeDisplayMode}
                             deletingTreePaths={deletingProjectPaths}

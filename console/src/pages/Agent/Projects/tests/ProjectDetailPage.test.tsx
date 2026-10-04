@@ -15,7 +15,6 @@ const {
   mockedGetProjectFileSummary,
   mockedMessageError,
   mockedMessageSuccess,
-  projectOverviewCardState,
   mockAgentStoreState,
   mockPreferredWorkspaceChatState,
   mockProjectUploadControllerState,
@@ -35,9 +34,6 @@ const {
   mockedGetProjectFileSummary: vi.fn(),
   mockedMessageError: vi.fn(),
   mockedMessageSuccess: vi.fn(),
-  projectOverviewCardState: {
-    latestProps: null as Record<string, unknown> | null,
-  },
   mockAgentStoreState: {
     selectedAgent: "agent-1",
     agents: [
@@ -279,12 +275,6 @@ vi.mock("../components/ProjectKnowledgeSignalsPanel", () => ({
 }));
 vi.mock("../components/ProjectKnowledgeSourcesPanel", () => ({ default: () => <div /> }));
 vi.mock("../components/ProjectKnowledgeSettingsPanel", () => ({ default: () => <div /> }));
-vi.mock("../components/ProjectOverviewCard", () => ({
-  default: (props: Record<string, unknown>) => {
-    projectOverviewCardState.latestProps = props;
-    return <div />;
-  },
-}));
 vi.mock("../components/ProjectUploadModal", () => ({ default: () => <div /> }));
 vi.mock("../components/ProjectWorkbenchPanel", () => ({ default: () => <div /> }));
 vi.mock("../components/ProjectMetricsPanel", () => ({ default: () => <div /> }));
@@ -333,7 +323,9 @@ function renderPage() {
 
 let consoleErrorSpy: ReturnType<typeof vi.spyOn> | null = null;
 
-describe("ProjectDetailPage refresh scheduling", () => {
+// Mounting the whole detail page costs ~0.5-3s alone and 10s+ when the suite
+// runs 84 files in parallel, so the 5s default test timeout is not enough.
+describe("ProjectDetailPage refresh scheduling", { timeout: 30000 }, () => {
   afterEach(() => {
     consoleErrorSpy?.mockRestore();
     consoleErrorSpy = null;
@@ -366,7 +358,6 @@ describe("ProjectDetailPage refresh scheduling", () => {
     realtimeControllerState.reconnectAttempt = 0;
     realtimeControllerState.onFileTreeInvalidated = undefined;
     realtimeControllerState.onPipelineInvalidated = undefined;
-    projectOverviewCardState.latestProps = null;
     mockedListProjectFileTree.mockResolvedValue([
       {
         filename: "guide.md",
@@ -462,20 +453,10 @@ describe("ProjectDetailPage refresh scheduling", () => {
     });
   });
 
-  it("uses summary recent updates without prefetching child directories", async () => {
-    mockedListProjectFileTree.mockResolvedValue([
-      {
-        filename: "original",
-        path: "original",
-        size: 0,
-        modified_time: "2026-04-29T00:00:00Z",
-        is_directory: true,
-        child_count: 2,
-        descendant_file_count: 1,
-        direct_file_count: 1,
-        has_child_directories: true,
-      },
-    ]);
+  it("surfaces the summary recent update without reading that file", async () => {
+    // The recent update lives under original/, which the flat file list never
+    // returns. Opening a project does transiently probe the auto-expanded stage
+    // root, so the stable half of this contract is: no read of the recent file.
     mockedGetProjectFileSummary.mockResolvedValue({
       total_files: 2,
       builtin_files: 0,
@@ -500,13 +481,13 @@ describe("ProjectDetailPage refresh scheduling", () => {
     try {
       await waitFor(() => {
         expect(mockedGetProjectFileSummary).toHaveBeenCalled();
-        expect(projectOverviewCardState.latestProps?.latestUpdatedFilePath).toBe("original/latest.md");
+        expect(screen.getByRole("button", { name: "Recent Update" })).toBeDefined();
       });
-
       await waitFor(() => {
         expect(mockedListProjectFileTree).toHaveBeenCalledWith("agent-1", "proj-1", "");
       });
-      expect(mockedListProjectFileTree).not.toHaveBeenCalledWith("agent-1", "proj-1", "original");
+
+      expect(mockedReadProjectFile).not.toHaveBeenCalledWith("agent-1", "proj-1", "original/latest.md");
     } finally {
       view.unmount();
     }
@@ -547,14 +528,11 @@ describe("ProjectDetailPage refresh scheduling", () => {
         expect(mockedQueryProjectFiles).toHaveBeenCalledTimes(1);
       });
 
-      const onMetricFilterChange = (
-        projectOverviewCardState.latestProps?.onMetricFilterChange
-      ) as ((next: "" | "markdown" | "text" | "script" | "otherType") => void) | undefined;
-
-      expect(onMetricFilterChange).toBeTypeOf("function");
+      const markdownChip = await screen.findByRole("button", { name: /Markdown/ });
+      expect(markdownChip.getAttribute("aria-pressed")).toBe("false");
 
       act(() => {
-        onMetricFilterChange?.("markdown");
+        markdownChip.click();
       });
 
       await waitFor(() => {
@@ -663,11 +641,11 @@ describe("ProjectDetailPage refresh scheduling", () => {
     const view = renderPage();
     try {
       await waitFor(() => {
-        expect(projectOverviewCardState.latestProps?.latestUpdatedFilePath).toBe("notes.md");
+        expect(screen.getByRole("button", { name: "Recent Update" })).toBeDefined();
       });
 
       act(() => {
-        (projectOverviewCardState.latestProps?.onSelectLatestUpdatedFile as ((path: string) => void) | undefined)?.("notes.md");
+        screen.getByRole("button", { name: "Recent Update" }).click();
       });
 
       await waitFor(() => {

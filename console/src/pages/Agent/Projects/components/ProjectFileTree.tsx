@@ -28,13 +28,18 @@ import {
 } from "../../../../components/ContextMenu";
 import type {
   AgentProjectFileInfo,
+  AgentProjectFileSummary,
   AgentProjectFileTreeNode,
   AgentProjectSummary,
 } from "../../../../api/types/agents";
 import { matchesProjectKnowledgeFilter } from "../utils/metrics";
+import {
+  getProjectFilterLabelDescriptor,
+  toggleProjectFileFilter,
+} from "../utils/filtering";
 import type { ProjectFileFilterKey } from "../utils/filtering";
 import type { TreeDisplayMode } from "../utils/projectLayoutPrefs";
-import { isBuiltInProjectFile } from "../utils/builtInFiles";
+import { isBuiltInProjectDirectory, isBuiltInProjectFile } from "../utils/builtInFiles";
 import {
   isStandardTreeRootDir,
   matchesProjectPathQuery,
@@ -65,15 +70,35 @@ interface TreeNode {
 
 interface LazyTreeItem extends AgentProjectFileTreeNode {
   loaded: boolean;
+  builtin?: boolean;
   children?: LazyTreeItem[];
 }
+
+type SummaryCountField = {
+  [K in keyof AgentProjectFileSummary]-?: NonNullable<AgentProjectFileSummary[K]> extends number ? K : never;
+}[keyof AgentProjectFileSummary];
+
+const METRIC_FILTER_CHIPS: Array<{ key: ProjectFileFilterKey; field: SummaryCountField }> = [
+  { key: "original", field: "original_files" },
+  { key: "intermediate", field: "intermediate_files" },
+  { key: "artifact", field: "artifact_files" },
+  { key: "agent", field: "agent_files" },
+  { key: "skill", field: "skill_files" },
+  { key: "flow", field: "flow_files" },
+  { key: "case", field: "case_files" },
+  { key: "builtin", field: "builtin_files" },
+  { key: "markdown", field: "markdown_files" },
+  { key: "text", field: "text_files" },
+  { key: "script", field: "script_files" },
+  { key: "otherType", field: "other_type_files" },
+];
 
 export interface ProjectFileTreeProps {
   selectedProject?: AgentProjectSummary;
   /** All project files (used for filtering/builtin detection) */
   projectFiles: AgentProjectFileInfo[];
-  /** Pre-computed file summary */
-  projectFileSummary?: { visible_files?: number; markdown_files?: number; text_files?: number; script_files?: number; other_type_files?: number; recently_updated_files?: number } | null;
+  /** Pre-computed file summary (drives the file-type filter chips) */
+  projectFileSummary?: AgentProjectFileSummary | null;
   /** Project tree nodes (lazy-loaded root level) */
   projectTreeNodes?: AgentProjectFileTreeNode[];
   projectTreeLoading?: boolean;
@@ -91,6 +116,8 @@ export interface ProjectFileTreeProps {
   treeFilterQuery?: string;
   /** Current metric filter */
   selectedMetricFilter: ProjectFileFilterKey | "";
+  /** Change the metric filter (enables the file-type filter chips) */
+  onMetricFilterChange?: (next: ProjectFileFilterKey | "") => void;
   activeStage?: string;
   treeDisplayMode: TreeDisplayMode;
   /** Files that are currently being deleted */
@@ -391,6 +418,9 @@ function buildLazyTreeNodes(
     const isHighlighted = !item.is_directory && highlightedFileSet.has(item.path);
     const isDeleting = deletingTreePathSet.has(item.path);
     const isRefreshingDirectory = item.is_directory && refreshingDirectorySet.has(item.path);
+    const directoryCountLabel = item.is_directory && item.direct_file_count > 0
+      ? `${item.direct_file_count}${item.has_child_directories ? "+" : ""}`
+      : "";
     const childNodes = item.children
       ? buildLazyTreeNodes(
           item.children, priorityFileSet, selectedAttachSet, highlightedFileSet,
@@ -414,6 +444,7 @@ function buildLazyTreeNodes(
               {item.filename}
             </span>
             {!item.is_directory && isAttached ? <span className={styles.treeNodeAttachedMark}>✓</span> : null}
+            {directoryCountLabel ? <span className={styles.treeNodeMetaCount}>{directoryCountLabel}</span> : null}
           </span>
           {item.is_directory ? (
             <span className={styles.treeNodeActions}>
@@ -454,6 +485,7 @@ export default function ProjectFileTree({
   selectedAttachPaths,
   treeFilterQuery,
   selectedMetricFilter = "",
+  onMetricFilterChange,
   activeStage,
   treeDisplayMode,
   deletingTreePaths = [],
@@ -824,7 +856,11 @@ export default function ProjectFileTree({
         case "intermediate": return normalizedPath === "intermediate" || normalizedPath.startsWith("intermediate/");
         case "artifact": return normalizedPath === "output" || normalizedPath.startsWith("output/");
         case "agent": return normalizedPath === ".agent" || normalizedPath.startsWith(".agent/");
-        case "builtin": return typeof item.builtin === "boolean" ? item.builtin : isBuiltInProjectFile(item.path);
+        case "builtin":
+          if (typeof item.builtin === "boolean") return item.builtin;
+          return item.is_directory
+            ? isBuiltInProjectDirectory(item.path)
+            : isBuiltInProjectFile(item.path);
         default: return true;
       }
     });
@@ -886,6 +922,18 @@ export default function ProjectFileTree({
     const timer = window.setTimeout(() => setTreeTransitioning(false), 220);
     return () => window.clearTimeout(timer);
   }, [activeStage, selectedMetricFilter]);
+
+  const metricFilterChips = useMemo(() => {
+    if (!onMetricFilterChange) return [] as Array<{ key: ProjectFileFilterKey; label: string; count: number }>;
+    return METRIC_FILTER_CHIPS.map(({ key, field }) => {
+      const descriptor = getProjectFilterLabelDescriptor(key);
+      return {
+        key,
+        label: t(descriptor.i18nKey, descriptor.defaultLabel),
+        count: projectFileSummary?.[field] ?? 0,
+      };
+    }).filter((chip) => chip.count > 0 || chip.key === selectedMetricFilter);
+  }, [onMetricFilterChange, projectFileSummary, selectedMetricFilter, t]);
 
   return (
     <div className={`${styles.scrollContainer} ${styles.treeOnlyScrollContainer}`}>
@@ -953,6 +1001,25 @@ export default function ProjectFileTree({
           <Button size="small" type={showSelectedOnly ? "primary" : "default"} onClick={() => setShowSelectedOnly((prev) => !prev)}>
             {selectedOnlyTitle}
           </Button>
+          {metricFilterChips.length > 0 ? (
+            <div className={styles.treeFilterChips}>
+              {metricFilterChips.map((chip) => {
+                const active = selectedMetricFilter === chip.key;
+                return (
+                  <button
+                    key={chip.key}
+                    type="button"
+                    className={`${styles.treeFilterChip} ${active ? styles.treeFilterChipActive : ""}`}
+                    aria-pressed={active}
+                    onClick={() => onMetricFilterChange?.(toggleProjectFileFilter(selectedMetricFilter, chip.key))}
+                  >
+                    {chip.label}
+                    <span className={styles.treeFilterChipCount}>{chip.count}</span>
+                  </button>
+                );
+              })}
+            </div>
+          ) : null}
         </div>
         <div className={styles.treeToolbarRight}>
           <Segmented

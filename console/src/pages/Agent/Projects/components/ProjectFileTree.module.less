@@ -110,6 +110,38 @@
   font-size: 12px;
 }
 
+.treeFilterChips {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
+  min-width: 0;
+}
+
+.treeFilterChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 6px;
+  font-size: 11px;
+  line-height: 18px;
+  color: var(--text-secondary, rgba(0, 0, 0, 0.65));
+  background: transparent;
+  border: 1px solid var(--border-secondary, rgba(0, 0, 0, 0.15));
+  border-radius: 10px;
+  cursor: pointer;
+}
+
+.treeFilterChipActive {
+  color: var(--brand-primary, #1677ff);
+  border-color: var(--brand-primary, #1677ff);
+}
+
+.treeFilterChipCount {
+  font-size: 10px;
+  color: var(--text-tertiary, rgba(0, 0, 0, 0.45));
+}
+
 .treeModeSegment {
   font-size: 12px;
 
