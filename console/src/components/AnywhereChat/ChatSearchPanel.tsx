@@ -142,7 +142,7 @@ const ChatSearchPanel: React.FC<ChatSearchPanelProps> = ({
           }
 
           const chat = validChats[index];
-          const chatName = chat.name || t("chat.newChat", "New Chat");
+          const chatName = chat.name || t("chat.newChat");
           const timestamp = chat.updated_at || chat.created_at;
           setSearchProgress(`${index + 1}/${validChats.length}`);
 
@@ -150,7 +150,7 @@ const ChatSearchPanel: React.FC<ChatSearchPanelProps> = ({
             results.push({
               chatId: chat.id,
               chatName,
-              roleLabel: t("chat.search.titleMatch", "Title"),
+              roleLabel: t("chat.search.titleMatch"),
               matchedText: chatName,
               timestamp,
             });
@@ -180,8 +180,8 @@ const ChatSearchPanel: React.FC<ChatSearchPanelProps> = ({
                 chatName,
                 roleLabel:
                   msg.role === "user"
-                    ? t("chat.search.userMessage", "User")
-                    : t("chat.search.assistantMessage", "Assistant"),
+                    ? t("chat.search.userMessage")
+                    : t("chat.search.assistantMessage"),
                 matchedText: start > 0 ? `...${snippet}` : snippet,
                 timestamp,
               });
@@ -256,7 +256,7 @@ const ChatSearchPanel: React.FC<ChatSearchPanelProps> = ({
     >
       <div className={styles.header}>
         <div className={styles.headerLeft}>
-          <span className={styles.headerTitle}>{t("chat.search.title", "Search")}</span>
+          <span className={styles.headerTitle}>{t("chat.search.title")}</span>
         </div>
         <div className={styles.headerRight}>
           <IconButton bordered={false} icon={<SparkOperateRightLine />} onClick={onClose} />
@@ -266,7 +266,7 @@ const ChatSearchPanel: React.FC<ChatSearchPanelProps> = ({
       <div className={styles.searchSection}>
         <Input
           ref={inputRef}
-          placeholder={t("chat.search.placeholder", "Search conversations")}
+          placeholder={t("chat.search.placeholder")}
           prefix={<SparkSearchLine style={{ color: "rgba(0,0,0,0.25)" }} />}
           value={searchQuery}
           onChange={(event) => setSearchQuery(event.target.value)}
@@ -281,7 +281,7 @@ const ChatSearchPanel: React.FC<ChatSearchPanelProps> = ({
             {loading && searchProgress
               ? t("chat.search.searching", { progress: searchProgress })
               : loading
-                ? t("chat.search.loading", "Searching...")
+                ? t("chat.search.loading")
                 : t("chat.search.resultsCount", { count: searchResults.length })}
           </Typography.Text>
         </div>
@@ -295,7 +295,7 @@ const ChatSearchPanel: React.FC<ChatSearchPanelProps> = ({
               <Spin />
             </div>
           ) : searchQuery.trim() && !loading && searchResults.length === 0 ? (
-            <Empty description={t("chat.search.noResults", "No results")} style={{ marginTop: 40 }} />
+            <Empty description={t("chat.search.noResults")} style={{ marginTop: 40 }} />
           ) : (
             <List
               dataSource={searchResults}

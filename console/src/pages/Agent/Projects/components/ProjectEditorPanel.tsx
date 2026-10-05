@@ -187,10 +187,7 @@ export default function ProjectEditorPanel({
               <div className={styles.knowledgePreviewPane}>
                 <div className={styles.knowledgePreviewHeader}>
                   <Text strong>
-                    {t(
-                      "projects.workbench.knowledgePreviewTitle",
-                      "Current Document Knowledge Visualization",
-                    )}
+                    {t("projects.workbench.knowledgePreviewTitle")}
                   </Text>
                 </div>
                 <div className={styles.knowledgePreviewBody}>
@@ -223,7 +220,7 @@ export default function ProjectEditorPanel({
       {hasAttachments && (
         <div className={styles.attachFloatingBar}>
           <div className={styles.attachCountText}>
-            {t("projects.chat.selectedCount", "Selected files: {{count}}", {
+            {t("projects.chat.selectedCount", {
               count: selectedAttachPaths.length,
             })}
           </div>
@@ -232,7 +229,7 @@ export default function ProjectEditorPanel({
             checked={autoAnalyzeOnAttach}
             onChange={(event) => onToggleAutoAnalyze(event.target.checked)}
           >
-            {t("projects.chat.autoAnalyze", "Auto Analyze")}
+            {t("projects.chat.autoAnalyze")}
           </Checkbox>
           <Button
             type="primary"
@@ -241,7 +238,7 @@ export default function ProjectEditorPanel({
             loading={sendingSelectedFiles}
             onClick={onSendSelectedFilesToChat}
           >
-            {t("projects.chat.sendSelected", "Attach To Chat")}
+            {t("projects.chat.sendSelected")}
           </Button>
         </div>
       )}

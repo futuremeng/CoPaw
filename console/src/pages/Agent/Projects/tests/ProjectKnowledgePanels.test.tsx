@@ -8,20 +8,12 @@ import { buildModeState } from "../utils/projectKnowledgeTestUtils";
 import type { AgentProjectFileInfo } from "../../../../api/types/agents";
 import type { ProjectKnowledgeHeaderSignals, ProjectKnowledgeState } from "../hooks/useProjectKnowledgeState";
 
-vi.mock("react-i18next", () => ({
-  useTranslation: () => ({
-    t: (
-      key: string,
-      maybeFallbackOrOptions?: string | Record<string, unknown>,
-      maybeOptions?: Record<string, unknown>,
-    ) => {
-      if (typeof maybeFallbackOrOptions === "string") {
-        return maybeFallbackOrOptions.replace(/\{\{(\w+)\}\}/g, (_match, name: string) => String((maybeOptions as Record<string, unknown> | undefined)?.[name] ?? ""));
-      }
-      return key;
-    },
-  }),
-}));
+// The app renders the English bundle (i18n default language is "en"), so the
+// double resolves copy from that bundle instead of an inline default.
+vi.mock("react-i18next", async () => {
+  const { t } = await vi.importActual<typeof import("./enLocaleTranslate")>("./enLocaleTranslate");
+  return { useTranslation: () => ({ t, i18n: { language: "en" } }) };
+});
 
 function buildKnowledgeState(): ProjectKnowledgeState {
   const projectId = "project-abc";
@@ -343,7 +335,7 @@ describe("project knowledge panels", () => {
     );
 
     expect(screen.getByText("Health")).not.toBeNull();
-    expect(screen.getByText(/copaw\.projects\.knowledge\.metricsSourceLabel/)).not.toBeNull();
+    expect(screen.getByText(/Metrics Source/)).not.toBeNull();
 
     render(<ProjectKnowledgeSourcesPanel knowledgeState={knowledgeState} projectFiles={projectFiles} />);
     expect(screen.getByText("original/a.md")).not.toBeNull();
@@ -492,7 +484,7 @@ describe("project knowledge panels", () => {
 
     render(<ProjectKnowledgeProcessingPanel knowledgeState={knowledgeState} projectFiles={buildProjectFiles()} />);
     expect(screen.getByText("Processing")).not.toBeNull();
-    expect(screen.getAllByText("copaw.projects.knowledge.processing.layerDimension").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Layer Dimension").length).toBeGreaterThan(0);
 
     render(<ProjectKnowledgeOutputsPanel knowledgeState={knowledgeState} />);
     expect(screen.getByText("Outputs")).not.toBeNull();

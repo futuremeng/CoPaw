@@ -105,7 +105,7 @@ export default function ProjectUploadModal({
 
   return (
     <Modal
-      title={t("projects.upload.title", "Upload Project Files")}
+      title={t("projects.upload.title")}
       open={open}
       width={760}
       wrapClassName={styles.uploadModal}
@@ -124,24 +124,24 @@ export default function ProjectUploadModal({
       }}
       onCancel={onCancel}
       okButtonProps={{ disabled: pendingUploads.length === 0 }}
-      okText={t("projects.upload.confirm", "Upload")}
+      okText={t("projects.upload.confirm")}
     >
       <div className={styles.uploadModalBody}>
         {uploadHint ? <div className={styles.itemMeta}>{uploadHint}</div> : null}
         <Input
           value={uploadTargetDir}
           onChange={(event) => onChangeUploadTargetDir(event.target.value)}
-          placeholder={t("projects.upload.targetDir", "Target directory (default: project root)")}
+          placeholder={t("projects.upload.targetDir")}
         />
         <Segmented
           block
           options={[
             {
-              label: t("projects.upload.mode.files", "文件模式"),
+              label: t("projects.upload.mode.files"),
               value: "files",
             },
             {
-              label: t("projects.upload.mode.folder", "文件夹模式"),
+              label: t("projects.upload.mode.folder"),
               value: "folder",
             },
           ]}
@@ -184,13 +184,13 @@ export default function ProjectUploadModal({
         >
           <p>
             {uploadMode === "folder"
-              ? t("projects.upload.folderDragHint", "选择文件夹后将按目录结构上传全部文件")
-              : t("projects.upload.dragHint", "Drag files here or click to select")}
+              ? t("projects.upload.folderDragHint")
+              : t("projects.upload.dragHint")}
           </p>
         </Dragger>
         {pendingUploads.length > PREVIEW_UPLOAD_LIMIT ? (
           <div className={styles.itemMeta}>
-            {t("projects.upload.previewLimitNotice", "Showing first {{count}} files ({{total}} selected)", {
+            {t("projects.upload.previewLimitNotice", {
               count: PREVIEW_UPLOAD_LIMIT,
               total: pendingUploads.length,
             })}

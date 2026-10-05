@@ -655,13 +655,13 @@ export function GraphQueryResults(props: GraphQueryResultsProps) {
           </div>
         ) : null}
         <Space wrap size={6}>
-          <strong>{t("knowledge.graphQuery.scopeFilter", "Scope Filter")}:</strong>
+          <strong>{t("knowledge.graphQuery.scopeFilter")}:</strong>
           <Tag color={scopeFilterState.applied ? "processing" : "default"}>
             {scopeFilterState.scopeType === "agent"
-              ? t("knowledge.graphQuery.scopeAgent", "Agent")
+              ? t("knowledge.graphQuery.scopeAgent")
               : scopeFilterState.scopeType === "project"
-                ? t("knowledge.graphQuery.scopeProject", "Project")
-                : t("knowledge.graphQuery.scopeCombined", "Combined")}
+                ? t("knowledge.graphQuery.scopeProject")
+                : t("knowledge.graphQuery.scopeCombined")}
           </Tag>
           {scopeFilterState.scopeId ? <Tag>{scopeFilterState.scopeId}</Tag> : null}
         </Space>
@@ -1138,21 +1138,21 @@ export function GraphVisualization(props: GraphVisualizationProps) {
     return [
       {
         key: "isolated",
-        title: t("knowledge.graphQuery.insightIsolated", "Isolated Nodes"),
+        title: t("knowledge.graphQuery.insightIsolated"),
         detail: `${isolatedNodeIds.length} nodes with degree <= 1`,
         nodeIds: isolatedNodeIds,
         edgeIds: [],
       },
       {
         key: "weak-links",
-        title: t("knowledge.graphQuery.insightWeakLinks", "Weak Links"),
+        title: t("knowledge.graphQuery.insightWeakLinks"),
         detail: `${weakEdgeIds.length} low-confidence edges`,
         nodeIds: weakNodeIds,
         edgeIds: weakEdgeIds,
       },
       {
         key: "bridges",
-        title: t("knowledge.graphQuery.insightBridges", "Bridge Nodes"),
+        title: t("knowledge.graphQuery.insightBridges"),
         detail: `${bridgeNodeIds.length} cross-group connectors`,
         nodeIds: bridgeNodeIds,
         edgeIds: bridgeEdges,
@@ -1873,10 +1873,10 @@ export function GraphVisualization(props: GraphVisualizationProps) {
       return (
         <>
           <div className={styles.graphFramelessRoot}>
-            <Empty description={edgeStrengthThreshold > 0 ? t("knowledge.graphQuery.noVisualizationAfterFilter", "No graph data after threshold filter") : t("knowledge.graphQuery.noVisualization")} />
+            <Empty description={edgeStrengthThreshold > 0 ? t("knowledge.graphQuery.noVisualizationAfterFilter") : t("knowledge.graphQuery.noVisualization")} />
           </div>
           <Modal
-            title={t("knowledge.graphQuery.advancedSettings", "高级设置")}
+            title={t("knowledge.graphQuery.advancedSettings")}
             open={advancedSettingsOpen}
             onCancel={() => {
               resetPendingGraphSettings();
@@ -1889,7 +1889,7 @@ export function GraphVisualization(props: GraphVisualizationProps) {
                     resetPendingGraphSettings();
                   }}
                 >
-                  {t("common.reset", "重置")}
+                  {t("common.reset")}
                 </Button>
                 <Button
                   type="primary"
@@ -1898,7 +1898,7 @@ export function GraphVisualization(props: GraphVisualizationProps) {
                     applyPendingGraphSettings({ closeModal: true, refreshQuery: true });
                   }}
                 >
-                  {t("knowledge.graphQuery.applyAndRefresh", "应用并刷新")}
+                  {t("knowledge.graphQuery.applyAndRefresh")}
                 </Button>
               </Space>
             )}
@@ -1906,18 +1906,18 @@ export function GraphVisualization(props: GraphVisualizationProps) {
           >
             <Space direction="vertical" size={10} style={{ width: "100%" }}>
               <Space wrap className={styles.graphAdvancedRow}>
-                <Typography.Text type="secondary">{t("knowledge.graphQuery.colorMode", "Color Mode")}</Typography.Text>
+                <Typography.Text type="secondary">{t("knowledge.graphQuery.colorMode")}</Typography.Text>
                 <Select
                   size="small"
                   value={pendingColorMode}
                   style={{ width: 180 }}
                   onChange={(value) => setPendingColorMode(value as GraphColorMode)}
                   options={[
-                    { label: t("knowledge.graphQuery.colorModeType", "Type Coloring"), value: "type" },
-                    { label: t("knowledge.graphQuery.colorModeWeight", "Weight Heatmap"), value: "weight" },
+                    { label: t("knowledge.graphQuery.colorModeType"), value: "type" },
+                    { label: t("knowledge.graphQuery.colorModeWeight"), value: "weight" },
                   ]}
                 />
-                <Typography.Text type="secondary">{t("knowledge.graphQuery.edgeThreshold", "Edge threshold")}</Typography.Text>
+                <Typography.Text type="secondary">{t("knowledge.graphQuery.edgeThreshold")}</Typography.Text>
                 <Slider
                   min={0}
                   max={1}
@@ -1941,7 +1941,7 @@ export function GraphVisualization(props: GraphVisualizationProps) {
         loading={loading}
         className={`${compact ? styles.graphCardCompact : ""} ${frameless ? styles.graphCardFrameless : ""}`.trim()}
       >
-        <Empty description={edgeStrengthThreshold > 0 ? t("knowledge.graphQuery.noVisualizationAfterFilter", "No graph data after threshold filter") : t("knowledge.graphQuery.noVisualization")} />
+        <Empty description={edgeStrengthThreshold > 0 ? t("knowledge.graphQuery.noVisualizationAfterFilter") : t("knowledge.graphQuery.noVisualization")} />
       </Card>
     );
   }
@@ -1950,7 +1950,7 @@ export function GraphVisualization(props: GraphVisualizationProps) {
     <div className={styles.graphStatusPanel}>
       <div className={styles.graphLegendRow}>
         <Typography.Text type="secondary">
-          {t("knowledge.graphQuery.colorMode", "Color Mode")}: {colorMode === "type" ? t("knowledge.graphQuery.colorModeType", "Type") : t("knowledge.graphQuery.colorModeWeight", "Weight")}
+          {t("knowledge.graphQuery.colorMode")}: {colorMode === "type" ? t("knowledge.graphQuery.colorModeType") : t("knowledge.graphQuery.colorModeWeight")}
         </Typography.Text>
         <div className={styles.graphLegendList}>
           {colorMode === "type"
@@ -1983,24 +1983,24 @@ export function GraphVisualization(props: GraphVisualizationProps) {
       ) : null}
       <div className={styles.graphEntityStatsRow}>
         <span className={styles.graphEntityStatPill}>
-          {t("knowledge.graphQuery.totalEntities", "Total Entities")}: {graphEntitySummary.totalNodes}
+          {t("knowledge.graphQuery.totalEntities")}: {graphEntitySummary.totalNodes}
         </span>
         <span className={styles.graphEntityStatPill}>
-          {t("knowledge.graphQuery.connectedEntities", "Connected")}: {graphEntitySummary.connectedNodes}
+          {t("knowledge.graphQuery.connectedEntities")}: {graphEntitySummary.connectedNodes}
         </span>
         <span className={styles.graphEntityStatPill}>
-          {t("knowledge.graphQuery.isolatedEntities", "Isolated")}: {graphEntitySummary.isolatedNodes}
+          {t("knowledge.graphQuery.isolatedEntities")}: {graphEntitySummary.isolatedNodes}
         </span>
         {edgeStrengthThreshold > 0 ? (
           <span className={styles.graphEntityStatPill}>
-            {t("knowledge.graphQuery.thresholdApplied", "Threshold")}: {Math.round(edgeStrengthThreshold * 100)}%
+            {t("knowledge.graphQuery.thresholdApplied")}: {Math.round(edgeStrengthThreshold * 100)}%
           </span>
         ) : null}
       </div>
       {topEntities.length > 0 ? (
         <Space wrap className={styles.graphHotNodesRow}>
           <Typography.Text type="secondary">
-            {t("knowledge.graphQuery.topEntities", "Top Entities")}
+            {t("knowledge.graphQuery.topEntities")}
           </Typography.Text>
           {topEntities.map((item) => (
             <Tag
@@ -2073,22 +2073,22 @@ export function GraphVisualization(props: GraphVisualizationProps) {
         content={statusPopoverContent}
       >
         <Button size={compact ? "small" : "middle"}>
-          {t("knowledge.graphQuery.status", "状态")}
+          {t("knowledge.graphQuery.status")}
         </Button>
       </Popover>
-      <Tooltip title={t("knowledge.graphQuery.advancedSettings", "高级设置")}>
+      <Tooltip title={t("knowledge.graphQuery.advancedSettings")}>
         <Button size={compact ? "small" : "middle"} onClick={handleOpenSettings}>
-          {compact ? t("knowledge.graphQuery.advancedSettingsShort", "设置") : t("knowledge.graphQuery.advancedSettings", "高级设置")}
+          {compact ? t("knowledge.graphQuery.advancedSettingsShort") : t("knowledge.graphQuery.advancedSettings")}
         </Button>
       </Tooltip>
-      <Tooltip title={t("knowledge.graphQuery.refresh", "刷新")}>
+      <Tooltip title={t("knowledge.graphQuery.refresh")}>
         <Button
           size={compact ? "small" : "middle"}
           type={hasPendingGraphSettings ? "primary" : "default"}
           icon={<ReloadOutlined />}
           onClick={handleRefreshGraph}
         >
-          {compact ? null : t("knowledge.graphQuery.refresh", "刷新")}
+          {compact ? null : t("knowledge.graphQuery.refresh")}
         </Button>
       </Tooltip>
       <Tooltip title={t("knowledge.graphQuery.export")}>
@@ -2103,11 +2103,11 @@ export function GraphVisualization(props: GraphVisualizationProps) {
         style={{ width: compact ? 150 : 180 }}
         onChange={(value) => setLayoutMode(value as GraphLayoutMode)}
         options={[
-          { label: t("knowledge.graphQuery.layoutForceCluster", "Force聚类"), value: "force-cluster" },
-          { label: t("knowledge.graphQuery.layoutForcePreventOverlap", "力导向（防重叠）"), value: "force-prevent-overlap" },
-          { label: t("knowledge.graphQuery.layoutRadial", "径向布局"), value: "radial" },
+          { label: t("knowledge.graphQuery.layoutForceCluster"), value: "force-cluster" },
+          { label: t("knowledge.graphQuery.layoutForcePreventOverlap"), value: "force-prevent-overlap" },
+          { label: t("knowledge.graphQuery.layoutRadial"), value: "radial" },
         ]}
-        aria-label={t("knowledge.graphQuery.layoutMode", "布局模式")}
+        aria-label={t("knowledge.graphQuery.layoutMode")}
       />
     </Space>
   );
@@ -2128,14 +2128,14 @@ export function GraphVisualization(props: GraphVisualizationProps) {
         <div className={styles.graphEntityPanel}>
           <div className={styles.graphEntityPanelHeader}>
             <Typography.Text strong>
-              {t("knowledge.graphQuery.entityDetail", "Entity Detail")}
+              {t("knowledge.graphQuery.entityDetail")}
             </Typography.Text>
             <Typography.Text type="secondary">{focusedNodeLabel}</Typography.Text>
           </div>
           <div className={styles.graphEntityPanelBody}>
             <div className={styles.graphEntitySection}>
               <Typography.Text type="secondary">
-                {t("knowledge.graphQuery.outgoing", "Outgoing")} ({focusedNodeRelations.outgoing.length})
+                {t("knowledge.graphQuery.outgoing")} ({focusedNodeRelations.outgoing.length})
               </Typography.Text>
               <div className={styles.graphEntityRelationList}>
                 {focusedNodeRelations.outgoing.slice(0, 8).map((item) => (
@@ -2152,14 +2152,14 @@ export function GraphVisualization(props: GraphVisualizationProps) {
                 ))}
                 {!focusedNodeRelations.outgoing.length ? (
                   <Typography.Text type="secondary" className={styles.graphEntityEmpty}>
-                    {t("knowledge.graphQuery.none", "None")}
+                    {t("knowledge.graphQuery.none")}
                   </Typography.Text>
                 ) : null}
               </div>
             </div>
             <div className={styles.graphEntitySection}>
               <Typography.Text type="secondary">
-                {t("knowledge.graphQuery.incoming", "Incoming")} ({focusedNodeRelations.incoming.length})
+                {t("knowledge.graphQuery.incoming")} ({focusedNodeRelations.incoming.length})
               </Typography.Text>
               <div className={styles.graphEntityRelationList}>
                 {focusedNodeRelations.incoming.slice(0, 8).map((item) => (
@@ -2176,7 +2176,7 @@ export function GraphVisualization(props: GraphVisualizationProps) {
                 ))}
                 {!focusedNodeRelations.incoming.length ? (
                   <Typography.Text type="secondary" className={styles.graphEntityEmpty}>
-                    {t("knowledge.graphQuery.none", "None")}
+                    {t("knowledge.graphQuery.none")}
                   </Typography.Text>
                 ) : null}
               </div>
@@ -2203,7 +2203,7 @@ export function GraphVisualization(props: GraphVisualizationProps) {
         </Card>
       )}
       <Modal
-        title={t("knowledge.graphQuery.advancedSettings", "高级设置")}
+        title={t("knowledge.graphQuery.advancedSettings")}
         open={advancedSettingsOpen}
         onCancel={() => {
           resetPendingGraphSettings();
@@ -2216,7 +2216,7 @@ export function GraphVisualization(props: GraphVisualizationProps) {
                 resetPendingGraphSettings();
               }}
             >
-              {t("common.reset", "重置")}
+              {t("common.reset")}
             </Button>
             <Button
               type="primary"
@@ -2225,7 +2225,7 @@ export function GraphVisualization(props: GraphVisualizationProps) {
                 applyPendingGraphSettings({ closeModal: true, refreshQuery: true });
               }}
             >
-              {t("knowledge.graphQuery.applyAndRefresh", "应用并刷新")}
+              {t("knowledge.graphQuery.applyAndRefresh")}
             </Button>
           </Space>
         )}
@@ -2233,18 +2233,18 @@ export function GraphVisualization(props: GraphVisualizationProps) {
       >
         <Space direction="vertical" size={10} style={{ width: "100%" }}>
           <Space wrap className={styles.graphAdvancedRow}>
-            <Typography.Text type="secondary">{t("knowledge.graphQuery.colorMode", "Color Mode")}</Typography.Text>
+            <Typography.Text type="secondary">{t("knowledge.graphQuery.colorMode")}</Typography.Text>
             <Select
               size="small"
               value={pendingColorMode}
               style={{ width: 180 }}
               onChange={(value) => setPendingColorMode(value as GraphColorMode)}
               options={[
-                { label: t("knowledge.graphQuery.colorModeType", "Type Coloring"), value: "type" },
-                { label: t("knowledge.graphQuery.colorModeWeight", "Weight Heatmap"), value: "weight" },
+                { label: t("knowledge.graphQuery.colorModeType"), value: "type" },
+                { label: t("knowledge.graphQuery.colorModeWeight"), value: "weight" },
               ]}
             />
-            <Typography.Text type="secondary">{t("knowledge.graphQuery.edgeThreshold", "Edge threshold")}</Typography.Text>
+            <Typography.Text type="secondary">{t("knowledge.graphQuery.edgeThreshold")}</Typography.Text>
             <Slider
               min={0}
               max={1}
@@ -2422,7 +2422,7 @@ export function GraphVisualization(props: GraphVisualizationProps) {
           ) : null}
           {topEntities.length > 0 ? (
             <Space wrap className={styles.graphHotNodesRow}>
-              <Typography.Text type="secondary">{t("knowledge.graphQuery.topEntities", "Top Entities")}</Typography.Text>
+              <Typography.Text type="secondary">{t("knowledge.graphQuery.topEntities")}</Typography.Text>
               {topEntities.map((item) => (
                 <Tag
                   key={item.id}

@@ -675,14 +675,14 @@ function ProjectKnowledgePanel(props: ProjectKnowledgePanelProps) {
             <div className={styles.projectKnowledgeEntityDetailCol}>
               <div className={styles.projectKnowledgeEntityDetailHeader}>
                 <Typography.Text strong>
-                  {t("knowledge.graphQuery.entityDetail", "Entity Detail")}
+                  {t("knowledge.graphQuery.entityDetail")}
                 </Typography.Text>
                 <Typography.Text type="secondary">{activeEntityDetail.nodeLabel}</Typography.Text>
               </div>
               <div className={styles.projectKnowledgeEntityDetailBody}>
                 <div className={styles.projectKnowledgeEntitySection}>
                   <Typography.Text type="secondary">
-                    {t("knowledge.graphQuery.outgoing", "Outgoing")} ({activeEntityDetail.outgoing.length})
+                    {t("knowledge.graphQuery.outgoing")} ({activeEntityDetail.outgoing.length})
                   </Typography.Text>
                   <div className={styles.projectKnowledgeEntityRelationList}>
                     {activeEntityDetail.outgoing.slice(0, 8).map((item) => (
@@ -699,14 +699,14 @@ function ProjectKnowledgePanel(props: ProjectKnowledgePanelProps) {
                     ))}
                     {!activeEntityDetail.outgoing.length ? (
                       <Typography.Text type="secondary" className={styles.projectKnowledgeEntityEmpty}>
-                        {t("knowledge.graphQuery.none", "None")}
+                        {t("knowledge.graphQuery.none")}
                       </Typography.Text>
                     ) : null}
                   </div>
                 </div>
                 <div className={styles.projectKnowledgeEntitySection}>
                   <Typography.Text type="secondary">
-                    {t("knowledge.graphQuery.incoming", "Incoming")} ({activeEntityDetail.incoming.length})
+                    {t("knowledge.graphQuery.incoming")} ({activeEntityDetail.incoming.length})
                   </Typography.Text>
                   <div className={styles.projectKnowledgeEntityRelationList}>
                     {activeEntityDetail.incoming.slice(0, 8).map((item) => (
@@ -723,7 +723,7 @@ function ProjectKnowledgePanel(props: ProjectKnowledgePanelProps) {
                     ))}
                     {!activeEntityDetail.incoming.length ? (
                       <Typography.Text type="secondary" className={styles.projectKnowledgeEntityEmpty}>
-                        {t("knowledge.graphQuery.none", "None")}
+                        {t("knowledge.graphQuery.none")}
                       </Typography.Text>
                     ) : null}
                   </div>

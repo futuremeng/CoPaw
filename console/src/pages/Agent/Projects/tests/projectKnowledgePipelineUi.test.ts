@@ -7,8 +7,10 @@ import {
   getProjectKnowledgeSemanticReasonLabel,
   getProjectKnowledgeSemanticSummary,
 } from "../utils/projectKnowledgePipelineUi";
+import { t as translateEn } from "./enLocaleTranslate";
 
-const t = ((key: string, fallback?: string) => fallback || key) as TFunction;
+// Asserts against the English bundle the app renders, not an inline default.
+const t = translateEn as unknown as TFunction;
 
 describe("projectKnowledgePipelineUi semantic helpers", () => {
   it("maps processing modes to quantization stages", () => {
@@ -60,7 +62,7 @@ describe("projectKnowledgePipelineUi semantic helpers", () => {
       reason_code: "SOURCE_NOT_READY",
       reason: "Project source has not been prepared for semantic extraction yet.",
     }, t)).toBe(
-      "copaw.projects.knowledge.semanticEngineCode: SOURCE_NOT_READY. Semantic engine waiting for project files to be scanned.",
+      "Code: SOURCE_NOT_READY. Semantic engine waiting for project files to be scanned.",
     );
   });
 

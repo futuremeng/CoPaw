@@ -104,10 +104,7 @@ export default function ProjectsListPage() {
     } catch (err) {
       console.error("failed to load project page data", err);
       setError(
-        t(
-          "projects.loadFailed",
-          "Failed to load project data for the current agent.",
-        ),
+        t("projects.loadFailed"),
       );
     } finally {
       setLoading(false);
@@ -141,14 +138,14 @@ export default function ProjectsListPage() {
         target_name: `${projectName} (Clone)`,
       });
       message.success(
-        t("projects.cloneSuccess", "Project cloned: {{name}}", {
+        t("projects.cloneSuccess", {
           name: cloned.name || cloned.id,
         }),
       );
       await loadPageData();
     } catch (err) {
       console.error("failed to clone project", err);
-      message.error(t("projects.cloneFailed", "Failed to clone project."));
+      message.error(t("projects.cloneFailed"));
     } finally {
       setCloningId("");
     }
@@ -183,14 +180,14 @@ export default function ProjectsListPage() {
     try {
       await agentsApi.deleteProject(currentAgent.id, projectId);
       message.success(
-        t("projects.deleteSuccess", "Project deleted: {{name}}", {
+        t("projects.deleteSuccess", {
           name: projectName || projectId,
         }),
       );
       await loadPageData();
     } catch (err) {
       console.error("failed to delete project", err);
-      message.error(t("projects.deleteFailed", "Failed to delete project."));
+      message.error(t("projects.deleteFailed"));
     } finally {
       setDeletingId("");
     }
@@ -217,7 +214,7 @@ export default function ProjectsListPage() {
         tags,
       });
       message.success(
-        t("projects.createSuccess", "Project created: {{name}}", {
+        t("projects.createSuccess", {
           name: created.name || created.id,
         }),
       );
@@ -228,7 +225,7 @@ export default function ProjectsListPage() {
         return;
       }
       console.error("failed to create project", err);
-      message.error(t("projects.createFailed", "Failed to create project."));
+      message.error(t("projects.createFailed"));
     } finally {
       setCreating(false);
     }
@@ -238,9 +235,9 @@ export default function ProjectsListPage() {
     <div className={styles.projectsPage}>
       <div className={styles.pageHeader}>
         <div className={styles.breadcrumbHeader}>
-          <span className={styles.breadcrumbParent}>{t("nav.agent", "Agent")}</span>
+          <span className={styles.breadcrumbParent}>{t("nav.agent")}</span>
           <span className={styles.breadcrumbSeparator}>/</span>
-          <span className={styles.breadcrumbCurrent}>{t("projects.title", "Projects")}</span>
+          <span className={styles.breadcrumbCurrent}>{t("projects.title")}</span>
         </div>
         <div className={styles.headerRight}>
           <div className={styles.sortControls}>
@@ -248,15 +245,15 @@ export default function ProjectsListPage() {
               size="small"
               value={sortField}
               className={styles.sortSelect}
-              aria-label={t("projects.sortField", "Sort projects by")}
+              aria-label={t("projects.sortField")}
               onChange={(value) => setSortField(value as ProjectSortField)}
               options={[
                 {
-                  label: t("projects.sort.updated", "Updated time"),
+                  label: t("projects.sort.updated"),
                   value: "updated",
                 },
                 {
-                  label: t("projects.sort.created", "Created time"),
+                  label: t("projects.sort.created"),
                   value: "created",
                 },
               ]}
@@ -266,18 +263,18 @@ export default function ProjectsListPage() {
               onClick={() => {
                 setSortOrder((current) => (current === "desc" ? "asc" : "desc"));
               }}
-              aria-label={t("projects.sortOrder", "Toggle sort order")}
+              aria-label={t("projects.sortOrder")}
             >
               {sortOrder === "desc"
-                ? t("projects.sort.desc", "Descending")
-                : t("projects.sort.asc", "Ascending")}
+                ? t("projects.sort.desc")
+                : t("projects.sort.asc")}
             </Button>
           </div>
           <Button size="small" type="primary" onClick={handleOpenCreate}>
-            {t("projects.create", "New Project")}
+            {t("projects.create")}
           </Button>
           <Button size="small" onClick={() => void loadPageData()} loading={loading}>
-            {t("common.refresh", "Refresh")}
+            {t("common.refresh")}
           </Button>
         </div>
       </div>
@@ -286,11 +283,11 @@ export default function ProjectsListPage() {
 
       <div className={styles.workspaceInfo}>
         <p className={styles.workspacePath}>
-          {t("projects.workspacePath", "Workspace Path")}: {" "}
+          {t("projects.workspacePath")}: {" "}
           {currentAgent?.workspace_dir || (
             loading
-              ? t("common.loading", "Loading")
-              : t("projects.noAgent", "No agent is currently available.")
+              ? t("common.loading")
+              : t("projects.noAgent")
           )}
         </p>
       </div>
@@ -300,12 +297,12 @@ export default function ProjectsListPage() {
           <Spin />
         </div>
       ) : !currentAgent ? (
-        <Empty description={t("projects.noAgent", "No agent is currently available.")} />
+        <Empty description={t("projects.noAgent")} />
       ) : sortedProjects.length === 0 ? (
-        <Empty description={t("projects.noProjects", "No projects in this workspace yet.")}
+        <Empty description={t("projects.noProjects")}
         >
           <Button type="primary" onClick={handleOpenCreate}>
-            {t("projects.create", "New Project")}
+            {t("projects.create")}
           </Button>
         </Empty>
       ) : (
@@ -334,14 +331,14 @@ export default function ProjectsListPage() {
                 </div>
               </div>
               <Text className={styles.projectDescription}>
-                {project.description || t("projects.noDescription", "No description")}
+                {project.description || t("projects.noDescription")}
               </Text>
               <div className={styles.metaRow}>
                 <span className={styles.metaLabel}>ID</span>
                 <span className={styles.metaValue}>{project.id}</span>
               </div>
               <div className={styles.metaRow}>
-                <span className={styles.metaLabel}>{t("common.updated", "Updated")}</span>
+                <span className={styles.metaLabel}>{t("common.updated")}</span>
                 <span className={styles.metaValue}>{project.updated_time}</span>
               </div>
 
@@ -353,7 +350,7 @@ export default function ProjectsListPage() {
                     className={styles.openButton}
                     onClick={(event) => handleOpenWorkspace(project.id, event)}
                   >
-                    {t("projects.open", "Open")}
+                    {t("projects.open")}
                   </Button>
                   <Button
                     size="small"
@@ -361,22 +358,20 @@ export default function ProjectsListPage() {
                     onClick={(event) => void handleClone(project.id, project.name, event)}
                     loading={cloningId === project.id}
                   >
-                    {t("projects.clone", "Clone")}
+                    {t("projects.clone")}
                   </Button>
                   <Popconfirm
                     open={deleteConfirmOpenId === project.id}
                     title={t(
                       "projects.deleteConfirmTitleWithName",
-                      "Delete project {{name}}?",
                       { name: project.name || project.id },
                     )}
                     description={t(
                       "projects.deleteConfirmDescription",
-                      "This action is irreversible and will permanently delete {{name}} and all project files.",
                       { name: project.name || project.id },
                     )}
-                    okText={t("common.delete", "Delete")}
-                    cancelText={t("common.cancel", "Cancel")}
+                    okText={t("common.delete")}
+                    cancelText={t("common.cancel")}
                     okButtonProps={{ danger: true, loading: deletingId === project.id }}
                     onOpenChange={(open) => {
                       setDeleteConfirmOpenId(open ? project.id : null);
@@ -398,7 +393,7 @@ export default function ProjectsListPage() {
                       loading={deletingId === project.id}
                       onClick={(event) => event.stopPropagation()}
                     >
-                      {t("common.delete", "Delete")}
+                      {t("common.delete")}
                     </Button>
                   </Popconfirm>
                 </div>
@@ -409,43 +404,43 @@ export default function ProjectsListPage() {
       )}
 
       <Modal
-        title={t("projects.create", "New Project")}
+        title={t("projects.create")}
         open={createOpen}
         onCancel={() => setCreateOpen(false)}
         onOk={() => void handleCreateProject()}
         confirmLoading={creating}
-        okText={t("common.create", "Create")}
+        okText={t("common.create")}
       >
         <Form form={createForm} layout="vertical">
           <Form.Item
-            label={t("projects.fields.name", "Name")}
+            label={t("projects.fields.name")}
             name="name"
-            rules={[{ required: true, message: t("projects.validation.nameRequired", "Project name is required") }]}
+            rules={[{ required: true, message: t("projects.validation.nameRequired") }]}
           >
-            <Input placeholder={t("projects.fields.namePlaceholder", "My new project")} maxLength={120} />
+            <Input placeholder={t("projects.fields.namePlaceholder")} maxLength={120} />
           </Form.Item>
           <Form.Item
-            label={t("projects.fields.id", "ID (optional)")}
+            label={t("projects.fields.id")}
             name="id"
           >
-            <Input placeholder={t("projects.fields.idPlaceholder", "project-my-topic")} maxLength={120} />
+            <Input placeholder={t("projects.fields.idPlaceholder")} maxLength={120} />
           </Form.Item>
           <Form.Item
-            label={t("projects.fields.description", "Description")}
+            label={t("projects.fields.description")}
             name="description"
           >
             <Input.TextArea
-              placeholder={t("projects.fields.descriptionPlaceholder", "Short summary of this project")}
+              placeholder={t("projects.fields.descriptionPlaceholder")}
               rows={3}
               maxLength={500}
               showCount
             />
           </Form.Item>
           <Form.Item
-            label={t("projects.fields.tags", "Tags (comma separated)")}
+            label={t("projects.fields.tags")}
             name="tags"
           >
-            <Input placeholder={t("projects.fields.tagsPlaceholder", "demo, draft")} />
+            <Input placeholder={t("projects.fields.tagsPlaceholder")} />
           </Form.Item>
         </Form>
       </Modal>

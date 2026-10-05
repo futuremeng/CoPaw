@@ -62,12 +62,9 @@ export function buildThinkingOnlyFallbackText(thinking: string): string {
     return "";
   }
 
-  const title = i18n.t("chat.thinkingFallbackTitle", "Thinking fallback view");
-  const description = i18n.t(
-    "chat.thinkingFallbackDescription",
-    "This turn ended before the model produced a final answer. The reasoning content below is shown as a fallback draft for reference.",
-  );
-  const label = i18n.t("chat.thinkingFallbackLabel", "Draft reasoning");
+  const title = i18n.t("chat.thinkingFallbackTitle");
+  const description = i18n.t("chat.thinkingFallbackDescription");
+  const label = i18n.t("chat.thinkingFallbackLabel");
 
   return [
     `### ${title}`,

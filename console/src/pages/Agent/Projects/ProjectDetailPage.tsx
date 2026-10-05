@@ -1045,10 +1045,7 @@ export default function ProjectDetailPage() {
 
   const leaveConfirmText = useMemo(
     () =>
-      t(
-        "projects.leaveConfirm",
-        "你有可能误触跳转。确定要离开当前项目页面吗？",
-      ),
+      t("projects.leaveConfirm"),
     [t],
   );
 
@@ -1378,10 +1375,7 @@ export default function ProjectDetailPage() {
     } catch (err) {
       console.error("failed to load agent projects", err);
       setError(
-        t(
-          "projects.loadFailed",
-          "Failed to load projects for the current agent.",
-        ),
+        t("projects.loadFailed"),
       );
     } finally {
       setLoading(false);
@@ -1403,10 +1397,7 @@ export default function ProjectDetailPage() {
       console.error("failed to load project list", err);
       setProjects([]);
       setError(
-        t(
-          "projects.loadFailed",
-          "Failed to load projects for the current agent.",
-        ),
+        t("projects.loadFailed"),
       );
     } finally {
       setProjectsLoading(false);
@@ -1694,10 +1685,7 @@ export default function ProjectDetailPage() {
     } catch (err) {
       console.error("failed to load project file content", err);
       setFileContent(
-        t(
-          "projects.previewLoadFailed",
-          "Unable to preview this file. It might be binary or inaccessible.",
-        ),
+        t("projects.previewLoadFailed"),
       );
     }
   }, [projectWorkspaceFacade, resolvedProjectRequestId, routeProjectId, t]);
@@ -2160,7 +2148,7 @@ export default function ProjectDetailPage() {
       console.error("failed to load recoverable chats", err);
       setManualRecoverCandidates([]);
       setError(
-        t("projects.chat.manualRecoverListFailed", "Failed to load history chats."),
+        t("projects.chat.manualRecoverListFailed"),
       );
     } finally {
       setManualRecoverLoading(false);
@@ -2213,12 +2201,12 @@ export default function ProjectDetailPage() {
       await syncPreferredWorkspaceChatBinding(target.id);
       setManualRecoverOpen(false);
       message.success(
-        t("projects.chat.manualRecoverSuccess", "Chat linked to current project."),
+        t("projects.chat.manualRecoverSuccess"),
       );
     } catch (err) {
       console.error("failed to manually recover project chat", err);
       message.error(
-        t("projects.chat.manualRecoverFailed", "Failed to recover chat binding."),
+        t("projects.chat.manualRecoverFailed"),
       );
     } finally {
       setManualRecoverLoading(false);
@@ -2262,18 +2250,18 @@ export default function ProjectDetailPage() {
 
   const realtimeConnectionText = useMemo(() => {
     if (realtimeConnectionState.status === "connected") {
-      return t("projects.realtime.connected", "Realtime connected");
+      return t("projects.realtime.connected");
     }
     if (realtimeConnectionState.status === "reconnecting") {
-      return t("projects.realtime.reconnecting", "Realtime reconnecting");
+      return t("projects.realtime.reconnecting");
     }
     if (realtimeConnectionState.status === "degraded") {
-      return t("projects.realtime.degraded", "Realtime degraded");
+      return t("projects.realtime.degraded");
     }
     if (realtimeConnectionState.status === "paused") {
-      return t("projects.realtime.paused", "Realtime paused");
+      return t("projects.realtime.paused");
     }
-    return t("projects.realtime.connecting", "Realtime connecting");
+    return t("projects.realtime.connecting");
   }, [realtimeConnectionState.status, t]);
 
   const showRealtimeHealthNotice =
@@ -2507,10 +2495,7 @@ export default function ProjectDetailPage() {
     }
     if (!isPreviewablePath(selectedFilePath)) {
       setFileContent(
-        t(
-          "projects.previewLoadFailed",
-          "Unable to preview this file. It might be binary or inaccessible.",
-        ),
+        t("projects.previewLoadFailed"),
       );
       return;
     }
@@ -2890,7 +2875,7 @@ export default function ProjectDetailPage() {
     const normalizedParent = normalizeProjectArtifactPath(parentPath);
     const normalizedName = normalizeTreeNodeName(directoryName);
     if (!normalizedName) {
-      message.warning(t("projects.invalidDirectoryName", "Invalid folder name"));
+      message.warning(t("projects.invalidDirectoryName"));
       return;
     }
     const targetPath = normalizedParent ? `${normalizedParent}/${normalizedName}` : normalizedName;
@@ -2928,11 +2913,11 @@ export default function ProjectDetailPage() {
 
       await handleRefreshProjectFiles();
       message.success(
-        t("projects.createDirectorySuccess", "Created folder: {{path}}", { path: targetPath }),
+        t("projects.createDirectorySuccess", { path: targetPath }),
       );
     } catch (err) {
       console.error("failed to create project directory", err);
-      message.error(t("projects.createDirectoryFailed", "Failed to create folder"));
+      message.error(t("projects.createDirectoryFailed"));
     } finally {
       setDeletingProjectPaths((prev) => prev.filter((path) => path !== targetPath));
     }
@@ -3001,7 +2986,7 @@ export default function ProjectDetailPage() {
     const normalizedSourcePath = normalizeProjectArtifactPath(sourcePath);
     const normalizedName = normalizeTreeNodeName(nextName);
     if (!normalizedSourcePath || !normalizedName) {
-      message.warning(t("projects.invalidName", "Invalid name"));
+      message.warning(t("projects.invalidName"));
       return { ok: false, reason: "unsafe" as const, detail: "invalid path or name" };
     }
 
@@ -3078,8 +3063,8 @@ export default function ProjectDetailPage() {
       if (shouldShowMessage) {
         message.success(
           isDirectory
-            ? t("projects.renameDirectorySuccess", "Renamed folder to: {{path}}", { path: targetPath })
-            : t("projects.renameFileSuccess", "Renamed file to: {{path}}", { path: targetPath }),
+            ? t("projects.renameDirectorySuccess", { path: targetPath })
+            : t("projects.renameFileSuccess", { path: targetPath }),
         );
       }
       return { ok: true };
@@ -3089,8 +3074,8 @@ export default function ProjectDetailPage() {
       if (shouldShowErrorMessage) {
         message.error(
           isDirectory
-            ? t("projects.renameDirectoryFailed", "Failed to rename folder")
-            : t("projects.renameFileFailed", "Failed to rename file"),
+            ? t("projects.renameDirectoryFailed")
+            : t("projects.renameFileFailed"),
         );
       }
       return {
@@ -3148,15 +3133,14 @@ export default function ProjectDetailPage() {
     const openMoveConfirm = () => {
       Modal.confirm({
         title: sourceIsDirectory
-          ? t("projects.moveDirectoryTitle", "Move folder")
-          : t("projects.moveFileTitle", "Move file"),
+          ? t("projects.moveDirectoryTitle")
+          : t("projects.moveFileTitle"),
         content: t(
           "projects.moveConfirmDescription",
-          "Move {{source}} to {{target}}?",
           { source: normalizedSourcePath, target: targetPath },
         ),
-        okText: t("common.confirm", "Confirm"),
-        cancelText: t("common.cancel", "Cancel"),
+        okText: t("common.confirm"),
+        cancelText: t("common.cancel"),
         onOk: async () => {
           await executeMove("fail_if_exists");
         },
@@ -3165,14 +3149,13 @@ export default function ProjectDetailPage() {
 
     if (targetExists) {
       Modal.confirm({
-        title: t("projects.moveConflictTitle", "Target already exists"),
+        title: t("projects.moveConflictTitle"),
         content: t(
           "projects.moveConflictDescription",
-          "{{target}} already exists. Overwrite it?",
           { target: targetPath },
         ),
-        okText: t("common.overwrite", "Overwrite"),
-        cancelText: t("common.cancel", "Cancel"),
+        okText: t("common.overwrite"),
+        cancelText: t("common.cancel"),
         okButtonProps: { danger: true },
         onOk: async () => {
           await executeMove("overwrite");
@@ -3189,23 +3172,23 @@ export default function ProjectDetailPage() {
     let nextName = "new-folder";
 
     Modal.confirm({
-      title: t("projects.createDirectoryTitle", "Create folder"),
+      title: t("projects.createDirectoryTitle"),
       content: (
         <Input
           autoFocus
           defaultValue={nextName}
-          placeholder={t("projects.createDirectoryPlaceholder", "Folder name")}
+          placeholder={t("projects.createDirectoryPlaceholder")}
           onChange={(event) => {
             nextName = event.target.value;
           }}
         />
       ),
-      okText: t("common.create", "Create"),
-      cancelText: t("common.cancel", "Cancel"),
+      okText: t("common.create"),
+      cancelText: t("common.cancel"),
       onOk: async () => {
         const normalizedName = normalizeTreeNodeName(nextName);
         if (!normalizedName) {
-          message.warning(t("projects.invalidDirectoryName", "Invalid folder name"));
+          message.warning(t("projects.invalidDirectoryName"));
           return Promise.reject(new Error("invalid directory name"));
         }
         await performCreateProjectTreeDirectory(normalizedParent, normalizedName);
@@ -3224,24 +3207,24 @@ export default function ProjectDetailPage() {
 
     Modal.confirm({
       title: isDirectory
-        ? t("projects.renameDirectoryTitle", "Rename folder")
-        : t("projects.renameFileTitle", "Rename file"),
+        ? t("projects.renameDirectoryTitle")
+        : t("projects.renameFileTitle"),
       content: (
         <Input
           autoFocus
           defaultValue={defaultName}
-          placeholder={t("projects.renamePlaceholder", "New name")}
+          placeholder={t("projects.renamePlaceholder")}
           onChange={(event) => {
             nextName = event.target.value;
           }}
         />
       ),
-      okText: t("common.rename", "Rename"),
-      cancelText: t("common.cancel", "Cancel"),
+      okText: t("common.rename"),
+      cancelText: t("common.cancel"),
       onOk: async () => {
         const normalizedName = normalizeTreeNodeName(nextName);
         if (!normalizedName) {
-          message.warning(t("projects.invalidName", "Invalid name"));
+          message.warning(t("projects.invalidName"));
           return Promise.reject(new Error("invalid path name"));
         }
         const slashIndex = normalizedPath.lastIndexOf("/");
@@ -3259,14 +3242,13 @@ export default function ProjectDetailPage() {
 
         return new Promise<void>((resolve, reject) => {
           Modal.confirm({
-            title: t("projects.renameConflictTitle", "Target already exists"),
+            title: t("projects.renameConflictTitle"),
             content: t(
               "projects.renameConflictDescription",
-              "{{target}} already exists. Overwrite it?",
               { target: targetPath },
             ),
-            okText: t("common.overwrite", "Overwrite"),
-            cancelText: t("common.cancel", "Cancel"),
+            okText: t("common.overwrite"),
+            cancelText: t("common.cancel"),
             okButtonProps: { danger: true },
             onOk: async () => {
               await performRenameProjectTreePath(
@@ -3368,16 +3350,16 @@ export default function ProjectDetailPage() {
       if (shouldShowMessage) {
         message.success(
           isDirectory
-            ? t("projects.deleteDirectorySuccess", "Deleted folder: {{path}}", { path: normalizedPath })
-            : t("projects.deleteFileSuccess", "Deleted file: {{path}}", { path: normalizedPath }),
+            ? t("projects.deleteDirectorySuccess", { path: normalizedPath })
+            : t("projects.deleteFileSuccess", { path: normalizedPath }),
         );
       }
     } catch (err) {
       console.error("failed to delete project path", err);
       message.error(
         isDirectory
-          ? t("projects.deleteDirectoryFailed", "Failed to delete folder")
-          : t("projects.deleteFileFailed", "Failed to delete file"),
+          ? t("projects.deleteDirectoryFailed")
+          : t("projects.deleteFileFailed"),
       );
     } finally {
       setDeletingProjectPaths((prev) => prev.filter((path) => path !== normalizedPath));
@@ -3403,15 +3385,14 @@ export default function ProjectDetailPage() {
 
     Modal.confirm({
       title: isDirectory
-        ? t("projects.deleteFileTreeDirectoryConfirmTitle", "Delete folder?")
-        : t("projects.deleteFileTreeFileConfirmTitle", "Delete file?"),
+        ? t("projects.deleteFileTreeDirectoryConfirmTitle")
+        : t("projects.deleteFileTreeFileConfirmTitle"),
       content: t(
         "projects.deleteFileTreeConfirmDescription",
-        "This action is irreversible and will permanently delete {{path}}.",
         { path: normalizedPath },
       ),
-      okText: t("common.delete", "Delete"),
-      cancelText: t("common.cancel", "Cancel"),
+      okText: t("common.delete"),
+      cancelText: t("common.cancel"),
       okButtonProps: { danger: true },
       onOk: async () => {
         await performDeleteProjectTreePath(normalizedPath, isDirectory);
@@ -3430,14 +3411,13 @@ export default function ProjectDetailPage() {
     }
 
     Modal.confirm({
-      title: t("projects.deleteSelectedFilesConfirmTitle", "Delete selected files?"),
+      title: t("projects.deleteSelectedFilesConfirmTitle"),
       content: t(
         "projects.deleteSelectedFilesConfirmDescription",
-        "This will permanently delete {{count}} selected files.",
         { count: normalizedPaths.length },
       ),
-      okText: t("common.delete", "Delete"),
-      cancelText: t("common.cancel", "Cancel"),
+      okText: t("common.delete"),
+      cancelText: t("common.cancel"),
       okButtonProps: { danger: true },
       onOk: async () => {
         let deletedCount = 0;
@@ -3447,7 +3427,7 @@ export default function ProjectDetailPage() {
         }
         await handleRefreshProjectFiles();
         message.success(
-          t("projects.deleteSelectedFilesSuccess", "Deleted {{count}} files", {
+          t("projects.deleteSelectedFilesSuccess", {
             count: deletedCount,
           }),
         );
@@ -3483,7 +3463,7 @@ export default function ProjectDetailPage() {
         .filter((item): item is { sourcePath: string; sourceName: string; targetPath: string } => Boolean(item));
 
       if (plans.length === 0) {
-        message.warning(t("projects.moveSelectedNoop", "No files need moving"));
+        message.warning(t("projects.moveSelectedNoop"));
         return;
       }
 
@@ -3496,10 +3476,7 @@ export default function ProjectDetailPage() {
         .map(([targetPath]) => targetPath);
       if (duplicateTargets.length > 0) {
         message.warning(
-          t(
-            "projects.moveSelectedDuplicateTargets",
-            "Multiple selected files would map to the same target name. Please rename before moving.",
-          ),
+          t("projects.moveSelectedDuplicateTargets"),
         );
         return;
       }
@@ -3535,14 +3512,14 @@ export default function ProjectDetailPage() {
 
       if (successCount > 0) {
         message.success(
-          t("projects.moveSelectedFilesSuccess", "Moved {{count}} files", {
+          t("projects.moveSelectedFilesSuccess", {
             count: successCount,
           }),
         );
       }
       if (failedItems.length > 0) {
         message.error(
-          t("projects.moveSelectedFilesFailedSummary", "Failed to move {{count}} files", {
+          t("projects.moveSelectedFilesFailedSummary", {
             count: failedItems.length,
           }),
         );
@@ -3562,45 +3539,30 @@ export default function ProjectDetailPage() {
         const reasonLabel = (reason: string): string => {
           switch (reason) {
             case "conflict":
-              return t("projects.moveFailureReasonConflict", "Name conflict");
+              return t("projects.moveFailureReasonConflict");
             case "unsafe":
-              return t("projects.moveFailureReasonUnsafe", "Invalid path");
+              return t("projects.moveFailureReasonUnsafe");
             case "permission":
-              return t("projects.moveFailureReasonPermission", "Permission denied");
+              return t("projects.moveFailureReasonPermission");
             case "notFound":
-              return t("projects.moveFailureReasonNotFound", "Source not found");
+              return t("projects.moveFailureReasonNotFound");
             default:
-              return t("projects.moveFailureReasonOther", "Other errors");
+              return t("projects.moveFailureReasonOther");
           }
         };
 
         const reasonSuggestion = (reason: string): string => {
           switch (reason) {
             case "conflict":
-              return t(
-                "projects.moveFailureSuggestionConflict",
-                "建议：先重命名冲突文件，或改用覆盖模式后重试。",
-              );
+              return t("projects.moveFailureSuggestionConflict");
             case "unsafe":
-              return t(
-                "projects.moveFailureSuggestionUnsafe",
-                "建议：检查目标路径，避免 ..、绝对路径或非法字符。",
-              );
+              return t("projects.moveFailureSuggestionUnsafe");
             case "permission":
-              return t(
-                "projects.moveFailureSuggestionPermission",
-                "建议：确认当前工作区写权限，或切换到可写目录。",
-              );
+              return t("projects.moveFailureSuggestionPermission");
             case "notFound":
-              return t(
-                "projects.moveFailureSuggestionNotFound",
-                "建议：刷新文件树后重试，确认源文件未被删除或移动。",
-              );
+              return t("projects.moveFailureSuggestionNotFound");
             default:
-              return t(
-                "projects.moveFailureSuggestionOther",
-                "建议：查看错误详情并重试；若持续失败请检查后端日志。",
-              );
+              return t("projects.moveFailureSuggestionOther");
           }
         };
 
@@ -3610,7 +3572,7 @@ export default function ProjectDetailPage() {
             const suggestion = reasonSuggestion(reason);
             const pathLines = group.paths.map((path) => `- ${path}`).join("\n");
             const sampleDetail = group.details[0]
-              ? t("projects.moveFailureSampleError", "示例错误：{{detail}}", {
+              ? t("projects.moveFailureSampleError", {
                 detail: group.details[0],
               })
               : "";
@@ -3619,7 +3581,7 @@ export default function ProjectDetailPage() {
           .join("\n\n");
 
         Modal.warning({
-          title: t("projects.moveSelectedFilesFailedDetailTitle", "Some files could not be moved"),
+          title: t("projects.moveSelectedFilesFailedDetailTitle"),
           content: (
             <div style={{ maxHeight: 260, overflow: "auto" }}>
               <div style={{ marginBottom: 8 }}>
@@ -3628,13 +3590,13 @@ export default function ProjectDetailPage() {
                   onClick={async () => {
                     try {
                       await navigator.clipboard.writeText(failureReportText);
-                      message.success(t("projects.moveFailureReportCopied", "Failure report copied"));
+                      message.success(t("projects.moveFailureReportCopied"));
                     } catch {
-                      message.error(t("projects.moveFailureReportCopyFailed", "Failed to copy report"));
+                      message.error(t("projects.moveFailureReportCopyFailed"));
                     }
                   }}
                 >
-                  {t("projects.copyFailureReport", "Copy Failure Report")}
+                  {t("projects.copyFailureReport")}
                 </Button>
               </div>
               {Object.entries(groupedFailures).map(([reason, group]) => (
@@ -3648,7 +3610,7 @@ export default function ProjectDetailPage() {
                   ))}
                   {group.paths.length > 8 ? (
                     <Text type="secondary">
-                      {t("projects.moveSelectedFilesFailedDetailMore", "...and {{count}} more", {
+                      {t("projects.moveSelectedFilesFailedDetailMore", {
                         count: group.paths.length - 8,
                       })}
                     </Text>
@@ -3656,7 +3618,7 @@ export default function ProjectDetailPage() {
                   {group.details.length > 0 ? (
                     <div>
                       <Text type="secondary">
-                        {t("projects.moveFailureSampleError", "示例错误：{{detail}}", {
+                        {t("projects.moveFailureSampleError", {
                           detail: group.details[0],
                         })}
                       </Text>
@@ -3666,25 +3628,25 @@ export default function ProjectDetailPage() {
               ))}
             </div>
           ),
-          okText: t("common.confirm", "Confirm"),
+          okText: t("common.confirm"),
         });
       }
     };
 
     Modal.confirm({
-      title: t("projects.moveSelectedFilesTitle", "Move selected files"),
+      title: t("projects.moveSelectedFilesTitle"),
       content: (
         <Input
           autoFocus
           defaultValue={nextTargetDirectory}
-          placeholder={t("projects.moveSelectedTargetPlaceholder", "Target folder (leave empty for root)")}
+          placeholder={t("projects.moveSelectedTargetPlaceholder")}
           onChange={(event) => {
             nextTargetDirectory = event.target.value;
           }}
         />
       ),
-      okText: t("common.move", "Move"),
-      cancelText: t("common.cancel", "Cancel"),
+      okText: t("common.move"),
+      cancelText: t("common.cancel"),
       onOk: async () => {
         const normalizedTargetDir = normalizeProjectArtifactPath(nextTargetDirectory || "");
         const conflicts = normalizedPaths.filter((sourcePath) => {
@@ -3703,14 +3665,13 @@ export default function ProjectDetailPage() {
 
         return new Promise<void>((resolve, reject) => {
           Modal.confirm({
-            title: t("projects.moveConflictTitle", "Target already exists"),
+            title: t("projects.moveConflictTitle"),
             content: t(
               "projects.moveSelectedConflictDescription",
-              "{{count}} files conflict at target location. Overwrite all?",
               { count: conflicts.length },
             ),
-            okText: t("common.overwrite", "Overwrite"),
-            cancelText: t("common.cancel", "Cancel"),
+            okText: t("common.overwrite"),
+            cancelText: t("common.cancel"),
             okButtonProps: { danger: true },
             onOk: async () => {
               await executeBatchMove(normalizedTargetDir, "overwrite");
@@ -3808,10 +3769,7 @@ export default function ProjectDetailPage() {
                 selectedFiles,
               }),
         },
-        successText: t(
-          "projects.chat.attachDraftReady",
-          "Prepared selected file context in the chat input box.",
-        ),
+        successText: t("projects.chat.attachDraftReady"),
       });
       setSelectedAttachPaths([]);
     } catch (err) {
@@ -3855,10 +3813,7 @@ export default function ProjectDetailPage() {
           gateSummary: verificationGateSummary,
         }),
       },
-      successText: t(
-        "projects.chat.implDraftReady",
-        "Implementation prompt has been prepared in the design chat input.",
-      ),
+      successText: t("projects.chat.implDraftReady"),
     });
   }, [
     handleEnsureDesignChat,
@@ -3878,10 +3833,7 @@ export default function ProjectDetailPage() {
     }
     if (!selectedRunId) {
       message.warning(
-        t(
-          "projects.pipeline.validationNeedRun",
-          "Please start or select one run before preparing a validation prompt.",
-        ),
+        t("projects.pipeline.validationNeedRun"),
       );
       return;
     }
@@ -3898,10 +3850,7 @@ export default function ProjectDetailPage() {
           gateSummary: verificationGateSummary,
         }),
       },
-      successText: t(
-        "projects.chat.validationDraftReady",
-        "Validation prompt has been prepared in the run chat input.",
-      ),
+      successText: t("projects.chat.validationDraftReady"),
     });
   }, [
     handleEnsureRunChat,
@@ -3931,10 +3880,7 @@ export default function ProjectDetailPage() {
           runId: selectedRunId,
         }),
       },
-      successText: t(
-        "projects.chat.promotionDraftReady",
-        "Promotion draft prompt has been prepared in the design chat input.",
-      ),
+      successText: t("projects.chat.promotionDraftReady"),
     });
   }, [
     handleEnsureDesignChat,
@@ -3974,9 +3920,7 @@ export default function ProjectDetailPage() {
         mode: "draft",
         note: prompt,
       },
-      successText: t(
-        "projects.pipeline.nextActionReady",
-      ),
+      successText: t("projects.pipeline.nextActionReady"),
     });
   }, [
     handleEnsureDesignChat,
@@ -4034,9 +3978,7 @@ export default function ProjectDetailPage() {
     } catch (err) {
       console.error("failed to execute next action", err);
       message.error(
-        t(
-          "projects.pipeline.executeActionFailed",
-        ),
+        t("projects.pipeline.executeActionFailed"),
       );
     }
   }, [
@@ -4159,7 +4101,7 @@ export default function ProjectDetailPage() {
     return [
       {
         key: "explore",
-        label: t("projects.knowledgeDock.tabExplore", "Explore"),
+        label: t("projects.knowledgeDock.tabExplore"),
         children: (
           <ProjectKnowledgePanel
             projectId={selectedProject.id}
@@ -4174,7 +4116,7 @@ export default function ProjectDetailPage() {
       },
       {
         key: "sources",
-        label: t("projects.knowledgeDock.tabSources", "Sources"),
+        label: t("projects.knowledgeDock.tabSources"),
         children: (
           <ProjectKnowledgeSourcesPanel
             knowledgeState={projectKnowledgeState}
@@ -4187,7 +4129,7 @@ export default function ProjectDetailPage() {
       },
       {
         key: "processing",
-        label: t("projects.knowledgeDock.tabProcessing", "Processing"),
+        label: t("projects.knowledgeDock.tabProcessing"),
         children: (
           <ProjectKnowledgeProcessingPanel
             knowledgeState={projectKnowledgeState}
@@ -4203,7 +4145,7 @@ export default function ProjectDetailPage() {
       },
       {
         key: "outputs",
-        label: t("projects.knowledgeDock.tabOutputs", "Outputs"),
+        label: t("projects.knowledgeDock.tabOutputs"),
         children: (
           <ProjectKnowledgeOutputsPanel
             knowledgeState={projectKnowledgeState}
@@ -4214,7 +4156,7 @@ export default function ProjectDetailPage() {
       },
       {
         key: "health",
-        label: t("projects.knowledgeDock.tabHealth", "Health"),
+        label: t("projects.knowledgeDock.tabHealth"),
         children: (
           <ProjectKnowledgeSignalsPanel
             knowledgeState={projectKnowledgeState}
@@ -4233,7 +4175,7 @@ export default function ProjectDetailPage() {
       },
       {
         key: "settings",
-        label: t("projects.knowledgeDock.tabSettings", "Settings"),
+        label: t("projects.knowledgeDock.tabSettings"),
         children: (
           <ProjectKnowledgeSettingsPanel
             agentId={currentAgent?.id}
@@ -4292,15 +4234,12 @@ export default function ProjectDetailPage() {
               </Button>
               <span className={styles.pathSeparator}>/</span>
               <span className={styles.pathCurrent}>
-                {selectedProject?.name || t("projects.path.projectSpace", "Project Space")}
+                {selectedProject?.name || t("projects.path.projectSpace")}
               </span>
             </div>
           </div>
           <Text type="secondary" className={styles.description}>
-            {t(
-              "projects.detailDescription",
-              "围绕目标与资料协作推进项目，自动化按需启用。",
-            )}
+            {t("projects.detailDescription")}
             <span className={styles.descriptionDivider}> | </span>
             {t("projects.workspacePath")}: {" "}
             {selectedProject?.workspace_dir ||
@@ -4317,27 +4256,25 @@ export default function ProjectDetailPage() {
               <Popconfirm
                 title={t(
                   "projects.deleteConfirmTitleWithName",
-                  "Delete project {{name}}?",
                   { name: selectedProject.name || selectedProject.id },
                 )}
                 description={t(
                   "projects.deleteConfirmDescription",
-                  "This action is irreversible and will permanently delete {{name}} and all project files.",
                   { name: selectedProject.name || selectedProject.id },
                 )}
-                okText={t("common.delete", "Delete")}
-                cancelText={t("common.cancel", "Cancel")}
+                okText={t("common.delete")}
+                cancelText={t("common.cancel")}
                 okButtonProps={{ danger: true, loading: deletingProject }}
                 onConfirm={() => void handleDeleteProject()}
               >
                 <Button size="small" danger loading={deletingProject}>
-                  {t("common.delete", "Delete")}
+                  {t("common.delete")}
                 </Button>
               </Popconfirm>
             </>
           ) : null}
           <Button size="small" onClick={() => void loadAgents()} loading={loading}>
-            {t("common.refresh", "Refresh")}
+            {t("common.refresh")}
           </Button>
         </div>
       </div>
@@ -4679,7 +4616,7 @@ export default function ProjectDetailPage() {
           />
 
           <Modal
-            title={t("projects.chat.manualRecoverTitle", "手动恢复对话关联")}
+            title={t("projects.chat.manualRecoverTitle")}
             open={manualRecoverOpen}
             onCancel={() => setManualRecoverOpen(false)}
             onOk={() => {
@@ -4690,28 +4627,25 @@ export default function ProjectDetailPage() {
               loading: manualRecoverLoading,
             }}
             confirmLoading={manualRecoverLoading}
-            okText={t("projects.chat.manualRecoverConfirm", "关联并切换")}
-            cancelText={t("common.cancel", "Cancel")}
+            okText={t("projects.chat.manualRecoverConfirm")}
+            cancelText={t("common.cancel")}
           >
             <Text type="secondary">
-              {t(
-                "projects.chat.manualRecoverHint",
-                "若自动恢复失败，可从历史会话中选择一个并绑定到当前项目。",
-              )}
+              {t("projects.chat.manualRecoverHint")}
             </Text>
             <div style={{ marginTop: 12 }}>
               <Select
                 style={{ width: "100%" }}
                 showSearch
                 loading={manualRecoverLoading}
-                placeholder={t("projects.chat.manualRecoverPlaceholder", "选择历史对话")}
+                placeholder={t("projects.chat.manualRecoverPlaceholder")}
                 optionFilterProp="label"
                 value={manualRecoverChatId || undefined}
                 onChange={(value) => setManualRecoverChatId(value)}
                 options={manualRecoverCandidates.map((chat) => ({
                   value: chat.id,
                   label:
-                    `${chat.name || t("chat.newChat", "New Chat")} · ${chat.id.slice(0, 8)} · ` +
+                    `${chat.name || t("chat.newChat")} · ${chat.id.slice(0, 8)} · ` +
                     `${formatRunTimeLabel(chat.updated_at || chat.created_at || "")}`,
                 }))}
               />
@@ -4737,7 +4671,7 @@ export default function ProjectDetailPage() {
                   onClick={() => setManualRecoverChatId(chat.id)}
                   style={{ textAlign: "left", justifyContent: "flex-start" }}
                 >
-                  {(chat.name || t("chat.newChat", "New Chat"))}
+                  {(chat.name || t("chat.newChat"))}
                   {" · "}
                   {chat.id.slice(0, 8)}
                 </Button>

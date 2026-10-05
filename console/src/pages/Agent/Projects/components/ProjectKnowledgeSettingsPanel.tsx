@@ -141,28 +141,19 @@ export default function ProjectKnowledgeSettingsPanel(
       message.success(
         enabled
           ? t("copaw.projects.knowledge.sourceRegisterSuccess")
-          : t(
-            "copaw.projects.knowledge.sourceUnregisterSuccess",
-            "Project knowledge source unregistered",
-          ),
+          : t("copaw.projects.knowledge.sourceUnregisterSuccess"),
       );
       await loadProjectSourceStatus();
     } catch (err) {
       const messageText = err instanceof Error
         ? err.message
-        : t(
-          "copaw.projects.knowledge.sourceRegistrationUpdateFailed",
-          "Failed to update project knowledge registration",
-        );
+        : t("copaw.projects.knowledge.sourceRegistrationUpdateFailed");
       const endpointUnavailable = /404|405|not\s*found|knowledge-registration/i.test(messageText);
       if (!enabled && endpointUnavailable) {
         try {
           await api.deleteKnowledgeSource(projectSourceId, { projectId });
           message.success(
-            t(
-              "copaw.projects.knowledge.sourceUnregisterSuccess",
-              "Project knowledge source unregistered",
-            ),
+            t("copaw.projects.knowledge.sourceUnregisterSuccess"),
           );
           await loadProjectSourceStatus();
           return;
@@ -212,15 +203,15 @@ export default function ProjectKnowledgeSettingsPanel(
       });
       message.success(
         commandType === "pause"
-          ? t("copaw.projects.knowledge.control.pauseSuccess", "Pipeline paused")
+          ? t("copaw.projects.knowledge.control.pauseSuccess")
           : commandType === "resume"
-            ? t("copaw.projects.knowledge.control.resumeSuccess", "Pipeline resumed")
-            : t("copaw.projects.knowledge.control.cancelSuccess", "Pipeline cancelled"),
+            ? t("copaw.projects.knowledge.control.resumeSuccess")
+            : t("copaw.projects.knowledge.control.cancelSuccess"),
       );
     } catch (err) {
       const detail = parseErrorDetail(err) as { message?: unknown; recovery_hint?: unknown; error_code?: unknown } | null;
       const messageText = String(detail?.message || (err instanceof Error ? err.message : "")).trim()
-        || t("copaw.projects.knowledge.control.commandFailed", "Pipeline control command failed");
+        || t("copaw.projects.knowledge.control.commandFailed");
       const recoveryHint = String(detail?.recovery_hint || "").trim();
       const errorCode = String(detail?.error_code || "").trim();
       message.error(
@@ -239,13 +230,10 @@ export default function ProjectKnowledgeSettingsPanel(
     <div className={styles.projectKnowledgeWorkbench}>
       <div>
         <Typography.Title level={5} className={styles.projectKnowledgeSectionTitle}>
-          {t("projects.knowledgeDock.tabSettings", "Settings")}
+          {t("projects.knowledgeDock.tabSettings")}
         </Typography.Title>
         <Typography.Text type="secondary">
-          {t(
-            "copaw.projects.knowledge.settingsCoreHint",
-            "Only two controls are kept here: document processing for new source files, and project document registration for RAG chunk queries.",
-          )}
+          {t("copaw.projects.knowledge.settingsCoreHint")}
         </Typography.Text>
       </div>
 
@@ -254,17 +242,11 @@ export default function ProjectKnowledgeSettingsPanel(
           <Space align="start" style={{ justifyContent: "space-between", width: "100%" }}>
             <div>
               <Typography.Text strong>
-                {t(
-                  "copaw.projects.knowledge.autoWorkflowTitle",
-                  "Auto document workflow for new source files",
-                )}
+                {t("copaw.projects.knowledge.autoWorkflowTitle")}
               </Typography.Text>
               <br />
               <Typography.Text type="secondary">
-                {t(
-                  "copaw.projects.knowledge.autoWorkflowDesc",
-                  "Default OFF. When enabled, only newly added document files in this project trigger processing.",
-                )}
+                {t("copaw.projects.knowledge.autoWorkflowDesc")}
               </Typography.Text>
             </div>
             <Switch
@@ -279,10 +261,7 @@ export default function ProjectKnowledgeSettingsPanel(
           <Space align="start" style={{ justifyContent: "space-between", width: "100%" }}>
             <div>
               <Typography.Text strong>
-                {t(
-                  "copaw.projects.knowledge.registerAsAgentKnowledgeTitle",
-                  "Register as project document source",
-                )}
+                {t("copaw.projects.knowledge.registerAsAgentKnowledgeTitle")}
               </Typography.Text>
               <br />
               <Typography.Text type="secondary">
@@ -308,7 +287,7 @@ export default function ProjectKnowledgeSettingsPanel(
                 ? sourceRegistered
                   ? t("copaw.projects.knowledge.sourceRegistered")
                   : t("copaw.projects.knowledge.sourceNotRegistered")
-                : t("common.loading", "Loading")
+                : t("common.loading")
             }
           />
 
@@ -318,15 +297,12 @@ export default function ProjectKnowledgeSettingsPanel(
 
           <Space direction="vertical" size={8} style={{ width: "100%" }}>
             <Typography.Text strong>
-              {t("copaw.projects.knowledge.control.title", "Pipeline control")}
+              {t("copaw.projects.knowledge.control.title")}
             </Typography.Text>
             <Typography.Text type="secondary">
               {flowRunId
                 ? t("copaw.projects.knowledge.control.flowRunLabel", { id: flowRunId })
-                : t(
-                  "copaw.projects.knowledge.control.flowRunMissing",
-                  "Flow run id is not available yet. Commands may fail until a run is bridged.",
-                )}
+                : t("copaw.projects.knowledge.control.flowRunMissing")}
             </Typography.Text>
             <Space wrap>
               <Button
@@ -336,7 +312,7 @@ export default function ProjectKnowledgeSettingsPanel(
                 loading={runningFlowCommand === "pause"}
                 disabled={runningFlowCommand !== "" || recentControlCommand === "pause"}
               >
-                {t("copaw.projects.knowledge.control.pause", "Pause")}
+                {t("copaw.projects.knowledge.control.pause")}
               </Button>
               <Button
                 onClick={() => {
@@ -345,7 +321,7 @@ export default function ProjectKnowledgeSettingsPanel(
                 loading={runningFlowCommand === "resume"}
                 disabled={runningFlowCommand !== "" || recentControlCommand === "resume"}
               >
-                {t("copaw.projects.knowledge.control.resume", "Resume")}
+                {t("copaw.projects.knowledge.control.resume")}
               </Button>
               <Button
                 danger
@@ -355,7 +331,7 @@ export default function ProjectKnowledgeSettingsPanel(
                 loading={runningFlowCommand === "cancel"}
                 disabled={runningFlowCommand !== "" || recentControlCommand === "cancel"}
               >
-                {t("copaw.projects.knowledge.control.cancel", "Cancel")}
+                {t("copaw.projects.knowledge.control.cancel")}
               </Button>
             </Space>
           </Space>

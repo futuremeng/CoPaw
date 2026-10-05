@@ -64,7 +64,7 @@ export function AgentSquarePanel({ onImported }: AgentSquarePanelProps) {
       const msg =
         error instanceof Error
           ? error.message
-          : t("agent.squareLoadFailed", "加载智能体广场失败");
+          : t("agent.squareLoadFailed");
       message.error(msg);
     } finally {
       setLoading(false);
@@ -121,7 +121,7 @@ export function AgentSquarePanel({ onImported }: AgentSquarePanelProps) {
       const msg =
         error instanceof Error
           ? error.message
-          : t("agent.squareSourceLoadFailed", "加载来源设置失败");
+          : t("agent.squareSourceLoadFailed");
       message.error(msg);
     } finally {
       setSourceLoading(false);
@@ -169,12 +169,12 @@ export function AgentSquarePanel({ onImported }: AgentSquarePanelProps) {
     try {
       const res = await agentsApi.validateSquareSource(fromEditableSource(row));
       updateSource(row._localKey, res.normalized);
-      message.success(t("agent.squareSourceValidateOk", "来源校验通过"));
+      message.success(t("agent.squareSourceValidateOk"));
     } catch (error: unknown) {
       const msg =
         error instanceof Error
           ? error.message
-          : t("agent.squareSourceValidateFailed", "来源校验失败");
+          : t("agent.squareSourceValidateFailed");
       message.error(msg);
     } finally {
       setValidatingKey(null);
@@ -194,12 +194,12 @@ export function AgentSquarePanel({ onImported }: AgentSquarePanelProps) {
       setSources(
         (payload.sources || []).map((item, idx) => toEditableSource(item, idx)),
       );
-      message.success(t("agent.squareSourceResetOk", "已恢复默认来源"));
+      message.success(t("agent.squareSourceResetOk"));
     } catch (error: unknown) {
       const msg =
         error instanceof Error
           ? error.message
-          : t("agent.squareSourceResetFailed", "恢复默认来源失败");
+          : t("agent.squareSourceResetFailed");
       message.error(msg);
     } finally {
       setSourceSaving(false);
@@ -224,14 +224,14 @@ export function AgentSquarePanel({ onImported }: AgentSquarePanelProps) {
         })),
       };
       await agentsApi.updateSquareSources(payload);
-      message.success(t("agent.squareSourceSaveOk", "来源设置已保存"));
+      message.success(t("agent.squareSourceSaveOk"));
       await loadSquareItems(true);
       setSourceModalOpen(false);
     } catch (error: unknown) {
       const msg =
         error instanceof Error
           ? error.message
-          : t("agent.squareSourceSaveFailed", "保存来源设置失败");
+          : t("agent.squareSourceSaveFailed");
       message.error(msg);
     } finally {
       setSourceSaving(false);
@@ -254,7 +254,7 @@ export function AgentSquarePanel({ onImported }: AgentSquarePanelProps) {
       const msg =
         error instanceof Error
           ? error.message
-          : t("agent.squareImportFailed", "导入智能体失败");
+          : t("agent.squareImportFailed");
       message.error(msg);
     } finally {
       setImportingKey(null);
@@ -266,10 +266,7 @@ export function AgentSquarePanel({ onImported }: AgentSquarePanelProps) {
       <Space style={{ marginBottom: 12 }} wrap>
         <Input.Search
           allowClear
-          placeholder={t(
-            "agent.squareSearchPlaceholder",
-            "按名称/ID/来源搜索",
-          )}
+          placeholder={t("agent.squareSearchPlaceholder")}
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           style={{ width: 300 }}
@@ -279,10 +276,10 @@ export function AgentSquarePanel({ onImported }: AgentSquarePanelProps) {
           onClick={() => void loadSquareItems(true)}
           loading={loading}
         >
-          {t("agent.squareRefresh", "刷新广场")}
+          {t("agent.squareRefresh")}
         </Button>
         <Button icon={<SettingOutlined />} onClick={() => void handleOpenSourceModal()}>
-          {t("agent.squareSources", "来源设置")}
+          {t("agent.squareSources")}
         </Button>
       </Space>
 
@@ -305,7 +302,7 @@ export function AgentSquarePanel({ onImported }: AgentSquarePanelProps) {
         dataSource={filteredItems}
         loading={loading}
         locale={{
-          emptyText: t("agent.squareEmpty", "暂无可导入的智能体"),
+          emptyText: t("agent.squareEmpty"),
         }}
         pagination={{
           pageSize: 10,
@@ -333,19 +330,19 @@ export function AgentSquarePanel({ onImported }: AgentSquarePanelProps) {
             width: 180,
           },
           {
-            title: t("agent.squareSource", "来源"),
+            title: t("agent.squareSource"),
             dataIndex: "source_id",
             key: "source_id",
             width: 180,
           },
           {
-            title: t("agent.squareVersion", "版本"),
+            title: t("agent.squareVersion"),
             dataIndex: "version",
             key: "version",
             width: 120,
           },
           {
-            title: t("agent.squareTags", "标签"),
+            title: t("agent.squareTags"),
             key: "tags",
             render: (_, record) => (
               <Space size={[4, 4]} wrap>
@@ -368,7 +365,7 @@ export function AgentSquarePanel({ onImported }: AgentSquarePanelProps) {
                   onClick={() => void handleImport(record)}
                   loading={importingKey === key}
                 >
-                  {t("agent.squareImport", "导入")}
+                  {t("agent.squareImport")}
                 </Button>
               );
             },
@@ -377,16 +374,16 @@ export function AgentSquarePanel({ onImported }: AgentSquarePanelProps) {
       />
 
       <Modal
-        title={t("agent.squareSources", "来源设置")}
+        title={t("agent.squareSources")}
         open={sourceModalOpen}
         onCancel={() => setSourceModalOpen(false)}
         width={1100}
         footer={[
           <Button key="add" icon={<PlusOutlined />} onClick={handleAddSource}>
-            {t("agent.squareSourceAdd", "新增来源")}
+            {t("agent.squareSourceAdd")}
           </Button>,
           <Button key="reset" onClick={() => void handleResetSources()} loading={sourceSaving}>
-            {t("agent.squareSourceReset", "恢复默认")}
+            {t("agent.squareSourceReset")}
           </Button>,
           <Button key="cancel" onClick={() => setSourceModalOpen(false)}>
             {t("common.cancel")}
@@ -402,15 +399,15 @@ export function AgentSquarePanel({ onImported }: AgentSquarePanelProps) {
         ]}
       >
         <Space style={{ marginBottom: 12 }} wrap>
-          <span>{t("agent.squareCacheTtl", "缓存秒数")}</span>
+          <span>{t("agent.squareCacheTtl")}</span>
           <Input
             value={String(cacheTtlSec)}
             onChange={(e) => setCacheTtlSec(Number(e.target.value) || 0)}
             style={{ width: 120 }}
           />
-          <span>{t("agent.squareOverwriteDefault", "安装默认覆盖")}</span>
+          <span>{t("agent.squareOverwriteDefault")}</span>
           <Switch checked={overwriteDefault} onChange={setOverwriteDefault} />
-          <span>{t("agent.squarePreserveWorkspace", "保留工作区文件")}</span>
+          <span>{t("agent.squarePreserveWorkspace")}</span>
           <Switch
             checked={preserveWorkspaceFiles}
             onChange={setPreserveWorkspaceFiles}
@@ -425,7 +422,7 @@ export function AgentSquarePanel({ onImported }: AgentSquarePanelProps) {
           scroll={{ x: 1000, y: 420 }}
           columns={[
             {
-              title: t("common.enabled", "启用"),
+              title: t("common.enabled"),
               dataIndex: "enabled",
               width: 80,
               render: (enabled: boolean, row) => (
@@ -464,7 +461,7 @@ export function AgentSquarePanel({ onImported }: AgentSquarePanelProps) {
               ),
             },
             {
-              title: t("agent.squareSourceUrl", "URL"),
+              title: t("agent.squareSourceUrl"),
               dataIndex: "url",
               width: 260,
               render: (value: string, row) => (
@@ -477,7 +474,7 @@ export function AgentSquarePanel({ onImported }: AgentSquarePanelProps) {
               ),
             },
             {
-              title: t("agent.squareSourceBranch", "分支"),
+              title: t("agent.squareSourceBranch"),
               dataIndex: "branch",
               width: 120,
               render: (value: string, row) => (
@@ -490,7 +487,7 @@ export function AgentSquarePanel({ onImported }: AgentSquarePanelProps) {
               ),
             },
             {
-              title: t("agent.squareSourcePath", "路径"),
+              title: t("agent.squareSourcePath"),
               dataIndex: "path",
               width: 120,
               render: (value: string, row) => (
@@ -515,7 +512,7 @@ export function AgentSquarePanel({ onImported }: AgentSquarePanelProps) {
                     onClick={() => void handleValidateSource(row)}
                   />
                   <Popconfirm
-                    title={t("agent.squareSourceDeleteConfirm", "确认删除该来源？")}
+                    title={t("agent.squareSourceDeleteConfirm")}
                     onConfirm={() => handleDeleteSource(row._localKey)}
                     disabled={row.pinned}
                   >

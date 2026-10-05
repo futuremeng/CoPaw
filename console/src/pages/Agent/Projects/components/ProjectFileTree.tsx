@@ -549,17 +549,17 @@ export default function ProjectFileTree({
     return selectedMetricFilter ? nonBuiltInFiles : projectFiles;
   }, [builtInFiles, nonBuiltInFiles, projectFiles, selectedMetricFilter]);
 
-  const attachTitle = t("projects.chat.addAttachment", "Add to chat attachments");
-  const detachTitle = t("projects.chat.removeAttachment", "Remove from chat attachments");
-  const refreshTitle = t("projects.refreshFiles", "Refresh");
-  const renameTitle = t("common.rename", "Rename");
-  const createFolderTitle = t("projects.createFolder", "New Folder");
-  const deleteTitle = t("common.delete", "Delete");
-  const deleteSelectedTitle = t("projects.deleteSelectedFiles", "Delete Selected Files");
-  const moveSelectedTitle = t("projects.moveSelectedFiles", "Move Selected Files");
-  const selectVisibleTitle = t("projects.selectVisibleFiles", "Select Visible Files");
-  const clearSelectedTitle = t("projects.clearSelectedFiles", "Clear Selected");
-  const selectedOnlyTitle = t("projects.treeSelectedOnly", "Selected Only");
+  const attachTitle = t("projects.chat.addAttachment");
+  const detachTitle = t("projects.chat.removeAttachment");
+  const refreshTitle = t("projects.refreshFiles");
+  const renameTitle = t("common.rename");
+  const createFolderTitle = t("projects.createFolder");
+  const deleteTitle = t("common.delete");
+  const deleteSelectedTitle = t("projects.deleteSelectedFiles");
+  const moveSelectedTitle = t("projects.moveSelectedFiles");
+  const selectVisibleTitle = t("projects.selectVisibleFiles");
+  const clearSelectedTitle = t("projects.clearSelectedFiles");
+  const selectedOnlyTitle = t("projects.treeSelectedOnly");
 
   const priorityFileSet = useMemo(() => new Set(priorityFilePaths), [priorityFilePaths]);
   const selectedAttachSet = useMemo(() => new Set(selectedAttachPaths), [selectedAttachPaths]);
@@ -749,12 +749,12 @@ export default function ProjectFileTree({
 
   // Empty state message
   const emptyTreeDescription = showSelectedOnly && selectedAttachPaths.length === 0
-    ? t("projects.noSelectedFiles", "No selected files")
+    ? t("projects.noSelectedFiles")
     : normalizedTreeFilterQuery
-      ? t("projects.noMatchedFiles", "No files match the current keyword")
+      ? t("projects.noMatchedFiles")
       : selectedMetricFilter || normalizedTreeFilterQuery
-        ? t("projects.noFilteredFiles", "No related files under the current filter")
-        : t("projects.noFiles", "No files in this project");
+        ? t("projects.noFilteredFiles")
+        : t("projects.noFiles");
 
   // Expanded keys management
   const updateExpandedKeys = useCallback((nextKeys: string[]) => {
@@ -943,17 +943,17 @@ export default function ProjectFileTree({
     <div className={`${styles.scrollContainer} ${styles.treeOnlyScrollContainer}`}>
       {/* ── Header ────────────────────────────────────────────────────── */}
       <div className={styles.treeOnlyHeaderRow}>
-        <span className={styles.sectionTitle}>{t("projects.projectSpaceFiles", "Project Space Files")}</span>
+        <span className={styles.sectionTitle}>{t("projects.projectSpaceFiles")}</span>
         <div className={styles.panelExtraActions}>
           {latestUpdatedFilePath ? (
             <Tooltip title={latestUpdatedFilePath}>
               <Button size="small" type="link" className={`${styles.panelExtraAction} ${styles.latestUpdatedFileButton}`} onClick={() => onSelectLatestUpdatedFile?.(latestUpdatedFilePath)}>
-                {t("projects.latestUpdatedFile", "Recent Update")}
+                {t("projects.latestUpdatedFile")}
               </Button>
             </Tooltip>
           ) : null}
           <Button size="small" type="link" icon={<ReloadOutlined spin={projectFilesRefreshing} />} className={styles.panelExtraAction} onClick={() => { void onRefreshProjectFiles?.(); }} disabled={!onRefreshProjectFiles || projectFilesRefreshing}>
-            {t("projects.refreshFiles", "Refresh")}
+            {t("projects.refreshFiles")}
           </Button>
         </div>
       </div>
@@ -962,7 +962,7 @@ export default function ProjectFileTree({
       <div className={styles.treeUploadRow}>
         <div className={styles.chatEmptyActions}>
           <Button type="primary" className={styles.treeUploadButton} onClick={onUploadFiles}>
-            {t("projects.upload.button", "Upload Files")}
+            {t("projects.upload.button")}
           </Button>
           <Button onClick={() => onRequestCreateChildDirectory?.("")}>{createFolderTitle}</Button>
           <Button disabled={!onRequestSetSelectedFilePaths || treeFilePaths.length === 0} onClick={() => onRequestSetSelectedFilePaths?.(treeFilePaths)}>
@@ -978,7 +978,7 @@ export default function ProjectFileTree({
             {deleteSelectedTitle}
           </Button>
           <Text type="secondary" className={styles.treeSelectedCountText}>
-            {t("projects.selectedFilesCount", "Selected: {{count}}", { count: selectedAttachPaths.length })}
+            {t("projects.selectedFilesCount", { count: selectedAttachPaths.length })}
           </Text>
         </div>
       </div>
@@ -1000,7 +1000,7 @@ export default function ProjectFileTree({
             }}
             className={styles.treeFilterInput}
             prefix={<SearchOutlined />}
-            placeholder={t("projects.treeFilterPlaceholder", "Filter files")}
+            placeholder={t("projects.treeFilterPlaceholder")}
           />
           <Button size="small" type={showSelectedOnly ? "primary" : "default"} onClick={() => setShowSelectedOnly((prev) => !prev)}>
             {selectedOnlyTitle}
@@ -1032,8 +1032,8 @@ export default function ProjectFileTree({
             value={treeDisplayMode}
             onChange={(value) => onTreeDisplayModeChange(value as TreeDisplayMode)}
             options={[
-              { label: t("projects.treeViewMode.filter", "Filter"), value: "filter" },
-              { label: t("projects.treeViewMode.highlight", "Highlight"), value: "highlight" },
+              { label: t("projects.treeViewMode.filter"), value: "filter" },
+              { label: t("projects.treeViewMode.highlight"), value: "highlight" },
             ]}
           />
         </div>

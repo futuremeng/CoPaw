@@ -110,19 +110,17 @@ export function AgentTable({
       key: "id",
     },
     {
-      title: t("agent.type", "类型"),
+      title: t("agent.type"),
       key: "agentType",
       width: 120,
       render: (_: any, record: AgentSummary) => (
         <Tag color={record.is_builtin ? "processing" : "default"}>
-          {record.is_builtin
-            ? t("agent.typeBuiltin", "内建")
-            : t("agent.typeCustom", "自定义")}
+          {record.is_builtin ? t("agent.typeBuiltin") : t("agent.typeCustom")}
         </Tag>
       ),
     },
     {
-      title: t("agent.feature", "特性"),
+      title: t("agent.feature"),
       key: "feature",
       width: 140,
       render: (_: any, record: AgentSummary) => {
@@ -180,7 +178,7 @@ export function AgentTable({
       render: (_: any, record: AgentSummary) => {
         const isProtected = isProtectedAgent(record);
         const blockedReason = record.system_protected
-          ? t("agent.systemAgentProtected", "系统内建智能体不可在此处修改")
+          ? t("agent.systemAgentProtected")
           : undefined;
 
         return (

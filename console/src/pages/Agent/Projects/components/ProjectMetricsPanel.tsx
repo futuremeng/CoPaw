@@ -128,7 +128,7 @@ export default function ProjectMetricsPanel({
       .catch(() => {
         if (!cancelled) {
           setCompareRunDetail(null);
-          setCompareError(t("projects.pipeline.compareLoadFailed", "Failed to load compare run"));
+          setCompareError(t("projects.pipeline.compareLoadFailed"));
         }
       })
       .finally(() => {
@@ -241,17 +241,17 @@ export default function ProjectMetricsPanel({
       {!runDetail ? (
         <Empty
           image={Empty.PRESENTED_IMAGE_SIMPLE}
-          description={t("projects.pipeline.noRun", "No run")}
+          description={t("projects.pipeline.noRun")}
         />
       ) : (
         <div className={styles.metricPanel}>
           <div className={styles.metricBlock}>
             <div className={styles.itemTitleRow}>
-              <span className={styles.itemTitle}>{t("projects.pipeline.compare", "Run Compare")}</span>
+              <span className={styles.itemTitle}>{t("projects.pipeline.compare")}</span>
             </div>
             {compareCandidates.length === 0 ? (
               <div className={styles.itemMeta}>
-                {t("projects.pipeline.noCompareRun", "No historical run available for comparison")}
+                {t("projects.pipeline.noCompareRun")}
               </div>
             ) : (
               <>
@@ -266,11 +266,11 @@ export default function ProjectMetricsPanel({
                       item.updated_at || item.created_at || "",
                     )}`,
                   }))}
-                  placeholder={t("projects.pipeline.comparePlaceholder", "Select baseline run")}
+                  placeholder={t("projects.pipeline.comparePlaceholder")}
                 />
                 {compareLoading ? (
                   <div className={styles.itemMeta} style={{ marginTop: 8 }}>
-                    <Spin size="small" /> {t("projects.pipeline.compareLoading", "Loading compare run")}
+                    <Spin size="small" /> {t("projects.pipeline.compareLoading")}
                   </div>
                 ) : null}
                 {compareError ? (
@@ -285,29 +285,29 @@ export default function ProjectMetricsPanel({
                 {compareRunDetail && !compareLoading && !compareError ? (
                   <div style={{ marginTop: 8 }}>
                     <div className={styles.itemMeta}>
-                      {t("projects.pipeline.compareArtifactsShared", "Shared artifacts")}: {artifactCompareSummary.shared.length}
+                      {t("projects.pipeline.compareArtifactsShared")}: {artifactCompareSummary.shared.length}
                     </div>
                     <div className={styles.itemMeta}>
-                      {t("projects.pipeline.compareArtifactsCurrentOnly", "Current-only artifacts")}: {artifactCompareSummary.currentOnly.length}
+                      {t("projects.pipeline.compareArtifactsCurrentOnly")}: {artifactCompareSummary.currentOnly.length}
                     </div>
                     <div className={styles.itemMeta}>
-                      {t("projects.pipeline.compareArtifactsBaselineOnly", "Baseline-only artifacts")}: {artifactCompareSummary.baselineOnly.length}
+                      {t("projects.pipeline.compareArtifactsBaselineOnly")}: {artifactCompareSummary.baselineOnly.length}
                     </div>
                     {artifactCompareSummary.currentOnly.length > 0 ? (
                       <div className={styles.itemMeta}>
-                        {t("projects.pipeline.compareArtifactsCurrentOnlyPreview", "Current only")}:
+                        {t("projects.pipeline.compareArtifactsCurrentOnlyPreview")}:
                         {renderPathLinks(artifactCompareSummary.currentOnly, "current")}
                       </div>
                     ) : null}
                     {artifactCompareSummary.shared.length > 0 ? (
                       <div className={styles.itemMeta}>
-                        {t("projects.pipeline.compareArtifactsSharedPreview", "Shared paths")}:
+                        {t("projects.pipeline.compareArtifactsSharedPreview")}:
                         {renderPathLinks(artifactCompareSummary.shared, "shared")}
                       </div>
                     ) : null}
                     {artifactCompareSummary.baselineOnly.length > 0 ? (
                       <div className={styles.itemMeta}>
-                        {t("projects.pipeline.compareArtifactsBaselineOnlyPreview", "Baseline only")}:
+                        {t("projects.pipeline.compareArtifactsBaselineOnlyPreview")}:
                         {renderPathLinks(artifactCompareSummary.baselineOnly, "baseline")}
                       </div>
                     ) : null}

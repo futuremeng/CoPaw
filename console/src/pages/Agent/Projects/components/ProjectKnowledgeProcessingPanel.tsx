@@ -233,7 +233,7 @@ function buildKnowledgeLayerRows(
             evidencePath: resolveEvidencePathByKey(l2EvidencePaths, "document_count"),
           },
           {
-            label: t("copaw.projects.knowledge.processing.tokenizeLineProgress", "Tokenize lines"),
+            label: t("copaw.projects.knowledge.processing.tokenizeLineProgress"),
             value: formatDoneTotal(l2DoneLines, l2TotalLines),
             evidenceKey: "tokenize_line_count",
             evidencePath: resolveEvidencePathByKey(l2EvidencePaths, "tokenize_line_count"),
@@ -634,9 +634,9 @@ export default function ProjectKnowledgeProcessingPanel(
     <div className={`${styles.projectKnowledgeWorkbench} ${styles.projectKnowledgeProcessingWorkbench}`}>
       <div className={styles.projectKnowledgeProcessingScrollBody}>
         <div className={styles.projectKnowledgeProcessingSection}>
-          <Typography.Text strong>{t("projects.knowledgeDock.tabProcessing", "Processing")}</Typography.Text>
+          <Typography.Text strong>{t("projects.knowledgeDock.tabProcessing")}</Typography.Text>
           <Typography.Text type="secondary">
-            {t("copaw.projects.knowledge.processing.globalOverviewHint", "项目全局占位指标，后续会继续细化")}
+            {t("copaw.projects.knowledge.processing.globalOverviewHint")}
           </Typography.Text>
           <div className={styles.projectKnowledgeSignalGrid}>
             <div className={styles.projectKnowledgeSignalCard}>
@@ -644,7 +644,7 @@ export default function ProjectKnowledgeProcessingPanel(
               <Typography.Text strong>{formatDoneTotal(globalDocumentCount, globalTotalDocuments)}</Typography.Text>
             </div>
             <div className={styles.projectKnowledgeSignalCard}>
-              <Typography.Text type="secondary">{t("copaw.projects.knowledge.processing.tokenizeLineProgress", "Tokenize lines")}</Typography.Text>
+              <Typography.Text type="secondary">{t("copaw.projects.knowledge.processing.tokenizeLineProgress")}</Typography.Text>
               <Typography.Text strong>{formatDoneTotal(globalDoneLines, globalTotalLines)}</Typography.Text>
             </div>
             <div className={styles.projectKnowledgeSignalCard}>
@@ -658,7 +658,7 @@ export default function ProjectKnowledgeProcessingPanel(
           <div className={styles.projectKnowledgeHistoryStrip}>
             <div className={styles.projectKnowledgeHistoryHeader}>
               <Typography.Text strong>
-                {t("copaw.projects.knowledge.processing.tokenizeProgressTitle", "Tokenize progress")}
+                {t("copaw.projects.knowledge.processing.tokenizeProgressTitle")}
               </Typography.Text>
               <Typography.Text type="secondary">
                 {formatDoneTotal(
@@ -666,14 +666,14 @@ export default function ProjectKnowledgeProcessingPanel(
                   Math.max(0, Number(globalNlpMode?.tokenizeTotalLines || 0)),
                 )}
                 {" · "}
-                {t("copaw.projects.knowledge.processing.tokenizeRunningDocs", "Running docs")}: {tokenizeRunningDocuments.length}
+                {t("copaw.projects.knowledge.processing.tokenizeRunningDocs")}: {tokenizeRunningDocuments.length}
               </Typography.Text>
             </div>
             <div className={styles.projectKnowledgeHistoryList}>
               {tokenizeDocumentsProgress.length === 0 ? (
                 <div className={styles.projectKnowledgeHistoryItem}>
                   <Typography.Text type="secondary">
-                    {t("copaw.projects.knowledge.processing.tokenizeProgressEmpty", "No tokenize progress yet")}
+                    {t("copaw.projects.knowledge.processing.tokenizeProgressEmpty")}
                   </Typography.Text>
                 </div>
               ) : tokenizeDocumentsProgress.map((item) => (
@@ -723,7 +723,7 @@ export default function ProjectKnowledgeProcessingPanel(
               options={sourceOptions}
               disabled={!sourceOptions.length}
               className={styles.projectKnowledgeProcessingScopeSourceSelect}
-              placeholder={t("copaw.projects.knowledge.processing.sourceSelectPlaceholder", "Select source")}
+              placeholder={t("copaw.projects.knowledge.processing.sourceSelectPlaceholder")}
               onChange={(value) => {
                 props.knowledgeState.setSelectedSourceId(String(value || ""));
               }}
@@ -759,7 +759,7 @@ export default function ProjectKnowledgeProcessingPanel(
                       });
                     }}
                   >
-                    {t("copaw.projects.knowledge.processing.rerunLayer", "Rerun Layer")}
+                    {t("copaw.projects.knowledge.processing.rerunLayer")}
                   </Button>
                 </div>
                 {[row.l2, row.l3].map((cell, index) => (
@@ -845,11 +845,11 @@ export default function ProjectKnowledgeProcessingPanel(
             </Typography.Text>
             {activeEvidence.scope === "source" && activeEvidence.sourceLabel ? (
               <Typography.Text type="secondary">
-                {t("copaw.projects.knowledge.processing.evidenceScopeSource", "Source scope: {{source}}", { source: activeEvidence.sourceLabel })}
+                {t("copaw.projects.knowledge.processing.evidenceScopeSource", { source: activeEvidence.sourceLabel })}
               </Typography.Text>
             ) : (
               <Typography.Text type="secondary">
-                {t("copaw.projects.knowledge.processing.evidenceScopeGlobal", "Project scope aggregate")}
+                {t("copaw.projects.knowledge.processing.evidenceScopeGlobal")}
               </Typography.Text>
             )}
             <Typography.Text type="secondary">{activeEvidence.summary}</Typography.Text>
@@ -875,7 +875,7 @@ export default function ProjectKnowledgeProcessingPanel(
                 {t("copaw.projects.knowledge.processing.evidenceSourceCount")}: {activeEvidence.bundle?.source_count || evidencePathsForModal.length || 0}
               </Typography.Text>
               <Typography.Text type="secondary">
-                {t("copaw.projects.knowledge.processing.evidenceSampleCoverage", "Sample coverage")}: {evidenceSampleCoverage}
+                {t("copaw.projects.knowledge.processing.evidenceSampleCoverage")}: {evidenceSampleCoverage}
               </Typography.Text>
               <div className={styles.projectKnowledgeEvidencePaths}>
                 {evidencePathsForModal.length ? evidencePathsForModal.map((pathText) => (

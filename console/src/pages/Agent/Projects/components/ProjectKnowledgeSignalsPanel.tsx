@@ -111,7 +111,7 @@ export default function ProjectKnowledgeSignalsPanel(
     <div className={styles.projectKnowledgeWorkbench}>
       <div>
         <Typography.Title level={5} className={styles.projectKnowledgeSectionTitle}>
-          {t("projects.knowledgeDock.tabHealth", "Health")}
+          {t("projects.knowledgeDock.tabHealth")}
         </Typography.Title>
         <Typography.Text type="secondary">
           {t(knowledgeState.insightMessageKey)}
@@ -139,10 +139,10 @@ export default function ProjectKnowledgeSignalsPanel(
             style={{ marginTop: 8 }}
             type={realtimeConnectionStatus === "degraded" ? "warning" : "info"}
             showIcon
-            message={realtimeConnectionText || t("projects.realtime.connecting", "Realtime connecting")}
+            message={realtimeConnectionText || t("projects.realtime.connecting")}
             description={
               (realtimeReconnectAttempt || 0) > 0
-                ? t("projects.realtime.retryingAttempt", "Attempt {{count}}", {
+                ? t("projects.realtime.retryingAttempt", {
                   count: realtimeReconnectAttempt,
                 })
                 : undefined
@@ -259,7 +259,7 @@ export default function ProjectKnowledgeSignalsPanel(
               {t("copaw.projects.knowledge.syncIdempotencyShort")}: {syncIdempotencyKey || "-"}
             </Typography.Text>
             <Typography.Text type="secondary">
-              {t("copaw.projects.knowledge.syncDeduplicated")}: {syncDeduplicated ? t("common.yes", "Yes") : t("common.no", "No")}
+              {t("copaw.projects.knowledge.syncDeduplicated")}: {syncDeduplicated ? t("common.yes") : t("common.no")}
               {syncLastAction
                 ? ` · ${t("copaw.projects.knowledge.syncLastAction")}: ${syncLastAction}`
                 : ""}
@@ -321,7 +321,7 @@ export default function ProjectKnowledgeSignalsPanel(
             </Typography.Text>
             <div className={styles.knowledgeLoopSummaryTags}>
               <Tag color={latestQualityLoopSummary.tone}>
-                {latestQualityLoopSummary.jobStatus || t("projects.statusUnknown", "unknown")}
+                {latestQualityLoopSummary.jobStatus || t("projects.statusUnknown")}
               </Tag>
               {latestQualityLoopSummary.roundNo ? (
                 <Tag>{t("copaw.projects.knowledge.roundLabel")} {latestQualityLoopSummary.roundNo}</Tag>
@@ -469,8 +469,8 @@ export default function ProjectKnowledgeSignalsPanel(
               onClick={() => knowledgeState.setTrendExpanded((prev) => !prev)}
             >
               {knowledgeState.trendExpanded
-                ? t("common.collapse", "Collapse")
-                : t("common.expand", "Expand")}
+                ? t("common.collapse")
+                : t("common.expand")}
             </Button>
           </Space>
         </div>

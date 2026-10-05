@@ -239,7 +239,7 @@ export default function ProjectKnowledgeOutputsPanel(
       <div className={styles.projectKnowledgeWorkbench}>
       <div>
         <Typography.Title level={5} className={styles.projectKnowledgeSectionTitle}>
-          {t("projects.knowledgeDock.tabOutputs", "Outputs")}
+          {t("projects.knowledgeDock.tabOutputs")}
         </Typography.Title>
         <Typography.Text type="secondary">{t("copaw.projects.knowledge.outputsRoleHint")}</Typography.Text>
       </div>
@@ -522,7 +522,7 @@ export default function ProjectKnowledgeOutputsPanel(
             <Empty description={t("copaw.projects.knowledge.outputs.highOrderEmpty")} />
           </div>
         ) : props.knowledgeState.graphLoading && !props.knowledgeState.graphResult ? (
-          <div className={styles.projectKnowledgeEmpty}><Empty description={t("common.loading", "Loading")} /></div>
+          <div className={styles.projectKnowledgeEmpty}><Empty description={t("common.loading")} /></div>
         ) : filteredRecords.length ? (
           <>
             <div className={styles.projectKnowledgeListFooter}>

@@ -741,7 +741,7 @@ export default function ProjectDocumentKnowledgeVisualization(
     return (
       <Empty
         image={Empty.PRESENTED_IMAGE_SIMPLE}
-        description={t("projects.selectFile", "Select a file to preview")}
+        description={t("projects.selectFile")}
       />
     );
   }
@@ -750,17 +750,14 @@ export default function ProjectDocumentKnowledgeVisualization(
     <div className={styles.documentKnowledgeVizWrap}>
       {!currentDocument && (
         <Typography.Text type="secondary" className={styles.documentKnowledgeVizHint}>
-          {t(
-            "projects.workbench.knowledgeCurrentDocMissing",
-            "Current file has no matched knowledge document yet. Showing lightweight sentence stats only.",
-          )}
+          {t("projects.workbench.knowledgeCurrentDocMissing")}
         </Typography.Text>
       )}
 
       <Card
         size="small"
         className={styles.documentKnowledgeVizCard}
-        title={t("projects.workbench.knowledgeMarkdownOutline", "Markdown 大纲导航")}
+        title={t("projects.workbench.knowledgeMarkdownOutline")}
       >
         {isMarkdownDocument ? (
           outlineItems.length > 0 ? (
@@ -778,8 +775,8 @@ export default function ProjectDocumentKnowledgeVisualization(
                         size="small"
                         className={styles.documentOutlineToggle}
                         aria-label={isCollapsed
-                          ? t("projects.workbench.knowledgeOutlineExpand", "Expand")
-                          : t("projects.workbench.knowledgeOutlineCollapse", "Collapse")}
+                          ? t("projects.workbench.knowledgeOutlineExpand")
+                          : t("projects.workbench.knowledgeOutlineCollapse")}
                         onClick={() => {
                           setCollapsedOutlineIds((prev) => {
                             const next = new Set(prev);
@@ -837,10 +834,7 @@ export default function ProjectDocumentKnowledgeVisualization(
             <div className={styles.documentKnowledgeVizEmpty}>
               <Empty
                 image={Empty.PRESENTED_IMAGE_SIMPLE}
-                description={t(
-                  "projects.workbench.knowledgeMarkdownOutlineEmpty",
-                  "No markdown headings found in this document",
-                )}
+                description={t("projects.workbench.knowledgeMarkdownOutlineEmpty")}
               />
             </div>
           )
@@ -848,10 +842,7 @@ export default function ProjectDocumentKnowledgeVisualization(
           <div className={styles.documentKnowledgeVizEmpty}>
             <Empty
               image={Empty.PRESENTED_IMAGE_SIMPLE}
-              description={t(
-                "projects.workbench.knowledgeMarkdownOutlineNotMarkdown",
-                "Outline navigation is available for Markdown files",
-              )}
+              description={t("projects.workbench.knowledgeMarkdownOutlineNotMarkdown")}
             />
           </div>
         )}
@@ -860,7 +851,7 @@ export default function ProjectDocumentKnowledgeVisualization(
       <Card
         size="small"
         className={styles.documentKnowledgeVizCard}
-        title={t("projects.workbench.knowledgeSentenceChars", "逐句字数分布")}
+        title={t("projects.workbench.knowledgeSentenceChars")}
       >
         {chartData.sentenceWordData.length > 0 ? (
           <div className={styles.documentKnowledgeVizChart}>
@@ -881,10 +872,7 @@ export default function ProjectDocumentKnowledgeVisualization(
           <div className={styles.documentKnowledgeVizEmpty}>
             <Empty
               image={Empty.PRESENTED_IMAGE_SIMPLE}
-              description={t(
-                "projects.workbench.knowledgeCharStatsMissing",
-                "Waiting for .char-stats.json artifact",
-              )}
+              description={t("projects.workbench.knowledgeCharStatsMissing")}
             />
           </div>
         )}
@@ -893,12 +881,11 @@ export default function ProjectDocumentKnowledgeVisualization(
       <Card
         size="small"
         className={styles.documentKnowledgeVizCard}
-        title={t("projects.workbench.knowledgeNerTopEntities", "NER Top 实体词频（Top 20）")}
+        title={t("projects.workbench.knowledgeNerTopEntities")}
         extra={
           <Typography.Text type="secondary" className={styles.documentKnowledgeVizHintInline}>
             {t(
               "projects.workbench.knowledgeNerSummary",
-              "Entities: {{entityTotal}} · Mentions: {{mentionTotal}} · Avg/sentence: {{avg}}",
               {
                 entityTotal: chartData.nerSummary.entityTotal,
                 mentionTotal: chartData.nerSummary.mentionTotal,
@@ -927,7 +914,7 @@ export default function ProjectDocumentKnowledgeVisualization(
           <div className={styles.documentKnowledgeVizEmpty}>
             <Empty
               image={Empty.PRESENTED_IMAGE_SIMPLE}
-              description={t("projects.workbench.knowledgeNerEmpty", "No NER entities for this document")}
+              description={t("projects.workbench.knowledgeNerEmpty")}
             />
           </div>
         )}
@@ -936,7 +923,7 @@ export default function ProjectDocumentKnowledgeVisualization(
       <Card
         size="small"
         className={styles.documentKnowledgeVizCard}
-        title={t("projects.workbench.knowledgeNerPie", "NER 实体类型占比")}
+        title={t("projects.workbench.knowledgeNerPie")}
       >
         {chartData.entityTypeData.length > 0 ? (
           <div className={styles.documentKnowledgeVizChart}>
@@ -965,7 +952,7 @@ export default function ProjectDocumentKnowledgeVisualization(
           <div className={styles.documentKnowledgeVizEmpty}>
             <Empty
               image={Empty.PRESENTED_IMAGE_SIMPLE}
-              description={t("projects.workbench.knowledgeNerTypeEmpty", "No entity type distribution yet")}
+              description={t("projects.workbench.knowledgeNerTypeEmpty")}
             />
           </div>
         )}
@@ -974,13 +961,10 @@ export default function ProjectDocumentKnowledgeVisualization(
       <Card
         size="small"
         className={styles.documentKnowledgeVizCard}
-        title={t("projects.workbench.knowledgeTemporalSpiral", "NER 准时序螺旋共现图（原始计数）")}
+        title={t("projects.workbench.knowledgeTemporalSpiral")}
         extra={
           <Typography.Text type="secondary" className={styles.documentKnowledgeVizHintInline}>
-            {t(
-              "projects.workbench.knowledgeTemporalSpiralHint",
-              "Time base: sentence_index (quasi-time), Weight: raw count (non-normalized)",
-            )}
+            {t("projects.workbench.knowledgeTemporalSpiralHint")}
           </Typography.Text>
         }
       >
@@ -1035,10 +1019,7 @@ export default function ProjectDocumentKnowledgeVisualization(
           <div className={styles.documentKnowledgeVizEmpty}>
             <Empty
               image={Empty.PRESENTED_IMAGE_SIMPLE}
-              description={t(
-                "projects.workbench.knowledgeTemporalSpiralEmpty",
-                "No sentence-level mentions, temporal co-occurrence cannot be built",
-              )}
+              description={t("projects.workbench.knowledgeTemporalSpiralEmpty")}
             />
           </div>
         )}
@@ -1047,12 +1028,12 @@ export default function ProjectDocumentKnowledgeVisualization(
       <Card
         size="small"
         className={styles.documentKnowledgeVizCard}
-        title={t("projects.workbench.knowledgeSyntaxRelation", "Syntax 关系聚合图（Top 20）")}
+        title={t("projects.workbench.knowledgeSyntaxRelation")}
         extra={
           <Typography.Text type="secondary" className={styles.documentKnowledgeVizHintInline}>
             {chartData.hasSyntax
-              ? t("projects.workbench.knowledgeSyntaxModeCooccur", "Fallback mode: cooccur when dependencies are unavailable")
-              : t("projects.workbench.knowledgeSyntaxEmptyHint", "No syntax relation data")}
+              ? t("projects.workbench.knowledgeSyntaxModeCooccur")
+              : t("projects.workbench.knowledgeSyntaxEmptyHint")}
           </Typography.Text>
         }
       >
@@ -1076,7 +1057,7 @@ export default function ProjectDocumentKnowledgeVisualization(
           <div className={styles.documentKnowledgeVizEmpty}>
             <Empty
               image={Empty.PRESENTED_IMAGE_SIMPLE}
-              description={t("projects.workbench.knowledgeSyntaxEmpty", "No syntax relations for this document")}
+              description={t("projects.workbench.knowledgeSyntaxEmpty")}
             />
           </div>
         )}

@@ -27,12 +27,12 @@ vi.mock("../../../../api/modules/agents", () => ({
   agentsApi: mockedAgentsApi,
 }));
 
-vi.mock("react-i18next", () => ({
-  useTranslation: () => ({
-    t: (key: string, maybeFallback?: string | Record<string, unknown>) =>
-      typeof maybeFallback === "string" ? maybeFallback : key,
-  }),
-}));
+// The app renders the English bundle (i18n default language is "en"), so the
+// double resolves copy from that bundle instead of an inline default.
+vi.mock("react-i18next", async () => {
+  const { t } = await vi.importActual<typeof import("./enLocaleTranslate")>("./enLocaleTranslate");
+  return { useTranslation: () => ({ t, i18n: { language: "en" } }) };
+});
 
 function buildRegisteredSource(projectId: string) {
   return {

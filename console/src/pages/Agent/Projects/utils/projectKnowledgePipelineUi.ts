@@ -288,24 +288,12 @@ export function getProjectKnowledgePipelineAlertDescription(
   const recentErrorSource = String(syncState.recent_error_source || "").trim().toLowerCase();
   const errorRecoveryHint = recentErrorCode
     ? recentErrorSource === "workflow_step"
-      ? t(
-        "copaw.projects.knowledge.errorRecovery.workflowStep",
-        "Step-level failure: review step outputs/evidence, then retry from the failed step.",
-      )
+      ? t("copaw.projects.knowledge.errorRecovery.workflowStep")
       : recentErrorSource === "execution_loop"
-        ? t(
-          "copaw.projects.knowledge.errorRecovery.executionLoop",
-          "Execution-loop failure: check backend runtime logs, then re-run the full project pipeline.",
-        )
+        ? t("copaw.projects.knowledge.errorRecovery.executionLoop")
         : recentErrorSource === "flow_control"
-          ? t(
-            "copaw.projects.knowledge.errorRecovery.flowControl",
-            "Flow-control failure: verify pause/resume/cancel command transitions and flow run state.",
-          )
-          : t(
-            "copaw.projects.knowledge.errorRecovery.generic",
-            "Pipeline failure detected: inspect runtime details before retrying.",
-          )
+          ? t("copaw.projects.knowledge.errorRecovery.flowControl")
+          : t("copaw.projects.knowledge.errorRecovery.generic")
     : "";
   const graphStats = getGraphStats(syncState);
   const segments = [
@@ -370,10 +358,10 @@ export function getTriggerModeLabel(t: Translate, triggerMode?: string): string 
     return "未知";
   }
   if (triggerMode === "automatic") {
-    return t("copaw.projects.knowledge.triggerModeAutomatic", "自动");
+    return t("copaw.projects.knowledge.triggerModeAutomatic");
   }
   if (triggerMode === "manual") {
-    return t("copaw.projects.knowledge.triggerModeManual", "手动");
+    return t("copaw.projects.knowledge.triggerModeManual");
   }
   return String(triggerMode);
 }
@@ -384,13 +372,13 @@ export function getProcessingStatusLabel(t: Translate, status?: string): string 
   }
 
   const statusMap: Record<string, string> = {
-    idle: t("copaw.projects.knowledge.processingStatusNotProcessed", "未加工"),
-    queued: t("copaw.projects.knowledge.processingStatusProcessing", "正在加工"),
-    pending: t("copaw.projects.knowledge.processingStatusProcessing", "正在加工"),
-    indexing: t("copaw.projects.knowledge.processingStatusProcessing", "正在加工"),
-    graphifying: t("copaw.projects.knowledge.processingStatusProcessing", "正在加工"),
-    succeeded: t("copaw.projects.knowledge.processingStatusCompleted", "已完成"),
-    failed: t("copaw.projects.knowledge.syncStage.failed", "失败"),
+    idle: t("copaw.projects.knowledge.processingStatusNotProcessed"),
+    queued: t("copaw.projects.knowledge.processingStatusProcessing"),
+    pending: t("copaw.projects.knowledge.processingStatusProcessing"),
+    indexing: t("copaw.projects.knowledge.processingStatusProcessing"),
+    graphifying: t("copaw.projects.knowledge.processingStatusProcessing"),
+    succeeded: t("copaw.projects.knowledge.processingStatusCompleted"),
+    failed: t("copaw.projects.knowledge.syncStage.failed"),
   };
 
   return statusMap[status] || String(status);

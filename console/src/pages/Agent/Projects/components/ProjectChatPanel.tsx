@@ -134,7 +134,7 @@ function ProjectChatPanel({
   const handleAutoAttachHandled = useCallback((payload: AutoAttachHandledPayload) => {
     if (!payload.ok) {
       message.error(
-        t("projects.chat.autoAttachFailed", "Failed to attach selected file to chat."),
+        t("projects.chat.autoAttachFailed"),
       );
     }
     onAutoAttachHandled(payload);
@@ -179,7 +179,7 @@ function ProjectChatPanel({
       <div className={styles.chatEmptyActions}>
         <Text type="secondary">{description}</Text>
         <Button onClick={handleActivateChatView}>
-          {t("projects.chat.loadConversation", "加载对话")}
+          {t("projects.chat.loadConversation")}
         </Button>
       </div>
     </div>
@@ -201,13 +201,10 @@ function ProjectChatPanel({
                       <div className={styles.chatEmptyAction}>
                         <div className={styles.chatEmptyActions}>
                           <Text type="secondary">
-                            {t(
-                              "projects.chat.previewRuntimeGuard",
-                              "VS Code 内置预览中已暂缓加载实时聊天运行时，以降低页面崩溃概率。",
-                            )}
+                            {t("projects.chat.previewRuntimeGuard")}
                           </Text>
                           <Button onClick={() => setChatRuntimeEnabled(true)}>
-                            {t("projects.chat.enablePreviewRuntime", "继续在预览中启用聊天")}
+                            {t("projects.chat.enablePreviewRuntime")}
                           </Button>
                         </div>
                       </div>
@@ -218,30 +215,15 @@ function ProjectChatPanel({
                         onAutoAttachHandled={handleAutoAttachHandled}
                         onNewChat={handleStartRunChat}
                         onSelectHistoryChat={handleSelectRunHistoryChat}
-                        historyMenuActionLabel={t("projects.chat.manualRecover", "手动恢复对话关联")}
+                        historyMenuActionLabel={t("projects.chat.manualRecover")}
                         onHistoryMenuAction={onOpenManualRecoverDialog}
                         onAssistantTurnCompleted={onAssistantTurnCompleted}
-                        inputPlaceholder={t(
-                          "projects.chat.placeholder",
-                          "Describe what you want to adjust in this run, and I will help iterate.",
-                        )}
-                        welcomeGreeting={t(
-                          "projects.chat.welcomeGreeting",
-                          "Project run assistant is ready.",
-                        )}
-                        welcomeDescription={t(
-                          "projects.chat.welcomeDescription",
-                          "Discuss artifacts, metrics, and evidence for the selected run without leaving this page.",
-                        )}
+                        inputPlaceholder={t("projects.chat.placeholder")}
+                        welcomeGreeting={t("projects.chat.welcomeGreeting")}
+                        welcomeDescription={t("projects.chat.welcomeDescription")}
                         welcomePrompts={[
-                          t(
-                            "projects.chat.prompt1",
-                            "Summarize the risks in this run and suggest next actions.",
-                          ),
-                          t(
-                            "projects.chat.prompt2",
-                            "Based on current evidence, propose a retry strategy for failed steps.",
-                          ),
+                          t("projects.chat.prompt1"),
+                          t("projects.chat.prompt2"),
                         ]}
                       />
                     ) : chatViewActivated ? (
@@ -249,10 +231,7 @@ function ProjectChatPanel({
                         <Spin />
                       </div>
                     ) : renderChatLoadGate(
-                      t(
-                        "projects.chat.loadRunConversationHint",
-                        "当前运行对话较大，默认不在首屏自动加载。需要时再打开。",
-                      ),
+                      t("projects.chat.loadRunConversationHint"),
                     )
                     }
                   </>
@@ -263,10 +242,10 @@ function ProjectChatPanel({
                 <div className={styles.chatEmptyAction}>
                   <Empty
                     image={Empty.PRESENTED_IMAGE_SIMPLE}
-                    description={t("projects.chat.noSession", "No chat session for this run yet")}
+                    description={t("projects.chat.noSession")}
                   >
                     <Button type="primary" onClick={handleStartRunChat}>
-                      {t("projects.chat.start", "Start chat")}
+                      {t("projects.chat.start")}
                     </Button>
                   </Empty>
                 </div>
@@ -281,13 +260,10 @@ function ProjectChatPanel({
                       <div className={styles.chatEmptyAction}>
                         <div className={styles.chatEmptyActions}>
                           <Text type="secondary">
-                            {t(
-                              "projects.chat.previewRuntimeGuard",
-                              "VS Code 内置预览中已暂缓加载实时聊天运行时，以降低页面崩溃概率。",
-                            )}
+                            {t("projects.chat.previewRuntimeGuard")}
                           </Text>
                           <Button onClick={() => setChatRuntimeEnabled(true)}>
-                            {t("projects.chat.enablePreviewRuntime", "继续在预览中启用聊天")}
+                            {t("projects.chat.enablePreviewRuntime")}
                           </Button>
                         </div>
                       </div>
@@ -298,30 +274,15 @@ function ProjectChatPanel({
                         onAutoAttachHandled={handleAutoAttachHandled}
                         onNewChat={handleStartDesignChat}
                         onSelectHistoryChat={handleSelectDesignHistoryChat}
-                        historyMenuActionLabel={t("projects.chat.manualRecover", "手动恢复对话关联")}
+                        historyMenuActionLabel={t("projects.chat.manualRecover")}
                         onHistoryMenuAction={onOpenManualRecoverDialog}
                         onAssistantTurnCompleted={onAssistantTurnCompleted}
-                        inputPlaceholder={t(
-                          "projects.chat.designPlaceholder",
-                          "Describe your target workflow and constraints, and I will draft/refine the project flow.",
-                        )}
-                        welcomeGreeting={t(
-                          "projects.chat.designWelcomeGreeting",
-                          "Project flow design assistant is ready.",
-                        )}
-                        welcomeDescription={t(
-                          "projects.chat.designWelcomeDescription",
-                          "Use this session to build a flow draft from your real project files before launching a run.",
-                        )}
+                        inputPlaceholder={t("projects.chat.designPlaceholder")}
+                        welcomeGreeting={t("projects.chat.designWelcomeGreeting")}
+                        welcomeDescription={t("projects.chat.designWelcomeDescription")}
                         welcomePrompts={[
-                          t(
-                            "projects.chat.designPrompt1",
-                            "Based on the current source files, propose a 4-step flow with clear inputs and outputs.",
-                          ),
-                          t(
-                            "projects.chat.designPrompt2",
-                            "Please optimize the flow for reliability and add retry policy suggestions.",
-                          ),
+                          t("projects.chat.designPrompt1"),
+                          t("projects.chat.designPrompt2"),
                         ]}
                       />
                     ) : chatViewActivated ? (
@@ -329,10 +290,7 @@ function ProjectChatPanel({
                         <Spin />
                       </div>
                     ) : renderChatLoadGate(
-                      t(
-                        "projects.chat.loadDesignConversationHint",
-                        "设计对话历史将在你打开时再读取，以避免拖慢项目页首屏。",
-                      ),
+                      t("projects.chat.loadDesignConversationHint"),
                     )
                     }
                   </>
@@ -343,13 +301,10 @@ function ProjectChatPanel({
                   <div className={styles.chatEmptyAction}>
                     <Empty
                       image={Empty.PRESENTED_IMAGE_SIMPLE}
-                      description={t(
-                        "projects.chat.noDesignSession",
-                        "No design chat session yet.",
-                      )}
+                      description={t("projects.chat.noDesignSession")}
                     >
                       <Button type="primary" onClick={handleStartDesignChat}>
-                        {t("projects.chat.start", "Start chat")}
+                        {t("projects.chat.start")}
                       </Button>
                     </Empty>
                   </div>
@@ -363,13 +318,10 @@ function ProjectChatPanel({
                     <div className={styles.chatEmptyAction}>
                       <div className={styles.chatEmptyActions}>
                         <Text type="secondary">
-                          {t(
-                            "projects.chat.previewRuntimeGuard",
-                            "VS Code 内置预览中已暂缓加载实时聊天运行时，以降低页面崩溃概率。",
-                          )}
+                          {t("projects.chat.previewRuntimeGuard")}
                         </Text>
                         <Button onClick={() => setChatRuntimeEnabled(true)}>
-                          {t("projects.chat.enablePreviewRuntime", "继续在预览中启用聊天")}
+                          {t("projects.chat.enablePreviewRuntime")}
                         </Button>
                       </div>
                     </div>
@@ -380,18 +332,12 @@ function ProjectChatPanel({
                       onAutoAttachHandled={handleAutoAttachHandled}
                       onNewChat={handleStartWorkspaceChat}
                       onSelectHistoryChat={handleSelectWorkspaceHistoryChat}
-                      historyMenuActionLabel={t("projects.chat.manualRecover", "手动恢复对话关联")}
+                      historyMenuActionLabel={t("projects.chat.manualRecover")}
                       onHistoryMenuAction={onOpenManualRecoverDialog}
                       onAssistantTurnCompleted={onAssistantTurnCompleted}
                       welcomePromptClickBehavior="append"
-                      inputPlaceholder={t(
-                        "projects.chat.collaborationPlaceholder",
-                        "Describe the project goal, current materials, or the next thing you want to move forward.",
-                      )}
-                      welcomeGreeting={t(
-                        "projects.chat.collaborationWelcomeGreeting",
-                        "Project collaboration assistant is ready.",
-                      )}
+                      inputPlaceholder={t("projects.chat.collaborationPlaceholder")}
+                      welcomeGreeting={t("projects.chat.collaborationWelcomeGreeting")}
                       welcomeDescription={t(
                         hasUserFiles
                           ? "projects.chat.collaborationWelcomeDescription"
@@ -433,13 +379,10 @@ function ProjectChatPanel({
               <div className={styles.chatEmptyAction}>
                 <Empty
                   image={Empty.PRESENTED_IMAGE_SIMPLE}
-                  description={t(
-                      "projects.chat.noWorkspaceSession",
-                      "No project collaboration session yet.",
-                  )}
+                  description={t("projects.chat.noWorkspaceSession")}
                   >
                     <Button type="primary" onClick={handleStartWorkspaceChat}>
-                      {t("projects.chat.start", "Start chat")}
+                      {t("projects.chat.start")}
                     </Button>
                   </Empty>
               </div>

@@ -152,7 +152,7 @@ export default function ProjectKnowledgeSourcesPanel(props: ProjectKnowledgeSour
 
   const sourceColumns = [
     {
-      title: t("copaw.projects.knowledge.columnPath", "Path"),
+      title: t("copaw.projects.knowledge.columnPath"),
       dataIndex: "title",
       key: "title",
       width: "40%",
@@ -169,26 +169,26 @@ export default function ProjectKnowledgeSourcesPanel(props: ProjectKnowledgeSour
       ),
     },
     {
-      title: t("projects.fileStage", "Stage"),
+      title: t("projects.fileStage"),
       dataIndex: "stage",
       key: "stage",
       width: 140,
     },
     {
-      title: t("projects.fileContentType", "Content Type"),
+      title: t("projects.fileContentType"),
       dataIndex: "contentType",
       key: "contentType",
       width: 160,
     },
     {
-      title: t("projects.fileSize", "Size"),
+      title: t("projects.fileSize"),
       dataIndex: "size",
       key: "size",
       width: 120,
       render: (size: number) => formatFileSize(size),
     },
     {
-      title: t("projects.fileModifiedTime", "Modified"),
+      title: t("projects.fileModifiedTime"),
       dataIndex: "modifiedTime",
       key: "modifiedTime",
       width: "22%",
@@ -201,19 +201,19 @@ export default function ProjectKnowledgeSourcesPanel(props: ProjectKnowledgeSour
       ),
     },
     {
-      title: t("copaw.projects.knowledge.sourcesPanel.origin", "Origin"),
+      title: t("copaw.projects.knowledge.sourcesPanel.origin"),
       key: "origin",
       width: 130,
       render: (_: unknown, record: ProjectKnowledgeSourceRow & { sourceOrigin: "manual" | "candidate" }) => (
         <Typography.Text type={record.sourceOrigin === "manual" ? "success" : "secondary"}>
           {record.sourceOrigin === "manual"
-            ? t("copaw.projects.knowledge.sourcesPanel.originManual", "Manual")
-            : t("copaw.projects.knowledge.sourcesPanel.originCandidate", "Candidate")}
+            ? t("copaw.projects.knowledge.sourcesPanel.originManual")
+            : t("copaw.projects.knowledge.sourcesPanel.originCandidate")}
         </Typography.Text>
       ),
     },
     {
-      title: t("copaw.projects.knowledge.processing.layerL2Column", "Processing"),
+      title: t("copaw.projects.knowledge.processing.layerL2Column"),
       key: "processing",
       width: 320,
       render: (_: unknown, record: ProjectKnowledgeSourceRow & { sourceOrigin: "manual" | "candidate" }) => {
@@ -221,13 +221,13 @@ export default function ProjectKnowledgeSourcesPanel(props: ProjectKnowledgeSour
         const isManual = record.sourceOrigin === "manual";
         const isImage = record.category === "image";
         const runLabel = record.category === "structured"
-          ? t("copaw.projects.knowledge.processing.runStructuredFlow", "Run Structured Flow")
-          : t("copaw.projects.knowledge.processing.runFullFlow", "Run Document Flow");
+          ? t("copaw.projects.knowledge.processing.runStructuredFlow")
+          : t("copaw.projects.knowledge.processing.runFullFlow");
         const openLabel = record.category === "structured"
-          ? t("copaw.projects.knowledge.processing.openStructuredDetail", "View Structured Processing")
+          ? t("copaw.projects.knowledge.processing.openStructuredDetail")
           : record.category === "image"
-            ? t("copaw.projects.knowledge.processing.openImageDetail", "View Image Placeholder")
-            : t("copaw.projects.knowledge.processing.openDetail", "View Document Processing");
+            ? t("copaw.projects.knowledge.processing.openImageDetail")
+            : t("copaw.projects.knowledge.processing.openDetail");
         return (
           <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
             <Button
@@ -269,12 +269,12 @@ export default function ProjectKnowledgeSourcesPanel(props: ProjectKnowledgeSour
               }}
             >
               {isManual
-                ? t("copaw.projects.knowledge.sourcesPanel.remove", "Remove")
+                ? t("copaw.projects.knowledge.sourcesPanel.remove")
                 : record.category === "structured"
-                  ? t("copaw.projects.knowledge.sourcesPanel.addStructured", "Add to Structured Sources")
+                  ? t("copaw.projects.knowledge.sourcesPanel.addStructured")
                   : record.category === "image"
-                    ? t("copaw.projects.knowledge.sourcesPanel.addImage", "Add to Image Sources")
-                    : t("copaw.projects.knowledge.sourcesPanel.addDocument", "Add to Document Sources")}
+                    ? t("copaw.projects.knowledge.sourcesPanel.addImage")
+                    : t("copaw.projects.knowledge.sourcesPanel.addDocument")}
             </Button>
           </div>
         );
@@ -307,37 +307,37 @@ export default function ProjectKnowledgeSourcesPanel(props: ProjectKnowledgeSour
       <div className={styles.projectKnowledgeSignalGrid}>
         <div className={styles.projectKnowledgeSignalCard}>
           <Typography.Text type="secondary">
-            {t("copaw.projects.knowledge.sourcesPanel.signalTotalSources", "Total Sources")}
+            {t("copaw.projects.knowledge.sourcesPanel.signalTotalSources")}
           </Typography.Text>
           <Typography.Text strong>{totalSourceCount}</Typography.Text>
         </div>
         <div className={styles.projectKnowledgeSignalCard}>
           <Typography.Text type="secondary">
-            {t("copaw.projects.knowledge.sourcesPanel.signalDocumentSources", "Document Sources")}
+            {t("copaw.projects.knowledge.sourcesPanel.signalDocumentSources")}
           </Typography.Text>
           <Typography.Text strong>{documentRows.length}</Typography.Text>
         </div>
         <div className={styles.projectKnowledgeSignalCard}>
           <Typography.Text type="secondary">
-            {t("copaw.projects.knowledge.sourcesPanel.signalStructuredSources", "Structured Sources")}
+            {t("copaw.projects.knowledge.sourcesPanel.signalStructuredSources")}
           </Typography.Text>
           <Typography.Text strong>{structuredRows.length}</Typography.Text>
         </div>
         <div className={styles.projectKnowledgeSignalCard}>
           <Typography.Text type="secondary">
-            {t("copaw.projects.knowledge.sourcesPanel.signalImageSources", "Image Sources")}
+            {t("copaw.projects.knowledge.sourcesPanel.signalImageSources")}
           </Typography.Text>
           <Typography.Text strong>{imageRows.length}</Typography.Text>
         </div>
         <div className={styles.projectKnowledgeSignalCard}>
           <Typography.Text type="secondary">
-            {t("copaw.projects.knowledge.sourcesPanel.signalManualSources", "Manual Sources")}
+            {t("copaw.projects.knowledge.sourcesPanel.signalManualSources")}
           </Typography.Text>
           <Typography.Text strong>{manualSourceCount}</Typography.Text>
         </div>
         <div className={styles.projectKnowledgeSignalCard}>
           <Typography.Text type="secondary">
-            {t("copaw.projects.knowledge.sourcesPanel.signalCandidateSources", "Candidate Sources")}
+            {t("copaw.projects.knowledge.sourcesPanel.signalCandidateSources")}
           </Typography.Text>
           <Typography.Text strong>{candidateSourceCount}</Typography.Text>
         </div>
@@ -346,35 +346,35 @@ export default function ProjectKnowledgeSourcesPanel(props: ProjectKnowledgeSour
       <div className={styles.projectKnowledgeHistoryStrip}>
         <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
           <Typography.Text strong>
-            {t("copaw.projects.knowledge.sourcesPanel.title", "Sources")}
+            {t("copaw.projects.knowledge.sourcesPanel.title")}
           </Typography.Text>
           <Button size="small" onClick={() => void knowledgeState.loadProjectSourceStatus()}>
-            {t("copaw.projects.knowledge.actions.refresh", "Refresh")}
+            {t("copaw.projects.knowledge.actions.refresh")}
           </Button>
         </div>
         <Tabs
           items={[
             {
               key: "document",
-              label: `${t("copaw.projects.knowledge.sourcesPanel.tabDocument", "Document")} (${documentRows.length})`,
+              label: `${t("copaw.projects.knowledge.sourcesPanel.tabDocument")} (${documentRows.length})`,
               children: (
                 <>
                   <div className={styles.projectKnowledgeSignalGrid} style={{ marginBottom: 12 }}>
                     <div className={styles.projectKnowledgeSignalCard}>
                       <Typography.Text type="secondary">
-                        {t("copaw.projects.knowledge.sourcesPanel.documentSentenceCount", "Sentences")}
+                        {t("copaw.projects.knowledge.sourcesPanel.documentSentenceCount")}
                       </Typography.Text>
                       <Typography.Text strong>{documentSentenceCount}</Typography.Text>
                     </div>
                     <div className={styles.projectKnowledgeSignalCard}>
                       <Typography.Text type="secondary">
-                        {t("copaw.projects.knowledge.sourcesPanel.documentTokenCount", "Lightweight Tokens")}
+                        {t("copaw.projects.knowledge.sourcesPanel.documentTokenCount")}
                       </Typography.Text>
                       <Typography.Text strong>{documentTokenCount}</Typography.Text>
                     </div>
                     <div className={styles.projectKnowledgeSignalCard}>
                       <Typography.Text type="secondary">
-                        {t("copaw.projects.knowledge.sourcesPanel.documentCharacterCount", "Characters")}
+                        {t("copaw.projects.knowledge.sourcesPanel.documentCharacterCount")}
                       </Typography.Text>
                       <Typography.Text strong>{documentCharacterCount}</Typography.Text>
                     </div>
@@ -386,14 +386,14 @@ export default function ProjectKnowledgeSourcesPanel(props: ProjectKnowledgeSour
                     size="small"
                     bordered={false}
                     scroll={{ x: 1400 }}
-                    locale={{ emptyText: t("copaw.projects.knowledge.sourcesPanel.emptyDocument", "No document sources found") }}
+                    locale={{ emptyText: t("copaw.projects.knowledge.sourcesPanel.emptyDocument") }}
                   />
                 </>
               ),
             },
             {
               key: "structured",
-              label: `${t("copaw.projects.knowledge.sourcesPanel.tabStructured", "Structured")} (${structuredRows.length})`,
+              label: `${t("copaw.projects.knowledge.sourcesPanel.tabStructured")} (${structuredRows.length})`,
               children: (
                 <Table
                   columns={sourceColumns}
@@ -402,13 +402,13 @@ export default function ProjectKnowledgeSourcesPanel(props: ProjectKnowledgeSour
                   size="small"
                   bordered={false}
                   scroll={{ x: 1400 }}
-                  locale={{ emptyText: t("copaw.projects.knowledge.sourcesPanel.emptyStructured", "No structured sources found") }}
+                  locale={{ emptyText: t("copaw.projects.knowledge.sourcesPanel.emptyStructured") }}
                 />
               ),
             },
             {
               key: "image",
-              label: `${t("copaw.projects.knowledge.sourcesPanel.tabImage", "Image")} (${imageRows.length})`,
+              label: `${t("copaw.projects.knowledge.sourcesPanel.tabImage")} (${imageRows.length})`,
               children: (
                 <Table
                   columns={sourceColumns}
@@ -417,7 +417,7 @@ export default function ProjectKnowledgeSourcesPanel(props: ProjectKnowledgeSour
                   size="small"
                   bordered={false}
                   scroll={{ x: 1400 }}
-                  locale={{ emptyText: t("copaw.projects.knowledge.sourcesPanel.emptyImage", "No image sources found") }}
+                  locale={{ emptyText: t("copaw.projects.knowledge.sourcesPanel.emptyImage") }}
                 />
               ),
             },

@@ -1365,7 +1365,7 @@ export default function AnywhereChat({
     (chats: ChatSpec[]): string => {
       const current = chats.find((chat) => chat.id === sessionId);
       return (current?.name || current?.session_id || current?.id || "").trim()
-        || t("chat.newChat", "New Chat");
+        || t("chat.newChat");
     },
     [sessionId, t],
   );
@@ -1378,7 +1378,7 @@ export default function AnywhereChat({
       setCurrentChatName(resolveCurrentChatName(chats));
     } catch {
       backendSessionIdRef.current = sessionId;
-      setCurrentChatName(t("chat.newChat", "New Chat"));
+      setCurrentChatName(t("chat.newChat"));
     }
   }, [resolveCurrentChatName, sessionId, t]);
 
@@ -1627,14 +1627,14 @@ export default function AnywhereChat({
   const copyAsText = useCallback(async (response: CopyableResponse) => {
     const payload = extractCopyableText(response) || stripMarkdownSyntax(extractRawMarkdownText(response));
     if (!payload) {
-      message.warning(t("common.nothingToCopy", "No copyable content."));
+      message.warning(t("common.nothingToCopy"));
       return;
     }
     try {
       await copyText(payload);
-      message.success(t("common.copiedText", "Text copied"));
+      message.success(t("common.copiedText"));
     } catch {
-      message.error(t("common.copyTextFailed", "Failed to copy text"));
+      message.error(t("common.copyTextFailed"));
     }
   }, [t]);
 
@@ -1644,14 +1644,14 @@ export default function AnywhereChat({
       raw || extractAssistantText(response as StreamResponseData | null),
     );
     if (!payload) {
-      message.warning(t("common.nothingToCopy", "No copyable content."));
+      message.warning(t("common.nothingToCopy"));
       return;
     }
     try {
       await copyText(payload);
-      message.success(t("common.copiedMarkdown", "Markdown copied"));
+      message.success(t("common.copiedMarkdown"));
     } catch {
-      message.error(t("common.copyMarkdownFailed", "Failed to copy Markdown"));
+      message.error(t("common.copyMarkdownFailed"));
     }
   }, [t]);
 
@@ -1964,7 +1964,7 @@ export default function AnywhereChat({
         });
         setClosingApprovalIds((prev) => prev.filter((id) => id !== requestId));
       }, 320);
-      message.success(t("approval.approved", "Approved"));
+      message.success(t("approval.approved"));
     } catch (error) {
       setClosingApprovalIds((prev) => prev.filter((id) => id !== requestId));
       throw error;
@@ -1990,7 +1990,7 @@ export default function AnywhereChat({
         });
         setClosingApprovalIds((prev) => prev.filter((id) => id !== requestId));
       }, 320);
-      message.success(t("approval.denied", "Denied"));
+      message.success(t("approval.denied"));
     } catch (error) {
       setClosingApprovalIds((prev) => prev.filter((id) => id !== requestId));
       throw error;
@@ -2122,10 +2122,7 @@ export default function AnywhereChat({
       const result = await chatApi.deleteTailUserMessage(sessionId);
       if (!result?.deleted) {
         throw new Error(
-          t(
-            "chat.deleteLastUserFailed",
-            "Failed to delete the last user message.",
-          ),
+          t("chat.deleteLastUserFailed"),
         );
       }
 
@@ -2155,10 +2152,7 @@ export default function AnywhereChat({
       message.error(
         error instanceof Error
           ? error.message
-          : t(
-              "chat.deleteLastUserFailed",
-              "Failed to delete the last user message.",
-            ),
+          : t("chat.deleteLastUserFailed"),
       );
       throw error;
     } finally {
@@ -2179,16 +2173,16 @@ export default function AnywhereChat({
     }
 
     Modal.confirm({
-      title: t("chat.confirmDeleteLastUserTitle", "确认删除最后一条用户消息"),
-      okText: t("common.confirm", "Confirm"),
-      cancelText: t("common.cancel", "Cancel"),
+      title: t("chat.confirmDeleteLastUserTitle"),
+      okText: t("common.confirm"),
+      cancelText: t("common.cancel"),
       okButtonProps: { danger: true },
       width: 640,
       content: (
         <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
           <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
             <span style={{ fontSize: 12, color: "rgba(0,0,0,0.45)" }}>
-              {t("chat.messageIdLabel", "消息 ID")}
+              {t("chat.messageIdLabel")}
             </span>
             <div
               style={{
@@ -2197,12 +2191,12 @@ export default function AnywhereChat({
                 wordBreak: "break-all",
               }}
             >
-              {tailUserActionMessageId || t("chat.unknownMessageId", "unknown")}
+              {tailUserActionMessageId || t("chat.unknownMessageId")}
             </div>
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
             <span style={{ fontSize: 12, color: "rgba(0,0,0,0.45)" }}>
-              {t("chat.messageContentLabel", "消息内容")}
+              {t("chat.messageContentLabel")}
             </span>
             <div
               style={{
@@ -2737,10 +2731,7 @@ export default function AnywhereChat({
         autoContinueTailRef.current[persistedSessionId] = tail;
 
         message.info(
-          t(
-            "chat.autoContinue.triggered",
-            "检测到回答可能未完成，已自动继续生成。",
-          ),
+          t("chat.autoContinue.triggered"),
         );
 
         try {
@@ -2825,12 +2816,12 @@ export default function AnywhereChat({
       {
         command: "/mission",
         value: "mission",
-        description: t("chat.commands.mission.description", "Create mission draft"),
+        description: t("chat.commands.mission.description"),
       },
       {
         command: "/skills",
         value: "skills",
-        description: t("chat.commands.skills.description", "Show skill market"),
+        description: t("chat.commands.skills.description"),
       },
       {
         command: "/approve",
@@ -2847,7 +2838,7 @@ export default function AnywhereChat({
       commandSuggestions.push({
         command: "/plan",
         value: "plan ",
-        description: t("chat.commands.plan.description", "Manage execution plan"),
+        description: t("chat.commands.plan.description"),
       });
     }
     const welcomeConfig = (i18nConfig.welcome || {}) as WelcomeConfigShape;
@@ -2959,7 +2950,7 @@ export default function AnywhereChat({
           if (chatIdForStop) {
             void chatApi.stopConsoleChat(chatIdForStop).catch((err) => {
               console.error("stopConsoleChat failed:", err);
-              message.error(t("chat.stopFailed", "Failed to stop chat."));
+              message.error(t("chat.stopFailed"));
             });
           }
         },
@@ -2971,7 +2962,7 @@ export default function AnywhereChat({
             icon: (
               <span
                 key="copy-text-action-icon"
-                title={`${t("chat.copyText", "复制文本")} · ${t("chat.copyTextHint", "纯文本，不含格式")}`}
+                title={`${t("chat.copyText")} · ${t("chat.copyTextHint")}`}
               >
                 <CopyOutlined />
               </span>
@@ -2985,12 +2976,12 @@ export default function AnywhereChat({
             icon: (
               <span
                 key="copy-md-action-icon"
-                title={`${t("chat.copyMarkdown", "复制原始Markdown")} · ${t("chat.copyMarkdownHint", "保留Markdown格式")}`}
+                title={`${t("chat.copyMarkdown")} · ${t("chat.copyMarkdownHint")}`}
                 className={styles.markdownCopyBadge}
               >
                 <FileMarkdownOutlined />
                 <span className={styles.markdownCopyBadgeText}>
-                  {t("chat.copyMarkdownShortLabel", "MD")}
+                  {t("chat.copyMarkdownShortLabel")}
                 </span>
               </span>
             ),
@@ -3038,7 +3029,7 @@ export default function AnywhereChat({
       return (
         <Empty
           image={Empty.PRESENTED_IMAGE_SIMPLE}
-          description={t("chat.historyEmpty", "No history chats")}
+          description={t("chat.historyEmpty")}
         />
       );
     }
@@ -3046,7 +3037,7 @@ export default function AnywhereChat({
     return (
       <div className={styles.historyPopover}>
         {historyChats.map((chat) => {
-          const title = (chat.name || chat.session_id || chat.id || "").trim() || t("chat.untitled", "Untitled chat");
+          const title = (chat.name || chat.session_id || chat.id || "").trim() || t("chat.untitled");
           const updatedAt = formatLocalDateTime(chat.updated_at || chat.created_at || "");
           const isActive = chat.id === sessionId;
           return (
@@ -3057,10 +3048,7 @@ export default function AnywhereChat({
               onClick={() => {
                 if (!onSelectHistoryChat) {
                   message.warning(
-                    t(
-                      "chat.historySwitchUnavailable",
-                      "Current page does not support switching history chats.",
-                    ),
+                    t("chat.historySwitchUnavailable"),
                   );
                   return;
                 }
@@ -3087,7 +3075,7 @@ export default function AnywhereChat({
                   {title}
                 </span>
                 <span style={{ fontSize: 11, opacity: 0.72 }}>
-                  {updatedAt || t("chat.unknownTime", "Unknown time")}
+                  {updatedAt || t("chat.unknownTime")}
                 </span>
               </div>
             </Button>
@@ -3111,7 +3099,7 @@ export default function AnywhereChat({
                   setHistoryPopoverOpen(false);
                 }}
               >
-                {historyMenuActionLabel || t("projects.chat.manualRecover", "手动恢复对话关联")}
+                {historyMenuActionLabel || t("projects.chat.manualRecover")}
               </Button>
             </div>
           </>
@@ -3150,35 +3138,35 @@ export default function AnywhereChat({
       >
         <div className={styles.headerLeft}>
           <span className={styles.chatName} title={currentChatName}>
-            {currentChatName || t("chat.newChat", "New Chat")}
+            {currentChatName || t("chat.newChat")}
           </span>
         </div>
         <div className={styles.headerRight}>
           <ModelSelector />
           {planEnabled ? (
-            <Tooltip title={t("plan.title", "Plan")} mouseEnterDelay={0.3}>
+            <Tooltip title={t("plan.title")} mouseEnterDelay={0.3}>
               <IconButton
                 bordered={false}
                 icon={<PlanIcon />}
                 onClick={() => setPlanPanelOpen(true)}
-                aria-label={t("plan.title", "Plan")}
+                aria-label={t("plan.title")}
               />
             </Tooltip>
           ) : null}
-          <Tooltip title={t("chat.searchTooltip", "Search")} mouseEnterDelay={0.3}>
+          <Tooltip title={t("chat.searchTooltip")} mouseEnterDelay={0.3}>
             <IconButton
               bordered={false}
               icon={<SparkSearchLine />}
               onClick={() => setSearchPanelOpen(true)}
-              aria-label={t("chat.searchTooltip", "Search")}
+              aria-label={t("chat.searchTooltip")}
             />
           </Tooltip>
-          <Tooltip title={t("chat.newChat", "New Chat")} mouseEnterDelay={0.3}>
+          <Tooltip title={t("chat.newChat")} mouseEnterDelay={0.3}>
             <IconButton
               bordered={false}
               icon={<SparkNewChatFill />}
               onClick={onNewChat}
-              aria-label={t("chat.newChat", "New Chat")}
+              aria-label={t("chat.newChat")}
             />
           </Tooltip>
           <Popover
@@ -3193,11 +3181,11 @@ export default function AnywhereChat({
             }}
             content={historyPopoverContent}
           >
-            <Tooltip title={t("chat.historyChat", "History Chats")} mouseEnterDelay={0.3}>
+            <Tooltip title={t("chat.historyChat")} mouseEnterDelay={0.3}>
               <IconButton
                 bordered={false}
                 icon={<SparkHistoryLine />}
-                aria-label={t("chat.historyChat", "History Chats")}
+                aria-label={t("chat.historyChat")}
               />
             </Tooltip>
           </Popover>
@@ -3221,7 +3209,7 @@ export default function AnywhereChat({
                   onClick={handleRestoreTailUserDraft}
                   loading={isDeletingTailUser}
                 >
-                  {t("chat.deleteLastUserAndRestoreDraft", "删除")}
+                  {t("chat.deleteLastUserAndRestoreDraft")}
                 </Button>
               </div>,
               tailUserActionHost,
@@ -3248,7 +3236,7 @@ export default function AnywhereChat({
             className={styles.approvalCollapseButton}
             onClick={() => setShowAllApprovals(false)}
           >
-            {t("approval.collapseList", "收起审批列表")}
+            {t("approval.collapseList")}
           </Button>
         ) : null}
 
@@ -3310,10 +3298,7 @@ export default function AnywhereChat({
 
           if (!onSelectHistoryChat) {
             message.warning(
-              t(
-                "chat.historySwitchUnavailable",
-                "Current page does not support switching history chats.",
-              ),
+              t("chat.historySwitchUnavailable"),
             );
             return;
           }

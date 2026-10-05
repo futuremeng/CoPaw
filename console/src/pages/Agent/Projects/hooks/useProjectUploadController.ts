@@ -81,13 +81,13 @@ export default function useProjectUploadController({
       await onUploadCompleted(currentAgent.id, selectedProject);
       resetUploadState();
       message.success(
-        t("projects.upload.success", "Uploaded {{count}} file(s) to project.", {
+        t("projects.upload.success", {
           count: uploadedCount,
         }),
       );
     } catch (err) {
       console.error("failed to upload project files", err);
-      message.error(t("projects.upload.failed", "Failed to upload project files."));
+      message.error(t("projects.upload.failed"));
     } finally {
       setUploadingFiles(false);
     }

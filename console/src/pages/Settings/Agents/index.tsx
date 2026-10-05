@@ -177,9 +177,7 @@ export default function AgentsPage() {
       <PageHeader
         parent={t("agent.parent")}
         current={
-          activeTab === "square"
-            ? t("agent.squareTitle", "智能体广场")
-            : t("agent.agents")
+          activeTab === "square" ? t("agent.squareTitle") : t("agent.agents")
         }
         extra={
           activeTab === "manage" ? (
@@ -203,7 +201,7 @@ export default function AgentsPage() {
           items={[
             {
               key: "manage",
-              label: t("agent.management", "智能体管理"),
+              label: t("agent.management"),
               children: (
                 <AgentTable
                   agents={agents}
@@ -218,7 +216,7 @@ export default function AgentsPage() {
             },
             {
               key: "square",
-              label: t("agent.squareTitle", "智能体广场"),
+              label: t("agent.squareTitle"),
               children: <AgentSquarePanel onImported={loadAgents} />,
             },
           ]}

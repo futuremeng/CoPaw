@@ -12,30 +12,12 @@ import ProjectFileTree from "../components/ProjectFileTree";
 import type { ProjectFileFilterKey } from "../utils/filtering";
 import type { ProjectStageKey } from "../utils/projectLayoutPrefs";
 
-vi.mock("react-i18next", () => ({
-  useTranslation: () => ({
-    t: (
-      key: string,
-      maybeFallbackOrOptions?: string | { label?: string },
-      maybeOptions?: { label?: string },
-    ) => {
-      const fallback = typeof maybeFallbackOrOptions === "string" ? maybeFallbackOrOptions : undefined;
-      const options = typeof maybeFallbackOrOptions === "object"
-        ? maybeFallbackOrOptions
-        : maybeOptions;
-
-      if (options?.label && typeof fallback === "string") {
-        return fallback.replace("{{label}}", options.label);
-      }
-
-      if (typeof fallback === "string") {
-        return fallback;
-      }
-
-      return key;
-    },
-  }),
-}));
+// The app renders the English bundle (i18n default language is "en"), so the
+// double resolves copy from that bundle instead of an inline default.
+vi.mock("react-i18next", async () => {
+  const { t } = await vi.importActual<typeof import("./enLocaleTranslate")>("./enLocaleTranslate");
+  return { useTranslation: () => ({ t, i18n: { language: "en" } }) };
+});
 
 function buildProjectSummary(): AgentProjectSummary {
   return {
@@ -370,7 +352,7 @@ describe("ProjectFileTree interactions", () => {
     );
 
     const markdownChip = screen.getByRole("button", { name: /Markdown/ });
-    const otherTypeChip = screen.getByRole("button", { name: /其他类型/ });
+    const otherTypeChip = screen.getByRole("button", { name: /Other Types/ });
     expect(markdownChip.getAttribute("aria-pressed")).toBe("false");
     expect(otherTypeChip.getAttribute("aria-pressed")).toBe("false");
 
