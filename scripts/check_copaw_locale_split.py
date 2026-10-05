@@ -56,7 +56,14 @@ for lang in LANGS:
         (rpa_path, ("copaw", "rpa")),
     ):
         if not split_path.exists():
-            errors.append(f"missing split locale: {split_path.relative_to(REPO_ROOT)}")
+            # Conflict-surface knife 76: only en/zh are full-copy deliverables.
+            # A secondary language that has nothing to say ships no file at all,
+            # so requiring six files per group would push those languages back
+            # into verbatim English just to satisfy the check.  A file that does
+            # exist must still carry content: an empty carrier is the same debt
+            # wearing a hat.
+            if lang in ("en", "zh"):
+                errors.append(f"missing split locale: {split_path.relative_to(REPO_ROOT)}")
             continue
         payload = load_json(split_path)
         node = nested_get(payload, *pointer)
@@ -257,6 +264,22 @@ def group_keys(group: str, lang: str) -> set[str]:
     return set() if not path.exists() else flatten(load_json(path))
 
 
+def flatten_values(node: Any, prefix: str = "") -> dict[str, Any]:
+    leaves: dict[str, Any] = {}
+    for key, child in node.items():
+        path = f"{prefix}.{key}" if prefix else key
+        if isinstance(child, dict):
+            leaves.update(flatten_values(child, path))
+        else:
+            leaves[path] = child
+    return leaves
+
+
+def group_leaves(group: str, lang: str) -> dict[str, Any]:
+    path = CONSOLE_LOCALES / "copaw" / group / f"{lang}.json"
+    return {} if not path.exists() else flatten_values(load_json(path))
+
+
 # The overlay ships full copy for en/zh only; ja, ru, pt-BR and id carry a
 # partial copy and lean on i18next `fallbackLng`.  A leaf that exists in one of
 # those four but not in en is copy no bundle can reach any more, and the en/zh
@@ -272,6 +295,22 @@ for group in OVERLAY_GROUPS:
                 f"copaw overlay group {group} ships {key} in {lang} but en has no such "
                 f"leaf; a key the en overlay does not carry is unreachable copy"
             )
+
+# Same blindness, other direction: a leaf whose text byte-equals the en leaf is
+# not a translation.  `fallbackLng: "en"` already renders that exact string, so
+# nothing can tell the leaf apart from its absence -- it is copy that inflates
+# the fork's own locale files while pretending to be localized.  Conflict-surface
+# knife 76 found 1,467 of them: every pipelines and rpa leaf in the four
+# secondary languages, and 231 of the 259 projects leaves in each.
+for group in OVERLAY_GROUPS:
+    english = group_leaves(group, "en")
+    for lang in SECONDARY_LANGS:
+        for key, value in sorted(group_leaves(group, lang).items()):
+            if isinstance(value, str) and english.get(key) == value:
+                errors.append(
+                    f"copaw overlay group {group} ships {key} in {lang} as a verbatim "
+                    f"copy of the en leaf; secondary-language copy must be translated"
+                )
 
 
 def bare_overlay_keys(lang: str) -> set[str]:

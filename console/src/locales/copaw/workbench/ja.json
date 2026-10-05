@@ -2,8 +2,7 @@
   "nav": {
     "projects": "プロジェクト",
     "pipelines": "パイプライン",
-    "knowledge": "ナレッジ",
-    "nlp": "NLP"
+    "knowledge": "ナレッジ"
   },
   "projects": {
     "workspacePath": "ワークスペースパス",

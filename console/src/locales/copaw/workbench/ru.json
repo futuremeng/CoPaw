@@ -2,8 +2,7 @@
   "nav": {
     "projects": "Проекты",
     "pipelines": "Пайплайны",
-    "knowledge": "База знаний",
-    "nlp": "NLP"
+    "knowledge": "База знаний"
   },
   "projects": {
     "workspacePath": "Путь рабочей области",

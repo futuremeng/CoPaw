@@ -2,13 +2,11 @@
   "nav": {
     "projects": "Proyek",
     "pipelines": "Pipeline",
-    "knowledge": "Pengetahuan",
-    "nlp": "NLP"
+    "knowledge": "Pengetahuan"
   },
   "projects": {
     "workspacePath": "Jalur workspace",
     "path": {
-      "workspace": "Workspace",
       "project": "Proyek"
     }
   }

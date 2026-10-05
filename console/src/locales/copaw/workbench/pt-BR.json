@@ -1,14 +1,11 @@
 {
   "nav": {
     "projects": "Projetos",
-    "pipelines": "Pipelines",
-    "knowledge": "Conhecimento",
-    "nlp": "NLP"
+    "knowledge": "Conhecimento"
   },
   "projects": {
     "workspacePath": "Caminho do workspace",
     "path": {
-      "workspace": "Workspace",
       "project": "Projeto"
     }
   }

@@ -5,18 +5,13 @@ import copawProjectsZh from "./projects/zh.json";
 import copawProjectsJa from "./projects/ja.json";
 import copawProjectsPtBR from "./projects/pt-BR.json";
 import copawProjectsId from "./projects/id.json";
+// Conflict-surface knife 76: pipelines and rpa ship en/zh only.  Their
+// ja/ru/pt-BR/id files held nothing but verbatim English, so i18next's
+// `fallbackLng` was already rendering the same string from the en overlay.
 import copawPipelinesEn from "./pipelines/en.json";
-import copawPipelinesRu from "./pipelines/ru.json";
 import copawPipelinesZh from "./pipelines/zh.json";
-import copawPipelinesJa from "./pipelines/ja.json";
-import copawPipelinesPtBR from "./pipelines/pt-BR.json";
-import copawPipelinesId from "./pipelines/id.json";
 import copawRpaEn from "./rpa/en.json";
-import copawRpaRu from "./rpa/ru.json";
 import copawRpaZh from "./rpa/zh.json";
-import copawRpaJa from "./rpa/ja.json";
-import copawRpaPtBR from "./rpa/pt-BR.json";
-import copawRpaId from "./rpa/id.json";
 import workbenchEn from "./workbench/en.json";
 import workbenchRu from "./workbench/ru.json";
 import workbenchZh from "./workbench/zh.json";
@@ -95,7 +90,7 @@ const copawOverlays: Record<string, TranslationMap> = {
     modelsEn,
     skillsEn,
   ),
-  ru: buildOverlay(copawProjectsRu, copawPipelinesRu, copawRpaRu, workbenchRu),
+  ru: buildOverlay(copawProjectsRu, workbenchRu),
   zh: buildOverlay(
     copawProjectsZh,
     copawPipelinesZh,
@@ -111,14 +106,9 @@ const copawOverlays: Record<string, TranslationMap> = {
     modelsZh,
     skillsZh,
   ),
-  ja: buildOverlay(copawProjectsJa, copawPipelinesJa, copawRpaJa, workbenchJa),
-  "pt-BR": buildOverlay(
-    copawProjectsPtBR,
-    copawPipelinesPtBR,
-    copawRpaPtBR,
-    workbenchPtBR,
-  ),
-  id: buildOverlay(copawProjectsId, copawPipelinesId, copawRpaId, workbenchId),
+  ja: buildOverlay(copawProjectsJa, workbenchJa),
+  "pt-BR": buildOverlay(copawProjectsPtBR, workbenchPtBR),
+  id: buildOverlay(copawProjectsId, workbenchId),
 };
 
 export function registerCopawTranslations(
