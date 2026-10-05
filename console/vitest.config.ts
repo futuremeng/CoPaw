@@ -22,6 +22,9 @@ export default defineConfig({
     globals: true,
     setupFiles: ["./src/test/setup.ts"],
     css: true,
+    // The suite is parallel-load-sensitive: heavy page tests intermittently pass
+    // the 5000ms default (4 recorded flakes).  The CI gate runs this file.
+    testTimeout: 20000,
     deps: {
       inline: [/@agentscope-ai\/(?!icons|chat|design)/],
     },

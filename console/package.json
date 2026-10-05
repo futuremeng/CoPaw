@@ -19,7 +19,9 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "preview:prod": "vite preview --mode production",
-    "preview:test": "vite preview --mode test"
+    "preview:test": "vite preview --mode test",
+    "test:run": "NODE_OPTIONS=--max-old-space-size=4096 vitest run",
+    "test:coverage": "NODE_OPTIONS=--max-old-space-size=4096 vitest run --coverage"
   },
   "dependencies": {
     "@agentscope-ai/chat": "^1.1.64-beta.1779961389231",
