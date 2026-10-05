@@ -16,23 +16,9 @@
         "semanticEngineStatus": "Semantic Engine",
         "runtimeStatusError": "Error",
         "actionOpenSettings": "Open settings",
-        "insightSuggestedQuery": "Suggested query",
-        "nerRoleHint": "NER uses interlinear sentence-normalized text as input and persists results/statistics under .knowledge/ner.",
-        "nerEmptySource": "No source content loaded yet. Open Sources or trigger sync first.",
-        "nerReadyChunks": "Ready Documents",
-        "nerUnavailableChunks": "Unavailable Documents",
-        "nerUniqueEntities": "Unique Entities",
-        "nerEntityMentions": "Entity Mentions",
         "nerBatchCount": "NER Batches",
         "nerWorkerRestartCount": "Worker Restarts",
         "nerWorkerPidCount": "Worker PID Count",
-        "nerLabelDistribution": "Label Distribution",
-        "nerNoLabelDistribution": "No label stats yet",
-        "nerInputModes": "Input Modes",
-        "nerNoInputModes": "No input mode stats yet",
-        "nerTopEntities": "Top Entities",
-        "nerNoEntities": "No NER entities yet",
-        "nerTableMentions": "Mentions",
         "outputs": {
           "fallbackUnknown": "Fallback Unknown",
           "fallbackFailed": "Fallback Failed",
@@ -233,9 +219,6 @@
         "query": "Query",
         "documents": "Documents",
         "processingRoleHint": "Processing Role Hint",
-        "relationsHint": "Inspect extracted subject-predicate-object relations.",
-        "predicates": "Relation Types",
-        "sources": "Sources",
         "memifyEnabled": "Entity extraction enabled",
         "memifyDisabled": "Entity extraction disabled",
         "memifyUpdateFailed": "Failed to update entity extraction setting",
@@ -688,35 +671,6 @@
       "noCompareRun": "No historical run available for comparison",
       "validationNeedRun": "Please start or select one run before preparing a validation prompt."
     },
-    "artifacts": {
-      "add": "Add",
-      "autoDraftFromConversation": "Auto Draft from Conversation",
-      "autoDraftFromFiles": "Auto Draft from Files",
-      "case": "Cases",
-      "confirmStable": "Confirm Stable",
-      "conversationRunIdPlaceholder": "Optional run_id (for explicit distill)",
-      "conversationRunIdSuggested": "Suggested run_id: {{runId}}",
-      "distillModeLabel": "Distill Mode",
-      "distillModes": {
-        "conversation_evidence": "Conversation Evidence",
-        "file_scan": "File Scan"
-      },
-      "empty": "No product artifacts yet",
-      "emptyCategory": "No entries",
-      "fields": {
-        "derivedFromIds": "Derived from IDs",
-        "distillationNote": "Distillation note",
-        "name": "Name",
-        "version": "Version"
-      },
-      "flow": "Flows",
-      "manage": "Manage Artifacts",
-      "promote": "Promote to Agent",
-      "promotedAs": "as {{name}}",
-      "promotedBadge": "Promoted",
-      "script": "Scripts",
-      "skill": "Skills"
-    },
     "clearSelectedFiles": "Clear Selected",
     "clone": "Clone",
     "cloneFailed": "Failed to clone project.",
@@ -744,7 +698,6 @@
     "deleteSelectedFilesConfirmTitle": "Delete selected files?",
     "deleteSelectedFilesSuccess": "Deleted {{count}} files",
     "detailDescription": "Collaborate on goals and materials; automation on demand.",
-    "emptyFile": "This file is empty",
     "fields": {
       "description": "Description",
       "descriptionPlaceholder": "Short summary of this project",
@@ -773,11 +726,8 @@
     "knowledgeDock": {
       "tabExplore": "Explore",
       "tabHealth": "Health",
-      "tabInsights": "Insights",
-      "tabNer": "NER",
       "tabOutputs": "Outputs",
       "tabProcessing": "Processing",
-      "tabRelations": "Relations",
       "tabSettings": "Settings",
       "tabSources": "Sources"
     },
@@ -821,7 +771,6 @@
     "path": {
       "projectSpace": "Project Space"
     },
-    "previewLargeFileTruncated": "Large file preview is truncated to the first {{count}} characters for smoother rendering.",
     "previewLoadFailed": "Unable to preview this file. It might be binary or inaccessible.",
     "projectSpaceFiles": "Project Space Files",
     "quantAvgFileSize": "Avg File Size",
@@ -894,12 +843,7 @@
       "knowledgeSyntaxRelation": "Syntax Relation Aggregation (Top 20)",
       "knowledgeTemporalSpiral": "NER Temporal Spiral Co-occurrence (raw counts)",
       "knowledgeTemporalSpiralEmpty": "No sentence-level mentions, temporal co-occurrence cannot be built",
-      "knowledgeTemporalSpiralHint": "Time base: sentence_index (quasi-time), Weight: raw count (non-normalized)",
-      "syncNoticeDismiss": "Dismiss",
-      "syncNoticeFallback": "A file",
-      "syncNoticeMulti": "{{count}} files changed in the background. Workbench stays on your current selection.",
-      "syncNoticeSingle": "{{path}} changed in the background. Workbench stays on your current selection.",
-      "syncNoticeTitle": "Background sync updated project files."
+      "knowledgeTemporalSpiralHint": "Time base: sentence_index (quasi-time), Weight: raw count (non-normalized)"
     }
   }
 }

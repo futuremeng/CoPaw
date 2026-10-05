@@ -16,23 +16,9 @@
         "semanticEngineStatus": "Semantic Engine",
         "runtimeStatusError": "Error",
         "actionOpenSettings": "Open settings",
-        "insightSuggestedQuery": "Suggested query",
-        "nerRoleHint": "NER uses interlinear sentence-normalized text as input and persists results/statistics under .knowledge/ner.",
-        "nerEmptySource": "No source content loaded yet. Open Sources or trigger sync first.",
-        "nerReadyChunks": "Ready Documents",
-        "nerUnavailableChunks": "Unavailable Documents",
-        "nerUniqueEntities": "Unique Entities",
-        "nerEntityMentions": "Entity Mentions",
         "nerBatchCount": "NER Batches",
         "nerWorkerRestartCount": "Worker Restarts",
         "nerWorkerPidCount": "Worker PID Count",
-        "nerLabelDistribution": "Label Distribution",
-        "nerNoLabelDistribution": "No label stats yet",
-        "nerInputModes": "Input Modes",
-        "nerNoInputModes": "No input mode stats yet",
-        "nerTopEntities": "Top Entities",
-        "nerNoEntities": "No NER entities yet",
-        "nerTableMentions": "Mentions",
         "outputs": {
           "fallbackUnknown": "状态未知",
           "fallbackFailed": "运行失败",
@@ -233,9 +219,6 @@
         "query": "查询",
         "documents": "文档数",
         "processingRoleHint": "Processing 只展示结构化处理与增强审校，不再重复展示 Sources 基础统计。",
-        "relationsHint": "Inspect extracted subject-predicate-object relations.",
-        "predicates": "Relation Types",
-        "sources": "Sources",
         "memifyEnabled": "Entity extraction enabled",
         "memifyDisabled": "Entity extraction disabled",
         "memifyUpdateFailed": "Failed to update entity extraction setting",
@@ -688,35 +671,6 @@
       "noCompareRun": "没有可用于对比的历史运行",
       "validationNeedRun": "准备校验提示词前，请先启动或选择一个运行。"
     },
-    "artifacts": {
-      "add": "添加",
-      "autoDraftFromConversation": "从对话自动起草",
-      "autoDraftFromFiles": "从文件自动起草",
-      "case": "案例",
-      "confirmStable": "确认为稳定版",
-      "conversationRunIdPlaceholder": "可选 run_id（用于显式蒸馏）",
-      "conversationRunIdSuggested": "建议 run_id：{{runId}}",
-      "distillModeLabel": "蒸馏模式",
-      "distillModes": {
-        "conversation_evidence": "对话证据",
-        "file_scan": "文件扫描"
-      },
-      "empty": "暂无产物",
-      "emptyCategory": "暂无条目",
-      "fields": {
-        "derivedFromIds": "来源 ID",
-        "distillationNote": "蒸馏说明",
-        "name": "名称",
-        "version": "版本"
-      },
-      "flow": "流程",
-      "manage": "管理产物",
-      "promote": "提升为智能体能力",
-      "promotedAs": "作为 {{name}}",
-      "promotedBadge": "已提升",
-      "script": "脚本",
-      "skill": "技能"
-    },
     "clearSelectedFiles": "清除所选",
     "clone": "克隆",
     "cloneFailed": "克隆项目失败。",
@@ -744,7 +698,6 @@
     "deleteSelectedFilesConfirmTitle": "删除所选文件？",
     "deleteSelectedFilesSuccess": "已删除 {{count}} 个文件",
     "detailDescription": "围绕目标与资料协作推进项目，自动化按需启用。",
-    "emptyFile": "该文件为空",
     "fields": {
       "description": "描述",
       "descriptionPlaceholder": "项目简介",
@@ -773,11 +726,8 @@
     "knowledgeDock": {
       "tabExplore": "探索",
       "tabHealth": "健康度",
-      "tabInsights": "洞察",
-      "tabNer": "NER",
       "tabOutputs": "输出",
       "tabProcessing": "处理中",
-      "tabRelations": "关系",
       "tabSettings": "设置",
       "tabSources": "来源"
     },
@@ -821,7 +771,6 @@
     "path": {
       "projectSpace": "项目空间"
     },
-    "previewLargeFileTruncated": "为保证渲染流畅，大文件预览仅显示前 {{count}} 个字符。",
     "previewLoadFailed": "无法预览该文件，可能是二进制或不可访问。",
     "projectSpaceFiles": "项目空间文件",
     "quantAvgFileSize": "平均文件大小",
@@ -894,12 +843,7 @@
       "knowledgeSyntaxRelation": "Syntax 关系聚合图（Top 20）",
       "knowledgeTemporalSpiral": "NER 准时序螺旋共现图（原始计数）",
       "knowledgeTemporalSpiralEmpty": "没有句级提及，无法构建时序共现",
-      "knowledgeTemporalSpiralHint": "时间基准：sentence_index（准时间），权重：原始计数（未归一化）",
-      "syncNoticeDismiss": "忽略",
-      "syncNoticeFallback": "某个文件",
-      "syncNoticeMulti": "后台同步变更了 {{count}} 个文件，工作台仍停留在你当前选择上。",
-      "syncNoticeSingle": "{{path}} 已在后台变更，工作台仍停留在你当前选择上。",
-      "syncNoticeTitle": "后台同步更新了项目文件。"
+      "knowledgeTemporalSpiralHint": "时间基准：sentence_index（准时间），权重：原始计数（未归一化）"
     }
   }
 }
