@@ -1,0 +1,16 @@
+{
+  "common": {
+    "copiedText": "已复制文本",
+    "copyTextFailed": "复制文本失败",
+    "copiedMarkdown": "已复制 Markdown",
+    "copyMarkdownFailed": "复制 Markdown 失败",
+    "collapse": "收起",
+    "error": "错误",
+    "expand": "展开",
+    "move": "移动",
+    "nothingToCopy": "没有可复制的内容。",
+    "overwrite": "覆盖",
+    "rename": "重命名",
+    "updated": "已更新"
+  }
+}

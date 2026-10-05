@@ -1,0 +1,28 @@
+{
+  "chat": {
+    "thinkingFallbackTitle": "Thinking fallback view",
+    "thinkingFallbackDescription": "This turn ended before the model produced a final answer. The reasoning content below is shown as a fallback draft for reference.",
+    "thinkingFallbackLabel": "Draft reasoning",
+    "autoContinue": {
+      "triggered": "The answer looked incomplete, so it was continued automatically."
+    },
+    "confirmDeleteLastUserTitle": "Delete the last user message?",
+    "copyMarkdown": "Copy original Markdown",
+    "copyMarkdownHint": "Keeps the Markdown formatting",
+    "copyMarkdownShortLabel": "MD",
+    "copyText": "Copy as text",
+    "copyTextHint": "Plain text, no formatting",
+    "deleteLastUserAndRestoreDraft": "Delete",
+    "deleteLastUserFailed": "Failed to delete the last user message.",
+    "historyChat": "History Chats",
+    "historyEmpty": "No history chats",
+    "historySwitchUnavailable": "Current page does not support switching history chats.",
+    "messageContentLabel": "Message content",
+    "messageIdLabel": "Message ID",
+    "newChat": "New chat",
+    "stopFailed": "Failed to stop chat.",
+    "unknownMessageId": "unknown",
+    "unknownTime": "Unknown time",
+    "untitled": "Untitled chat"
+  }
+}

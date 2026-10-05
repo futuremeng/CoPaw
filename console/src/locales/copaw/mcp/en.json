@@ -1,0 +1,10 @@
+{
+  "mcp": {
+    "probeStatus": "Probe Status",
+    "probing": "Probing...",
+    "probeDone": "Status probing completed",
+    "noEnabledClients": "No enabled MCP clients to probe",
+    "runtimeConnected": "Connected",
+    "runtimeDisconnected": "Disconnected"
+  }
+}

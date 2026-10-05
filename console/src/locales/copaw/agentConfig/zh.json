@@ -1,0 +1,6 @@
+{
+  "agentConfig": {
+    "autoContinueEnabled": "启用自动续写",
+    "autoContinueEnabledTooltip": "启用后，聊天端在检测到回答中断时可自动续写。关闭后仅允许手动续写。"
+  }
+}

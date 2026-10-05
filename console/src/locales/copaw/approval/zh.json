@@ -1,0 +1,6 @@
+{
+  "approval": {
+    "collapseList": "收起审批列表",
+    "moreCount": "还有 {{count}} 条待处理"
+  }
+}

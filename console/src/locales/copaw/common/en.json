@@ -1,0 +1,16 @@
+{
+  "common": {
+    "copiedText": "Text copied",
+    "copyTextFailed": "Failed to copy text",
+    "copiedMarkdown": "Markdown copied",
+    "copyMarkdownFailed": "Failed to copy Markdown",
+    "collapse": "Collapse",
+    "error": "Error",
+    "expand": "Expand",
+    "move": "Move",
+    "nothingToCopy": "No copyable content.",
+    "overwrite": "Overwrite",
+    "rename": "Rename",
+    "updated": "Updated"
+  }
+}

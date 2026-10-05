@@ -1,0 +1,6 @@
+{
+  "approval": {
+    "collapseList": "Collapse approval list",
+    "moreCount": "{{count}} more pending"
+  }
+}

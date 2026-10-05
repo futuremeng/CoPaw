@@ -1,0 +1,28 @@
+{
+  "chat": {
+    "thinkingFallbackTitle": "思考兜底展示",
+    "thinkingFallbackDescription": "本轮模型尚未产出正式答复，以下展示已生成的思考内容，仅供参考。",
+    "thinkingFallbackLabel": "模型思考草稿",
+    "autoContinue": {
+      "triggered": "检测到回答可能未完成，已自动继续生成。"
+    },
+    "confirmDeleteLastUserTitle": "确认删除最后一条用户消息",
+    "copyMarkdown": "复制原始Markdown",
+    "copyMarkdownHint": "保留Markdown格式",
+    "copyMarkdownShortLabel": "MD",
+    "copyText": "复制文本",
+    "copyTextHint": "纯文本，不含格式",
+    "deleteLastUserAndRestoreDraft": "删除",
+    "deleteLastUserFailed": "删除最后一条用户消息失败。",
+    "historyChat": "历史对话",
+    "historyEmpty": "暂无历史对话",
+    "historySwitchUnavailable": "当前页面不支持切换历史对话。",
+    "messageContentLabel": "消息内容",
+    "messageIdLabel": "消息 ID",
+    "newChat": "新对话",
+    "stopFailed": "停止对话失败。",
+    "unknownMessageId": "未知",
+    "unknownTime": "未知时间",
+    "untitled": "未命名对话"
+  }
+}

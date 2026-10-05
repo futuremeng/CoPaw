@@ -247,10 +247,7 @@ export function AgentSquarePanel({ onImported }: AgentSquarePanelProps) {
         agent_id: item.agent_id,
       });
       message.success(
-        t(
-          "agent.squareImportSuccess",
-          `导入成功: ${imported.name || imported.id}`,
-        ),
+        t("agent.squareImportSuccess", { name: imported.name || imported.id }),
       );
       await onImported?.();
     } catch (error: unknown) {

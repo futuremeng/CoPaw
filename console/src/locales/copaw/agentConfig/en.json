@@ -1,0 +1,6 @@
+{
+  "agentConfig": {
+    "autoContinueEnabled": "Enable Auto Continue",
+    "autoContinueEnabledTooltip": "When enabled, interrupted assistant responses can be auto-continued by chat clients. Disable to force manual continuation."
+  }
+}

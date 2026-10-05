@@ -44,6 +44,14 @@ const expectedBundle = (lng: string): TranslationMap => {
     "rpa",
     "workbench",
     "knowledge",
+    "agent",
+    "agentConfig",
+    "approval",
+    "chat",
+    "common",
+    "mcp",
+    "models",
+    "skills",
   ].filter((dir) => overlayDirs.includes(dir));
   return [
     readJson(`src/locales/${lng}.json`),

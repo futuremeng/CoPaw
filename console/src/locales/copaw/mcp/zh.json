@@ -1,0 +1,10 @@
+{
+  "mcp": {
+    "probeStatus": "状态探测",
+    "probing": "探测中...",
+    "probeDone": "状态探测完成",
+    "noEnabledClients": "没有可探测的已启用 MCP 客户端",
+    "runtimeConnected": "已连接",
+    "runtimeDisconnected": "未连接"
+  }
+}
