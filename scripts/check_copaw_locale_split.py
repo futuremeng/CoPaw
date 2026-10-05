@@ -252,6 +252,28 @@ for key in sorted(zh_overlay - en_overlay):
     errors.append(f"copaw overlay key exists in zh but not en: {key}")
 
 
+def group_keys(group: str, lang: str) -> set[str]:
+    path = CONSOLE_LOCALES / "copaw" / group / f"{lang}.json"
+    return set() if not path.exists() else flatten(load_json(path))
+
+
+# The overlay ships full copy for en/zh only; ja, ru, pt-BR and id carry a
+# partial copy and lean on i18next `fallbackLng`.  A leaf that exists in one of
+# those four but not in en is copy no bundle can reach any more, and the en/zh
+# checks above are blind to it -- that blindness is how knives 71 and 73 each
+# left a batch behind (conflict-surface knife 74).  Lagging behind en is normal,
+# leading it is not.
+SECONDARY_LANGS = ("ja", "ru", "pt-BR", "id")
+for group in OVERLAY_GROUPS:
+    english = group_keys(group, "en")
+    for lang in SECONDARY_LANGS:
+        for key in sorted(group_keys(group, lang) - english):
+            errors.append(
+                f"copaw overlay group {group} ships {key} in {lang} but en has no such "
+                f"leaf; a key the en overlay does not carry is unreachable copy"
+            )
+
+
 def bare_overlay_keys(lang: str) -> set[str]:
     keys: set[str] = set()
     for group in OVERLAY_GROUPS:
