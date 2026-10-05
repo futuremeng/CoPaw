@@ -23,6 +23,8 @@ import workbenchZh from "./workbench/zh.json";
 import workbenchJa from "./workbench/ja.json";
 import workbenchPtBR from "./workbench/pt-BR.json";
 import workbenchId from "./workbench/id.json";
+import copawKnowledgeEn from "./knowledge/en.json";
+import copawKnowledgeZh from "./knowledge/zh.json";
 
 type TranslationMap = Record<string, unknown>;
 
@@ -55,9 +57,24 @@ function buildOverlay(...parts: TranslationMap[]): TranslationMap {
 }
 
 const copawOverlays: Record<string, TranslationMap> = {
-  en: buildOverlay(copawProjectsEn, copawPipelinesEn, copawRpaEn, workbenchEn),
+  // The knowledge overlay is an en/zh deliverable: the other four languages
+  // reach it through i18n.ts `fallbackLng`, same as the projects/pipelines/rpa
+  // dictionaries did before conflict-surface knife 71 re-supplied them.
+  en: buildOverlay(
+    copawProjectsEn,
+    copawPipelinesEn,
+    copawRpaEn,
+    workbenchEn,
+    copawKnowledgeEn,
+  ),
   ru: buildOverlay(copawProjectsRu, copawPipelinesRu, copawRpaRu, workbenchRu),
-  zh: buildOverlay(copawProjectsZh, copawPipelinesZh, copawRpaZh, workbenchZh),
+  zh: buildOverlay(
+    copawProjectsZh,
+    copawPipelinesZh,
+    copawRpaZh,
+    workbenchZh,
+    copawKnowledgeZh,
+  ),
   ja: buildOverlay(copawProjectsJa, copawPipelinesJa, copawRpaJa, workbenchJa),
   "pt-BR": buildOverlay(
     copawProjectsPtBR,

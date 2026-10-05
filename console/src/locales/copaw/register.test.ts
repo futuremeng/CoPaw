@@ -1,4 +1,4 @@
-import { readdirSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import i18n from "../../i18n";
@@ -35,14 +35,22 @@ const overlayDirs = readdirSync(resolve(process.cwd(), "src/locales/copaw"), {
   .map((entry) => entry.name);
 
 const expectedBundle = (lng: string): TranslationMap => {
-  const overlayOrder = ["projects", "pipelines", "rpa", "workbench"].filter(
-    (dir) => overlayDirs.includes(dir),
-  );
+  // A group may ship only some languages (the copaw overlay is an en/zh
+  // deliverable; the rest fall back through i18n.ts `fallbackLng`), so the
+  // expected bundle skips the same missing files the split gate skips.
+  const overlayOrder = [
+    "projects",
+    "pipelines",
+    "rpa",
+    "workbench",
+    "knowledge",
+  ].filter((dir) => overlayDirs.includes(dir));
   return [
     readJson(`src/locales/${lng}.json`),
-    ...overlayOrder.map((dir) =>
-      readJson(`src/locales/copaw/${dir}/${lng}.json`),
-    ),
+    ...overlayOrder
+      .map((dir) => `src/locales/copaw/${dir}/${lng}.json`)
+      .filter((rel) => existsSync(resolve(process.cwd(), rel)))
+      .map((rel) => readJson(rel)),
   ].reduce(merge, {});
 };
 
