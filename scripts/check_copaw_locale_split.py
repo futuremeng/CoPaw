@@ -77,14 +77,15 @@ for lang in LANGS:
         )
 
 CONSOLE_SRC = REPO_ROOT / "console" / "src"
-OVERLAY_GROUPS = ("projects", "pipelines", "rpa", "workbench")
+OVERLAY_GROUPS = ("projects", "pipelines", "rpa", "workbench", "knowledge")
 # Only these paths are i18n keys.  Storage keys such as
 # "copaw.navigation.trace" or "copaw.project.knowledge.trend.v1" live outside
 # them, so restricting the roots keeps the scan from treating cache keys as copy.
-# "projects." is a bare root the fork's own pages read (conflict-surface knife 70);
-# every other bare root is upstream-owned or not yet closed.
+# "projects." and "knowledge." are bare roots the fork's own pages read
+# (conflict-surface knives 70 and 71); every other bare root is upstream-owned
+# or not yet closed.
 OVERLAY_KEY_RE = re.compile(
-    r'["\']((?:copaw\.(?:projects|pipelines|rpa|workbench)|projects)'
+    r'["\']((?:copaw\.(?:projects|pipelines|rpa|workbench)|projects|knowledge)'
     r'\.[A-Za-z0-9_.]+?)["\']'
 )
 
