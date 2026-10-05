@@ -9,6 +9,7 @@ from typing import Any
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 CONSOLE_LOCALES = REPO_ROOT / "console" / "src" / "locales"
+CONSOLE_SRC = REPO_ROOT / "console" / "src"
 SWITCHER = REPO_ROOT / "console" / "src" / "components" / "LanguageSwitcher" / "index.tsx"
 LANGS = ("en", "zh", "ja", "ru", "pt-BR", "id")
 
@@ -76,18 +77,112 @@ for lang in LANGS:
             f"locale bundle {lang}.json ships but has no entry in the language switcher"
         )
 
-CONSOLE_SRC = REPO_ROOT / "console" / "src"
-OVERLAY_GROUPS = ("projects", "pipelines", "rpa", "workbench", "knowledge")
-# Only these paths are i18n keys.  Storage keys such as
+# `projects`, `pipelines`, `rpa`, `workbench` are copaw-prefixed groups; the
+# bare roots are copy the fork's own pages read (conflict-surface knives 70-72).
+# The knife-72 roots are NOT in LITERAL_KEY_RE below: they also host upstream
+# copy, so a bare-literal scan there would gate upstream keys on fork copy.
+OVERLAY_GROUPS = (
+    "projects",
+    "pipelines",
+    "rpa",
+    "workbench",
+    "knowledge",
+    "agent",
+    "agentConfig",
+    "approval",
+    "chat",
+    "common",
+    "mcp",
+    "models",
+    "skills",
+)
+# Only these paths are i18n keys *outside* of a call site.  Storage keys such as
 # "copaw.navigation.trace" or "copaw.project.knowledge.trend.v1" live outside
 # them, so restricting the roots keeps the scan from treating cache keys as copy.
-# "projects." and "knowledge." are bare roots the fork's own pages read
-# (conflict-surface knives 70 and 71); every other bare root is upstream-owned
-# or not yet closed.
-OVERLAY_KEY_RE = re.compile(
+LITERAL_KEY_RE = re.compile(
     r'["\']((?:copaw\.(?:projects|pipelines|rpa|workbench)|projects|knowledge)'
     r'\.[A-Za-z0-9_.]+?)["\']'
 )
+
+# Conflict-surface knife 72 (judgment 52): copy ownership follows the author of
+# the *call-site line*, not the file that hosts it.  Asking that question needs
+# upstream v2's blobs, which are not reachable from a clone of this fork, so the
+# gate encodes the answer as this exemption list instead.  Every entry is a key
+# whose only production reads are upstream's own lines: supplying fork copy at
+# those paths would shadow upstream copy (judgment 44) or fix an upstream
+# defect from the fork.  Upstream owns these; the fork does not gate on them.
+UPSTREAM_OWNED_KEYS = {
+    "common.all": "read from upstream's own line in pages/Agent/ACP/index.tsx",
+    "common.operationFailed": "read from upstream's own line in pages/Inbox/index.tsx",
+    "common.unknown": "read from upstream's own lines (chat surfaces)",
+    "voiceTranscription.loadFailed": "read from upstream's own settings line",
+    "skills.examples": "read only from a line upstream deleted in v2 (sync debt)",
+}
+
+CALL_RE = re.compile(r'(?<![A-Za-z0-9_$])(?:[A-Za-z0-9_]+\.)?t\(')
+DESCRIPTOR_RE = re.compile(
+    r'(?:i18nKey|labelI18nKey)\s*:\s*["\']([A-Za-z][A-Za-z0-9_]*(?:\.[A-Za-z0-9_]+)+)["\']'
+)
+KEYISH_RE = re.compile(r"^[a-z][A-Za-z0-9_]*(?:\.[A-Za-z0-9_]+)+$")
+STRING_ARG_RE = re.compile(r'^["\']([^"\']+)["\']$')
+
+
+def _matching_paren(text: str, open_index: int) -> int | None:
+    depth, index, quote = 1, open_index, None
+    while index < len(text):
+        char = text[index]
+        if quote:
+            if char == "\\":
+                index += 2
+                continue
+            if char == quote:
+                quote = None
+        elif char in "\"'`":
+            quote = char
+        elif char == "(":
+            depth += 1
+        elif char == ")":
+            depth -= 1
+            if depth == 0:
+                return index
+        index += 1
+    return None
+
+
+def _first_argument(argument_text: str) -> str:
+    depth, index, quote = 0, 0, None
+    while index < len(argument_text):
+        char = argument_text[index]
+        if quote:
+            if char == "\\":
+                index += 2
+                continue
+            if char == quote:
+                quote = None
+        elif char in "\"'`":
+            quote = char
+        elif char in "([{":
+            depth += 1
+        elif char in ")]}":
+            depth -= 1
+        elif char == "," and depth == 0:
+            break
+        index += 1
+    return argument_text[:index].strip()
+
+
+def call_site_keys(path: Path) -> set[str]:
+    text = path.read_text(encoding="utf-8")
+    found = {match.group(1) for match in DESCRIPTOR_RE.finditer(text)}
+    for match in CALL_RE.finditer(text):
+        end = _matching_paren(text, match.end())
+        if end is None:
+            continue
+        first = _first_argument(text[match.end():end])
+        literal = STRING_ARG_RE.match(first)
+        if literal and KEYISH_RE.match(literal.group(1)):
+            found.add(literal.group(1))
+    return found
 
 
 def flatten(node: Any, prefix: str = "") -> set[str]:
@@ -128,19 +223,26 @@ def production_translation_keys() -> dict[str, list[str]]:
             rel = path.relative_to(CONSOLE_SRC)
             if ".test." in filename or rel.as_posix() == "locales/copaw/register.ts":
                 continue
-            for match in OVERLAY_KEY_RE.finditer(path.read_text(encoding="utf-8")):
+            text = path.read_text(encoding="utf-8")
+            for key in call_site_keys(path):
+                found.setdefault(key, []).append(rel.as_posix())
+            for match in LITERAL_KEY_RE.finditer(text):
                 found.setdefault(match.group(1), []).append(rel.as_posix())
     return found
 
 
 call_sites = production_translation_keys()
+gated = sorted(key for key in call_sites if key not in UPSTREAM_OWNED_KEYS)
+exempted = sorted(key for key in call_sites if key in UPSTREAM_OWNED_KEYS)
 for lang in ("en", "zh"):
     available = resolvable_keys(lang)
-    for key in sorted(k for k in call_sites if k not in available):
-        errors.append(
-            f"translation key {key} is read by production code but missing from the {lang} bundle "
-            f"(sites: {', '.join(sorted(set(call_sites[key])))})"
-        )
+    for key in gated:
+        if key not in available:
+            sites = ", ".join(sorted(set(call_sites[key])))
+            errors.append(
+                f"translation key {key} is read by production code but missing from the "
+                f"{lang} bundle (sites: {sites})"
+            )
 
 en_overlay = overlay_keys("en")
 zh_overlay = overlay_keys("zh")
@@ -180,5 +282,6 @@ if errors:
 
 print(
     "CoPaw locale split check passed "
-    f"({len(call_sites)} production gated keys, {len(en_overlay)} overlay keys en/zh)"
+    f"({len(gated)} production gated keys, {len(en_overlay)} overlay keys en/zh, "
+    f"{len(exempted)} upstream-owned keys exempted)"
 )
