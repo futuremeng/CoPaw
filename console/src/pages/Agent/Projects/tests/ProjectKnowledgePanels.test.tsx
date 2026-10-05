@@ -1,6 +1,5 @@
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
-import ProjectKnowledgeNerPanel from "../components/ProjectKnowledgeNerPanel";
 import ProjectKnowledgeOutputsPanel from "../components/ProjectKnowledgeOutputsPanel";
 import ProjectKnowledgeProcessingPanel from "../components/ProjectKnowledgeProcessingPanel";
 import ProjectKnowledgeSignalsPanel from "../components/ProjectKnowledgeSignalsPanel";
@@ -574,13 +573,5 @@ describe("project knowledge panels", () => {
     render(<ProjectKnowledgeProcessingPanel knowledgeState={knowledgeState} projectFiles={buildProjectFiles()} />);
     fireEvent.click(screen.getAllByRole("button", { name: "Rerun Layer" })[0]);
     expect(knowledgeState.rerunKnowledgeLayer).toHaveBeenCalled();
-  });
-
-  it("renders NER panel", () => {
-    const knowledgeState = buildKnowledgeState();
-
-    render(<ProjectKnowledgeNerPanel knowledgeState={knowledgeState} />);
-    expect(screen.getByText("NER")).not.toBeNull();
-    expect(screen.getByText("copaw.projects.knowledge.nerEmptySource")).not.toBeNull();
   });
 });

@@ -250,7 +250,6 @@ vi.mock("../hooks/useProjectRealtimeController", () => ({
 
 vi.mock("../components/ProjectAutomationPanel", () => ({ default: () => <div /> }));
 vi.mock("../components/ProjectKnowledgePanel", () => ({ default: () => <div /> }));
-vi.mock("../components/ProjectKnowledgeNerPanel", () => ({ default: () => <div /> }));
 vi.mock("../components/ProjectKnowledgeOutputsPanel", () => ({ default: () => <div /> }));
 vi.mock("../components/ProjectKnowledgeProcessingPanel", () => ({ default: () => <div /> }));
 vi.mock("../components/ProjectKnowledgeSignalsPanel", () => ({
@@ -276,7 +275,6 @@ vi.mock("../components/ProjectKnowledgeSignalsPanel", () => ({
 vi.mock("../components/ProjectKnowledgeSourcesPanel", () => ({ default: () => <div /> }));
 vi.mock("../components/ProjectKnowledgeSettingsPanel", () => ({ default: () => <div /> }));
 vi.mock("../components/ProjectUploadModal", () => ({ default: () => <div /> }));
-vi.mock("../components/ProjectWorkbenchPanel", () => ({ default: () => <div /> }));
 vi.mock("../components/ProjectMetricsPanel", () => ({ default: () => <div /> }));
 vi.mock("../components/ProjectEvidencePanel", () => ({ default: () => <div /> }));
 vi.mock("../components/ProjectChatPanel", () => ({
