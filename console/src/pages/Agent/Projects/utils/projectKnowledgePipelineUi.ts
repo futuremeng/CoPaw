@@ -208,27 +208,7 @@ export function getProjectKnowledgeSemanticSummary(
     return "";
   }
   const reasonCode = String(semanticEngine.reason_code || "").trim();
-  const fallback = reasonCode === "SOURCE_NOT_READY"
-    ? "Semantic engine waiting for project files to be scanned."
-    : reasonCode === "HANLP_SIDECAR_UNCONFIGURED"
-      ? "Semantic engine unavailable: HanLP sidecar is not configured."
-      : reasonCode === "HANLP_SIDECAR_PYTHON_MISSING"
-        ? "Semantic engine unavailable: HanLP sidecar Python executable was not found."
-        : reasonCode === "HANLP_SIDECAR_PYTHON_INCOMPATIBLE"
-          ? "Semantic engine unavailable: HanLP sidecar must use Python 3.6-3.9."
-          : reasonCode === "HANLP_SIDECAR_EXEC_FAILED"
-            ? "Semantic engine unavailable: HanLP sidecar health check failed."
-    : reasonCode === "HANLP_IMPORT_UNAVAILABLE"
-      ? "Semantic engine unavailable: HanLP module is not installed."
-      : reasonCode === "HANLP_ENTRYPOINT_MISSING"
-        ? "Semantic engine unavailable: HanLP tokenizer entry point is missing."
-        : reasonCode === "HANLP_TOKENIZE_FAILED"
-          ? "Semantic engine error: HanLP tokenization failed."
-          : reasonCode === "SEMANTIC_STATE_INVALID"
-            ? "Semantic engine error: invalid runtime state payload."
-            : reasonCode === "SEMANTIC_STATE_UNKNOWN"
-              ? "Semantic engine status is unknown."
-              : String(semanticEngine.summary || semanticEngine.reason || "").trim();
+  const fallback = String(semanticEngine.summary || semanticEngine.reason || "").trim();
   return t(`copaw.projects.knowledge.semanticReasonSummary.${reasonCode}`, fallback);
 }
 
@@ -240,27 +220,7 @@ export function getProjectKnowledgeSemanticReasonLabel(
     return "";
   }
   const reasonCode = String(semanticEngine.reason_code || "").trim();
-  const fallback = reasonCode === "HANLP_IMPORT_UNAVAILABLE"
-    ? "Module Unavailable"
-    : reasonCode === "HANLP_SIDECAR_UNCONFIGURED"
-      ? "Sidecar Unconfigured"
-      : reasonCode === "HANLP_SIDECAR_PYTHON_MISSING"
-        ? "Sidecar Python Missing"
-        : reasonCode === "HANLP_SIDECAR_PYTHON_INCOMPATIBLE"
-          ? "Sidecar Python Incompatible"
-          : reasonCode === "HANLP_SIDECAR_EXEC_FAILED"
-            ? "Sidecar Check Failed"
-    : reasonCode === "HANLP_ENTRYPOINT_MISSING"
-      ? "Tokenizer Entry Missing"
-      : reasonCode === "HANLP_TOKENIZE_FAILED"
-        ? "Tokenization Failed"
-        : reasonCode === "SOURCE_NOT_READY"
-          ? "Source Not Ready"
-          : reasonCode === "SEMANTIC_STATE_INVALID"
-            ? "Invalid Semantic State"
-            : reasonCode === "SEMANTIC_STATE_UNKNOWN"
-              ? "Unknown Semantic State"
-              : "Ready";
+  const fallback = t("copaw.projects.knowledge.semanticReasonReady");
   return t(`copaw.projects.knowledge.semanticReasonCode.${reasonCode}`, fallback);
 }
 
@@ -355,7 +315,7 @@ export function getProjectKnowledgePipelineAlertType(
 
 export function getTriggerModeLabel(t: Translate, triggerMode?: string): string {
   if (!triggerMode) {
-    return "未知";
+    return t("copaw.projects.knowledge.unknown");
   }
   if (triggerMode === "automatic") {
     return t("copaw.projects.knowledge.triggerModeAutomatic");
@@ -368,7 +328,7 @@ export function getTriggerModeLabel(t: Translate, triggerMode?: string): string 
 
 export function getProcessingStatusLabel(t: Translate, status?: string): string {
   if (!status) {
-    return "未知";
+    return t("copaw.projects.knowledge.unknown");
   }
 
   const statusMap: Record<string, string> = {

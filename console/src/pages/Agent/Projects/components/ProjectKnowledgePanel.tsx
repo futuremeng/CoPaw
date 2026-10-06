@@ -10,7 +10,6 @@ import {
   Typography,
   message,
 } from "antd";
-import type { TFunction } from "i18next";
 import { useTranslation } from "react-i18next";
 import {
   limitGraphVisualizationRecords,
@@ -26,6 +25,7 @@ import {
   formatGraphRelationTypeLabel,
 } from "../utils/projectKnowledgeFilterLabels";
 import { buildProjectKnowledgeLatestSummaryModelFromState } from "../utils/projectKnowledgeLatestSummaryModel";
+import { getProjectKnowledgePipelineStageLabel } from "../utils/projectKnowledgePipelineUi";
 import styles from "../index.module.less";
 import type { ProjectKnowledgeProcessingMode, ProjectKnowledgeState } from "../hooks/useProjectKnowledgeState";
 
@@ -56,24 +56,6 @@ interface ProjectKnowledgePanelProps {
     GraphQueryResults: React.ComponentType<Record<string, unknown>>;
     GraphVisualization: React.ComponentType<Record<string, unknown>>;
   };
-}
-
-function resolvePipelineStageLabel(
-  stage: { key?: string | null; label?: string | null; label_key?: string | null },
-  t: TFunction,
-): string {
-  const explicitKey = String(stage.label_key || "").trim();
-  if (explicitKey) {
-    const fallback = String(stage.label || stage.key || "").trim() || explicitKey;
-    return t(explicitKey, fallback);
-  }
-
-  const stageKey = String(stage.key || "").trim();
-  if (stageKey === "fast" || stageKey === "nlp" || stageKey === "agentic") {
-    return t(`copaw.projects.knowledge.pipelineStage.${stageKey}`, String(stage.label || "").trim() || stageKey);
-  }
-
-  return String(stage.label || stageKey).trim();
 }
 
 function ProjectKnowledgePanel(props: ProjectKnowledgePanelProps) {
@@ -300,7 +282,7 @@ function ProjectKnowledgePanel(props: ProjectKnowledgePanelProps) {
     const stages = knowledgeState.syncState?.pipeline_trace?.stages || [];
     return stages.slice(0, 3).map((stage) => ({
       key: `${stage.key}-${stage.label}`,
-      label: resolvePipelineStageLabel(stage, t),
+      label: getProjectKnowledgePipelineStageLabel(stage, t),
       status: String(stage.status || "idle").trim().toLowerCase(),
       summary: stage.summary,
     }));

@@ -233,13 +233,14 @@ describe("projectKnowledgePipelineUi semantic helpers", () => {
   });
 
   it("renders the unknown trigger and processing labels from the bundle", () => {
-    for (const lng of ["en", ...SECONDARY_LANGUAGES]) {
-      expect(getTriggerModeLabel(translateIn(lng))).not.toContain("未知");
-      expect(getProcessingStatusLabel(translateIn(lng))).not.toContain("未知");
+    // The Chinese literal used to be hardcoded, so every language rendered it.
+    expect(getTriggerModeLabel(translateIn("en"))).not.toContain("未知");
+    expect(getProcessingStatusLabel(translateIn("en"))).not.toContain("未知");
+    const englishTrigger = getTriggerModeLabel(translateIn("en"));
+    const englishStatus = getProcessingStatusLabel(translateIn("en"));
+    for (const lng of SECONDARY_LANGUAGES) {
+      expect(getTriggerModeLabel(translateIn(lng))).not.toBe(englishTrigger);
+      expect(getProcessingStatusLabel(translateIn(lng))).not.toBe(englishStatus);
     }
-    expect(getTriggerModeLabel(translateIn("zh"))).not.toBe(getTriggerModeLabel(translateIn("en")));
-    expect(getProcessingStatusLabel(translateIn("zh"))).not.toBe(
-      getProcessingStatusLabel(translateIn("en")),
-    );
   });
 });
