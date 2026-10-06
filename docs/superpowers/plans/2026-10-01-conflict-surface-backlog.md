@@ -30,6 +30,13 @@ git diff --no-renames --name-only e111ec6fb upstream/main > /tmp/upstream_change
 
 把 `/tmp/p1.json` 里 `behavior_added + behavior_removed > 0` 的路径与 `/tmp/upstream_changed.txt` 取交集，即下表 155 行。
 
+> **2026-10-07 两条口径修正（见 `docs/superpowers/plans/2026-10-07-trial-merge-conflict-table.md`）**：
+> ① 上面第 1 条"fork 新建的文件不算，它们不会冲突"**不成立** —— 分叉点之后两侧各自新建同一路径会撞成 add/add，
+> 现测 9 个（另有 2 个上游改名后的新路径、1 个位置冲突，共 12 个本表结构上看不见的冲突）；
+> ② 第 3 条"上游也改过 ⇒ 必然冲突"是**高估** —— 真正用 `git merge-tree` 现算时，在册 145 枚路径里只有 100 枚真冲突，
+> 43 枚干净合并（过去几十步退回上游字节的成果在这里第一次被验证为"确实减少冲突"）。
+> 所以本表的"必然冲突 155/149/…"要读成**差异面**，合并代价请按判据 **84** 用 merge-tree 现算。
+
 ## 2 总量读数
 
 | 项 | 数值 | 含义 |
@@ -649,6 +656,7 @@ v2 把整个目录改名重写成 `app/chats/`（该路径共 22 个文件、3,1
 - **需要回写 `UPSTREAM_V2_MIGRATION_PLAN.md` §2 的一处判据**：那张表的 P2 行写着"上游删了 `app/mcp/{stateful_client,watcher}.py`、`app/runner/*` 7 个文件、`app/routers/plan.py`，等于上游替我们做了裁决，无需决策"。§4 的逐文件复核推翻了"无需决策"：**上游删掉宿主文件不等于上游删掉需求** —— `tail-user/delete`（v2 全树消息级删除符号命中 0）、`ChatUpdate.meta`（v2 `ChatUpdate` 只有 `name` 且 `extra="forbid"`，而 fork 侧 6 处生产调用在写它）、session 的 `.snapshot` sidecar 这几条需求仍活在 fork 自有的 `AnywhereChat` / `Projects` 界面上，只是失去了后端载体；反过来 `AgentTable` / `Workspace` / plan 前端 / 历史分页那几类跟着走 `CUT` 或 `DROP` 才是对齐。这两类必须分开写，不能再合并成"自动作废"。
 - **簇 A（6 个 locale 文件）是投入产出比最高的一刀**：302 行私有文案搬进 fork 已有的 `console/src/locales/copaw/*`，一次消掉 6 个冲突文件，零功能损失；唯一前置是 v2 的插件翻译注册接缝（`i18n.ts` 全仓无 `addResource`）是否存在 —— 未验证。 → **✅ 已执行（2026-10-02，WP-13，`wp/13-locale-exit` @ `ee400b053`），且这一刀确实兑现了预判：−6 冲突宿主 / −377 侵入行，是本清单里最大单笔削减。** 那个"唯一前置"的答案是**两半**：插件侧注册接缝**不存在**（拿不到 i18n 句柄），但 fork 自有 `console/src` 代码里 overlay-only 的 `addResourceBundle` **可用**，所以落点形态从"等上游接缝"改成"fork 自有 `locales/copaw/register.ts` + `i18n.ts` 留 16 行调用"。零功能损失也实测到了：6 语言叶子级深度合并逐 key 相等 + 19 条 fork 自有测试 + tsc/vitest 与基线同集合。
 - **簇 J / K 搬迁项的落点机制**：`src/copaw` 在 D-16 之后只剩别名壳，fork 自有后端实现的合法落点是 `PluginApi.register_http_router(router, *, prefix, tags)`（**v2 `plugins/api.py:590` / fork 当前树 `plugins/api.py:191`，两棵树行号不同，引用时别混用**；实现体 `plugins/registry.py:141`，路由挂在 `/api` + prefix，`prefix` 非法或被占用直接 raise）与 PawApp（WP-03/04）。这条接缝**已在产运行**：`plugins/bundle/qwenpaw-pet/plugin.py:73` 用 `router.py` 挂 `/qwenpaw-pet`，父 app 由 `set_plugin_http_app` 注入（fork `app/_app.py:355`、v2 `app/_app.py:491`）。前端落点是 fork 自有组件目录（`components/AnywhereChat` 已是先例）+ v2 的 slot 接缝。
+- **试合并冲突表**（`docs/superpowers/plans/2026-10-07-trial-merge-conflict-table.md`，2026-10-07 现算，纯文档、无代码改动）：拿 `git merge-tree --write-tree HEAD upstream/main` 对本表做一次真冲突测量，逐文件列出 112 个冲突落点。它与本表的关系是**互补而不是替代** —— 本表量差异（决定"哪些文件要设计落点"），那份量冲突（决定"合并那天真正要判多少次"）。三处必读差异：① 本表 §1 第 1 条口径把 fork 新建文件排除在"会冲突"之外，实测有 9 个 add/add 撞名（判据 85，已在本表 §1 补注）；② 在册 145 枚路径里只有 100 枚真冲突、43 枚干净合并 ⇒ 本表头数当合并代价会高估约 45%（判据 84）；③ 那份表还量到本表看不见的**静默删除**：上游删了、我们树里还留着的路径共 115 个，其中 **96 个我们没改过 ⇒ 合并直接删掉、一个冲突都不报**（那 96 个未逐个查引用，只查了我们改过的 19 个：6 个生产文件 + 1 个打包脚本 + 13 个测试文件仍指向其中若干路径）⇒ **WP-06 的验收不能只写"冲突清零"，必须加 `tsc -b` + pytest + vitest**。
 
 ## 9 本清单里的未验证项
 
