@@ -29,6 +29,37 @@
           "succeeded": "Selesai",
           "failed": "Gagal"
         },
+        "pipelineStage": {
+          "fast": "L1 · Cepat",
+          "nlp": "L2 · Strukturisasi NLP",
+          "agentic": "L3 · Mode agentik"
+        },
+        "semanticReasonReady": "Siap",
+        "semanticReasonCode": {
+          "SOURCE_NOT_READY": "Sumber belum siap",
+          "HANLP_SIDECAR_UNCONFIGURED": "Sidecar belum dikonfigurasi",
+          "HANLP_SIDECAR_PYTHON_MISSING": "Python sidecar tidak ditemukan",
+          "HANLP_SIDECAR_PYTHON_INCOMPATIBLE": "Python sidecar tidak cocok",
+          "HANLP_SIDECAR_EXEC_FAILED": "Pemeriksaan sidecar gagal",
+          "HANLP_IMPORT_UNAVAILABLE": "Modul tidak tersedia",
+          "HANLP_ENTRYPOINT_MISSING": "Titik masuk tidak ada",
+          "HANLP_TOKENIZE_FAILED": "Tokenisasi gagal",
+          "SEMANTIC_STATE_INVALID": "Status semantik tidak valid",
+          "SEMANTIC_STATE_UNKNOWN": "Status semantik tidak diketahui"
+        },
+        "semanticReasonSummary": {
+          "SOURCE_NOT_READY": "Mesin semantik menunggu berkas proyek dipindai.",
+          "HANLP_SIDECAR_UNCONFIGURED": "Mesin semantik tidak tersedia: sidecar HanLP belum dikonfigurasi.",
+          "HANLP_SIDECAR_PYTHON_MISSING": "Mesin semantik tidak tersedia: program Python untuk sidecar HanLP tidak ditemukan.",
+          "HANLP_SIDECAR_PYTHON_INCOMPATIBLE": "Mesin semantik tidak tersedia: sidecar HanLP harus memakai Python 3.6-3.9.",
+          "HANLP_SIDECAR_EXEC_FAILED": "Mesin semantik tidak tersedia: pemeriksaan kesehatan sidecar HanLP gagal.",
+          "HANLP_IMPORT_UNAVAILABLE": "Mesin semantik tidak tersedia: modul HanLP belum dipasang.",
+          "HANLP_ENTRYPOINT_MISSING": "Mesin semantik tidak tersedia: titik masuk tokenisasi HanLP tidak ada.",
+          "HANLP_TOKENIZE_FAILED": "Kesalahan mesin semantik: tokenisasi HanLP gagal.",
+          "SEMANTIC_STATE_INVALID": "Kesalahan mesin semantik: data status waktu jalan tidak valid.",
+          "SEMANTIC_STATE_UNKNOWN": "Status mesin semantik tidak diketahui."
+        },
+        "unknown": "Tidak diketahui",
         "sourcesFileListTitle": "File Pengetahuan",
         "sourcesFileListHint": "File yang tersedia untuk pemrosesan pengetahuan",
         "sourcesFileListEmpty": "Tidak ada file pengetahuan yang ditemukan"

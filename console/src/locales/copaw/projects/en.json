@@ -259,6 +259,37 @@
           "succeeded": "Done",
           "failed": "Failed"
         },
+        "pipelineStage": {
+          "fast": "L1 · Fast",
+          "nlp": "L2 · NLP",
+          "agentic": "L3 · Agentic"
+        },
+        "semanticReasonReady": "Ready",
+        "semanticReasonCode": {
+          "SOURCE_NOT_READY": "Source Not Ready",
+          "HANLP_SIDECAR_UNCONFIGURED": "Sidecar Unconfigured",
+          "HANLP_SIDECAR_PYTHON_MISSING": "Sidecar Python Missing",
+          "HANLP_SIDECAR_PYTHON_INCOMPATIBLE": "Sidecar Python Incompatible",
+          "HANLP_SIDECAR_EXEC_FAILED": "Sidecar Check Failed",
+          "HANLP_IMPORT_UNAVAILABLE": "Module Unavailable",
+          "HANLP_ENTRYPOINT_MISSING": "Tokenizer Entry Missing",
+          "HANLP_TOKENIZE_FAILED": "Tokenization Failed",
+          "SEMANTIC_STATE_INVALID": "Invalid Semantic State",
+          "SEMANTIC_STATE_UNKNOWN": "Unknown Semantic State"
+        },
+        "semanticReasonSummary": {
+          "SOURCE_NOT_READY": "Semantic engine waiting for project files to be scanned.",
+          "HANLP_SIDECAR_UNCONFIGURED": "Semantic engine unavailable: HanLP sidecar is not configured.",
+          "HANLP_SIDECAR_PYTHON_MISSING": "Semantic engine unavailable: HanLP sidecar Python executable was not found.",
+          "HANLP_SIDECAR_PYTHON_INCOMPATIBLE": "Semantic engine unavailable: HanLP sidecar must use Python 3.6-3.9.",
+          "HANLP_SIDECAR_EXEC_FAILED": "Semantic engine unavailable: HanLP sidecar health check failed.",
+          "HANLP_IMPORT_UNAVAILABLE": "Semantic engine unavailable: HanLP module is not installed.",
+          "HANLP_ENTRYPOINT_MISSING": "Semantic engine unavailable: HanLP tokenizer entry point is missing.",
+          "HANLP_TOKENIZE_FAILED": "Semantic engine error: HanLP tokenization failed.",
+          "SEMANTIC_STATE_INVALID": "Semantic engine error: invalid runtime state payload.",
+          "SEMANTIC_STATE_UNKNOWN": "Semantic engine status is unknown."
+        },
+        "unknown": "Unknown",
         "metricsSourceUnknown": "unknown",
         "metricsSourceProjectPipelineMerged": "Backend merged sync metrics",
         "metricsSourceSourceStatus": "Source status metrics",

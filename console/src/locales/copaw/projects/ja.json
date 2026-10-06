@@ -29,6 +29,37 @@
           "succeeded": "完了",
           "failed": "失敗"
         },
+        "pipelineStage": {
+          "fast": "L1 · 高速",
+          "nlp": "L2 · NLP 構造化",
+          "agentic": "L3 · エージェント処理"
+        },
+        "semanticReasonReady": "準備完了",
+        "semanticReasonCode": {
+          "SOURCE_NOT_READY": "ソース未準備",
+          "HANLP_SIDECAR_UNCONFIGURED": "サイドカー未設定",
+          "HANLP_SIDECAR_PYTHON_MISSING": "サイドカー Python 不在",
+          "HANLP_SIDECAR_PYTHON_INCOMPATIBLE": "サイドカー Python 非対応",
+          "HANLP_SIDECAR_EXEC_FAILED": "サイドカー確認失敗",
+          "HANLP_IMPORT_UNAVAILABLE": "モジュール利用不可",
+          "HANLP_ENTRYPOINT_MISSING": "形態素解析エントリなし",
+          "HANLP_TOKENIZE_FAILED": "形態素解析失敗",
+          "SEMANTIC_STATE_INVALID": "意味解析の状態が無効",
+          "SEMANTIC_STATE_UNKNOWN": "意味解析の状態が不明"
+        },
+        "semanticReasonSummary": {
+          "SOURCE_NOT_READY": "意味解析エンジンはプロジェクトファイルのスキャンを待っています。",
+          "HANLP_SIDECAR_UNCONFIGURED": "意味解析エンジンを利用できません：HanLP サイドカーが設定されていません。",
+          "HANLP_SIDECAR_PYTHON_MISSING": "意味解析エンジンを利用できません：HanLP サイドカーの Python 実行ファイルが見つかりません。",
+          "HANLP_SIDECAR_PYTHON_INCOMPATIBLE": "意味解析エンジンを利用できません：HanLP サイドカーは Python 3.6-3.9 を使用する必要があります。",
+          "HANLP_SIDECAR_EXEC_FAILED": "意味解析エンジンを利用できません：HanLP サイドカーの健全性確認に失敗しました。",
+          "HANLP_IMPORT_UNAVAILABLE": "意味解析エンジンを利用できません：HanLP モジュールがインストールされていません。",
+          "HANLP_ENTRYPOINT_MISSING": "意味解析エンジンを利用できません：HanLP の形態素解析エントリポイントがありません。",
+          "HANLP_TOKENIZE_FAILED": "意味解析エンジンでエラー：HanLP の形態素解析に失敗しました。",
+          "SEMANTIC_STATE_INVALID": "意味解析エンジンでエラー：実行時状態のデータが無効です。",
+          "SEMANTIC_STATE_UNKNOWN": "意味解析エンジンの状態が不明です。"
+        },
+        "unknown": "不明",
         "sourcesFileListTitle": "知識ファイル",
         "sourcesFileListHint": "知識処理が可能なファイルリスト",
         "sourcesFileListEmpty": "利用可能なファイルがありません"

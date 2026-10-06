@@ -29,6 +29,37 @@
           "succeeded": "Concluído",
           "failed": "Falhou"
         },
+        "pipelineStage": {
+          "fast": "L1 · Rápido",
+          "nlp": "L2 · Estruturação NLP",
+          "agentic": "L3 · Modo agêntico"
+        },
+        "semanticReasonReady": "Pronto",
+        "semanticReasonCode": {
+          "SOURCE_NOT_READY": "Fonte não preparada",
+          "HANLP_SIDECAR_UNCONFIGURED": "Sidecar não configurado",
+          "HANLP_SIDECAR_PYTHON_MISSING": "Python do sidecar ausente",
+          "HANLP_SIDECAR_PYTHON_INCOMPATIBLE": "Python do sidecar incompatível",
+          "HANLP_SIDECAR_EXEC_FAILED": "Falha na verificação do sidecar",
+          "HANLP_IMPORT_UNAVAILABLE": "Módulo indisponível",
+          "HANLP_ENTRYPOINT_MISSING": "Ponto de entrada ausente",
+          "HANLP_TOKENIZE_FAILED": "Falha na tokenização",
+          "SEMANTIC_STATE_INVALID": "Estado semântico inválido",
+          "SEMANTIC_STATE_UNKNOWN": "Estado semântico desconhecido"
+        },
+        "semanticReasonSummary": {
+          "SOURCE_NOT_READY": "O mecanismo semântico aguarda a análise dos arquivos do projeto.",
+          "HANLP_SIDECAR_UNCONFIGURED": "Mecanismo semântico indisponível: o sidecar do HanLP não está configurado.",
+          "HANLP_SIDECAR_PYTHON_MISSING": "Mecanismo semântico indisponível: o executável Python do sidecar do HanLP não foi encontrado.",
+          "HANLP_SIDECAR_PYTHON_INCOMPATIBLE": "Mecanismo semântico indisponível: o sidecar do HanLP precisa usar Python 3.6-3.9.",
+          "HANLP_SIDECAR_EXEC_FAILED": "Mecanismo semântico indisponível: a verificação de integridade do sidecar do HanLP falhou.",
+          "HANLP_IMPORT_UNAVAILABLE": "Mecanismo semântico indisponível: o módulo HanLP não está instalado.",
+          "HANLP_ENTRYPOINT_MISSING": "Mecanismo semântico indisponível: falta o ponto de entrada de tokenização do HanLP.",
+          "HANLP_TOKENIZE_FAILED": "Erro do mecanismo semântico: a tokenização do HanLP falhou.",
+          "SEMANTIC_STATE_INVALID": "Erro do mecanismo semântico: dados de estado em tempo de execução inválidos.",
+          "SEMANTIC_STATE_UNKNOWN": "O estado do mecanismo semântico é desconhecido."
+        },
+        "unknown": "Desconhecido",
         "sourcesFileListTitle": "Arquivos de Conhecimento",
         "sourcesFileListHint": "Arquivos disponíveis para processamento de conhecimento",
         "sourcesFileListEmpty": "Nenhum arquivo de conhecimento encontrado"

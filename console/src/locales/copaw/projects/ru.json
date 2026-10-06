@@ -29,6 +29,37 @@
           "succeeded": "Завершено",
           "failed": "Сбой"
         },
+        "pipelineStage": {
+          "fast": "L1 · Быстрый",
+          "nlp": "L2 · Структурная обработка",
+          "agentic": "L3 · Агентный режим"
+        },
+        "semanticReasonReady": "Готов",
+        "semanticReasonCode": {
+          "SOURCE_NOT_READY": "Источник не готов",
+          "HANLP_SIDECAR_UNCONFIGURED": "Sidecar не настроен",
+          "HANLP_SIDECAR_PYTHON_MISSING": "Python для sidecar не найден",
+          "HANLP_SIDECAR_PYTHON_INCOMPATIBLE": "Неподходящая версия Python",
+          "HANLP_SIDECAR_EXEC_FAILED": "Проверка sidecar не выполнена",
+          "HANLP_IMPORT_UNAVAILABLE": "Модуль недоступен",
+          "HANLP_ENTRYPOINT_MISSING": "Точка входа отсутствует",
+          "HANLP_TOKENIZE_FAILED": "Ошибка токенизации",
+          "SEMANTIC_STATE_INVALID": "Некорректное состояние",
+          "SEMANTIC_STATE_UNKNOWN": "Состояние неизвестно"
+        },
+        "semanticReasonSummary": {
+          "SOURCE_NOT_READY": "Семантический движок ждёт сканирования файлов проекта.",
+          "HANLP_SIDECAR_UNCONFIGURED": "Семантический движок недоступен: sidecar HanLP не настроен.",
+          "HANLP_SIDECAR_PYTHON_MISSING": "Семантический движок недоступен: не найден интерпретатор Python для sidecar HanLP.",
+          "HANLP_SIDECAR_PYTHON_INCOMPATIBLE": "Семантический движок недоступен: sidecar HanLP требует Python 3.6-3.9.",
+          "HANLP_SIDECAR_EXEC_FAILED": "Семантический движок недоступен: проверка состояния sidecar HanLP не пройдена.",
+          "HANLP_IMPORT_UNAVAILABLE": "Семантический движок недоступен: модуль HanLP не установлен.",
+          "HANLP_ENTRYPOINT_MISSING": "Семантический движок недоступен: отсутствует точка входа токенизации HanLP.",
+          "HANLP_TOKENIZE_FAILED": "Ошибка семантического движка: сбой токенизации HanLP.",
+          "SEMANTIC_STATE_INVALID": "Ошибка семантического движка: некорректные данные состояния.",
+          "SEMANTIC_STATE_UNKNOWN": "Состояние семантического движка неизвестно."
+        },
+        "unknown": "Неизвестно",
         "sourcesFileListTitle": "Файлы знаний",
         "sourcesFileListHint": "Файлы, доступные для обработки знаний",
         "sourcesFileListEmpty": "Файлы знаний не найдены"

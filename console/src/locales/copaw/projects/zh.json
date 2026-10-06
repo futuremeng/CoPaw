@@ -259,6 +259,37 @@
           "succeeded": "已完成",
           "failed": "失败"
         },
+        "pipelineStage": {
+          "fast": "L1 · 极速",
+          "nlp": "L2 · NLP 结构化",
+          "agentic": "L3 · 多智能体"
+        },
+        "semanticReasonReady": "已就绪",
+        "semanticReasonCode": {
+          "SOURCE_NOT_READY": "源文件未就绪",
+          "HANLP_SIDECAR_UNCONFIGURED": "旁挂服务未配置",
+          "HANLP_SIDECAR_PYTHON_MISSING": "旁挂 Python 缺失",
+          "HANLP_SIDECAR_PYTHON_INCOMPATIBLE": "旁挂 Python 版本不符",
+          "HANLP_SIDECAR_EXEC_FAILED": "旁挂健康检查失败",
+          "HANLP_IMPORT_UNAVAILABLE": "HanLP 模块不可用",
+          "HANLP_ENTRYPOINT_MISSING": "分词入口缺失",
+          "HANLP_TOKENIZE_FAILED": "分词失败",
+          "SEMANTIC_STATE_INVALID": "语义状态无效",
+          "SEMANTIC_STATE_UNKNOWN": "语义状态未知"
+        },
+        "semanticReasonSummary": {
+          "SOURCE_NOT_READY": "语义引擎正在等待项目文件完成扫描。",
+          "HANLP_SIDECAR_UNCONFIGURED": "语义引擎不可用：未配置 HanLP 旁挂服务。",
+          "HANLP_SIDECAR_PYTHON_MISSING": "语义引擎不可用：找不到 HanLP 旁挂服务的 Python 可执行文件。",
+          "HANLP_SIDECAR_PYTHON_INCOMPATIBLE": "语义引擎不可用：HanLP 旁挂服务需使用 Python 3.6-3.9。",
+          "HANLP_SIDECAR_EXEC_FAILED": "语义引擎不可用：HanLP 旁挂服务健康检查失败。",
+          "HANLP_IMPORT_UNAVAILABLE": "语义引擎不可用：未安装 HanLP 模块。",
+          "HANLP_ENTRYPOINT_MISSING": "语义引擎不可用：缺少 HanLP 分词入口。",
+          "HANLP_TOKENIZE_FAILED": "语义引擎错误：HanLP 分词失败。",
+          "SEMANTIC_STATE_INVALID": "语义引擎错误：运行状态数据无效。",
+          "SEMANTIC_STATE_UNKNOWN": "语义引擎状态未知。"
+        },
+        "unknown": "未知",
         "metricsSourceUnknown": "unknown",
         "metricsSourceProjectPipelineMerged": "Backend merged sync metrics",
         "metricsSourceSourceStatus": "Source status metrics",
