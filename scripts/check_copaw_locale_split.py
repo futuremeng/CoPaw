@@ -132,6 +132,42 @@ DESCRIPTOR_RE = re.compile(
 )
 KEYISH_RE = re.compile(r"^[a-z][A-Za-z0-9_]*(?:\.[A-Za-z0-9_]+)+$")
 STRING_ARG_RE = re.compile(r'^["\']([^"\']+)["\']$')
+# Conflict-surface knife 79: `STRING_ARG_RE` refuses backticks on purpose, so a
+# call site that builds its key from a template (`t(`knowledge.quantReason.${x}`)`)
+# was invisible to every check above.  The static prefix names a whole key family,
+# and `knowledge.quantReason` turned out to have no leaf in any locale file at all:
+# the inline fallback the family was written around had become the only text on
+# screen, in every language (judgment 79).
+TEMPLATE_ROOT_RE = re.compile(r'^[`"]([A-Za-z][A-Za-z0-9_.]*?)\$\{')
+
+# Same exemption shape as UPSTREAM_OWNED_KEYS: the call-site line, not the file,
+# decides who owns the copy.  The first two are upstream's own reads and the gap
+# is upstream's (`channels.channelNames` is already absent from `en.json` at the
+# merge base, `pluginManager.kind` in upstream/main too), so supplying fork copy at
+# those paths would shadow upstream copy (judgment 44).  The last three are fork
+# families with no copy yet; they are the next knife's material -- 23 keys in total
+# (3 pipelineStage, 10 semanticReasonCode, 10 semanticReasonSummary, all enumerated
+# by the inline fallback maps in pages/Agent/Projects) -- and are listed here so the
+# gate says them out loud instead of missing them.
+TEMPLATE_ROOT_EXEMPTIONS = {
+    "channels.channelNames": (
+        "read from upstream's own line in "
+        "pages/Control/Channels/components/constants.ts"
+    ),
+    "pluginManager.kind": (
+        "read from upstream's own line in "
+        "pages/Settings/PluginManager/components/OfficialPluginList.tsx"
+    ),
+    "copaw.projects.knowledge.pipelineStage": (
+        "fork family with no copy; deferred knife (3 stage keys)"
+    ),
+    "copaw.projects.knowledge.semanticReasonCode": (
+        "fork family with no copy; deferred knife (10 reason codes)"
+    ),
+    "copaw.projects.knowledge.semanticReasonSummary": (
+        "fork family with no copy; deferred knife (10 reason codes)"
+    ),
+}
 
 
 def _matching_paren(text: str, open_index: int) -> int | None:
@@ -219,8 +255,25 @@ def resolvable_keys(lang: str) -> set[str]:
     return keys
 
 
-def production_translation_keys() -> dict[str, list[str]]:
+def template_family_roots(path: Path) -> set[str]:
+    text = path.read_text(encoding="utf-8")
+    roots: set[str] = set()
+    for match in CALL_RE.finditer(text):
+        end = _matching_paren(text, match.end())
+        if end is None:
+            continue
+        first = _first_argument(text[match.end():end])
+        if STRING_ARG_RE.match(first):
+            continue
+        template = TEMPLATE_ROOT_RE.match(first)
+        if template:
+            roots.add(template.group(1).rstrip("."))
+    return roots
+
+
+def production_translation_keys() -> tuple[dict[str, list[str]], dict[str, list[str]]]:
     found: dict[str, list[str]] = {}
+    families: dict[str, list[str]] = {}
     for dirpath, dirnames, filenames in os.walk(CONSOLE_SRC):
         dirnames[:] = [d for d in dirnames if d != "tests"]
         for filename in filenames:
@@ -235,10 +288,12 @@ def production_translation_keys() -> dict[str, list[str]]:
                 found.setdefault(key, []).append(rel.as_posix())
             for match in LITERAL_KEY_RE.finditer(text):
                 found.setdefault(match.group(1), []).append(rel.as_posix())
-    return found
+            for root in template_family_roots(path):
+                families.setdefault(root, []).append(rel.as_posix())
+    return found, families
 
 
-call_sites = production_translation_keys()
+call_sites, template_families = production_translation_keys()
 gated = sorted(key for key in call_sites if key not in UPSTREAM_OWNED_KEYS)
 exempted = sorted(key for key in call_sites if key in UPSTREAM_OWNED_KEYS)
 for lang in ("en", "zh"):
@@ -253,6 +308,19 @@ for lang in ("en", "zh"):
 
 en_overlay = overlay_keys("en")
 zh_overlay = overlay_keys("zh")
+
+for lang in ("en", "zh"):
+    available = resolvable_keys(lang)
+    for root in sorted(template_families):
+        if root in TEMPLATE_ROOT_EXEMPTIONS:
+            continue
+        prefix = f"{root}."
+        if not any(key.startswith(prefix) for key in available):
+            sites = ", ".join(sorted(set(template_families[root])))
+            errors.append(
+                f"template key family {root}.* is read by production code but has no "
+                f"leaf in the {lang} bundle (sites: {sites})"
+            )
 for key in sorted(en_overlay - zh_overlay):
     errors.append(f"copaw overlay key exists in en but not zh: {key}")
 for key in sorted(zh_overlay - en_overlay):
@@ -341,8 +409,12 @@ if errors:
         print(f"ERROR: {item}")
     sys.exit(1)
 
+gated_families = sorted(root for root in template_families if root not in TEMPLATE_ROOT_EXEMPTIONS)
+
 print(
     "CoPaw locale split check passed "
-    f"({len(gated)} production gated keys, {len(en_overlay)} overlay keys en/zh, "
+    f"({len(gated)} production gated keys, {len(gated_families)} template key families gated, "
+    f"{len(template_families) - len(gated_families)} template families exempted, "
+    f"{len(en_overlay)} overlay keys en/zh, "
     f"{len(exempted)} upstream-owned keys exempted)"
 )
