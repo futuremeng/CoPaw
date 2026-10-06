@@ -13,7 +13,6 @@ export type ProjectFileFilterKey = FileMetricFilterKey | ProjectKnowledgeFilterK
 
 export interface FilterLabelDescriptor {
   i18nKey: string;
-  defaultLabel: string;
 }
 
 export function toggleProjectFileFilter(
@@ -28,30 +27,30 @@ export function getProjectFilterLabelDescriptor(
 ): FilterLabelDescriptor {
   switch (filter) {
     case "original":
-      return { i18nKey: "projects.filesOriginal", defaultLabel: "Original Files" };
+      return { i18nKey: "projects.filesOriginal" };
     case "intermediate":
-      return { i18nKey: "projects.filesIntermediate", defaultLabel: "Intermediate Files" };
+      return { i18nKey: "projects.filesIntermediate" };
     case "artifact":
-      return { i18nKey: "projects.filesArtifact", defaultLabel: "Artifact Files" };
+      return { i18nKey: "projects.filesArtifact" };
     case "agent":
-      return { i18nKey: "projects.filesAgent", defaultLabel: "智能体" };
+      return { i18nKey: "projects.filesAgent" };
     case "skill":
-      return { i18nKey: "projects.filesSkill", defaultLabel: "技能" };
+      return { i18nKey: "projects.filesSkill" };
     case "flow":
-      return { i18nKey: "projects.filesFlow", defaultLabel: "流程" };
+      return { i18nKey: "projects.filesFlow" };
     case "case":
-      return { i18nKey: "projects.filesCase", defaultLabel: "案例" };
+      return { i18nKey: "projects.filesCase" };
     case "builtin":
-      return { i18nKey: "projects.filesBuiltIn", defaultLabel: "Built-in Files" };
+      return { i18nKey: "projects.filesBuiltIn" };
     case "markdown":
-      return { i18nKey: "projects.quantMarkdownFiles", defaultLabel: "Markdown" };
+      return { i18nKey: "projects.quantMarkdownFiles" };
     case "text":
-      return { i18nKey: "projects.quantTextFiles", defaultLabel: "文本文件" };
+      return { i18nKey: "projects.quantTextFiles" };
     case "script":
-      return { i18nKey: "projects.quantScriptFiles", defaultLabel: "脚本 (.py)" };
+      return { i18nKey: "projects.quantScriptFiles" };
     case "otherType":
-      return { i18nKey: "projects.quantOtherTypeFiles", defaultLabel: "其他类型" };
+      return { i18nKey: "projects.quantOtherTypeFiles" };
     default:
-      return { i18nKey: "projects.files", defaultLabel: "Files" };
+      return { i18nKey: "projects.files" };
   }
 }

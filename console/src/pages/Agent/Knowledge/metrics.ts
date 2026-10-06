@@ -41,7 +41,6 @@ export interface QuantAssessment {
 
 export interface QuantStatusLabel {
   i18nKey: string;
-  defaultLabel: string;
 }
 
 export type KnowledgeQuantActionKey =
@@ -53,13 +52,11 @@ export type KnowledgeQuantActionKey =
 export interface KnowledgeQuantActionDescriptor {
   key: KnowledgeQuantActionKey;
   labelI18nKey: string;
-  defaultLabel: string;
 }
 
 export interface KnowledgeQuantCardModel {
   key: KnowledgeQuantMetricKey;
   labelI18nKey: string;
-  defaultLabel: string;
   value: string | number;
   assessment: QuantAssessment;
   reason: QuantReason;
@@ -408,26 +405,22 @@ export function getKnowledgeQuantActionDescriptor(
       return {
         key: "addSource",
         labelI18nKey: "knowledge.addSource",
-        defaultLabel: "Add Source",
       };
     case "rebuildIndex":
       return {
         key: "rebuildIndex",
         labelI18nKey: "knowledge.indexAll",
-        defaultLabel: "Rebuild Index",
       };
     case "backfillHistory":
       return {
         key: "backfillHistory",
         labelI18nKey: "knowledge.backfillNowButton",
-        defaultLabel: "Backfill History",
       };
     case "retryRemote":
     default:
       return {
         key: "retryRemote",
         labelI18nKey: "knowledge.remoteRetryAction",
-        defaultLabel: "Retry Remote Sources",
       };
   }
 }
@@ -439,18 +432,15 @@ export function getKnowledgeQuantStatusLabel(
     case "healthy":
       return {
         i18nKey: "knowledge.quantStatusHealthy",
-        defaultLabel: "Healthy",
       };
     case "attention":
       return {
         i18nKey: "knowledge.quantStatusAttention",
-        defaultLabel: "Needs attention",
       };
     case "neutral":
     default:
       return {
         i18nKey: "knowledge.quantStatusNeutral",
-        defaultLabel: "No signal",
       };
   }
 }
@@ -461,61 +451,51 @@ export function buildKnowledgeQuantCardModels(
   const base: Array<{
     key: KnowledgeQuantMetricKey;
     labelI18nKey: string;
-    defaultLabel: string;
     value: string | number;
   }> = [
     {
       key: "indexed",
       labelI18nKey: "knowledge.quantSourcesIndexed",
-      defaultLabel: "Index Coverage",
       value: ratioToPercent(metrics.indexedRatio),
     },
     {
       key: "documents",
       labelI18nKey: "knowledge.quantDocuments",
-      defaultLabel: "Documents",
       value: metrics.totalDocuments,
     },
     {
       key: "chunks",
       labelI18nKey: "knowledge.quantChunks",
-      defaultLabel: "Chunks",
       value: metrics.totalChunks,
     },
     {
       key: "entities",
       labelI18nKey: "knowledge.quantEntities",
-      defaultLabel: "Entities",
       value: metrics.totalEntities,
     },
     {
       key: "relations",
       labelI18nKey: "knowledge.quantRelations",
-      defaultLabel: "Relations",
       value: metrics.totalRelations,
     },
     {
       key: "relationNormCoverage",
       labelI18nKey: "knowledge.quantRelationNormalizationCoverage",
-      defaultLabel: "Relation Normalization Coverage",
       value: ratioToPercent(metrics.relationNormalizationCoverage),
     },
     {
       key: "entityNormCoverage",
       labelI18nKey: "knowledge.quantEntityCanonicalCoverage",
-      defaultLabel: "Entity Canonical Coverage",
       value: ratioToPercent(metrics.entityCanonicalCoverage),
     },
     {
       key: "lowConfidenceRatio",
       labelI18nKey: "knowledge.quantLowConfidenceRatio",
-      defaultLabel: "Low-confidence Edge Ratio",
       value: ratioToPercent(metrics.lowConfidenceRatio),
     },
     {
       key: "missingEvidenceRatio",
       labelI18nKey: "knowledge.quantMissingEvidenceRatio",
-      defaultLabel: "Missing Evidence Ratio",
       value: ratioToPercent(metrics.missingEvidenceRatio),
     },
   ];

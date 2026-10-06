@@ -7,7 +7,6 @@ import {
 
 export interface KnowledgeQuantCardActionViewModel {
   labelI18nKey: string;
-  defaultLabel: string;
   onClick: () => void;
   loading: boolean;
 }
@@ -15,7 +14,6 @@ export interface KnowledgeQuantCardActionViewModel {
 export interface KnowledgeQuantCardViewModel {
   key: string;
   labelI18nKey: string;
-  defaultLabel: string;
   value: string | number;
   assessment: { tone: "neutral" | "positive" | "warning"; status: "healthy" | "attention" | "neutral" };
   reason: { key: string; params?: Record<string, number | string>; defaultLabel?: string };
@@ -42,7 +40,6 @@ export function buildKnowledgeQuantCardViewModels(
       action: actionDescriptor
         ? {
             labelI18nKey: actionDescriptor.labelI18nKey,
-            defaultLabel: actionDescriptor.defaultLabel,
             onClick: input.handlers[actionDescriptor.key],
             loading: input.loading[actionDescriptor.key],
           }

@@ -1271,10 +1271,10 @@ function KnowledgePage() {
     },
   }).map((item) => ({
     ...item,
-    label: t(item.labelI18nKey, item.defaultLabel),
+    label: t(item.labelI18nKey),
     action: item.action
       ? {
-          label: t(item.action.labelI18nKey, item.action.defaultLabel),
+          label: t(item.action.labelI18nKey),
           onClick: item.action.onClick,
           loading: item.action.loading,
         }
@@ -1386,7 +1386,7 @@ function KnowledgePage() {
                   <Typography.Text className={styles.quantLabel}>{item.label}</Typography.Text>
                   <Typography.Text className={styles.quantValue}>{item.value}</Typography.Text>
                   <Typography.Text className={styles.quantNote}>
-                    {t(statusLabel.i18nKey, statusLabel.defaultLabel)}
+                    {t(statusLabel.i18nKey)}
                   </Typography.Text>
                   <Typography.Text className={styles.quantReason}>
                     {t(

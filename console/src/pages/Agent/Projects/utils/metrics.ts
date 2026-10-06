@@ -69,7 +69,6 @@ export interface QuantAssessment {
 
 export interface QuantStatusLabel {
   i18nKey: string;
-  defaultLabel: string;
 }
 
 export interface QuantReason {
@@ -89,7 +88,6 @@ export interface QuantReason {
 export interface ProjectKnowledgeCardModel {
   key: ProjectKnowledgeMetricKey;
   labelI18nKey: string;
-  defaultLabel: string;
   value: string | number;
   filterKey?: ProjectKnowledgeFilterKey;
   assessment: QuantAssessment;
@@ -369,18 +367,15 @@ export function getProjectKnowledgeQuantStatusLabel(
     case "healthy":
       return {
         i18nKey: "projects.quantStatusHealthy",
-        defaultLabel: "Healthy",
       };
     case "attention":
       return {
         i18nKey: "projects.quantStatusAttention",
-        defaultLabel: "Needs attention",
       };
     case "neutral":
     default:
       return {
         i18nKey: "projects.quantStatusNeutral",
-        defaultLabel: "No signal",
       };
   }
 }
@@ -391,49 +386,41 @@ export function buildProjectKnowledgeCardModels(
   const base: Array<{
     key: ProjectKnowledgeMetricKey;
     labelI18nKey: string;
-    defaultLabel: string;
     value: string | number;
   }> = [
     {
       key: "markdown",
       labelI18nKey: "projects.quantMarkdownFiles",
-      defaultLabel: "Markdown",
       value: metrics.markdownFiles,
     },
     {
       key: "text",
       labelI18nKey: "projects.quantTextFiles",
-      defaultLabel: "文本文件",
       value: metrics.textFiles,
     },
     {
       key: "script",
       labelI18nKey: "projects.quantScriptFiles",
-      defaultLabel: "脚本 (.py)",
       value: metrics.scriptFiles,
     },
     {
       key: "otherType",
       labelI18nKey: "projects.quantOtherTypeFiles",
-      defaultLabel: "其他类型",
       value: metrics.otherTypeFiles,
     },
     {
       key: "average",
       labelI18nKey: "projects.quantAvgFileSize",
-      defaultLabel: "Avg File Size",
       value: formatFileSize(metrics.averageFileBytes),
     },
     {
       key: "total",
       labelI18nKey: "projects.quantTotalSize",
-      defaultLabel: "Total File Size",
       value: formatFileSize(metrics.totalFileBytes),
     },
     {
       key: "totalFiles",
       labelI18nKey: "projects.files",
-      defaultLabel: "Files",
       value: metrics.totalFiles,
     },
   ];

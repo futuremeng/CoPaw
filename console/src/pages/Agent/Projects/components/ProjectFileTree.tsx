@@ -933,7 +933,7 @@ export default function ProjectFileTree({
       const descriptor = getProjectFilterLabelDescriptor(key);
       return {
         key,
-        label: t(descriptor.i18nKey, descriptor.defaultLabel),
+        label: t(descriptor.i18nKey),
         count: projectFileSummary?.[field] ?? 0,
       };
     }).filter((chip) => chip.count > 0 || chip.key === selectedMetricFilter);

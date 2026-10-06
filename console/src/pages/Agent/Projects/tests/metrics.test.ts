@@ -17,6 +17,7 @@ import {
   isScriptPath,
   isOtherTypePath,
 } from "../utils/metrics";
+import { t } from "./enLocaleTranslate";
 
 describe("project metrics", () => {
   it("classifies project files into knowledge-related buckets", () => {
@@ -215,7 +216,6 @@ describe("project metrics", () => {
     expect(getProjectKnowledgeFilterKeyFromMetric("otherType")).toBe("otherType");
     expect(getProjectKnowledgeQuantStatusLabel("attention")).toEqual({
       i18nKey: "projects.quantStatusAttention",
-      defaultLabel: "Needs attention",
     });
 
     const cards = buildProjectKnowledgeCardModels(computeProjectKnowledgeMetrics([
@@ -229,6 +229,29 @@ describe("project metrics", () => {
     expect(cards).toHaveLength(7);
     expect(cards.find((card) => card.key === "markdown")?.value).toBe(1);
     expect(cards.find((card) => card.key === "markdown")?.filterKey).toBe("markdown");
+    expect(cards.find((card) => card.key === "markdown")?.value).toBe(1);
+    expect(cards.find((card) => card.key === "markdown")?.filterKey).toBe("markdown");
     expect(cards.find((card) => card.key === "average")?.filterKey).toBeUndefined();
+  });
+
+  it("ships bundle copy for every quant label", () => {
+    for (const status of ["healthy", "attention", "neutral"] as const) {
+      const { i18nKey } = getProjectKnowledgeQuantStatusLabel(status);
+      expect(t(i18nKey)).not.toBe(i18nKey);
+    }
+    const cards = buildProjectKnowledgeCardModels(
+      computeProjectKnowledgeMetrics([
+        {
+          filename: "doc.md",
+          path: "original/doc.md",
+          size: 1024,
+          modified_time: "2026-04-08T00:00:00Z",
+        },
+      ]),
+    );
+    expect(cards).toHaveLength(7);
+    for (const card of cards) {
+      expect(t(card.labelI18nKey)).not.toBe(card.labelI18nKey);
+    }
   });
 });

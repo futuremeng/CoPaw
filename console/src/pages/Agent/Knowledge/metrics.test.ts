@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { t } from "../Projects/tests/enLocaleTranslate";
 import type {
   KnowledgeHistoryBackfillStatus,
   KnowledgeSourceItem,
@@ -197,7 +198,6 @@ describe("knowledge metrics", () => {
     expect(getKnowledgeQuantActionDescriptor("addSource")).toEqual({
       key: "addSource",
       labelI18nKey: "knowledge.addSource",
-      defaultLabel: "Add Source",
     });
 
     const cards = buildKnowledgeQuantCardModels(weakMetrics);
@@ -208,7 +208,23 @@ describe("knowledge metrics", () => {
     expect(cards[8].key).toBe("missingEvidenceRatio");
     expect(getKnowledgeQuantStatusLabel("healthy")).toEqual({
       i18nKey: "knowledge.quantStatusHealthy",
-      defaultLabel: "Healthy",
     });
+  });
+
+  it("ships bundle copy for every card, status and action label", () => {
+    const cards = buildKnowledgeQuantCardModels(computeKnowledgeQuantMetrics([], [], null));
+    expect(cards).toHaveLength(9);
+    for (const card of cards) {
+      expect(t(card.labelI18nKey)).not.toBe(card.labelI18nKey);
+    }
+    for (const status of ["healthy", "attention", "neutral"] as const) {
+      expect(t(getKnowledgeQuantStatusLabel(status).i18nKey)).not.toBe(
+        getKnowledgeQuantStatusLabel(status).i18nKey,
+      );
+    }
+    for (const actionKey of ["addSource", "rebuildIndex", "backfillHistory", "retryRemote"] as const) {
+      const labelI18nKey = getKnowledgeQuantActionDescriptor(actionKey).labelI18nKey;
+      expect(t(labelI18nKey)).not.toBe(labelI18nKey);
+    }
   });
 });

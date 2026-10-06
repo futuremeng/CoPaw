@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { t } from "../Projects/tests/enLocaleTranslate";
 import { computeKnowledgeQuantMetrics } from "./metrics";
 import { buildKnowledgeQuantCardViewModels } from "./quantCards";
 
@@ -54,7 +55,8 @@ describe("knowledge quant cards view models", () => {
     const indexed = cards.find((item) => item.key === "indexed");
       const documents = cards.find((item) => item.key === "documents");
 
-    expect(indexed?.action?.defaultLabel).toBe("Rebuild Index");
+    expect(indexed?.action?.labelI18nKey).toBe("knowledge.indexAll");
+    expect(t(indexed?.action?.labelI18nKey ?? "")).toBe("Rebuild Index");
     expect(indexed?.action?.loading).toBe(true);
     indexed?.action?.onClick();
     expect(onRebuildIndex).toHaveBeenCalledTimes(1);
@@ -87,7 +89,8 @@ describe("knowledge quant cards view models", () => {
     });
 
       const documentsCard = cards.find((item) => item.key === "documents");
-      expect(documentsCard?.action?.defaultLabel).toBe("Add Source");
+      expect(documentsCard?.action?.labelI18nKey).toBe("knowledge.addSource");
+      expect(t(documentsCard?.action?.labelI18nKey ?? "")).toBe("Add Source");
       documentsCard?.action?.onClick();
     expect(onAddSource).toHaveBeenCalledTimes(1);
   });
