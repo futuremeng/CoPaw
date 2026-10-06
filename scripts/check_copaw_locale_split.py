@@ -141,14 +141,15 @@ STRING_ARG_RE = re.compile(r'^["\']([^"\']+)["\']$')
 TEMPLATE_ROOT_RE = re.compile(r'^[`"]([A-Za-z][A-Za-z0-9_.]*?)\$\{')
 
 # Same exemption shape as UPSTREAM_OWNED_KEYS: the call-site line, not the file,
-# decides who owns the copy.  The first two are upstream's own reads and the gap
+# decides who owns the copy.  The two below are upstream's own reads and the gap
 # is upstream's (`channels.channelNames` is already absent from `en.json` at the
 # merge base, `pluginManager.kind` in upstream/main too), so supplying fork copy at
-# those paths would shadow upstream copy (judgment 44).  The last three are fork
-# families with no copy yet; they are the next knife's material -- 23 keys in total
-# (3 pipelineStage, 10 semanticReasonCode, 10 semanticReasonSummary, all enumerated
-# by the inline fallback maps in pages/Agent/Projects) -- and are listed here so the
-# gate says them out loud instead of missing them.
+# those paths would shadow upstream copy (judgment 44).  The three fork families
+# that used to be listed here -- 3 pipelineStage, 10 semanticReasonCode and 10
+# semanticReasonSummary keys -- got their copy in six languages, so they are gated
+# like every other family now; the enumeration guard in
+# pages/Agent/Projects/tests/projectKnowledgePipelineUi.test.ts is what proves each
+# individual key renders, since this rule can only see the family (judgment 81).
 TEMPLATE_ROOT_EXEMPTIONS = {
     "channels.channelNames": (
         "read from upstream's own line in "
@@ -157,15 +158,6 @@ TEMPLATE_ROOT_EXEMPTIONS = {
     "pluginManager.kind": (
         "read from upstream's own line in "
         "pages/Settings/PluginManager/components/OfficialPluginList.tsx"
-    ),
-    "copaw.projects.knowledge.pipelineStage": (
-        "fork family with no copy; deferred knife (3 stage keys)"
-    ),
-    "copaw.projects.knowledge.semanticReasonCode": (
-        "fork family with no copy; deferred knife (10 reason codes)"
-    ),
-    "copaw.projects.knowledge.semanticReasonSummary": (
-        "fork family with no copy; deferred knife (10 reason codes)"
     ),
 }
 
