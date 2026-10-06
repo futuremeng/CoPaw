@@ -20,6 +20,12 @@ import workbenchPtBR from "./workbench/pt-BR.json";
 import workbenchId from "./workbench/id.json";
 import copawKnowledgeEn from "./knowledge/en.json";
 import copawKnowledgeZh from "./knowledge/zh.json";
+// Conflict-surface knife 79: the knowledge group carries a ja and a ru carrier
+// for `knowledge.quantReason` only.  Both are real translations restored from
+// the fork's own pre-split dictionaries, so the group stays a subset of the en
+// overlay instead of padding out to verbatim English.
+import copawKnowledgeJa from "./knowledge/ja.json";
+import copawKnowledgeRu from "./knowledge/ru.json";
 // Conflict-surface knife 72: copy the fork's own console pages read, restored
 // from the fork's dropped dictionaries (or supplied from an upstream v2 / inline
 // donor).  Same en/zh-only deliverable as the knowledge group above.
@@ -71,10 +77,10 @@ function buildOverlay(...parts: TranslationMap[]): TranslationMap {
 }
 
 const copawOverlays: Record<string, TranslationMap> = {
-  // The knowledge and knife-72 groups are en/zh deliverables: the other four
-  // languages reach them through i18n.ts `fallbackLng`, same as the
-  // projects/pipelines/rpa dictionaries did before conflict-surface knife 71
-  // re-supplied the knowledge copy.
+  // The knife-72 groups are en/zh deliverables: the other four languages reach
+  // them through i18n.ts `fallbackLng`.  The knowledge group is en/zh too,
+  // except for the `knowledge.quantReason` family, for which conflict-surface
+  // knife 79 shipped ja and ru carriers.
   en: buildOverlay(
     copawProjectsEn,
     copawPipelinesEn,
@@ -90,7 +96,7 @@ const copawOverlays: Record<string, TranslationMap> = {
     modelsEn,
     skillsEn,
   ),
-  ru: buildOverlay(copawProjectsRu, workbenchRu),
+  ru: buildOverlay(copawProjectsRu, workbenchRu, copawKnowledgeRu),
   zh: buildOverlay(
     copawProjectsZh,
     copawPipelinesZh,
@@ -106,7 +112,7 @@ const copawOverlays: Record<string, TranslationMap> = {
     modelsZh,
     skillsZh,
   ),
-  ja: buildOverlay(copawProjectsJa, workbenchJa),
+  ja: buildOverlay(copawProjectsJa, workbenchJa, copawKnowledgeJa),
   "pt-BR": buildOverlay(copawProjectsPtBR, workbenchPtBR),
   id: buildOverlay(copawProjectsId, workbenchId),
 };

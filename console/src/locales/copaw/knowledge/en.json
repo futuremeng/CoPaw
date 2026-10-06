@@ -80,6 +80,17 @@
     "quantEntityCanonicalCoverage": "Entity Canonical Coverage",
     "quantLowConfidenceRatio": "Low-confidence Edge Ratio",
     "quantMissingEvidenceRatio": "Missing Evidence Ratio",
+    "quantReason": {
+      "emptyState": "No data has been collected yet.",
+      "indexedCoverageHealthy": "Indexed coverage is at {{percent}}%.",
+      "indexedCoverageLow": "Indexed coverage is low ({{percent}}%).",
+      "activityPresent": "This metric is actively populated.",
+      "noActivity": "No activity has been detected yet.",
+      "qualityCoverageHealthy": "Coverage is acceptable ({{percent}}%).",
+      "qualityCoverageLow": "Coverage is low ({{percent}}%).",
+      "riskRatioHealthy": "Risk ratio is controlled ({{percent}}%).",
+      "riskRatioHigh": "Risk ratio is high ({{percent}}%)."
+    },
     "remoteStateCached": "Remote cache: hit",
     "remoteStateWaitingRetry": "Remote cache: waiting retry ({{time}})",
     "remoteStateReadyRetry": "Remote cache: ready to retry",

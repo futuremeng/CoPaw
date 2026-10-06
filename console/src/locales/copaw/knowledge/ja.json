@@ -1,0 +1,15 @@
+{
+  "knowledge": {
+    "quantReason": {
+      "emptyState": "まだデータが収集されていません。",
+      "indexedCoverageHealthy": "現在のインデックスカバレッジは {{percent}}% です。",
+      "indexedCoverageLow": "インデックスカバレッジは低めです（{{percent}}%）。",
+      "activityPresent": "この指標には実データがあります。",
+      "noActivity": "この指標にはまだ活動がありません。",
+      "qualityCoverageHealthy": "カバレッジは許容範囲です（{{percent}}%）。",
+      "qualityCoverageLow": "カバレッジは低めです（{{percent}}%）。",
+      "riskRatioHealthy": "リスク比率は抑制されています（{{percent}}%）。",
+      "riskRatioHigh": "リスク比率は高くなっています（{{percent}}%）。"
+    }
+  }
+}

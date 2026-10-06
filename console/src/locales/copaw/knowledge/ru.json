@@ -1,0 +1,15 @@
+{
+  "knowledge": {
+    "quantReason": {
+      "emptyState": "Данные ещё не собраны.",
+      "indexedCoverageHealthy": "Текущее покрытие индекса: {{percent}}%.",
+      "indexedCoverageLow": "Покрытие индекса низкое: {{percent}}%.",
+      "activityPresent": "По этой метрике уже есть данные.",
+      "noActivity": "По этой метрике пока нет активности.",
+      "qualityCoverageHealthy": "Покрытие в пределах допустимого: {{percent}}%.",
+      "qualityCoverageLow": "Покрытие низкое: {{percent}}%.",
+      "riskRatioHealthy": "Доля рисков под контролем: {{percent}}%.",
+      "riskRatioHigh": "Доля рисков высокая: {{percent}}%."
+    }
+  }
+}

@@ -1389,11 +1389,7 @@ function KnowledgePage() {
                     {t(statusLabel.i18nKey)}
                   </Typography.Text>
                   <Typography.Text className={styles.quantReason}>
-                    {t(
-                      `knowledge.quantReason.${item.reason.key}`,
-                      item.reason.defaultLabel || "",
-                      item.reason.params || {},
-                    )}
+                    {t(`knowledge.quantReason.${item.reason.key}`, item.reason.params || {})}
                   </Typography.Text>
                   {item.action ? (
                     <div className={styles.quantActionRow}>

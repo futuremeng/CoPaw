@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import i18n from "../../../i18n";
 import { t } from "../Projects/tests/enLocaleTranslate";
 import type {
   KnowledgeHistoryBackfillStatus,
@@ -13,6 +14,10 @@ import {
   getKnowledgeQuantAssessment,
   getKnowledgeQuantReason,
   getKnowledgeQuantStatusLabel,
+} from "./metrics";
+import type {
+  KnowledgeQuantMetricKey,
+  KnowledgeQuantMetrics,
 } from "./metrics";
 
 function createSource(overrides: Partial<KnowledgeSourceItem>): KnowledgeSourceItem {
@@ -171,6 +176,132 @@ describe("knowledge metrics", () => {
     });
     expect(getKnowledgeQuantReason("relationNormCoverage", metrics).key).toBe("qualityCoverageLow");
     expect(getKnowledgeQuantReason("missingEvidenceRatio", metrics).key).toBe("riskRatioHigh");
+  });
+
+  it("ships bundle copy for every quant reason the producer can emit", () => {
+    const emptyMetrics: KnowledgeQuantMetrics = {
+      totalSources: 0,
+      indexedSources: 0,
+      indexedRatio: 0,
+      totalDocuments: 0,
+      totalChunks: 0,
+      totalEntities: 0,
+      totalRelations: 0,
+      relationNormalizationCoverage: 0,
+      entityCanonicalCoverage: 0,
+      lowConfidenceRatio: 0,
+      missingEvidenceRatio: 0,
+      pendingHistorySessions: 0,
+      searchHits: 0,
+    };
+    const weakMetrics: KnowledgeQuantMetrics = {
+      ...emptyMetrics,
+      totalSources: 10,
+      indexedSources: 6,
+      indexedRatio: 0.6,
+      totalDocuments: 4,
+      totalChunks: 8,
+      totalEntities: 0,
+      totalRelations: 0,
+      relationNormalizationCoverage: 0.2,
+      entityCanonicalCoverage: 0.3,
+      lowConfidenceRatio: 0.4,
+      missingEvidenceRatio: 0.5,
+    };
+    const strongMetrics: KnowledgeQuantMetrics = {
+      ...emptyMetrics,
+      totalSources: 10,
+      indexedSources: 10,
+      indexedRatio: 1,
+      totalDocuments: 40,
+      totalChunks: 80,
+      totalEntities: 12,
+      totalRelations: 30,
+      relationNormalizationCoverage: 0.8,
+      entityCanonicalCoverage: 0.9,
+      lowConfidenceRatio: 0.1,
+      missingEvidenceRatio: 0.05,
+    };
+    const metricKeys: KnowledgeQuantMetricKey[] = [
+      "indexed",
+      "documents",
+      "chunks",
+      "entities",
+      "relations",
+      "relationNormCoverage",
+      "entityNormCoverage",
+      "lowConfidenceRatio",
+      "missingEvidenceRatio",
+    ];
+
+    const emitted = new Set<string>();
+    for (const metrics of [emptyMetrics, weakMetrics, strongMetrics]) {
+      for (const metricKey of metricKeys) {
+        const reason = getKnowledgeQuantReason(metricKey, metrics);
+        emitted.add(reason.key);
+        const dottedKey = `knowledge.quantReason.${reason.key}`;
+        const rendered = t(dottedKey, reason.params ?? {});
+        expect(rendered).not.toBe(dottedKey);
+        expect(rendered).not.toContain("{{");
+      }
+    }
+
+    expect([...emitted].sort()).toEqual([
+      "activityPresent",
+      "emptyState",
+      "indexedCoverageHealthy",
+      "indexedCoverageLow",
+      "noActivity",
+      "qualityCoverageHealthy",
+      "qualityCoverageLow",
+      "riskRatioHealthy",
+      "riskRatioHigh",
+    ].sort());
+  });
+
+  it("renders the quant reason family in the languages the overlay ships", () => {
+    // Through the product's own i18n instance, so the four-language deliverable
+    // is proven by the same registration order production uses, not by a second
+    // hand-assembled bundle.
+    const reasonKeys = [
+      "emptyState",
+      "indexedCoverageHealthy",
+      "indexedCoverageLow",
+      "activityPresent",
+      "noActivity",
+      "qualityCoverageHealthy",
+      "qualityCoverageLow",
+      "riskRatioHealthy",
+      "riskRatioHigh",
+    ] as const;
+    const english: Record<string, string> = {};
+
+    for (const key of reasonKeys) {
+      const dottedKey = `knowledge.quantReason.${key}`;
+      english[key] = i18n.t(dottedKey, { lng: "en", percent: 42 });
+      expect(english[key]).not.toBe(dottedKey);
+      expect(english[key]).not.toContain("{{");
+    }
+
+    for (const lng of ["zh", "ja", "ru"] as const) {
+      for (const key of reasonKeys) {
+        const rendered = i18n.t(`knowledge.quantReason.${key}`, { lng, percent: 42 });
+        expect(rendered).not.toBe(`knowledge.quantReason.${key}`);
+        expect(rendered).not.toContain("{{");
+        expect(rendered).not.toBe(english[key]);
+        if (english[key].includes("42")) {
+          expect(rendered).toContain("42");
+        }
+      }
+    }
+
+    for (const lng of ["pt-BR", "id"] as const) {
+      for (const key of reasonKeys) {
+        expect(i18n.t(`knowledge.quantReason.${key}`, { lng, percent: 42 })).toBe(
+          english[key],
+        );
+      }
+    }
   });
 
   it("derives quant action keys from metric states", () => {

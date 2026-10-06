@@ -77,7 +77,6 @@ export interface QuantReason {
     | "riskRatioHealthy"
     | "riskRatioHigh";
   params?: Record<string, number | string>;
-  defaultLabel?: string;
 }
 
 export interface RemoteRetrySource {
@@ -270,21 +269,16 @@ export function getKnowledgeQuantReason(
   switch (key) {
     case "indexed":
       if (metrics.totalSources === 0) {
-        return {
-          key: "emptyState",
-          defaultLabel: "No indexed sources yet",
-        };
+        return { key: "emptyState" };
       }
       return metrics.indexedRatio >= 0.9
         ? {
             key: "indexedCoverageHealthy",
             params: { percent: Math.round(metrics.indexedRatio * 100) },
-            defaultLabel: "Indexed coverage is healthy ({{percent}}%)",
           }
         : {
             key: "indexedCoverageLow",
             params: { percent: Math.round(metrics.indexedRatio * 100) },
-            defaultLabel: "Indexed coverage is low ({{percent}}%)",
           };
     case "documents":
     case "chunks":
@@ -298,8 +292,8 @@ export function getKnowledgeQuantReason(
             ? metrics.totalEntities
             : metrics.totalRelations;
       return value > 0
-        ? { key: "activityPresent", defaultLabel: "Sufficient observed activity" }
-        : { key: "noActivity", defaultLabel: "No activity observed yet" };
+        ? { key: "activityPresent" }
+        : { key: "noActivity" };
     }
     case "relationNormCoverage": {
       const percent = Math.round(metrics.relationNormalizationCoverage * 100);
@@ -307,12 +301,10 @@ export function getKnowledgeQuantReason(
         ? {
             key: "qualityCoverageHealthy",
             params: { percent },
-            defaultLabel: "Coverage is acceptable ({{percent}}%)",
           }
         : {
             key: "qualityCoverageLow",
             params: { percent },
-            defaultLabel: "Coverage is low ({{percent}}%)",
           };
     }
     case "entityNormCoverage": {
@@ -321,12 +313,10 @@ export function getKnowledgeQuantReason(
         ? {
             key: "qualityCoverageHealthy",
             params: { percent },
-            defaultLabel: "Coverage is acceptable ({{percent}}%)",
           }
         : {
             key: "qualityCoverageLow",
             params: { percent },
-            defaultLabel: "Coverage is low ({{percent}}%)",
           };
     }
     case "lowConfidenceRatio": {
@@ -335,12 +325,10 @@ export function getKnowledgeQuantReason(
         ? {
             key: "riskRatioHealthy",
             params: { percent },
-            defaultLabel: "Risk ratio is controlled ({{percent}}%)",
           }
         : {
             key: "riskRatioHigh",
             params: { percent },
-            defaultLabel: "Risk ratio is high ({{percent}}%)",
           };
     }
     case "missingEvidenceRatio": {
@@ -349,19 +337,14 @@ export function getKnowledgeQuantReason(
         ? {
             key: "riskRatioHealthy",
             params: { percent },
-            defaultLabel: "Risk ratio is controlled ({{percent}}%)",
           }
         : {
             key: "riskRatioHigh",
             params: { percent },
-            defaultLabel: "Risk ratio is high ({{percent}}%)",
           };
     }
     default:
-      return {
-        key: "emptyState",
-        defaultLabel: "No signal",
-      };
+      return { key: "emptyState" };
   }
 }
 

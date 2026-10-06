@@ -80,6 +80,17 @@
     "quantEntityCanonicalCoverage": "实体归一覆盖率",
     "quantLowConfidenceRatio": "低置信边占比",
     "quantMissingEvidenceRatio": "证据缺失占比",
+    "quantReason": {
+      "emptyState": "尚未收集到数据。",
+      "indexedCoverageHealthy": "当前索引覆盖率为 {{percent}}%。",
+      "indexedCoverageLow": "索引覆盖率较低（{{percent}}%）。",
+      "activityPresent": "该指标已有实际数据。",
+      "noActivity": "该指标暂未观察到活动。",
+      "qualityCoverageHealthy": "归一化覆盖率处于可接受水平（{{percent}}%）。",
+      "qualityCoverageLow": "归一化覆盖率较低（{{percent}}%）。",
+      "riskRatioHealthy": "风险占比可控（{{percent}}%）。",
+      "riskRatioHigh": "风险占比偏高（{{percent}}%）。"
+    },
     "remoteStateCached": "远端缓存：已命中",
     "remoteStateWaitingRetry": "远端缓存：等待重试（{{time}}）",
     "remoteStateReadyRetry": "远端缓存：可重试",
