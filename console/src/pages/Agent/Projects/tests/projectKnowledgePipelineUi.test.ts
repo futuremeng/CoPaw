@@ -54,8 +54,16 @@ function semanticEngineFixture(reasonCode: string) {
 
 // Verbatim from src/qwenpaw/knowledge/project_pipeline_projection.py:923-925.
 const PIPELINE_STAGES = [
-  { mode: "fast", label_key: "copaw.projects.knowledge.pipelineStage.fast", label: "L1 · Fast" },
-  { mode: "nlp", label_key: "copaw.projects.knowledge.pipelineStage.nlp", label: "L2 · NLP" },
+  {
+    mode: "fast",
+    label_key: "copaw.projects.knowledge.pipelineStage.fast",
+    label: "L1 · Fast",
+  },
+  {
+    mode: "nlp",
+    label_key: "copaw.projects.knowledge.pipelineStage.nlp",
+    label: "L2 · NLP",
+  },
   {
     mode: "agentic",
     label_key: "copaw.projects.knowledge.pipelineStage.agentic",
@@ -192,10 +200,16 @@ describe("projectKnowledgePipelineUi semantic helpers", () => {
 
       for (const lng of SECONDARY_LANGUAGES) {
         expect(
-          getProjectKnowledgeSemanticReasonLabel(semanticEngineFixture(reasonCode), translateIn(lng)),
+          getProjectKnowledgeSemanticReasonLabel(
+            semanticEngineFixture(reasonCode),
+            translateIn(lng),
+          ),
         ).not.toBe(englishLabel);
         expect(
-          getProjectKnowledgeSemanticSummary(semanticEngineFixture(reasonCode), translateIn(lng)),
+          getProjectKnowledgeSemanticSummary(
+            semanticEngineFixture(reasonCode),
+            translateIn(lng),
+          ),
         ).not.toBe(englishSummary);
       }
     }
@@ -211,7 +225,10 @@ describe("projectKnowledgePipelineUi semantic helpers", () => {
       expect(unmapped).not.toContain("semanticReasonCode.");
       // Today's contract: a code with no dedicated copy behaves like the ready state.
       expect(unmapped).toBe(
-        getProjectKnowledgeSemanticReasonLabel(semanticEngineFixture(""), translateIn(lng)),
+        getProjectKnowledgeSemanticReasonLabel(
+          semanticEngineFixture(""),
+          translateIn(lng),
+        ),
       );
       readyLabels.set(lng, unmapped);
     }
@@ -221,11 +238,20 @@ describe("projectKnowledgePipelineUi semantic helpers", () => {
 
   it("localizes the pipeline stage labels the backend sends by key", () => {
     for (const stage of PIPELINE_STAGES) {
-      const payload = { key: stage.mode, label_key: stage.label_key, label: stage.label };
+      const payload = {
+        key: stage.mode,
+        label_key: stage.label_key,
+        label: stage.label,
+      };
       // English must keep rendering exactly the text the backend used to supply.
-      expect(getProjectKnowledgePipelineStageLabel(payload, translateIn("en"))).toBe(stage.label);
+      expect(
+        getProjectKnowledgePipelineStageLabel(payload, translateIn("en")),
+      ).toBe(stage.label);
       for (const lng of SECONDARY_LANGUAGES) {
-        const rendered = getProjectKnowledgePipelineStageLabel(payload, translateIn(lng));
+        const rendered = getProjectKnowledgePipelineStageLabel(
+          payload,
+          translateIn(lng),
+        );
         expect(rendered).not.toContain("pipelineStage.");
         expect(rendered).not.toBe(stage.label);
       }
@@ -240,7 +266,9 @@ describe("projectKnowledgePipelineUi semantic helpers", () => {
     const englishStatus = getProcessingStatusLabel(translateIn("en"));
     for (const lng of SECONDARY_LANGUAGES) {
       expect(getTriggerModeLabel(translateIn(lng))).not.toBe(englishTrigger);
-      expect(getProcessingStatusLabel(translateIn(lng))).not.toBe(englishStatus);
+      expect(getProcessingStatusLabel(translateIn(lng))).not.toBe(
+        englishStatus,
+      );
     }
   });
 });
