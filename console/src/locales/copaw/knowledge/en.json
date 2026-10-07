@@ -217,7 +217,17 @@
       "status": "Status",
       "thresholdApplied": "Threshold",
       "topEntities": "Top Entities",
-      "totalEntities": "Total Entities"
+      "totalEntities": "Total Entities",
+      "scope": "Scope",
+      "scopeId": "Scope ID",
+      "nodeId": "Node ID",
+      "documentTitle": "Document Title",
+      "sortDescending": "Descending",
+      "sortAscending": "Ascending",
+      "weightLow": "Low",
+      "weightMid": "Mid",
+      "weightHigh": "High",
+      "scopeIdOptional": "optional"
     },
     "table": {
       "subject": "Subject",
@@ -225,7 +235,8 @@
       "keywords": "Keywords",
       "location": "Location",
       "status": "Status",
-      "chunkStats": "Chunk stats"
+      "chunkStats": "Chunk stats",
+      "remote": "Remote"
     },
     "form": {
       "id": "Source ID",
@@ -243,6 +254,13 @@
       "disabled": "Disabled"
     },
     "quantEntities": "Entities",
-    "quantRelations": "Relations"
+    "quantRelations": "Relations",
+    "sourceType": {
+      "file": "File",
+      "directory": "Directory",
+      "url": "URL",
+      "text": "Text",
+      "chat": "Chat"
+    }
   }
 }

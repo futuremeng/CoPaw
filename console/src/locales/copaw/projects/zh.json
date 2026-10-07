@@ -606,7 +606,8 @@
         "failed": "失败",
         "blocked": "已阻塞",
         "cancelled": "已取消",
-        "pending": "待执行"
+        "pending": "待执行",
+        "completed": "已完成"
       },
       "event": {
         "runRestarted": "运行已重启",
@@ -700,7 +701,9 @@
       "compareLoading": "正在加载对比运行",
       "comparePlaceholder": "选择基线运行",
       "noCompareRun": "没有可用于对比的历史运行",
-      "validationNeedRun": "准备校验提示词前，请先启动或选择一个运行。"
+      "validationNeedRun": "准备校验提示词前，请先启动或选择一个运行。",
+      "totalSteps": "总步骤数",
+      "noMetrics": "无指标"
     },
     "clearSelectedFiles": "清除所选",
     "clone": "克隆",

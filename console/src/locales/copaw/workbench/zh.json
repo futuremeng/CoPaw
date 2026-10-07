@@ -90,7 +90,8 @@
       "rawOutput": "原始输出",
       "empty": "空",
       "classicalTask": "古文任务",
-      "classicalInputPlaceholder": "输入一段文言文进行分析"
+      "classicalInputPlaceholder": "输入一段文言文进行分析",
+      "schemaJson": "输出结构（JSON）"
     },
     "telemetry": {
       "mode": "执行模式",

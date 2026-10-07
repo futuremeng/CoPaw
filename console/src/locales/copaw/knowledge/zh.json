@@ -217,7 +217,17 @@
       "status": "状态",
       "thresholdApplied": "阈值",
       "topEntities": "Top 实体",
-      "totalEntities": "实体总数"
+      "totalEntities": "实体总数",
+      "scope": "范围",
+      "scopeId": "范围 ID",
+      "nodeId": "节点 ID",
+      "documentTitle": "文档标题",
+      "sortDescending": "降序",
+      "sortAscending": "升序",
+      "weightLow": "低",
+      "weightMid": "中",
+      "weightHigh": "高",
+      "scopeIdOptional": "可选"
     },
     "table": {
       "subject": "主题",
@@ -225,7 +235,8 @@
       "keywords": "关键词",
       "location": "位置",
       "status": "状态",
-      "chunkStats": "切片统计"
+      "chunkStats": "切片统计",
+      "remote": "远端"
     },
     "form": {
       "id": "来源 ID",
@@ -243,6 +254,13 @@
       "disabled": "停用"
     },
     "quantEntities": "实体数",
-    "quantRelations": "关系数"
+    "quantRelations": "关系数",
+    "sourceType": {
+      "file": "文件",
+      "directory": "文件夹",
+      "url": "网址",
+      "text": "文本",
+      "chat": "聊天"
+    }
   }
 }

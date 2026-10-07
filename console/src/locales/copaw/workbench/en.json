@@ -90,7 +90,8 @@
       "rawOutput": "Raw output",
       "empty": "Empty",
       "classicalTask": "Classical Chinese task",
-      "classicalInputPlaceholder": "Enter a Classical Chinese sentence for analysis"
+      "classicalInputPlaceholder": "Enter a Classical Chinese sentence for analysis",
+      "schemaJson": "Schema JSON"
     },
     "telemetry": {
       "mode": "Execution mode",

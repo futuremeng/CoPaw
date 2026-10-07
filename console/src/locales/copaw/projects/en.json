@@ -606,7 +606,8 @@
         "failed": "Failed",
         "blocked": "Blocked",
         "cancelled": "Cancelled",
-        "pending": "Pending"
+        "pending": "Pending",
+        "completed": "Completed"
       },
       "event": {
         "runRestarted": "Run restarted",
@@ -700,7 +701,9 @@
       "compareLoading": "Loading compare run",
       "comparePlaceholder": "Select baseline run",
       "noCompareRun": "No historical run available for comparison",
-      "validationNeedRun": "Please start or select one run before preparing a validation prompt."
+      "validationNeedRun": "Please start or select one run before preparing a validation prompt.",
+      "totalSteps": "Total Steps",
+      "noMetrics": "No metrics"
     },
     "clearSelectedFiles": "Clear Selected",
     "clone": "Clone",
