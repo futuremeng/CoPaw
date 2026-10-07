@@ -54,21 +54,15 @@ import { buildKnowledgeQuantCardViewModels } from "./quantCards";
 import { buildRemoteRetryNotice, collectRemoteRetrySources } from "./remoteRetry";
 import { graphEntityNodeId, recordsToVisualizationData, formatScore } from "./graphQuery";
 import { GraphQueryResults, GraphVisualization } from "./graphVisualization.tsx";
+import {
+  knowledgeScopeOptions,
+  sourceTypeOptions,
+  type KnowledgeScopeFilter,
+} from "./selectLabels";
 import styles from "./index.module.less";
 
-const SOURCE_TYPE_OPTIONS: Array<{
-  label: string;
-  value: KnowledgeSourceType;
-}> = [
-  { label: "File", value: "file" },
-  { label: "Directory", value: "directory" },
-  { label: "URL", value: "url" },
-  { label: "Text", value: "text" },
-  { label: "Chat", value: "chat" },
-];
-
 type SourceOriginFilter = "all" | "manual" | "auto";
-type KnowledgeSearchScopeFilter = "combined" | "agent" | "project";
+type KnowledgeSearchScopeFilter = KnowledgeScopeFilter;
 
 function safeGraphNodeId(raw: string): string {
   const normalized = String(raw || "").trim();
@@ -1457,11 +1451,7 @@ function KnowledgePage() {
                 onChange={(value) =>
                   setSearchScopeFilter(value as KnowledgeSearchScopeFilter)
                 }
-                options={[
-                  { label: "Combined", value: "combined" },
-                  { label: "Agent", value: "agent" },
-                  { label: "Project", value: "project" },
-                ]}
+                options={knowledgeScopeOptions(t)}
                 className={styles.searchTypeSelect}
               />
               <Select
@@ -1471,7 +1461,7 @@ function KnowledgePage() {
                 }
                 options={[
                   { label: t("knowledge.allTypes"), value: "all" },
-                  ...SOURCE_TYPE_OPTIONS,
+                  ...sourceTypeOptions(t),
                 ]}
                 className={styles.searchTypeSelect}
               />
@@ -1582,7 +1572,7 @@ function KnowledgePage() {
               onChange={(value) => setSourceTypeFilter(value as KnowledgeSourceType | "all")}
               options={[
                 { label: t("knowledge.allTypes"), value: "all" },
-                ...SOURCE_TYPE_OPTIONS,
+                ...sourceTypeOptions(t),
               ]}
               className={styles.filterSelect}
             />
@@ -1746,7 +1736,9 @@ function KnowledgePage() {
                               </div>
                               {remoteLine ? (
                                 <div className={styles.statusSubRow}>
-                                  <Typography.Text type="secondary">Remote</Typography.Text>
+                                  <Typography.Text type="secondary">
+                                    {t("knowledge.table.remote")}
+                                  </Typography.Text>
                                   <Typography.Text type="secondary">{remoteLine}</Typography.Text>
                                 </div>
                               ) : null}
@@ -1855,30 +1847,26 @@ function KnowledgePage() {
             <Space size="small" wrap>
               <div className={styles.paramControl}>
                 <Typography.Text type="secondary" className={styles.paramLabel}>
-                  Scope:
+                  {t("knowledge.graphQuery.scope")}:
                 </Typography.Text>
                 <Select
                   value={graphQueryScopeFilter}
                   onChange={(value) =>
                     setGraphQueryScopeFilter(value as KnowledgeSearchScopeFilter)
                   }
-                  options={[
-                    { label: "Combined", value: "combined" },
-                    { label: "Agent", value: "agent" },
-                    { label: "Project", value: "project" },
-                  ]}
+                  options={knowledgeScopeOptions(t)}
                   style={{ width: 140 }}
                 />
               </div>
               <div className={styles.paramControl}>
                 <Typography.Text type="secondary" className={styles.paramLabel}>
-                  Scope ID:
+                  {t("knowledge.graphQuery.scopeId")}:
                 </Typography.Text>
                 <Input
                   value={graphQueryScopeId}
                   disabled={graphQueryScopeFilter === "combined"}
                   onChange={(event) => setGraphQueryScopeId(event.target.value)}
-                  placeholder="optional"
+                  placeholder={t("knowledge.graphQuery.scopeIdOptional")}
                   style={{ width: 180 }}
                 />
               </div>
@@ -2013,7 +2001,7 @@ function KnowledgePage() {
             rules={[{ required: true }]}
           >
             <Select
-              options={SOURCE_TYPE_OPTIONS}
+              options={sourceTypeOptions(t)}
               onChange={(value) => {
                 setSelectedType(value as KnowledgeSourceType);
                 setIsFileDragActive(false);
@@ -2304,7 +2292,7 @@ function KnowledgePage() {
             ) : null}
 
             <div className={styles.infoSection}>
-              <div className={styles.infoLabel}>Node ID</div>
+              <div className={styles.infoLabel}>{t("knowledge.graphQuery.nodeId")}</div>
               <div className={`${styles.infoBlock} ${styles.singleLineValue}`}>
                 {graphQueryClickedNode}
               </div>
@@ -2464,7 +2452,7 @@ function KnowledgePage() {
 
             {selectedSourceRemoteLine ? (
               <div className={styles.infoSection}>
-                <div className={styles.infoLabel}>Remote</div>
+                <div className={styles.infoLabel}>{t("knowledge.table.remote")}</div>
                 <div className={styles.infoBlock}>{selectedSourceRemoteLine}</div>
               </div>
             ) : null}

@@ -319,19 +319,19 @@ export default function ProjectMetricsPanel({
 
           <div className={styles.metricSummaryGrid}>
             <div className={styles.metricSummaryCard}>
-              <div className={styles.itemMeta}>Total Steps</div>
+              <div className={styles.itemMeta}>{t("projects.pipeline.totalSteps")}</div>
               <div className={styles.metricSummaryValue}>{runProgress.total}</div>
             </div>
             <div className={styles.metricSummaryCard}>
-              <div className={styles.itemMeta}>Completed</div>
+              <div className={styles.itemMeta}>{t("projects.pipeline.status.completed")}</div>
               <div className={styles.metricSummaryValue}>{runProgress.completed}</div>
             </div>
             <div className={styles.metricSummaryCard}>
-              <div className={styles.itemMeta}>Running</div>
+              <div className={styles.itemMeta}>{t("projects.pipeline.status.running")}</div>
               <div className={styles.metricSummaryValue}>{runProgress.running}</div>
             </div>
             <div className={styles.metricSummaryCard}>
-              <div className={styles.itemMeta}>Pending</div>
+              <div className={styles.itemMeta}>{t("projects.pipeline.status.pending")}</div>
               <div className={styles.metricSummaryValue}>{runProgress.pending}</div>
             </div>
           </div>
@@ -345,7 +345,7 @@ export default function ProjectMetricsPanel({
                   <Tag color={statusTagColor(step.status)}>{step.status}</Tag>
                 </div>
                 {entries.length === 0 ? (
-                  <div className={styles.itemMeta}>No metrics</div>
+                  <div className={styles.itemMeta}>{t("projects.pipeline.noMetrics")}</div>
                 ) : (
                   entries.map(([key, value]) => {
                     const currentNumeric = toNumericMetric(value);

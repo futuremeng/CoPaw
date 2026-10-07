@@ -2377,7 +2377,7 @@ function NlpPage() {
                       />
                       {activeSiameseDemoMethod?.schema ? (
                         <>
-                          <Typography.Text type="secondary">Schema JSON</Typography.Text>
+                          <Typography.Text type="secondary">{t("nlpConfig.demo.schemaJson")}</Typography.Text>
                           <Input.TextArea
                             rows={5}
                             value={activeSiameseSchema}

@@ -47,6 +47,13 @@ import {
   summarizeGraphEntities,
 } from "./graphVisualizationData";
 import { parseScopeFilterProvenance } from "./graphScopeFilter.ts";
+import {
+  graphSortFieldOptions,
+  graphSortOrderOptions,
+  weightLegendLabels,
+  type GraphSortField,
+  type GraphSortOrder,
+} from "./selectLabels";
 import { useTheme } from "../../../contexts/ThemeContext";
 import styles from "./index.module.less";
 
@@ -503,8 +510,8 @@ export function GraphQueryResults(props: GraphQueryResultsProps) {
       [props.provenance],
     );
   const [filterText, setFilterText] = useState("");
-  const [sortBy, setSortBy] = useState<"score" | "subject" | "title">("score");
-  const [sortOrder, setSortOrder] = useState<"descend" | "ascend">("descend");
+  const [sortBy, setSortBy] = useState<GraphSortField>("score");
+  const [sortOrder, setSortOrder] = useState<GraphSortOrder>("descend");
   const [pageSize, setPageSize] = useState(10);
 
   const viewModels = useMemo(() => {
@@ -627,21 +634,14 @@ export function GraphQueryResults(props: GraphQueryResultsProps) {
             size={props.compact ? "small" : "middle"}
             value={sortBy}
             onChange={setSortBy}
-            options={[
-              { label: "Score", value: "score" },
-              { label: "Subject", value: "subject" },
-              { label: "Document Title", value: "title" },
-            ]}
+            options={graphSortFieldOptions(t)}
             style={{ width: props.compact ? 130 : 150 }}
           />
           <Select
             size={props.compact ? "small" : "middle"}
             value={sortOrder}
-            onChange={(value) => setSortOrder(value as "ascend" | "descend")}
-            options={[
-              { label: "Descending", value: "descend" },
-              { label: "Ascending", value: "ascend" },
-            ]}
+            onChange={(value) => setSortOrder(value as GraphSortOrder)}
+            options={graphSortOrderOptions(t)}
             style={{ width: props.compact ? 112 : 120 }}
           />
         </Space>
@@ -1946,6 +1946,8 @@ export function GraphVisualization(props: GraphVisualizationProps) {
     );
   }
 
+  const weightLabels = weightLegendLabels(t);
+
   const statusPopoverContent = (
     <div className={styles.graphStatusPanel}>
       <div className={styles.graphLegendRow}>
@@ -1961,9 +1963,9 @@ export function GraphVisualization(props: GraphVisualizationProps) {
               </span>
             ))
             : [
-              { label: "Low", color: buildWeightColor(0.2) },
-              { label: "Mid", color: buildWeightColor(0.55) },
-              { label: "High", color: buildWeightColor(0.9) },
+              { label: weightLabels.low, color: buildWeightColor(0.2) },
+              { label: weightLabels.mid, color: buildWeightColor(0.55) },
+              { label: weightLabels.high, color: buildWeightColor(0.9) },
             ].map((item) => (
               <span key={item.label} className={styles.graphLegendItem}>
                 <span className={styles.graphLegendSwatch} style={{ backgroundColor: item.color }} />
