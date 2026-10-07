@@ -1,12 +1,6 @@
 // ── URLs ──────────────────────────────────────────────────────────────────
 
-export const PYPI_URL = "https://pypi.org/pypi/qwenpaw/json";
-
 export const GITHUB_URL = "https://github.com/agentscope-ai/QwenPaw" as const;
-
-// ── Timing ────────────────────────────────────────────────────────────────
-
-export const ONE_HOUR_MS = 60 * 60 * 1000;
 
 // ── Navigation ────────────────────────────────────────────────────────────
 
@@ -95,74 +89,25 @@ export const getFeatureDemosUrl = (lang: string): string =>
     lang,
   )}`;
 
-// ── Version helpers ────────────────────────────────────────────────────────
-
-// Filter out pre-release versions; post-releases are treated as stable.
-// PEP 440 pre-release suffixes: aN / bN / rcN (or cN) / devN.
-export const isStableVersion = (v: string): boolean =>
-  !/(\d)(a|alpha|b|beta|rc|c|dev)\d*/i.test(v);
-
-// Compare two PEP 440 version strings. Returns >0 if a>b, <0 if a<b, 0 if equal.
-// .postN releases sort after their base version (e.g. 1.0.0.post1 > 1.0.0).
-// Pre-release versions (aN, bN, rcN) sort before their base version.
-export const compareVersions = (a: string, b: string): number => {
-  const normalise = (v: string): number[] => {
-    // Handle .postN suffix
-    const postMatch = v.match(/\.post(\d+)$/i);
-    const postNum = postMatch ? Number(postMatch[1]) : 0;
-    const baseVersion = v.replace(/\.post\d+$/i, "");
-
-    // Handle pre-release suffix (e.g., 1.0.1b1 -> base=1.0.1, preType=b, preNum=1)
-    const preMatch = baseVersion.match(/^(.+?)(a|alpha|b|beta|rc|c)(\d*)$/i);
-    let coreVersion = baseVersion;
-    let preType = 0; // 0 = stable, -3 = alpha, -2 = beta, -1 = rc
-    let preNum = 0;
-    if (preMatch) {
-      coreVersion = preMatch[1];
-      const preLabel = preMatch[2].toLowerCase();
-      preType =
-        preLabel === "a" || preLabel === "alpha"
-          ? -3
-          : preLabel === "b" || preLabel === "beta"
-          ? -2
-          : -1; // rc or c
-      preNum = preMatch[3] ? Number(preMatch[3]) : 0;
-    }
-
-    const parts = coreVersion.split(/[.\-]/).map((seg) => Number(seg) || 0);
-    // Append: preType (0 for stable, negative for pre-release), preNum, postNum
-    return [...parts, preType, preNum, postNum];
-  };
-
-  const aN = normalise(a);
-  const bN = normalise(b);
-  const len = Math.max(aN.length, bN.length);
-  for (let i = 0; i < len; i++) {
-    const diff = (aN[i] ?? 0) - (bN[i] ?? 0);
-    if (diff !== 0) return diff;
-  }
-  return 0;
-};
-
 // ── Update markdown ───────────────────────────────────────────────────────
-// TODO
+// CoPaw is published only on GitHub Releases today: the PyPI distribution and
+// the Docker image are upstream channels, so naming them here would tell a
+// CoPaw user to replace their CoPaw install with the upstream product.
 export const UPDATE_MD: Record<string, string> = {
   zh: `### CoPaw如何更新
 
-要更新 CoPaw 到最新版本，可根据你的安装方式选择对应方法：
+CoPaw 目前只通过 GitHub Releases 发布，PyPI 包与 Docker 镜像渠道还没有开通，因此不要执行上游的 pip 或 Docker 升级命令，那会装上 QwenPaw 而不是 CoPaw。
 
-1. 如果你使用的是一键安装脚本，直接重新运行安装命令即可自动升级。
-
-2. 如果你是通过 pip 安装，在终端中执行以下命令升级：
+1. 打开 CoPaw 发布页查看最新版本并下载安装包：
 
 \`\`\`
-qwenpaw update
+https://github.com/futuremeng/CoPaw/releases
 \`\`\`
 
-3. 如果你是从源码安装，进入项目目录并拉取最新代码后重新安装：
+2. 如果你是从源码安装的，进入项目目录拉取最新代码，重新构建前端并重装：
 
 \`\`\`
-cd QwenPaw
+cd CoPaw
 git pull origin main
 cd console && npm ci && npm run build
 cd .. && mkdir -p src/qwenpaw/console
@@ -170,31 +115,26 @@ cp -R console/dist/. src/qwenpaw/console/
 pip install -e .
 \`\`\`
 
-4. 如果你使用的是 Docker，拉取最新镜像并重启容器：
+3. 升级完成后重启服务：
 
 \`\`\`
-docker pull agentscope/qwenpaw:latest
-docker run -p 127.0.0.1:8088:8088 -v qwenpaw-data:/app/working -v qwenpaw-secrets:/app/working.secret -v qwenpaw-backups:/app/working.backups agentscope/qwenpaw:latest
-\`\`\`
+copaw app
+\`\`\``,
 
-升级后重启服务 copaw app。`,
+  ru: `### Как обновить CoPaw
 
-  ru: `### Как обновить QwenPaw
+CoPaw публикуется только на странице GitHub Releases: каналы PyPI и Docker ещё не открыты, поэтому не выполняйте команды обновления из документации QwenPaw — они установят QwenPaw вместо CoPaw.
 
-Чтобы обновить QwenPaw, выберите способ в зависимости от типа установки:
-
-1. Если вы устанавливали через однострочный скрипт, повторно запустите установщик для обновления.
-
-2. Если устанавливали через pip, выполните:
+1. Откройте страницу релизов CoPaw и скачайте последнюю версию:
 
 \`\`\`
-qwenpaw update
+https://github.com/futuremeng/CoPaw/releases
 \`\`\`
 
-3. Если устанавливали из исходников, получите последние изменения и переустановите:
+2. Если CoPaw установлен из исходников, получите последние изменения, пересоберите интерфейс и переустановите:
 
 \`\`\`
-cd QwenPaw
+cd CoPaw
 git pull origin main
 cd console && npm ci && npm run build
 cd .. && mkdir -p src/qwenpaw/console
@@ -202,31 +142,26 @@ cp -R console/dist/. src/qwenpaw/console/
 pip install -e .
 \`\`\`
 
-4. Если используете Docker, загрузите новый образ и перезапустите контейнер:
+3. После обновления перезапустите сервис:
 
 \`\`\`
-docker pull agentscope/qwenpaw:latest
-docker run -p 127.0.0.1:8088:8088 -v qwenpaw-data:/app/working -v qwenpaw-secrets:/app/working.secret -v qwenpaw-backups:/app/working.backups agentscope/qwenpaw:latest
-\`\`\`
+copaw app
+\`\`\``,
 
-After upgrading, restart the service with \`qwenpaw app\`.`,
+  en: `### How to update CoPaw
 
-  en: `### How to update QwenPaw
+CoPaw is released only through GitHub Releases for now; the PyPI package and the Docker image channels are not open yet, so do not run the upstream pip or Docker upgrade commands — they would install QwenPaw instead of CoPaw.
 
-To update QwenPaw, use the method matching your installation type:
-
-1. If installed via one-line script, re-run the installer to upgrade.
-
-2. If installed via pip, run:
+1. Open the CoPaw releases page and download the latest build:
 
 \`\`\`
-qwenpaw update
+https://github.com/futuremeng/CoPaw/releases
 \`\`\`
 
-3. If installed from source, pull the latest code and reinstall:
+2. If you installed CoPaw from source, pull the latest code, rebuild the console and reinstall:
 
 \`\`\`
-cd QwenPaw
+cd CoPaw
 git pull origin main
 cd console && npm ci && npm run build
 cd .. && mkdir -p src/qwenpaw/console
@@ -234,12 +169,9 @@ cp -R console/dist/. src/qwenpaw/console/
 pip install -e .
 \`\`\`
 
-4. If using Docker, pull the latest image and restart the container:
+3. After upgrading, restart the service:
 
 \`\`\`
-docker pull agentscope/qwenpaw:latest
-docker run -p 127.0.0.1:8088:8088 -v qwenpaw-data:/app/working -v qwenpaw-secrets:/app/working.secret -v qwenpaw-backups:/app/working.backups agentscope/qwenpaw:latest
-\`\`\`
-
-After upgrading, restart the service with \`qwenpaw app\`.`,
+copaw app
+\`\`\``,
 };

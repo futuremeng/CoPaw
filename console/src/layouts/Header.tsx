@@ -1,4 +1,4 @@
-import { Layout, Space, Badge, Spin, Tooltip, Dropdown } from "antd";
+import { Layout, Space, Spin, Tooltip, Dropdown } from "antd";
 import type { MenuProps } from "antd";
 import LanguageSwitcher from "../components/LanguageSwitcher/index";
 import ThemeToggleButton from "../components/ThemeToggleButton";
@@ -13,11 +13,7 @@ import {
   getFeatureDemosUrl,
   getFaqUrl,
   getReleaseNotesUrl,
-  PYPI_URL,
-  ONE_HOUR_MS,
   UPDATE_MD,
-  isStableVersion,
-  compareVersions,
 } from "./constants";
 import { useState, useEffect } from "react";
 import ReactMarkdown from "react-markdown";
@@ -64,7 +60,6 @@ function UpdateCodeBlock({ code }: { code: string }) {
 export default function Header() {
   const { t, i18n } = useTranslation();
   const [version, setVersion] = useState<string>("");
-  const [latestVersion, setLatestVersion] = useState<string>("");
   const [updateModalOpen, setUpdateModalOpen] = useState(false);
   const [updateMarkdown, setUpdateMarkdown] = useState<string>("");
 
@@ -75,78 +70,14 @@ export default function Header() {
       .catch(() => {});
   }, []);
 
-  useEffect(() => {
-    fetch(PYPI_URL)
-      .then((res) => res.json())
-      .then((data) => {
-        const releases = data?.releases ?? {};
-
-        const versionsWithTime = Object.entries(releases)
-          .filter(([v]) => isStableVersion(v))
-          .map(([v, files]) => {
-            const fileList = files as Array<{ upload_time_iso_8601?: string }>;
-            const latestUpload = fileList
-              .map((f) => f.upload_time_iso_8601)
-              .filter(Boolean)
-              .sort()
-              .pop();
-            return { version: v, uploadTime: latestUpload || "" };
-          });
-
-        versionsWithTime.sort((a, b) => {
-          const timeDiff =
-            new Date(b.uploadTime).getTime() - new Date(a.uploadTime).getTime();
-          return timeDiff !== 0
-            ? timeDiff
-            : compareVersions(b.version, a.version);
-        });
-
-        const versions = versionsWithTime.map((v) => v.version);
-        const latest = versions[0] ?? data?.info?.version ?? "";
-
-        const releaseTime = versionsWithTime.find((v) => v.version === latest)
-          ?.uploadTime;
-        const isOldEnough =
-          !!releaseTime &&
-          new Date(releaseTime) <= new Date(Date.now() - ONE_HOUR_MS);
-
-        if (isOldEnough) {
-          setLatestVersion(latest);
-        } else {
-          setLatestVersion("");
-        }
-      })
-      .catch(() => {});
-  }, []);
-
-  const hasUpdate =
-    !!version && !!latestVersion && compareVersions(latestVersion, version) > 0;
-
   const handleOpenUpdateModal = () => {
-    setUpdateMarkdown("");
-    setUpdateModalOpen(true);
     const lang = i18n.language?.startsWith("zh")
       ? "zh"
       : i18n.language?.startsWith("ru")
       ? "ru"
       : "en";
-    const faqLang = lang === "zh" ? "zh" : "en";
-    const url = `https://qwenpaw.agentscope.io/docs/faq.${faqLang}.md`;
-    fetch(url, { cache: "no-cache" })
-      .then((res) => (res.ok ? res.text() : Promise.reject()))
-      .then((text) => {
-        const zhPattern = /###\s*QwenPaw如何更新[\s\S]*?(?=\n###|$)/;
-        const enPattern = /###\s*How to update QwenPaw[\s\S]*?(?=\n###|$)/;
-        const match = text.match(faqLang === "zh" ? zhPattern : enPattern);
-        setUpdateMarkdown(
-          match && lang !== "ru"
-            ? match[0].trim()
-            : UPDATE_MD[lang] ?? UPDATE_MD.en,
-        );
-      })
-      .catch(() => {
-        setUpdateMarkdown(UPDATE_MD[lang] ?? UPDATE_MD.en);
-      });
+    setUpdateMarkdown(UPDATE_MD[lang] ?? UPDATE_MD.en);
+    setUpdateModalOpen(true);
   };
 
   const handleNavClick = (url: string) => {
@@ -174,22 +105,12 @@ export default function Header() {
           <span className={styles.brandText}>CoPaw</span>
           <div className={styles.logoDivider} />
           {version && (
-            <Badge
-              dot={!!hasUpdate}
-              color="rgba(255, 157, 77, 1)"
-              offset={[4, 28]}
+            <span
+              className={`${styles.versionBadge} ${styles.versionBadgeClickable}`}
+              onClick={handleOpenUpdateModal}
             >
-              <span
-                className={`${styles.versionBadge} ${
-                  hasUpdate
-                    ? styles.versionBadgeClickable
-                    : styles.versionBadgeDefault
-                }`}
-                onClick={() => hasUpdate && handleOpenUpdateModal()}
-              >
-                v{version}
-              </span>
-            </Badge>
+              v{version}
+            </span>
           )}
         </div>
         <Space size="middle">
@@ -271,12 +192,10 @@ export default function Header() {
           <div className={styles.updateModalBannerLeft}>
             <span className={styles.updateModalVersionTag}>
               <TagOutlined />
-              Version {latestVersion || version}
+              Version {version}
             </span>
             <div className={styles.updateModalBannerTitle}>
-              {t("sidebar.updateModal.title", {
-                version: latestVersion || version,
-              })}
+              {t("sidebar.updateModal.title", { version })}
             </div>
           </div>
         </div>

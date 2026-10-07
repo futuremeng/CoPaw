@@ -2,7 +2,7 @@
   "base_ref": "e111ec6fb",
   "source_ref": "working",
   "files": 9,
-  "lines": 34,
+  "lines": 37,
   "entries": [
     {
       "path": "console/index.html",
@@ -30,12 +30,24 @@
           "new": "  zh: `### CoPaw如何更新"
         },
         {
-          "old": "要更新 QwenPaw 到最新版本，可根据你的安装方式选择对应方法：",
-          "new": "要更新 CoPaw 到最新版本，可根据你的安装方式选择对应方法："
+          "old": "cd QwenPaw",
+          "new": "cd CoPaw"
         },
         {
-          "old": "升级后重启服务 qwenpaw app。`,",
-          "new": "升级后重启服务 copaw app。`,"
+          "old": "  ru: `### Как обновить QwenPaw",
+          "new": "  ru: `### Как обновить CoPaw"
+        },
+        {
+          "old": "cd QwenPaw",
+          "new": "cd CoPaw"
+        },
+        {
+          "old": "  en: `### How to update QwenPaw",
+          "new": "  en: `### How to update CoPaw"
+        },
+        {
+          "old": "cd QwenPaw",
+          "new": "cd CoPaw"
         }
       ]
     },
