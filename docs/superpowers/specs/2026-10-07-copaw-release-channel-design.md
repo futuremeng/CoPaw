@@ -1,6 +1,6 @@
 # CoPaw 发布渠道设计
 
-- 状态：**待用户复审**（本文只描述设计；实施另出计划文档）
+- 状态：**已批准**（用户 2026-10-08 复审通过，§9 五项待裁按本文建议答案采纳）。实施计划另出：`docs/superpowers/plans/2026-10-08-copaw-release-channel-phase1.md`（阶段 1；计划对本文有四处已核对的偏离，列在该计划开头）
 - 日期：2026-10-07
 - 分支：`wp/integration`（worktree `CoPaw-wp14`）
 - 用户已锁的四项决定：① 范围 = 全渠道 + 自有 PyPI 包名；② 版本政策 = 跟上游同号、自加 `.postN`；③ 账号现状 = 只有 GitHub 已开，PyPI / Docker / 对象存储都没有；④ 技术方案 = 单一事实源（一个 `release_channel.json` 供 CLI / 前端 / 文档 / CI 共同读）
@@ -93,7 +93,7 @@
 | Shell / PowerShell 安装脚本 | `python scripts/release_channel.py --sh` 出 `export` 行 | `scripts/copaw_brand.py` 已是"脚本读账本"这种形状 |
 | 前端 | 提交进仓库的生成文件 `console/src/generated/releaseChannel.ts` | `console/src/layouts/constants.ts` 已是常量集散地（`console/src/generated/` 目前不存在，是新目录） |
 
-**命名避让（对批准稿的一处改动，请在复审时确认）**：批准稿里 CI / 安装脚本的入口写作 `scripts/channel.py`。现仓已有 `scripts/check_channel_contracts.py`，那里的 "channel" 指**聊天渠道**（钉钉 / 飞书 / Discord）。同一个仓库里两个 "channel" 会让人读错，因此改名为 `scripts/release_channel.py`、环境变量前缀 `RELEASE_`。概念、字段、行为都不变，只是名字。
+**命名避让（对批准稿的一处改动，用户 2026-10-08 复审确认）**：批准稿里 CI / 安装脚本的入口写作 `scripts/channel.py`。现仓已有 `scripts/check_channel_contracts.py`，那里的 "channel" 指**聊天渠道**（钉钉 / 飞书 / Discord）。同一个仓库里两个 "channel" 会让人读错，因此改名为 `scripts/release_channel.py`、环境变量前缀 `RELEASE_`。概念、字段、行为都不变，只是名字。
 
 **承重轴：`pending` 必须能区分"没有这个渠道"和"渠道地址未知"**。loader 对 `null` 返回 `None`（不是空串），前端拿到 `null` 就不发那个请求。现在这个弹窗的病根正是"把上游渠道当成我们的渠道去查"——若新设计允许"空串 ⇒ 仍然请求"，同样的病会复发。
 
