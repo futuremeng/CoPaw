@@ -2,7 +2,7 @@
 // Fact source: src/copaw/release_channel.json
 export const RELEASE_CHANNEL = {
   distribution: "copaw",
-  pypi_project: "copaw",
+  pypi_project: "copaw-community",
   upstream_version: "1.1.11b1",
   docker_namespace: null,
   github_repository: "futuremeng/CoPaw",

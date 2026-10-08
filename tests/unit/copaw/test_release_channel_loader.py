@@ -62,7 +62,11 @@ def test_unready_channel_reads_none_not_empty_string(rc, data):
 
 def test_pypi_name_exists_while_pending(rc, data):
     assert rc.is_ready(data, "pypi") is False
-    assert data["pypi_project"] == "copaw"
+    assert data["pypi_project"] == "copaw-community"
+    # Upstream owns the bare `copaw` project on PyPI (their pre-rename
+    # distribution, last uploaded 2026-04-09), so the PyPI name must never
+    # collapse back onto the program name.
+    assert data["pypi_project"] != data["distribution"]
 
 
 def test_urls_derive_from_the_repository_field(rc, data):
