@@ -224,5 +224,5 @@ describe("ProjectsListPage", () => {
         tags: ["demo", "draft"],
       });
     });
-  }, 15000);
+  });
 });

@@ -20,10 +20,13 @@ export default defineConfig({
     environment: "jsdom",
     include: ["src/**/*.test.ts", "src/**/*.test.tsx"],
     globals: true,
-    setupFiles: ["./src/test/setup.ts"],
+    setupFiles: ["./src/test/setup.ts", "./src/test/asyncUtilTimeout.ts"],
     css: true,
     // The suite is parallel-load-sensitive: heavy page tests intermittently pass
     // the 5000ms default (4 recorded flakes).  The CI gate runs this file.
+    // Keep per-test `timeout:` overrides above the asyncUtilTimeout configured
+    // in src/test/asyncUtilTimeout.ts, otherwise a wait and the test that hosts
+    // it are racing two unrelated clocks.
     testTimeout: 20000,
     deps: {
       inline: [/@agentscope-ai\/(?!icons|chat|design)/],

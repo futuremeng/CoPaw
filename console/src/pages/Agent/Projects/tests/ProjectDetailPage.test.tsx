@@ -314,7 +314,8 @@ function renderPage() {
 let consoleErrorSpy: ReturnType<typeof vi.spyOn> | null = null;
 
 // Mounting the whole detail page costs ~0.5-3s alone and 10s+ when the suite
-// runs 84 files in parallel, so the 5s default test timeout is not enough.
+// runs every file in parallel (one case measured 13,297ms), so it needs more
+// than the global testTimeout in vitest.config.ts.
 describe("ProjectDetailPage refresh scheduling", { timeout: 30000 }, () => {
   afterEach(() => {
     consoleErrorSpy?.mockRestore();
@@ -422,19 +423,21 @@ describe("ProjectDetailPage refresh scheduling", { timeout: 30000 }, () => {
     await waitFor(() => {
       expect(mockedAcquireProjectKnowledgeWatchLease).toHaveBeenCalledWith("agent-1", "proj-1");
     });
-    expect(mockedQueryProjectFiles).toHaveBeenCalledWith(
-      "agent-1",
-      "proj-1",
-      expect.objectContaining({
-        include_ignored: false,
-        sort_by: "path",
-        sort_order: "asc",
-        offset: 0,
-        limit: 5000,
-        include_builtin: false,
-        stages: ["original", "intermediate", "artifact"],
-      }),
-    );
+    await waitFor(() => {
+      expect(mockedQueryProjectFiles).toHaveBeenCalledWith(
+        "agent-1",
+        "proj-1",
+        expect.objectContaining({
+          include_ignored: false,
+          sort_by: "path",
+          sort_order: "asc",
+          offset: 0,
+          limit: 5000,
+          include_builtin: false,
+          stages: ["original", "intermediate", "artifact"],
+        }),
+      );
+    });
 
     view.unmount();
 
@@ -687,11 +690,9 @@ describe("ProjectDetailPage refresh scheduling", { timeout: 30000 }, () => {
 
     const view = renderPage();
     try {
-      await new Promise((resolve) => {
-        setTimeout(resolve, 500);
+      await waitFor(() => {
+        expect(mockedQueryProjectFiles.mock.calls.length).toBeGreaterThanOrEqual(2);
       });
-
-      expect(mockedQueryProjectFiles.mock.calls.length).toBeGreaterThanOrEqual(2);
       expect(mockedQueryProjectFiles.mock.calls[0]?.[1]).toBe("proj-1");
       expect(mockedMessageError).not.toHaveBeenCalledWith("projects.loadFilesFailed");
     } finally {
