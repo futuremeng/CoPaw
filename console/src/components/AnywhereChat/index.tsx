@@ -20,7 +20,6 @@ import { chatApi } from "../../api/modules/chat";
 import { commandsApi } from "../../api/modules/commands";
 import { providerApi } from "../../api/modules/provider";
 import { agentApi } from "../../api/modules/agent";
-import { planApi } from "../../api/modules/plan";
 import { buildAuthHeaders } from "../../api/authHeaders";
 import { getApiUrl } from "../../api/config";
 import { useTheme } from "../../contexts/ThemeContext";
@@ -57,7 +56,6 @@ import WhisperSpeechButton, {
   WhisperSpeechButtonRef,
 } from "../../pages/Chat/components/WhisperSpeechButton/index";
 import { ApprovalCard } from "../ApprovalCard/ApprovalCard";
-import PlanPanel from "../PlanPanel";
 import ChatSearchPanel from "./ChatSearchPanel";
 import { resolveApprovalVisibility } from "./approvalVisibility";
 import { createClearHistoryResponseParser } from "./clearHistoryResponseParser";
@@ -256,22 +254,6 @@ type RuntimeUiMessage = IAgentScopeRuntimeWebUIMessage & {
 };
 
 const CHAT_ATTACHMENT_MAX_MB = 10;
-
-const PlanIcon = () => (
-  <svg
-    width="1em"
-    height="1em"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-  >
-    <path d="M9 11l3 3L22 4" />
-    <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
-  </svg>
-);
 
 const COPAW_FULL_REFERENCES_BLOCK_RE =
   /<!--\s*COPAW_REFERENCES_FULL_BEGIN[\s\S]*?COPAW_REFERENCES_FULL_END\s*-->/gi;
@@ -863,8 +845,6 @@ export default function AnywhereChat({
   const { approvals, setApprovals } = useApprovalContext();
   const { selectedAgent } = useAgentStore();
   const [refreshKey, setRefreshKey] = useState(0);
-  const [planEnabled, setPlanEnabled] = useState(false);
-  const [planPanelOpen, setPlanPanelOpen] = useState(false);
   const [searchPanelOpen, setSearchPanelOpen] = useState(false);
   const [whisperEnabled, setWhisperEnabled] = useState(false);
   const [approvalRequests, setApprovalRequests] = useState<Map<string, ApprovalMessageData>>(new Map());
@@ -1874,25 +1854,6 @@ export default function AnywhereChat({
   }, [loadRuntimeInputs]);
 
   useEffect(() => {
-    let cancelled = false;
-    planApi
-      .getPlanConfig(selectedAgent)
-      .then((config) => {
-        if (!cancelled) {
-          setPlanEnabled(config.enabled);
-        }
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setPlanEnabled(false);
-        }
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [selectedAgent]);
-
-  useEffect(() => {
     agentApi
       .getTranscriptionProviderType()
       .then((result) => {
@@ -2465,20 +2426,6 @@ export default function AnywhereChat({
       const lastInput = input.slice(-1);
       const latestUserText = extractLatestUserText(input);
 
-      if (planEnabled && latestUserText.trim() === "/plan") {
-        setPlanPanelOpen(true);
-        return new Response(
-          JSON.stringify({
-            status: AgentScopeRuntimeRunStatus.Completed,
-            output: [],
-          }),
-          {
-            status: 200,
-            headers: { "Content-Type": "application/json" },
-          },
-        );
-      }
-
       const bootstrapText = isPipelineDesignBootstrapText(latestUserText);
       const shouldInlinePipelineGuide =
         !bootstrapText && shouldSuggestPipelineOpportunity(latestUserText);
@@ -2792,7 +2739,6 @@ export default function AnywhereChat({
       onAssistantTurnCompleted,
       persistStreamSession,
       runningConfig?.auto_continue_enabled,
-      planEnabled,
       selectedAgent,
       sessionId,
       t,
@@ -2834,13 +2780,6 @@ export default function AnywhereChat({
         description: t("chat.commands.deny.description"),
       },
     ];
-    if (planEnabled) {
-      commandSuggestions.push({
-        command: "/plan",
-        value: "plan ",
-        description: t("chat.commands.plan.description"),
-      });
-    }
     const welcomeConfig = (i18nConfig.welcome || {}) as WelcomeConfigShape;
     const selectedPromptValues = welcomePromptsWhenEmpty || welcomePrompts || [];
     const prompts =
@@ -3003,7 +2942,6 @@ export default function AnywhereChat({
     multimodalCaps,
     appendPromptToDraftInput,
     handleWhisperTranscription,
-    planEnabled,
     sessionId,
     scheduleHistoryClear,
     singleSessionApi,
@@ -3143,16 +3081,6 @@ export default function AnywhereChat({
         </div>
         <div className={styles.headerRight}>
           <ModelSelector />
-          {planEnabled ? (
-            <Tooltip title={t("plan.title")} mouseEnterDelay={0.3}>
-              <IconButton
-                bordered={false}
-                icon={<PlanIcon />}
-                onClick={() => setPlanPanelOpen(true)}
-                aria-label={t("plan.title")}
-              />
-            </Tooltip>
-          ) : null}
           <Tooltip title={t("chat.searchTooltip")} mouseEnterDelay={0.3}>
             <IconButton
               bordered={false}
@@ -3305,15 +3233,6 @@ export default function AnywhereChat({
           onSelectHistoryChat(chatId);
         }}
       />
-      {planEnabled ? (
-        <PlanPanel
-          open={planPanelOpen}
-          onClose={() => {
-            setPlanPanelOpen(false);
-            focusChatInput();
-          }}
-        />
-      ) : null}
     </div>
   );
 }
