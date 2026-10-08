@@ -89,6 +89,10 @@ jobs:
           python scripts/check_p1_invariants.py --check
           python scripts/copaw_brand.py verify
 
+      - name: Release channel consistency (gate)
+        if: matrix.python-version == '3.10'
+        run: python scripts/check_release_channel_consistency.py
+
       - name: Run all unit tests (informational — pre-existing failures tolerated)
         continue-on-error: true
         run: |
