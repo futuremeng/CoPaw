@@ -87,6 +87,9 @@ include-package-data = true
     "app/channels/yuanbao/proto/*.json",
     "docs/*.md",
 ]
+"copaw" = [
+    "release_channel.json",
+]
 
 [build-system]
 requires = ["setuptools>=42", "wheel"]

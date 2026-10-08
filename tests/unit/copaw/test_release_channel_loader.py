@@ -97,3 +97,16 @@ def test_ready_channel_exposes_its_address(rc, tmp_path):
     assert rc.is_ready(data, "docker") is True
     assert rc.address(data, "docker") == "ghcr.io/futuremeng"
     assert rc.address(data, "cdn") == "https://cdn.example.invalid/copaw"
+
+
+def test_package_data_ships_the_fact_source():
+    text = (REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8")
+    section = text.split("[tool.setuptools.package-data]")[1]
+    section = section.split("[build-system]")[0]
+    assert '"copaw"' in section
+    assert "release_channel.json" in section
+
+
+def test_version_still_comes_from_the_upstream_version_module():
+    text = (REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8")
+    assert 'version = {attr = "qwenpaw.__version__.__version__"}' in text
