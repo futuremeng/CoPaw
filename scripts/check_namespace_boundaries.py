@@ -34,12 +34,15 @@ ALLOWED_QWENPAW_TO_COPAW: set[str] = set()
 # Shared files that are legitimately non-thin on the copaw side: the branded
 # entry points (cli, __main__) and the overlay app / lazy knowledge tables.
 # Anything else sharing a path with qwenpaw must be a pure re-export shim.
+# ``cli/update_cmd.py`` is the branded update overlay: it refuses the upstream
+# pip path until the PyPI channel opens, so it cannot mirror the engine file.
 ALLOWED_NON_THIN_SHARED = {
     "__init__.py",
     "__main__.py",
     "app/_app.py",
     "cli/__init__.py",
     "cli/main.py",
+    "cli/update_cmd.py",
     "knowledge/__init__.py",
 }
 
@@ -53,8 +56,10 @@ ALLOWED_COPAW_ONLY_PREFIXES = (
 )
 
 # copaw-only routers were sunk into the engine package (D-16); the Copaw overlay
-# includes them from ``qwenpaw`` so no file-level exception is needed here.
-ALLOWED_COPAW_ONLY_FILES: set[str] = set()
+# includes them from ``qwenpaw`` so no router-level exception belongs here.
+# ``release_channel.py`` is the single fact source for CoPaw's own release
+# channel: the engine package must never read it.
+ALLOWED_COPAW_ONLY_FILES: set[str] = {"release_channel.py"}
 
 QWENPAW_TO_COPAW_IMPORT_RE = re.compile(r"^\s*from\s+copaw\.[\w.]+\s+import\s+", re.M)
 COPAW_TO_QWENPAW_IMPORT_RE = re.compile(

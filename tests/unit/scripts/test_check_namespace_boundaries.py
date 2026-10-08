@@ -56,7 +56,11 @@ def test_copaw_keeps_no_router_level_exceptions():
     """D-16: both Copaw task routers were sunk into ``qwenpaw.app.routers``."""
     mod = _load_module()
     repo_root = Path(__file__).resolve().parents[3]
-    assert mod.ALLOWED_COPAW_ONLY_FILES == set()
+    # ``release_channel.py`` is the only registered copaw-only file (阶段 1);
+    # the router-level table D-16 emptied stays empty.
+    registered = mod.ALLOWED_COPAW_ONLY_FILES
+    assert registered == {"release_channel.py"}
+    assert not [f for f in registered if f.startswith("app/routers/")]
     assert not (repo_root / "src" / "copaw" / "app" / "routers" / "knowledge_hanlp_tasks.py").exists()
     assert (repo_root / "src" / "qwenpaw" / "app" / "routers" / "knowledge_hanlp_tasks.py").is_file()
 
@@ -64,3 +68,13 @@ def test_copaw_keeps_no_router_level_exceptions():
 def test_allowed_non_thin_shared_includes_copaw_app_overlay():
     mod = _load_module()
     assert "app/_app.py" in mod.ALLOWED_NON_THIN_SHARED
+
+
+def test_release_channel_files_do_not_trip_the_gate():
+    """阶段 1: ``copaw update``'s overlay and the fact-source loader are both
+    legitimately copaw-owned, so the live tree must read clean."""
+    mod = _load_module()
+    assert "cli/update_cmd.py" in mod.ALLOWED_NON_THIN_SHARED
+    report = mod.compute_local_report()
+    assert report["non_thin_shared"] == []
+    assert report["non_extension_copaw_only"] == []
