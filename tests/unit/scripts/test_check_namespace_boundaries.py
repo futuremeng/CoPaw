@@ -49,7 +49,9 @@ def test_flow_engine_lives_in_the_engine_package():
     repo_root = Path(__file__).resolve().parents[3]
     assert "app/flow_engine/" not in mod.ALLOWED_COPAW_ONLY_PREFIXES
     assert (repo_root / "src" / "qwenpaw" / "app" / "flow_engine" / "__init__.py").is_file()
-    assert not (repo_root / "src" / "copaw" / "app" / "flow_engine").exists()
+    sink_dir = repo_root / "src" / "copaw" / "app" / "flow_engine"
+    # A stale, gitignored __pycache__/ from before the sink is not a module.
+    assert not list(sink_dir.glob("*.py"))
 
 
 def test_copaw_keeps_no_router_level_exceptions():
