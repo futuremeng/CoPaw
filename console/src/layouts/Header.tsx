@@ -13,6 +13,7 @@ import {
   getFeatureDemosUrl,
   getFaqUrl,
   getReleaseNotesUrl,
+  releasesUrl,
   UPDATE_MD,
 } from "./constants";
 import { useState, useEffect } from "react";
@@ -179,7 +180,7 @@ export default function Header() {
             key="releases"
             type="primary"
             className={styles.updateViewReleasesBtn}
-            onClick={() => handleNavClick(getReleaseNotesUrl(i18n.language))}
+            onClick={() => handleNavClick(releasesUrl)}
           >
             {t("sidebar.updateModal.viewReleases")}
           </Button>,

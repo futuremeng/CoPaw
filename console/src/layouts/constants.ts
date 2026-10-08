@@ -1,6 +1,13 @@
 // ── URLs ──────────────────────────────────────────────────────────────────
+// Both repository URLs come from the release-channel fact source
+// (src/copaw/release_channel.json -> console/src/generated/releaseChannel.ts).
+// The documentation-site helpers below still point at the upstream site on
+// purpose: it is upstream's content asset, and CoPaw has no equivalent yet
+// (design section 9.3).
 
-export const GITHUB_URL = "https://github.com/agentscope-ai/QwenPaw" as const;
+import { githubUrl, releasesUrl } from "../generated/releaseChannel";
+
+export { githubUrl as GITHUB_URL, releasesUrl };
 
 // ── Navigation ────────────────────────────────────────────────────────────
 
@@ -101,7 +108,7 @@ CoPaw 目前只通过 GitHub Releases 发布，PyPI 包与 Docker 镜像渠道�
 1. 打开 CoPaw 发布页查看最新版本并下载安装包：
 
 \`\`\`
-https://github.com/futuremeng/CoPaw/releases
+${releasesUrl}
 \`\`\`
 
 2. 如果你是从源码安装的，进入项目目录拉取最新代码，重新构建前端并重装：
@@ -128,7 +135,7 @@ CoPaw публикуется только на странице GitHub Releases:
 1. Откройте страницу релизов CoPaw и скачайте последнюю версию:
 
 \`\`\`
-https://github.com/futuremeng/CoPaw/releases
+${releasesUrl}
 \`\`\`
 
 2. Если CoPaw установлен из исходников, получите последние изменения, пересоберите интерфейс и переустановите:
@@ -155,7 +162,7 @@ CoPaw is released only through GitHub Releases for now; the PyPI package and the
 1. Open the CoPaw releases page and download the latest build:
 
 \`\`\`
-https://github.com/futuremeng/CoPaw/releases
+${releasesUrl}
 \`\`\`
 
 2. If you installed CoPaw from source, pull the latest code, rebuild the console and reinstall:
