@@ -4,6 +4,7 @@
 - 日期：2026-10-07
 - 分支：`wp/integration`（worktree `CoPaw-wp14`）
 - 用户已锁的四项决定：① 范围 = 全渠道 + 自有 PyPI 包名；② 版本政策 = 跟上游同号、自加 `.postN`；③ 账号现状 = 只有 GitHub 已开，PyPI / Docker / 对象存储都没有；④ 技术方案 = 单一事实源（一个 `release_channel.json` 供 CLI / 前端 / 文档 / CI 共同读）
+- **2026-10-08 的实测更正（一次批准后的修订）**：决定 ① 里那枚包名原写的是 `copaw`，实测 `https://pypi.org/pypi/copaw/json` 返回 200、它是**上游改名前自己那枚包**（详见 §3）⇒ 我们的 PyPI 名定为 **`copaw-community`**，`distribution`（程序名 / console script）仍是 `copaw`。裁决人：用户 2026-10-08。
 - 顺序（用户 2026-10-07 亲自排）：**止血两刀（已闭）→ 本设计文档 → 追上游 v2.2.1 排最后**
 - 延伸：D-22 品牌边界的 R3（分发物的命名由 fork 自有的构建 overlay 决定，实现方式不许是"改上游构建脚本"）
 - 前置：止血两刀已落地并推送 —— `ceeee342a`（`copaw update` 不再走上游 pip 安装器）、`ac9afd740`（console 版本徽标不再抓 PyPI、改为打开本地 CoPaw 更新指引）
@@ -32,7 +33,7 @@
 
 | # | 链路 | 现值与落点 | 所有权 | 在册 | 状态 |
 |---|---|---|---|---|---|
-| 1 | PyPI 分发名 | `pyproject.toml:2` `name = "qwenpaw"` | 上游自有 | 在册（+11 −2） | 待办（阶段 2） |
+| 1 | PyPI 分发名 | `pyproject.toml:2` `name = "qwenpaw"` | 上游自有 | 在册（+11 −2） | 待办（阶段 2）：目标名 = **`copaw-community`**（`copaw` 实测被上游改名前的包占着，2026-10-08 裁，见 §4）；console script `copaw` 已在 `:102` |
 | 2 | 上游自更新命令 | `src/qwenpaw/cli/update_cmd.py:353` `package_spec = f"qwenpaw=={latest_version}"` | 上游自有 | 不在册 | **止血已闭**：`src/copaw/cli/update_cmd.py` 用同名命令盖住，上游文件一个字节没动 |
 | 3 | 前端更新检查 | 原 `constants.ts` 的 `PYPI_URL` + `Header.tsx` 挂载时 fetch | 上游自有 | 在册 | **止血已闭**：已删，徽标改为恒可点 |
 | 4 | 前端指引正文 | `console/src/layouts/constants.ts:96` `UPDATE_MD`（zh / ru / en 三门真译文） | 上游自有 | 在册 | **止血已闭**：只写 CoPaw 的 Releases |
@@ -61,7 +62,7 @@
 
 **一处必须跟着改、否则改名立刻咬人**：§2 第 9 行那两个 `importlib.metadata.version('qwenpaw')`。已核实这是全仓仅有的"按分发名读版本"的读点（Python 侧唯一的 `metadata.version()` 调用读的是 `reme-ai`，`src/qwenpaw/agents/memory/reme_light_memory_manager.py:163`，与分发名无关）。
 
-**一处分发名的连锁成本（要接受，不打算阻止）**：PyPI 上 `copaw` 与 `qwenpaw` 是两个不同的包，可以同时装，而两边都提供 `qwenpaw` 这个 console script，pip 会静默覆盖。上游包不是我们能控的；应对只写在文档与安装脚本里："装 CoPaw 渠道用 `pip install copaw`，跑 `copaw`"。
+**一处分发名的连锁成本（要接受，不打算阻止）**：本文原先写"PyPI 上 `copaw` 与 `qwenpaw` 是两个不同的包"，**2026-10-08 实测推翻了它的前提** —— `https://pypi.org/pypi/copaw/json` 返回 **200**，那枚包就是**上游改名前的自己**：说明文字里的链接全是 `github.com/agentscope-ai/CoPaw`，版本 `0.0.1 → 1.0.2`（46 个发布），最后上传 **2026-04-09**；`qwenpaw` 则从 `1.1.0` 起接上，首枚 **2026-04-12**（现 tip `2.2.1`）。所以 `copaw` 不是空位，是上游占着一个已停更的死名，而且我们的版本线 `1.1.11b1.post1` 正好压在它的 `1.0.2` 之上 —— 真用它，老用户的 `pip install -U copaw` 会静默从 AgentScope 团队的包换成我们的 fork。定名因此取 **`copaw-community`**（2026-10-08 现测 404 = 无人占；同批量过 `copaw-ai` / `copaw-fork` / `futuremeng-copaw` / `copaw-assistant` 也都 404）。连锁成本原样成立：两边都提供 `qwenpaw` 这个 console script，pip 会静默覆盖，上游包不是我们能控的；应对仍只写在文档与安装脚本里："装 CoPaw 渠道用 `pip install copaw-community`，跑 `copaw`"。
 
 ---
 
@@ -72,7 +73,7 @@
 ```json
 {
   "distribution": "copaw",
-  "pypi_project": "copaw",
+  "pypi_project": "copaw-community",
   "upstream_version": "1.1.11b1",
   "docker_namespace": null,
   "github_repository": "futuremeng/CoPaw",
@@ -89,7 +90,7 @@
 | 读取方 | 方式 | 现成先例 |
 |---|---|---|
 | Python | `src/copaw/release_channel.py` 一个小 loader（`json.load` + 字段名常量），`copaw update`、CLI 文案、诊断自检查都从它取 | `src/copaw/cli/{app_command,update_cmd}.py` 已经是 fork 自有 overlay |
-| GitHub Actions | 一步 `python scripts/release_channel.py --gh-env` 往 `$GITHUB_ENV` 写 `RELEASE_DISTRIBUTION=copaw` 等 | `desktop-release.yml:31-41`（pwsh 正则抽 `__version__.py`）与 `:101-103`（sed 抽版本写 `$GITHUB_OUTPUT`）已经是"从一处读版本"的形状 |
+| GitHub Actions | 一步 `python scripts/release_channel.py --gh-env` 往 `$GITHUB_ENV` 写 `RELEASE_DISTRIBUTION=copaw` / `RELEASE_PYPI_PROJECT=copaw-community` 等 | `desktop-release.yml:31-41`（pwsh 正则抽 `__version__.py`）与 `:101-103`（sed 抽版本写 `$GITHUB_OUTPUT`）已经是"从一处读版本"的形状 |
 | Shell / PowerShell 安装脚本 | `python scripts/release_channel.py --sh` 出 `export` 行 | `scripts/copaw_brand.py` 已是"脚本读账本"这种形状 |
 | 前端 | 提交进仓库的生成文件 `console/src/generated/releaseChannel.ts` | `console/src/layouts/constants.ts` 已是常量集散地（`console/src/generated/` 目前不存在，是新目录） |
 
@@ -119,11 +120,11 @@
 
 | 链路 | 现在（未就绪，止血后的状态） | 就绪后 | 谁负责切换 |
 |---|---|---|---|
-| `copaw update` | 打印版本 + "CoPaw is not published to PyPI yet" + Releases 链接，退出码 1，不执行任何 pip/uv | 从事实源读 `pypi_project`，比对基号后 `pip install copaw==<latest>` | `pending` 里去掉 `pypi` 那一把刀；命令体仍按**程序名分派**（判据 90：非 `copaw` 一律委托上游） |
+| `copaw update` | 打印版本 + "CoPaw is not published to PyPI yet" + Releases 链接，退出码 1，不执行任何 pip/uv | 从事实源读 `pypi_project`，比对基号后 `pip install copaw-community==<latest>` | `pending` 里去掉 `pypi` 那一把刀；命令体仍按**程序名分派**（判据 90：非 `copaw` 一律委托上游） |
 | `qwenpaw update` | 上游原行为（委托，未被我们改） | 同左 | 不变 |
 | 版本徽标 | 恒可点，打开本地三语指引，不发任何网络请求 | 恢复"有新版本"圆点，基准来自 `releaseChannel.ts`（由 JSON 生成） | 阶段 3 |
 | 上游四条发布 workflow（`publish-pypi` / `docker-release` / `desktop-release` / `plugins-release`） | 仍在仓库里；靠 GitHub 设置**停用**，不改 YAML | fork 自有 `copaw-release.yml` / `copaw-docker-release.yml` 承担发布 | 停均是仓库设置动作，需要授权，不在代码里 |
-| 安装脚本 | 仍克隆上游仓库（§2 第 6 行）| 克隆源、包名、索引全部从事实源取 | **阶段 1 就做**：这是当前唯一"照着官方步骤装错产品"的路径。**未就绪期的具体行为要定死**：源码分支（克隆）改指 `futuremeng/CoPaw`；PyPI 分支（`install.sh:264` / `install.ps1:315` 那种 `qwenpaw==<version>`）在 `pending` 含 `pypi` 时必须**显式失败并指向 Releases**，既不许装上游 `qwenpaw==`，也不许去装一个还不存在的 `copaw==` |
+| 安装脚本 | 仍克隆上游仓库（§2 第 6 行）| 克隆源、包名、索引全部从事实源取 | **阶段 1 就做**：这是当前唯一"照着官方步骤装错产品"的路径。**未就绪期的具体行为要定死**：源码分支（克隆）改指 `futuremeng/CoPaw`；PyPI 分支（`install.sh:264` / `install.ps1:315` 那种 `qwenpaw==<version>`）在 `pending` 含 `pypi` 时必须**显式失败并指向 Releases**，既不许装上游 `qwenpaw==`，也不许去装一个还不存在的 `copaw-community==` |
 
 ---
 
@@ -144,7 +145,7 @@
 
 **新门禁 `scripts/check_release_channel_consistency.py`**，五条规则：
 
-1. **权威性**：`pending` 是唯一的可用性位 —— 读取方判断"这个渠道能不能用"只看它在不在 `pending` 里，不看字段是否为空。`pypi_project` 是**名字**不是地址，允许在账号就绪前就有值（`copaw`），否则未就绪期没有任何地方能写出我们的包名。
+1. **权威性**：`pending` 是唯一的可用性位 —— 读取方判断"这个渠道能不能用"只看它在不在 `pending` 里，不看字段是否为空。`pypi_project` 是**名字**不是地址，允许在账号就绪前就有值（现值 `copaw-community`），否则未就绪期没有任何地方能写出我们的包名。⚠ 它**不能等于程序名 `copaw`** —— 那枚在 PyPI 上是上游改名前的包（§3）， loader 用例 `test_pypi_name_exists_while_pending` 钉住这条。
 2. **地址类字段**（`docker_namespace`、`download_cdn`）在对应项离开 `pending` 之前必须为 `null`；反过来 `pending` 里没有的项，其字段必须非 `null`。
 3. **禁止串清单**：fork 侧渠道文件（安装脚本、前端指引、fork workflow）里出现 `pypi.org/pypi/qwenpaw`、`agentscope-ai/QwenPaw.git`、`agentscope/qwenpaw` 即红。禁止串取自键值本身，不取任何一门语言的文案（判据 83）。
 4. `console/src/generated/releaseChannel.ts` 与 JSON 同步：重新生成后 `git diff --quiet` 必须干净。
@@ -154,7 +155,7 @@
 
 **用例按先红后绿**（止血已建立的那批继续留在树上，不重写）：
 
-- Python：loader 对 `null` 返回 `None`；`pending` 与字段一致性；`copaw update` 在未就绪态**不触碰** `subprocess` / `_fetch_latest_version`（已有 `no_installer` 夹具）；就绪分支新增一条（monkeypatch 一个假 PyPI 读数，断言它装的是 `copaw==`，且程序名不是 `copaw` 时仍委托上游）。
+- Python：loader 对 `null` 返回 `None`；`pending` 与字段一致性；`copaw update` 在未就绪态**不触碰** `subprocess` / `_fetch_latest_version`（已有 `no_installer` 夹具）；就绪分支新增一条（monkeypatch 一个假 PyPI 读数，断言它装的是 `copaw-community==`，且程序名不是 `copaw` 时仍委托上游）。
 - Shell / PS：`--sh` 出串的形状用例（fixture 仓库，不真跑安装）。
 - 前端：生成常量与 JSON 逐字段一致；`Header` 挂载时不发网络请求（已有）；新增"就绪态才出现圆点"的分支用例。
 - 全套照旧：五表 + `tsc -b --force` + `npm run test:run` + `PYTHONPATH=$PWD/src pytest tests/unit` + prettier + `copaw_brand.py verify`。
@@ -165,7 +166,7 @@
 
 **待裁（需要产品/账号决定，不能由实现顺手定）**
 
-1. **PyPI 上 `copaw` 包名是否可占**——还没核实，查它需要网络访问，用户尚未授权。这是阶段 2 的第一件事。
+1. ~~**PyPI 上 `copaw` 包名是否可占**~~ —— **已闭（2026-10-08 实测 + 用户裁决）**。`https://pypi.org/pypi/copaw/json` 返回 200，那枚是上游改名前的包（`0.0.1 → 1.0.2`、46 个发布、最后上传 2026-04-09，说明文字链回 `agentscope-ai/CoPaw`），不是空位；`copaw-community` / `copaw-ai` / `copaw-fork` / `futuremeng-copaw` / `copaw-assistant` 五枚现测均 404。用户 2026-10-08 裁：**包名取 `copaw-community`，程序名与 console script 仍是 `copaw`**（详见 §3 与本文开头的更正）。
 2. **停用上游那四条发布 workflow** 是 GitHub 仓库设置动作，不在代码里，需要单独授权。
 3. **文档站链接归属**：`constants.ts:79 :82 :85 :88` 四处指 `qwenpaw.agentscope.io`（介绍 / FAQ / 发布说明 / 功能示例），`GITHUB_URL`（`:3`）指上游仓库。前者是**上游的内容资产**，我们没有对应站点；后者是**我们的仓库**。建议：`GITHUB_URL` 随阶段 1 改成 `futuremeng/CoPaw`（它是"看源码 / 去 Releases"的落点，属分发身份），文档站链接暂不改，并在 CoPaw 指引里写明"文档目前在上游站点"。这条要点头。
 4. **三个运行时下载点**（`plugins/download_catalog.py:17`、`local_models/manager.py:48`、`website/.../Downloads/constants.ts:3`）：我们没有桶，现在装完会 404。改它们要动上游运行时代码 = 3 个新宿主；不改则接受"插件/模型下载在上游桶里"这一现实。建议列成单独一笔裁决，不并进渠道刀。
@@ -187,8 +188,8 @@
 **阶段 1（不等任何账号，可立即做）**：事实源 JSON + Python loader + `scripts/release_channel.py` + 前端生成文件与接线 + 门禁五条规则 + 安装脚本的克隆源/包名改指我们仓库 + 版本线写回 `__version__.py`（含 `.post1`）与品牌账册登记 + `copaw update` 文案改为从事实源读。
 验收：门禁绿且五条规则各自证过红；**册只 +1 宿主**（`__version__.py`），其余落点逐文件对照 §7；`pytest tests/unit` / `tsc -b --force` / `npm run test:run` 全绿；`copaw update` 仍是拒绝态，但拒绝文案里的地址来自 JSON。
 
-**阶段 2（PyPI 账号就绪）**：`pyproject.toml:2` 分发名 `qwenpaw` → `copaw`；§3 那两个 `importlib.metadata.version('qwenpaw')` 跟着改；fork 自有发布 workflow；`copaw update` 从拒绝改为真升级（仍按程序名分派）；`pending` 去掉 `pypi`。
-验收：`pip install copaw` 出来的包能起 `copaw` 且 `qwenpaw` console script 仍在；升级命令装的是 `copaw==`。
+**阶段 2（PyPI 账号就绪）**：`pyproject.toml:2` 的 `[project] name` `qwenpaw` → `copaw-community`（= 事实源里的 `pypi_project`；console script `copaw` 已在 `pyproject.toml:102`，这一把不需要新增入口）；§3 那两个 `importlib.metadata.version('qwenpaw')` 跟着改；fork 自有发布 workflow；`copaw update` 从拒绝改为真升级（仍按程序名分派）；`pending` 去掉 `pypi`。
+验收：`pip install copaw-community` 出来的包能起 `copaw` 且 `qwenpaw` console script 仍在；升级命令装的是 `copaw-community==`。
 
 **阶段 3（Docker / 对象存储就绪）**：Docker 命名空间与 fork 镜像 workflow；前端"有新版本"圆点恢复；`pending` 清空。
 

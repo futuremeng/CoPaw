@@ -188,7 +188,9 @@ def test_unready_channel_reads_none_not_empty_string(rc, data):
 
 def test_pypi_name_exists_while_pending(rc, data):
     assert rc.is_ready(data, "pypi") is False
-    assert data["pypi_project"] == "copaw"
+    # 2026-10-08 更正：本计划原写 `copaw`，实测那枚在 PyPI 上是上游改名前的包。
+    assert data["pypi_project"] == "copaw-community"
+    assert data["pypi_project"] != data["distribution"]
 
 
 def test_urls_derive_from_the_repository_field(rc, data):
@@ -237,7 +239,7 @@ Expected: 收集或执行失败 —— `FileNotFoundError: .../src/copaw/release
 ```json
 {
   "distribution": "copaw",
-  "pypi_project": "copaw",
+  "pypi_project": "copaw-community",
   "upstream_version": "1.1.11b1",
   "docker_namespace": null,
   "github_repository": "futuremeng/CoPaw",
@@ -1629,6 +1631,8 @@ $VENV scripts/release_channel.py --sh
 
 更新 `project-copaw-release-channel.md`（阶段 1 已闭、六笔提交哈希、门禁名与五条规则、`pending` 作为唯一可用性位、下一步是阶段 2 的 PyPI 包名核实需授权）与 `project-copaw-conflict-surface.md`（+1 宿主）。
 
+> 2026-10-08 追加：那件"待授权核实的 PyPI 包名"已结 —— 实测 `copaw` 被上游改名前的包占着（`0.0.1 → 1.0.2`、最后上传 2026-04-09），用户裁我们的 PyPI 名 = `copaw-community`（程序名/console script 仍是 `copaw`），事实源、生成文件与 loader 用例已同日改过。阶段 2 剩下的才是账号侧动作。
+
 ```bash
 git status --short            # 必须只剩本刀产物
 git log --oneline -8
@@ -1641,11 +1645,12 @@ git push                       # 只 fast-forward 推 wp/integration，不强推
 
 **阶段 2 就绪时只需改这三处 + 一条命令体**
 
-1. `src/copaw/release_channel.json`：`pending` 去掉 `"pypi"`（`pypi_project` 早就有值 ⇒ 不用动）。
-2. `pyproject.toml:2`：`name = "qwenpaw"` → `name = "copaw"`；`scripts/pack/build_macos.sh:161` 与 `scripts/pack/build_win.ps1:289` 的 `importlib.metadata.version('qwenpaw')` 同步改成读 `copaw`（分发名一改，这两处立刻读不到版本）。两处 `console script` 条目保持两条都在（设计 §3）。
-3. `src/copaw/cli/update_cmd.py` 的命令体：`is_ready(data, "pypi")` 为真时走真升级（读 `pypi_project` 拼 `f"{project}=={latest}"`）；**程序名分派不变** —— `invoked_as_copaw(ctx)` 为假仍 `ctx.invoke(_core_update_cmd, yes=yes)`（判据 90）。新增用例：monkeypatch 一个假 PyPI 读数，断言装的是 `copaw==` 且 `prog_name="qwenpaw"` 时仍委托上游（设计 §8 那条被本轮推迟的用例）。
+1. `src/copaw/release_channel.json`：`pending` 去掉 `"pypi"`（`pypi_project` 早就有值 = `copaw-community`，2026-10-08 实测后用户裁的名 ⇒ 不用动）。
+2. `pyproject.toml:2`：`name = "qwenpaw"` → `name = "copaw-community"`（= 事实源的 `pypi_project`，不是 `copaw` —— 那枚在 PyPI 上是上游改名前的包，设计 §3）；`scripts/pack/build_macos.sh:161` 与 `scripts/pack/build_win.ps1:289` 的 `importlib.metadata.version('qwenpaw')` 同步改成读 `copaw-community`（分发名一改，这两处立刻读不到版本）。两处 `console script` 条目保持两条都在（设计 §3）。
+3. `src/copaw/cli/update_cmd.py` 的命令体：`is_ready(data, "pypi")` 为真时走真升级（读 `pypi_project` 拼 `f"{project}=={latest}"`）；**程序名分派不变** —— `invoked_as_copaw(ctx)` 为假仍 `ctx.invoke(_core_update_cmd, yes=yes)`（判据 90）。新增用例：monkeypatch 一个假 PyPI 读数，断言装的是 `copaw-community==` 且 `prog_name="qwenpaw"` 时仍委托上游（设计 §8 那条被本轮推迟的用例）。
 4. 新建 fork 自有 `.github/workflows/copaw-release.yml`：第一步 `python scripts/release_channel.py --gh-env`，之后用 `RELEASE_PYPI_PROJECT` / `RELEASE_UPSTREAM_VERSION`；它自动进入门禁 R3 的 `copaw-*.y*ml` glob 覆盖集（无需改门禁）。
-5. 验收：`pip install copaw` 出来的包能起 `copaw`，`qwenpaw` console script 仍在；`copaw update` 装的是 `copaw==`。
+5. 验收：`pip install copaw-community` 出来的包能起 `copaw`，`qwenpaw` console script 仍在；`copaw update` 装的是 `copaw-community==`。
+6. ⚠ 同刀要处理的正则坑：`console/src/layouts/constants.test.ts:44-45` 用未锚定的 `/pip install copaw/` 守"未就绪期不许承诺 PyPI 渠道"，而它会**连带匹配 `pip install copaw-community`** —— 一旦指引文案里出现我们的包名，这条守卫必红。届时改成 `/pip install copaw(\b|-)/` 之类并按事实源分状态（`pending` 含 `pypi` 时禁、去掉后允许），不要直接删守卫。
 
 **阶段 3 接口**
 
