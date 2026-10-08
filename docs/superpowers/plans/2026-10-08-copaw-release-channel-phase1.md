@@ -1289,7 +1289,13 @@ CHANNEL_FILES = (
     ("scripts/install.bat", "releases"),
     ("console/src/layouts/constants.ts", None),
     ("console/src/generated/releaseChannel.ts", None),
-    ("src/copaw/cli/update_cmd.py", "releases"),
+    # No anchor here: Task 5 deletes this file's literal Releases URL and
+    # derives the address from the fact source, so requiring the literal
+    # would be a permanent red.  It stays in the coverage set for the
+    # forbidden markers (its docstring used to name `qwenpaw==`), and the
+    # "address comes from the JSON" property is guarded by Task 5's probe
+    # experiment plus `test_cli_update_overlay.py`.
+    ("src/copaw/cli/update_cmd.py", None),
 )
 FORK_WORKFLOW_GLOB = "copaw-*.y*ml"
 
