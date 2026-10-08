@@ -105,10 +105,10 @@
 | 1 | +363 −17 | `console/src/api/modules/agent.ts` |
 | 4 | +264 −76 | `console/src/pages/Settings/Security/index.tsx` |
 
-（口径先说清，这里最容易读错：`totals.behavior_added` 13,705 + `totals.behavior_removed` 2,285
+（口径先说清，这里最容易读错（**判据 101**）：`totals.behavior_added` 13,705 + `totals.behavior_removed` 2,285
 = **15,990** 是**门禁口径**，它把 `MECHANICAL` 集合里的文件整枚剔掉（`scripts/check_p1_invariants.py`
 的 `_totals`），本树里被剔掉的正是 `console/package-lock.json` 那一枚 —— `files` 字典 146 键、
-`totals.files` 145，差的就是它；而**含 lock 的主机累加是 34,394**。
+`totals.files` 145，差的就是它；而**含 lock 的主机累加是 34,394**（一枚自动生成文件占 54%）。
 下面所有分数**用 15,990 作分母**，lock 单独列，权重才不被一枚自动生成文件吃掉。）
 
 **这一簇的权重（现算，非估算）：**
@@ -140,7 +140,27 @@ lock 走"取上游 + 重新生成"，剩下真正要逐块判的是这 12 枚（
 
 - 上游现存 `chats/` 11 枚：`__init__.py api.py manager.py models.py query_error_dump.py session.py title_generator.py utils.py repo/{__init__,base,json_repo}.py`
   ⇒ 我们 `runner/` 同名 11 枚逐一对应，**我们的在册改动可以逐枚搬到新路径**（`api.py` +457、`session.py` +320、`models.py` +37、`__init__.py` +23、`runner.py` +32 里除 `runner.py` 外都在）。
-- 上游**不再保留** `runner/` 的 12 枚：`runner.py command_dispatch.py daemon_commands.py mission_dispatch.py task_tracker.py query_error_resilience.py control_commands/*(6)` ⇒ 我们在这些文件里有 fork 行为（含已闭环 56/57 恢复的 runner 能力与 context-overflow 重试），要么把整族留在 fork 侧自有路径，要么逐枚判"上游新架构里谁接替了它"。
+- 上游**不再保留** `runner/` 的 12 枚：`runner.py command_dispatch.py daemon_commands.py mission_dispatch.py task_tracker.py query_error_resilience.py control_commands/*(6)`。
+  逐枚按**定义符号**（不是文件名）在上游 tip 上找接替宿主，12 枚**全部有下落**：
+
+| 我们侧（`app/runner/`） | 上游定义符号 | 接替宿主（实测） |
+|---|---|---|
+| `task_tracker.py` | `class TaskTracker` | **同符号搬家**：`src/qwenpaw/app/task_tracker.py:47` |
+| `control_commands/{__init__,base,model_handler,skills_handler,stop_handler,approval_handler}.py` | `BaseControlCommandHandler ControlContext …CommandHandler` | **同族搬家**：`src/qwenpaw/runtime/commands/control/`（其 `__init__.py:25-34` 逐一导入，另加 `checkpoint_handler.py`） |
+| `daemon_commands.py` | `DAEMON_PREFIX`、`RestartInProgressError` | `runtime/commands/daemon.py:30` + `exceptions.py:553`；适配器 `runtime/builtin_commands.py:32 _make_daemon_adapter` |
+| `command_dispatch.py` | `_is_conversation_command`、`_is_control_command`、`handle_control_command` | **改写**：`runtime/slash_command_registry.py`（`CommandSpec:28`、`SlashCommandRegistry:47`）+ `runtime/builtin_commands.py`（`_make_conversation_adapter:511`、`_collect_conversation_specs:613`、`_make_control_adapter:165`、`_collect_control_specs:248`）；`is_control_command` 另见 `app/channels/command_registry.py` |
+| `mission_dispatch.py` | `detect_active_mission_phase` | **改写**：`src/qwenpaw/modes/mission/`（`MissionMode:27`、`MissionGate:43`，`gates.py:4` 注释明写 "Replaces the custom run_mission_phase2 executor"、`contributor.py`、`hooks.py`） |
+| `query_error_resilience.py` | `_CONTEXT_OVERFLOW_PATTERNS`、`_TRANSIENT_UPSTREAM_STATUS_CODES` | **上游自己实现了同一能力**：`agents/context/overflow_recovery.py:19 call_with_overflow_recovery` + `agents/context/base.py:25 recover_from_context_overflow`（`scroll/manager.py:375` 实现）+ `agents/react_agent.py:665 _is_context_overflow_error` ⇒ **已闭环 57 那笔（context overflow → compaction 重试）合并后应以上游实现为准，我们那份退掉**（⚠ 别拿 `agents/context/recovery.py` 当上游宿主 —— 那是**我们**的文件，上游没有） |
+| `runner.py` | `class AgentRunner`（继承 `Runner`） | 上游 tip `git grep "^class \w*Runner"` **零命中** ⇒ 整枚拆进 `runtime/`：`runtime.py executor.py builder.py phases.py hooks.py tool_registry.py tool_guard.py` |
+
+⇒ 裁决 3（"问上游新架构里谁接替了它"）的答案是：**不需要"整族留 fork 自有路径"这个选项**，
+12 枚逐枚都能落到上表的新宿主上。代价分两类：同符号/同族搬家 4 组可以直接把我们的在册改动重放；
+`command_dispatch`、`mission_dispatch`、`query_error_resilience`、`runner.py` 这 4 枚是上游重写，
+我们的 fork 行为要**映射到新机制**（slash 注册表、modes/mission、context recovery），不是搬文本。
+
+我们侧还在跨目录引用 `app.runner` 的 6 处（合并后必须逐个重指）：
+`agent_stats/service.py:16`、`agents/memory/proactive/proactive_trigger.py:64`、
+`app/_app.py:395`、`app/routers/plugins.py:173`、`:383`、`cli/daemon_cmd.py:13`。
 
 **(b) `app/mcp/ → drivers/`（重构，不是改名）**
 
@@ -149,16 +169,36 @@ lock 走"取上游 + 重新生成"，剩下真正要逐块判的是这 12 枚（
   **`src/qwenpaw/drivers/handlers/mcp_stateful_client.py`**（配套 `drivers/adapters/mcp_{binding,card_builder,console,legacy_config}.py`、`drivers/handlers/mcp.py`）。
 - ⚠ 这里压着两笔已闭案的修复：**已闭环 40（远程 MCP 的 OAuth Bearer 注入回归）**与**已闭环 46（py3.10 `BaseExceptionGroup` NameError）**。搬到新宿主时必须重验这两笔，不能靠"合并没报红"过关。
 
-**(c) 上游整体删除、我们仍在改的四组前端能力 + 一组后端**
+**(c) 上游整体删除、我们仍在改的四组：逐组量了"接替者"与"消费方闭包"（判据 102）**
 
-| 路径 | 我们的在册行为行 | 上游替代 |
-|---|---|---|
-| `console/src/api/modules/plan.ts` + `console/src/components/PlanPanel/index.tsx` + `src/qwenpaw/app/routers/plan.py` | +16 / +13 / +2 | **无**（上游整个删掉 Plan 这套） |
-| `console/src/pages/Agent/Workspace/{index.tsx, index.module.less, components/FileListPanel.tsx, components/useAgentsData.ts}` | +12 / +9 / +8 / +58 | **无** |
-| `console/src/pages/Chat/components/ChatSessionDrawer/index.tsx` | +5 −5 | **无** |
-| `console/src/pages/Settings/Agents/components/AgentTable.tsx` | +98 −60 | **无**（同名文件也被删；`Settings/Backups/restore/RestoreAgentTable.tsx` 不是接替者） |
+量法：对每个被删路径，用 `git grep -nE "from ['\"][^'\"]*< specifier >"` 逐文件解析 import specifier
+再做扩展名/目录补全；Python 侧按 dotted module 加相对层级补全。路径 token 模糊匹配会造假命中
+（`plan` 一词在 HEAD 里命中 76 个文件，真消费方只有 7 个）。
 
-⇒ 这四组是**产品裁决**，不是解冲突：跟着上游删（放弃功能）或在 fork 侧安家继续维护。
+| 组 | 被删路径 | 我们的在册行为行 | 上游接替者（已实测存在） | HEAD 里的消费方 |
+|---|---|---|---|---|
+| Workspace | `pages/Agent/Workspace/` 全部 8 枚文件 | +12 / +9 / +8 / +58（其余 4 枚在册外） | **`pages/Files/index.tsx`**（路由 `core.workspace` = `/workspace`）挂 **`features/files-workspace/FilesWorkspace.tsx`**（该 feature 目录 30 枚文件，含 `FilesDrawer.tsx`、`FilesNavigator.tsx`、`MemoryGraphView.tsx`、`ResponseArtifactList.tsx`） | 唯一入口是 `layouts/MainLayout/index.tsx:31` 的字符串路由 `lazyImportWithRetry("../../pages/Agent/Workspace")`；上游的 MainLayout 已换成注册表驱动的 `useRoutes()`（`console/src/plugins/registry`），文件里已无 `lazyImportWithRetry` |
+| 会话抽屉 | `pages/Chat/components/ChatSessionDrawer/` 全部 3 枚 | +5 −5 | **`layouts/SidebarSessionList.tsx`** + `useSidebarSessionListData.ts` + `components/SessionItem/`、`SessionGroupDnd/`、`SessionGroupHeader/`、`SessionDateHeader/` ⇒ 会话列表从抽屉挪进侧栏 | `Chat/components/ChatActionGroup/index.tsx:11` 一处 + 组内自带 `ChatSessionDrawer.test.tsx`。上游的 ChatActionGroup 只剩 `Files`、`Terminal` 两个 IconButton |
+| Agent 表 | `pages/Settings/Agents/components/AgentTable.tsx` | +98 −60 | **`Settings/Agents/components/AgentGallery.tsx`**（`index.tsx:1` import、`:356` 渲染；上游该目录留 18 枚文件，其 `components/index.ts` 只出 `AgentModal`/`AgentBackendFields`/`CopyAgentModal`） | barrel 一行 `components/index.ts:1`，经 barrel 被 `Settings/Agents/index.tsx:10` import、`:206` 渲染 |
+| Plan | `app/routers/plan.py` + `api/modules/plan.ts` + `components/PlanPanel/{index.tsx, index.module.less}` + `src/qwenpaw/plan/{__init__,broadcast,hints,schemas}.py` | +2 / +16 / +13（后 4 枚在册外、静默删） | **无** —— 上游 tip 上 `src/qwenpaw/plan` 空、无 `plan_router`、console 里零 `plan` 命中；只保留 agent 侧的 `agents/skills/make_plan-{en,zh}/SKILL.md`（提示词，不是 HTTP 面） | py：`routers/__init__.py:36`、`routers/agent_scoped.py:95` 两处登记（上游两份都在、都不引用 plan）。ts：`api/modules/plan` 被 `PlanPanel`、`Chat/index.tsx:35`、`ReactAgentCard.tsx:5`、`components/AnywhereChat/index.tsx:23` 四处 import；`PlanPanel` 被 `AnywhereChat:60` 与 `ChatActionGroup:13` 两处 import |
+
+两处要点：
+
+- **"跟着上游删"的真实动作不是删文件**：上表所有消费方（除 `AnywhereChat`）都是上游自有文件，
+  且上游那份里对这些被删符号**零引用** ⇒ 每一处的实际动作是"取上游字节 + 手删我们加的那几行"，
+  然后删我们的文件。`src/qwenpaw/plan/` 那 4 枚静默删里，合并后唯一还活着的引用是
+  `agents/react_agent.py:817` 和 `:927`（`from ..plan.hints import ...`，两处都是我们加的行，
+  上游那份 react_agent 里没有）。
+- **`components/AnywhereChat/index.tsx`（3,318 行）是 fork 自建**（`git cat-file -e e111ec6fb:` 失败）
+  ⇒ 它不在上游删除清单里、合并不会动它，但它是 plan 组唯一"跟着删就要改自己产品面"的宿主
+  （`:23` `planApi`、`:60` `PlanPanel`、`:867/:2469/:3151/:3309` 五处开关与渲染）。
+  **这一处是子裁决，不在"跟着上游删"的默认里。**
+
+16 枚 modify/delete 的在册行为行合计 **2,244 行**（占 15,990 的 14%），其中 `stateful_client.py`
+一枚占 1,086 ⇒ 后端两族（runner→chats、mcp→drivers）是重新安家，前端四组才是裁决面。
+
+⇒ 四组里有三组上游给了**明确接替者**（FilesWorkspace、SidebarSessionList、AgentGallery），
+"跟着上游删"意味着我们的 fork 行为要搬到接替者上重新实现一遍，或直接放弃。
 
 ---
 
@@ -170,16 +210,14 @@ lock 走"取上游 + 重新生成"，剩下真正要逐块判的是这 12 枚（
 
 建议的执行形态（成本从低到高）：
 
-1. **准备阶段（可提前做、每做一枚就少一枚冲突）**：把 §2 的 4 枚真断引用先结掉，
-   把 §4(c) 四组产品裁决落成 fork 自有路径（这一步之后它们在合并里不再报 modify/delete）。
+1. **准备阶段（可提前做、每做一枚就少一枚冲突）**：清单见 §6 的"合并前刀序"。
    这一步就是判据 84/85 的反向使用：**在册但这次干净合并的 42 枚，是过去几十步"退回上游字节"换来的**。
 2. **开一个专用 worktree + 分支**（例如 `sync/upstream-20261008`，基点 `wp/integration`），
    在里面 `git merge upstream/main`，工作区一旦进冲突态就留在里面，不碰 `CoPaw-wp14`。
-3. **按类批量落默认解**：
+3. **按类批量落默认解**（add/add 10 枚以**上游为准**、把我们的额外断言并进同一文件，因为那 9 枚是双方各自写的测试）：
    - 锁文件：取上游 ⇒ 之后 `npm install` 让 fork 侧新增依赖（`@testing-library/dom` 等）自己长回来；
-   - add/add 10 枚：以**上游为准**，把我们的额外断言并进同一文件（9 枚是双方各自写的测试）；
-   - `app/runner/*` → `app/chats/*`：逐枚搬到新路径；上游不再保留的 12 枚先判"留在 fork 路径"还是"接上游新架构"；
    - `app/mcp/*` → `drivers/`：逐 hunk 重放到 `drivers/handlers/mcp_stateful_client.py`，**OAuth 注入与 py3.10 两笔必须有回归用例**；
+   - `app/runner/*` → `app/chats/*` 与上游不再保留的 12 枚：按 §4(a) 的符号级接替表逐枚落地（不留 fork 自有路径）；
    - 其余在册内容冲突：按 §3 的权重倒序处理，**先吃掉 agents/skills 那 12 枚（55 块、51.2% 的行）**，
      剩下 75 枚平均不到 50 行、逐块判即可。
 4. **验收集**（与刀 86 之后的基线一致，全部现跑）：`pytest tests/unit`（基线 3,433 / 5 skipped / 8 xfailed）·
@@ -192,34 +230,87 @@ lock 走"取上游 + 重新生成"，剩下真正要逐块判的是这 12 枚（
      **这不是回归，是口径平移**。要么把 base 改成上游合并点（`upstream/main` tip 或 merge 后的第二父），
      要么改成"合并之后的新分叉点"并重新立基线。这是判据 92 那一类问题：口径不先定，读数就没人能解释。
    - `check_namespace_boundaries.py --upstream-ref qwenpaw_upstream_main` 与 CI 里那个 ref 名要一起更新。
+     ⚠ 现算：`qwenpaw_upstream_main` **只存在于 CI 里**（`.github/workflows/unit-tests.yml:83` 现场
+     `git fetch … agentscope-ai/QwenPaw.git main:qwenpaw_upstream_main`），本地 `git ls-tree` 直接
+     `fatal: Not a valid object name` ⇒ 这条门禁在本地是不可用的，读数只能在 CI 里取。
+     另：上游仓库已改名（本地 remote `upstream` = `agentscope-ai/CoPaw.git`，tip `7147731d5`；
+     旧名 `agentscope-ai/QwenPaw.git` 的本地 ref 停在 `2d9527bb0` 2026-05-27，且**是** tip 的祖先）
+     ⇒ 换基线那一步要把 workflow 里那两处 URL/ref 与 `DEFAULT_BASE_REF` 同时核一遍。
    - 版本线：阶段 1 定的 `1.1.11b1.post1` 要按"跟上游同号 + `.postN`"重新裁定（上游已到 v2.2.x 线）。
 
 ---
 
-## 6. 需要用户裁决的 4 项（不开口就没法往下走）
+## 6. 四项裁决（2026-10-08 已下）与刀序
 
-1. **合并形态**：一次 merge 到 `upstream/main` tip（`7147731d5`），还是先追 `v2.2.1` 再补 tip？
-   现算 `v2.2.1` tag（`cae577370`）**不是** `main` 的祖先（main 另有 133 枚提交、tag 另有 1 枚），
-   追 tag 反而多一步。
-2. **§4(c) 四组被上游整体删除的能力**（Plan 前后端整套、`Agent/Workspace` 页、`ChatSessionDrawer`、
-   `Settings/Agents/AgentTable`）：跟随上游删除，还是在 fork 侧安家继续维护？
-3. **`app/runner/` 里上游不再保留的 12 枚**（含 `runner.py`、`command_dispatch.py`、`control_commands/*`）：
-   整族留 fork 自有路径，还是逐枚找上游新架构的接替者？
-4. **P1 账本的新基线**：合并落地后 `DEFAULT_BASE_REF` 换成什么（上游合并点 / 新分叉点），
-   以及换基线那一步要不要单独成一笔账。
+裁决原文与落点：
+
+1. **合并形态 = 一次合到 `upstream/main` tip（`7147731d5`）**。不追 `v2.2.1`（它不是 `main` 的祖先，追它多一次合并）。
+2. **§4(c) 四组被上游整体删除的能力 = 跟着上游删**。
+   实测动作不是"删四个文件"：这些组的消费方**全是上游自有文件，且上游那份零引用**
+   ⇒ 每一处的动作 = 取上游字节 + 手删我们加的那几行，然后删我们的文件。
+   唯一例外是 fork 自建的 `components/AnywhereChat/index.tsx`（3,318 行，`planApi` + `PlanPanel` 五处用点）
+   ⇒ **这是裁决 2 没覆盖的一个子问题，要单独定**：给它换宿主（上游 `features/files-workspace` + `features/project-directory` 里有对应能力）还是把那五处用点摘掉。
+   三组有明确接替者（`pages/Files` + `features/files-workspace/FilesWorkspace.tsx`、
+   `layouts/SidebarSessionList.tsx` + `components/SessionItem`、`Settings/Agents/components/AgentGallery.tsx`），
+   Plan 组**无任何接替者**（上游 tip 上 `src/qwenpaw/plan` 为空、无 `plan_router`、console 零 `plan` 命中，
+   只留 agent 侧的 `make_plan-{en,zh}/SKILL.md` 提示词）。
+3. **`app/runner/` 上游不再保留的 12 枚 = 逐枚找上游新架构的接替者**（不做"整族留 fork 路径"）。
+   结果见 §4(a) 的符号级接替表：12 枚全有下落，4 组同符号/同族搬家、4 枚上游重写需要把 fork 行为映射到新机制。
+4. **P1 账本 = 换新分叉点重立基线**：合并落地后 `DEFAULT_BASE_REF` 与
+   `check_namespace_boundaries.py --upstream-ref` 一起换到新分叉点，重立基线那一步单独成一笔账。
+
+### 刀序（合并前能做的，与只能在合并后做的）
+
+合并前（每做一枚就少一枚冲突，且都是 fork 侧独立可验的刀）：
+
+1. **裁决 2 的前置刀：把四组能力的消费方引用清干净**（Plan、Workspace、ChatSessionDrawer、AgentTable）
+   —— 先从 AnywhereChat 那五处用点开始（它是唯一不是"取上游字节就能解决"的）。
+   落点：`api/modules/plan.ts`、`components/PlanPanel/`、`pages/Agent/Workspace/`、
+   `Chat/components/ChatSessionDrawer/`、`Settings/Agents/components/AgentTable.tsx` 五处的 import 与渲染点。
+   ⚠ 判据 91：这是"删上游一项能力"，在册记 `behavior_removed` 上涨，不等于减债。
+2. **§2 的 4 枚真断引用**（合并只会扩大它们，不会修）：
+   `Coding/FileTree.module.less`、`Settings/Agents/components/SortableAgentRow.tsx`、
+   `console/src/test/chat-mock.ts`、`agents/memory/adbpg_memory_manager.py`。
+3. **五表里已被标为待重放的两笔**（已闭环 40 OAuth 注入、已闭环 46 py3.10 `BaseExceptionGroup`）
+   在 `app/mcp/*` → `drivers/` 搬迁时必须有回归用例 —— 现在能先把用例写红。
+
+合并后（只能在合并态里做）：
+
+4. 锁文件取上游 + `npm install` 让 fork 侧依赖长回来。
+5. add/add 14 枚（10 枚真冲突）以**上游为准**，我们的额外断言并进同一文件。
+6. `app/runner/*` → `app/chats/*` 逐枚重放；上游重写那 4 枚按 §4(a) 的符号表映射到
+   `runtime/`、`modes/mission/`、`app/task_tracker.py`。
+7. agents/skills 那 12 枚（55 块、8,185 行 = 门禁口径 51.2%）先吃，剩 75 枚（194 块、3,717 行）逐块判。
+8. 换新分叉点重立基线（裁决 4）+ 版本线重新裁定（`1.1.11b1.post1` vs 上游 v2.2.x）。
 
 ---
 
 ## 7. 量到了什么 / 没量什么
 
 量到：冲突分型与逐枚路径、权重排序、静默删除的引用实测、两边改动集规模、tag 拓扑、
-`app/runner→app/chats` 与 `app/mcp→drivers` 的宿主映射（按目录清单逐一对照，非推测）。
+`app/runner→app/chats` 与 `app/mcp→drivers` 的宿主映射、
+上游不再保留的 12 枚 runner 文件的**符号级接替表**、
+§4(c) 四组的**接替者与消费方闭包**（逐文件解析 import specifier，非 token 匹配）。
 
 没量：**没有真跑一次 merge**（`merge-tree` 只产树，不产工作区冲突态，所以"hunk 级实际文本长度"
 与"逐枚裁决的真实耗时"仍是估计）；没跑合并后的测试；没读上游 v2.2.1 → tip 这 133 枚提交的内容摘要
 （不知道上游自己在这 133 枚里是否已经把我们的某些能力做掉了）；`console/package-lock.json` 取上游后
 `npm install` 会产生什么差异没验；§2 的引用实测按"模块名/基名的字面出现"计数，
-动态 import 与字符串拼路径不在其中。
+动态 import 与字符串拼路径不在其中；**§4(a) 符号表只证明"上游有同名符号的宿主"，没证明
+它的行为合同与我们那份等价**（`query_error_resilience` 那一枚最需要这一步：上游有
+`call_with_overflow_recovery`，但它覆盖不覆盖已闭环 57 的全部情形，要在合并后用用例验）。
+
+新判据：
+
+- **判据 102（删除闭包按 import specifier 量，不按路径 token）**：一次模糊匹配把 `plan` 一词
+  在 HEAD 里报了 76 枚"消费方"，逐文件解析 import 后真数是 7 枚。合并方案里"删掉一个能力"的
+  代价必须数得出真消费方，否则会按假数排刀。
+- **判据 103（"跟着上游删"的真实动作在消费方一侧）**：上游删一组能力时，它的消费方通常**也是上游自有文件**，
+  且上游那份对这些符号零引用 ⇒ 合并自动取上游字节 = 我们的 fork 行为**静默消失且不报冲突**。
+  所以这类裁决的账要记在"我们往上游文件里加了哪几行"上，不是记在被删文件上。
+- **判据 104（找接替者要用定义符号，文件名会误导）**：`app/runner/*` 的 12 枚里，
+  `task_tracker.py` 的同名类在 `app/task_tracker.py`、`control_commands/*` 的同族在 `runtime/commands/control/`，
+  而 `runner.py` 的 `class AgentRunner` 在上游 tip **零命中** —— 只看目录改名会漏掉"整枚被拆"这种形态。
 
 相关账目：已闭环 84–86（判据 84/85/86 原文在 `2026-10-07-trial-merge-conflict-table.md`）、
 已闭环 40、46、56、57、75、79–81、83–86。
