@@ -14,9 +14,11 @@ behaviour.  The overlay therefore checks the program name it was invoked as.
 
 from __future__ import annotations
 
+import json
 import runpy
 import subprocess
 import sys
+from pathlib import Path
 
 import click
 import pytest
@@ -27,7 +29,16 @@ import qwenpaw.cli.update_cmd as core_update
 from copaw.cli.main import cli as copaw_cli
 from copaw.cli.update_cmd import make_overlay_update_command
 
-COPAW_RELEASES_URL = "https://github.com/futuremeng/CoPaw/releases"
+_REPO_ROOT = Path(__file__).resolve().parents[3]
+
+
+def _fact_releases_url() -> str:
+    fact = json.loads(
+        (_REPO_ROOT / "src/copaw/release_channel.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    return f"https://github.com/{fact['github_repository']}/releases"
 
 
 def _resolve(name: str) -> click.Command:
@@ -104,7 +115,25 @@ def test_copaw_program_refuses_and_points_to_releases(no_installer) -> None:
     assert result.exit_code != 0
     assert no_installer == []
     assert "not published to PyPI" in result.output
-    assert COPAW_RELEASES_URL in result.output
+    assert _fact_releases_url() in result.output
+
+
+def test_copaw_refusal_names_no_upstream_install_target(no_installer) -> None:
+    result = CliRunner().invoke(
+        copaw_cli,
+        ["update"],
+        prog_name="copaw",
+    )
+
+    assert result.exit_code != 0
+    assert no_installer == []
+    for marker in (
+        "agentscope-ai/QwenPaw",
+        "agentscope/qwenpaw",
+        "pypi.org/pypi/qwenpaw",
+        "qwenpaw==",
+    ):
+        assert marker not in result.output
 
 
 def test_copaw_program_still_refuses_with_yes(no_installer) -> None:

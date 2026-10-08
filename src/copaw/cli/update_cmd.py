@@ -2,7 +2,7 @@
 """Take over upstream's ``update`` command for the ``copaw`` program only.
 
 ``qwenpaw.cli.update_cmd`` reads the newest release of the upstream PyPI
-project and pip-installs ``qwenpaw==<latest>`` into the current environment.
+project and pip-installs that project into the current environment.
 The Copaw entry point shares that very command object, so ``copaw update``
 replaced a CoPaw install with upstream QwenPaw.  CoPaw has no PyPI channel
 yet, so the honest behaviour for CoPaw is to refuse and point at our own
@@ -20,10 +20,11 @@ import os
 
 import click
 
+from copaw.release_channel import load as _load_fact_source
+from copaw.release_channel import releases_url as _releases_url
 from qwenpaw.__version__ import __version__
 from qwenpaw.cli.update_cmd import update_cmd as _core_update_cmd
 
-COPAW_RELEASES_URL = "https://github.com/futuremeng/CoPaw/releases"
 COPAW_PROGRAM_NAME = "copaw"
 
 
@@ -46,7 +47,7 @@ def overlay_update_callback(ctx: click.Context, *, yes: bool = False) -> None:
         "nothing: the upstream updater would pip-install qwenpaw and "
         "replace this CoPaw install.",
     )
-    click.echo(f"Releases: {COPAW_RELEASES_URL}")
+    click.echo(f"Releases: {_releases_url(_load_fact_source())}")
     raise SystemExit(1)
 
 
