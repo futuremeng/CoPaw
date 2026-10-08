@@ -28,7 +28,7 @@ QWENPAW_HOME="${QWENPAW_HOME:-$HOME/.qwenpaw}"
 QWENPAW_VENV="$QWENPAW_HOME/venv"
 QWENPAW_BIN="$QWENPAW_HOME/bin"
 PYTHON_VERSION="3.10"
-QWENPAW_REPO="https://github.com/agentscope-ai/QwenPaw.git"
+QWENPAW_REPO="https://github.com/futuremeng/CoPaw.git"
 
 # New: Intelligent selection of PyPI source (automatically using Alibaba Cloud mirror for domestic users, and official source for overseas users)
 choose_pypi_mirror() {
@@ -91,6 +91,14 @@ EOF
             die "Unknown option: $1 (try --help)" ;;
     esac
 done
+
+# ── Channel guard ───────────────────────────────────────────────────────────
+# CoPaw has no PyPI distribution: release_channel.json keeps "pypi" pending.
+# Refuse before uv creates anything, so re-running the documented install
+# command can never replace a CoPaw install with the upstream package.
+if [ "$FROM_SOURCE" != true ]; then
+    die "CoPaw is not published to PyPI yet. Re-run with --from-source, or download a build from https://github.com/futuremeng/CoPaw/releases"
+fi
 
 # ── OS check ──────────────────────────────────────────────────────────────────
 OS="$(uname -s)"
@@ -258,14 +266,6 @@ if [ "$FROM_SOURCE" = true ]; then
         uv pip install "${CLONE_DIR}${EXTRAS_SUFFIX}" --python "$QWENPAW_VENV/bin/python" --prerelease=allow --index-url "$PYPI_MIRROR"
         # CLONE_DIR is cleaned up by trap; no need for cleanup_console/cleanup_docs
     fi
-else
-    PACKAGE="qwenpaw"
-    if [ -n "$VERSION" ]; then
-        PACKAGE="qwenpaw==$VERSION"
-    fi
-
-    info "Installing ${PACKAGE}${EXTRAS_SUFFIX} from PyPI..."
-    uv pip install "${PACKAGE}${EXTRAS_SUFFIX}" --python "$QWENPAW_VENV/bin/python" --prerelease=allow --quiet --index-url "$PYPI_MIRROR" --refresh-package qwenpaw
 fi
 
 # Verify the CLI entry point exists

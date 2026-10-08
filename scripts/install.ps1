@@ -31,7 +31,7 @@ $QwenpawHome     = if ($env:QWENPAW_HOME) { $env:QWENPAW_HOME } else { Join-Path
 $QwenpawVenv     = Join-Path $QwenpawHome "venv"
 $QwenpawBin      = Join-Path $QwenpawHome "bin"
 $PythonVersion = "3.12"
-$QwenpawRepo     = "https://github.com/agentscope-ai/QwenPaw.git"
+$QwenpawRepo     = "https://github.com/futuremeng/CoPaw.git"
 
 # ── Colors ────────────────────────────────────────────────────────────────────
 function Write-Info { param([string]$Message) Write-Host "[qwenpaw] " -ForegroundColor Green  -NoNewline; Write-Host $Message }
@@ -59,6 +59,12 @@ Environment:
   QWENPAW_HOME            Installation directory (default: ~/.qwenpaw)
 "@
     exit 0
+}
+
+# CoPaw has no PyPI distribution yet (release_channel.json keeps "pypi"
+# pending).  Refuse before uv creates the environment.
+if (-not $FromSource) {
+    Stop-WithError "CoPaw is not published to PyPI yet. Re-run with -FromSource, or download a build from https://github.com/futuremeng/CoPaw/releases"
 }
 
 Write-Host "[qwenpaw] " -ForegroundColor Green -NoNewline
@@ -310,13 +316,6 @@ if ($FromSource) {
             }
         }
     }
-} else {
-    $package = "qwenpaw"
-    if ($Version) { $package = "qwenpaw==$Version" }
-
-    Write-Info "Installing ${package}${ExtrasSuffix} from PyPI..."
-    uv pip install "${package}${ExtrasSuffix}" --python $VenvPython --prerelease=allow --quiet --refresh-package qwenpaw
-    if ($LASTEXITCODE -ne 0) { Stop-WithError "Installation failed" }
 }
 
 # Verify the CLI entry point exists

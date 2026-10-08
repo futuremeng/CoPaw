@@ -22,7 +22,7 @@ if defined QWENPAW_HOME (
 set "QWENPAW_VENV=%QWENPAW_HOME%\venv"
 set "QWENPAW_BIN=%QWENPAW_HOME%\bin"
 set "PYTHON_VERSION=3.12"
-set "QWENPAW_REPO=https://github.com/agentscope-ai/QwenPaw.git"
+set "QWENPAW_REPO=https://github.com/futuremeng/CoPaw.git"
 
 REM ──── Argument defaults ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 set "ARG_VERSION="
@@ -302,6 +302,10 @@ REM ═════════════════════════�
 :main
 echo [qwenpaw] Installing QwenPaw into %QWENPAW_HOME%
 
+REM CoPaw has no PyPI distribution yet (release_channel.json keeps "pypi"
+REM pending).  Refuse before uv creates the environment.
+if not "%ARG_FROM_SOURCE%"=="1" goto :refuse_pypi_channel
+
 REM ──── Step 1: Ensure uv ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 call :ensure_uv
 if errorlevel 1 exit /b 1
@@ -337,7 +341,7 @@ set "VENV_QWENPAW=%QWENPAW_VENV%\Scripts\qwenpaw.exe"
 REM Use goto-based branching to avoid nested parenthesized blocks,
 REM which break when %vars% expand to values containing "(" or ")".
 if "%ARG_FROM_SOURCE%"=="1" goto :install_from_source
-goto :install_from_pypi
+goto :refuse_pypi_channel
 
 :install_from_source
 if defined ARG_SOURCE_DIR goto :install_from_local
@@ -419,35 +423,9 @@ if %_INST_ERR% neq 0 (
 )
 goto :install_verify
 
-:install_from_pypi
-set "_PACKAGE=qwenpaw"
-
-rem === Secure Validation for ARG_VERSION ===
-if defined ARG_VERSION (
-    rem Version number whitelist: Only permits numbers, letters, periods, comparison symbols (=<>!), hyphens, and tilde characters
-    rem Prohibits spaces, quotation marks, slashes, and other characters potentially used for --index-url injection
-    echo %ARG_VERSION% | findstr /R "[^a-zA-Z0-9\.=<>\!\-~]" >nul 2>&1
-    if not errorlevel 1 (
-        echo [ERROR] Security Alert: ARG_VERSION contains invalid characters.
-        echo [ERROR] Detected unsafe input: %ARG_VERSION%
-        echo [ERROR] Installation aborted.
-        exit /b 1
-    )
-    set "_PACKAGE=qwenpaw%ARG_VERSION%"
-)
-rem === End Version Validation ===
-
-echo [qwenpaw] Installing %_PACKAGE%%EXTRAS_SUFFIX% from PyPI...
-rem Note: It is also recommended to validate EXTRAS_SUFFIX here. Although it may be undefined in the local scope above,
-rem for safety, if ARG_EXTRAS is defined globally, it is best to reuse the validation logic from above or ensure its source is secure.
-rem Assume EXTRAS_SUFFIX is generated here based on the previously validated ARG_EXTRAS, or is empty.
-rem If ARG_EXTRAS is passed globally, it is recommended to validate it uniformly at the beginning of the script.
-
-uv pip install "%_PACKAGE%%EXTRAS_SUFFIX%" --python "%VENV_PYTHON%" --prerelease=allow --quiet --refresh-package qwenpaw
-if errorlevel 1 (
-    echo [qwenpaw] ERROR: Installation failed
-    exit /b 1
-)
+:refuse_pypi_channel
+call :stop_with_error "CoPaw is not published to PyPI yet. Re-run with -FromSource, or download a build from https://github.com/futuremeng/CoPaw/releases"
+if errorlevel 1 exit /b 1
 
 :install_verify
 
