@@ -153,3 +153,33 @@ def test_rule_four_rejects_a_stale_generated_file(fixture_root, capsys):
 def test_this_repository_passes_the_guard():
     """The gate runs in unit-tests.yml, so the live tree must be clean."""
     assert _module().main([]) == 0
+
+
+def _set_version(root: Path, number: str) -> None:
+    (root / "src/qwenpaw/__version__.py").write_text(
+        f'# -*- coding: utf-8 -*-\n__version__ = "{number}"\n',
+        encoding="utf-8",
+    )
+
+
+def test_rule_five_rejects_a_foreign_upstream_number(fixture_root, capsys):
+    mod = _module()
+    _set_version(fixture_root, "2.0.0")
+    assert run(mod, fixture_root) == 1
+    assert "R5:" in capsys.readouterr().out
+
+
+def test_rule_five_accepts_a_post_release(fixture_root):
+    mod = _module()
+    fact = _fact(fixture_root)
+    _set_version(fixture_root, f"{fact['upstream_version']}.post3")
+    assert run(mod, fixture_root) == 0
+
+
+def test_our_channel_number_carries_a_post_release():
+    """CoPaw ships upstream's number plus its own suffix (design §5), so the
+    distributed version can never equal the upstream build."""
+    text = (REPO_ROOT / "src/qwenpaw/__version__.py").read_text(
+        encoding="utf-8"
+    )
+    assert ".post" in text
