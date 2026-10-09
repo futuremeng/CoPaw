@@ -206,7 +206,12 @@ lock 走"取上游 + 重新生成"，剩下真正要逐块判的是这 12 枚（
 - 我们侧：`mcp/manager.py`（+194 −13）、`mcp/stateful_client.py`（**+690 −396**）、`mcp/watcher.py`（+26 −8）。
 - 上游侧 `app/mcp/` 只剩 `__init__.py config_service.py schemas.py`；`stateful_client` 的新宿主是
   **`src/qwenpaw/drivers/handlers/mcp_stateful_client.py`**（配套 `drivers/adapters/mcp_{binding,card_builder,console,legacy_config}.py`、`drivers/handlers/mcp.py`）。
-- ⚠ 这里压着两笔已闭案的修复：**已闭环 40（远程 MCP 的 OAuth Bearer 注入回归）**与**已闭环 46（py3.10 `BaseExceptionGroup` NameError）**。搬到新宿主时必须重验这两笔，不能靠"合并没报红"过关。
+- ⚠ 这里压着两笔已闭案的修复：**已闭环 40（远程 MCP 的 OAuth Bearer 注入）**与**已闭环 46（py3.10 `BaseExceptionGroup` NameError）**。2026-10-09 逐枚按定义符号找了接替者（判据 104），两条都有下落，但**合同方向不同**：
+
+| 我们的修复 | 上游 tip 的接替者 | 行为是否等价 |
+|---|---|---|
+| `manager.py::_inject_oauth_token`（`_build_client` 里调） | `drivers/credentials/bindings.py:89-91 implicit_auth_headers` + `adapters/mcp_card_builder.py:288-293`（把 `Authorization` 声明成 `{source: credential, field: access_token, format: "Bearer {value}"}`） | **不等价两处**：① 过期令牌我们是不注入，上游是走刷新（`credentials/providers.py:225-247`，`expires_at - now > _REFRESH_MARGIN_SECONDS`）；② 手动 header 我们让令牌**覆盖**它，上游是 `existing_headers` 里已有 `authorization` 就**整个返回 `{}`**（`bindings.py:73-75`） |
+| `stateful_client.py::_iter_leaf_exceptions` / `_extract_http_status_error`（不命名 `BaseExceptionGroup`） | `drivers/handlers/mcp_stateful_client.py:96-107`（`_is_transport_error`、`_is_401_error`，同为 `getattr(exc, "exceptions", None)` 鸭子式展开） | NameError 那一型在上游新宿主**结构性不会复发**：tip `pyproject.toml:6` 是 `requires-python = ">=3.11,<3.14"`（我们是 `>=3.10`），`ExceptionGroup` 在 3.11 是内置。我们那 4 枚 helper（`_iter_leaf_exceptions`、`_summarize_exception_chain`、`_extract_http_status_error`、`_log_http_lifecycle_exception`）在 tip `src/qwenpaw` **零命中** ⇒ 重试日志上下文那部分能力无落点，按裁决 2 归上游 |
 
 **(c) 上游整体删除、我们仍在改的四组：逐组量了"接替者"与"消费方闭包"（判据 102）**
 
@@ -270,7 +275,8 @@ lock 走"取上游 + 重新生成"，剩下真正要逐块判的是这 12 枚（
    在里面 `git merge upstream/main`，工作区一旦进冲突态就留在里面，不碰 `CoPaw-wp14`。
 3. **按类批量落默认解**（add/add 10 枚以**上游为准**、把我们的额外断言并进同一文件，因为那 9 枚是双方各自写的测试）：
    - 锁文件：取上游 ⇒ 之后 `npm install` 让 fork 侧新增依赖（`@testing-library/dom` 等）自己长回来；
-   - `app/mcp/*` → `drivers/`：逐 hunk 重放到 `drivers/handlers/mcp_stateful_client.py`，**OAuth 注入与 py3.10 两笔必须有回归用例**；
+   - `app/mcp/*` → `drivers/`：逐 hunk 重放到 `drivers/handlers/mcp_stateful_client.py`，
+     两笔已闭案（40 OAuth 注入、46 py3.10）的用例与合同分歧见 §4(b) 与 §6 第 3 项 —— **11 条用例已存在，要重指宿主，不是新写**；
    - `app/runner/*` → `app/chats/*` 与上游不再保留的 12 枚：按 §4(a) 的符号级接替表逐枚落地（不留 fork 自有路径）；
    - 其余在册内容冲突：按 §3 的权重倒序处理，**先吃掉 agents/skills 那 12 枚（55 块、51.2% 的行）**，
      剩下 75 枚平均不到 50 行、逐块判即可。
@@ -291,6 +297,15 @@ lock 走"取上游 + 重新生成"，剩下真正要逐块判的是这 12 枚（
      旧名 `agentscope-ai/QwenPaw.git` 的本地 ref 停在 `2d9527bb0` 2026-05-27，且**是** tip 的祖先）
      ⇒ 换基线那一步要把 workflow 里那两处 URL/ref 与 `DEFAULT_BASE_REF` 同时核一遍。
    - 版本线：阶段 1 定的 `1.1.11b1.post1` 要按"跟上游同号 + `.postN`"重新裁定（上游已到 v2.2.x 线）。
+   - **Python 下限（2026-10-09 现算，合并必裁）**：`pyproject.toml:6` 我们是 `>=3.10,<3.14`，tip 是
+     `>=3.11,<3.14`。取上游那侧 ⇒ **本 worktree 的共用 venv（`.venv/bin/python -V` = `Python 3.10.20`）
+     不再满足下限**，合并后所有 Python 读数（`pytest tests/unit`、五道门禁）都要先换解释器；
+     副作用是已闭环 46 那一型（命名 `BaseExceptionGroup` 在 3.10 上 NameError）结构性消失，
+     连带的 `exceptiongroup` 兜底只剩 `tests/unit/app/test_mcp_stateful_client.py:17-23` 一处。
+     取我们那侧则要逐枚验上游 3.11+ 标准库用法，现算 tip：**`import tomllib` 3 处**
+     （`checkpoints/policy.py:215`、`portability/providers/codex_schedule_reader.py:13`、`portability/providers/external_state.py:9`）
+     · **`from enum import … StrEnum` 8 枚文件** · `except*` **0 处** ⇒ 3.10 上必 `ImportError` 的面是这 11 枚，
+     不是全树。未逐枚验它们是否在活跃导入链上。
 
 ---
 
@@ -317,7 +332,8 @@ lock 走"取上游 + 重新生成"，剩下真正要逐块判的是这 12 枚（
 
 ### 刀序（合并前能做的，与只能在合并后做的）
 
-合并前（fork 侧独立可验的刀。⚠ 判据 105：**"少一枚冲突"不是这类刀的评价标准** —— 落在上游自有文件上的
+合并前（fork 侧独立可验的刀。⚠ **2026-10-09：下面 1/2/3 三项已全部闭完 ⇒ 合并前刀序清空，下一个动作只能是合并本身**。
+判据 105：**"少一枚冲突"不是这类刀的评价标准** —— 落在上游自有文件上的
 预防性改动不会减冲突，只会把合并的免费工作量重做一遍；合并前真正该手工摘的只有 fork 自建文件那一型）：
 
 1. **裁决 2 的前置刀：合并前只需要手工摘 fork 自建那一枚消费方 —— 已完成（刀 87，`54bb86bc8`）**。
@@ -348,8 +364,16 @@ lock 走"取上游 + 重新生成"，剩下真正要逐块判的是这 12 枚（
    的对比是在负载 26 与 8.32 之间做的，把 stub→SDK 这一改动误判成超时元凶；
    第二次 stub 全量在负载 26 同样红（该条用例在安静时 12,724 ms、负载下 21,831–22,317 ms，
    上限是 `testTimeout: 20000`）⇒ 那次 2×1 作废。
-3. **五表里已被标为待重放的两笔**（已闭环 40 OAuth 注入、已闭环 46 py3.10 `BaseExceptionGroup`）
-   在 `app/mcp/*` → `drivers/` 搬迁时必须有回归用例 —— 现在能先把用例写红。
+3. **五表里已被标为待重放的两笔（已闭环 40、46）= 用例早已存在，合并前工作量 0**。
+   2026-10-09 现数：`tests/unit/app/test_mcp_oauth_injection.py` 4 条 + `tests/unit/app/test_mcp_stateful_client.py` 7 条
+   = **11 条**，现树 `pytest` 两文件 **11 passed / 0.18 s**；两枚文件都是 fork 自建（分叉点与 tip 各 `git cat-file -e` 全失败）
+   ⇒ 合并不会动它们，**不需要"先把用例写红"**。
+   真正的合并态工作是**这 11 条钉在即将消失的宿主上**：两者分别 `from qwenpaw.app.mcp.manager import MCPClientManager`
+   与 `from qwenpaw.app.mcp import stateful_client`，而 `app/mcp/{manager,stateful_client}.py` 在 tip 不存在
+   （只剩 `__init__.py config_service.py schemas.py`）⇒ 按裁决 2 接受删除之后，11 条全变 collection error，
+   守卫恰好在需要它重放的那一刻消失。归并后清单第 6 项：4 条 OAuth 用例重指 `drivers/credentials/bindings.py` +
+   `adapters/mcp_card_builder.py`，并按 §4(b) 那张表**先裁两处合同分歧**（过期不注入 vs 过期即刷新；令牌覆盖手动 header vs 有 authorization 就不注入），
+   再决定 7 条 helper 用例是重指 `_is_401_error`/`_is_transport_error` 还是随宿主同删。
 
 合并后（只能在合并态里做）：
 
@@ -374,9 +398,10 @@ lock 走"取上游 + 重新生成"，剩下真正要逐块判的是这 12 枚（
 （不知道上游自己在这 133 枚里是否已经把我们的某些能力做掉了）；`console/package-lock.json` 取上游后
 `npm install` 会产生什么差异没验；§2 已换成**逐 import specifier 解析**（不再是字面计数），但它仍只看
 代码里的说明符：**模板串拼出来的路径、`importlib` / 运行时动态加载、以及测试配置里的字符串（alias 值与
-`exclude` glob）都不在它的作用域里**（判据 108）；**§4(a) 符号表只证明"上游有同名符号的宿主"，没证明
-它的行为合同与我们那份等价**（`query_error_resilience` 那一枚最需要这一步：上游有
+`exclude` glob）都不在它的作用域里**（判据 108）；**§4(a) 符号表只证明"上游有同名符号的宿主"，没证明它的行为合同与我们那份等价**（`query_error_resilience` 那一枚最需要这一步：上游有
 `call_with_overflow_recovery`，但它覆盖不覆盖已闭环 57 的全部情形，要在合并后用用例验）；
+**§4(b) 的 MCP 两笔已于 2026-10-09 补做到合同级**（判据 112：接替者找到、且量出两处方向相反 ⇒ 这两处是合并后必红的，
+红得有依据）；runner 12 枚与 `query_error_resilience` 仍停在"同名宿主存在"这一级。
 **`check_namespace_boundaries.py` 在本 worktree 里 `result: PASSED` 但同时打
 `warning: failed to read baseline ref 'qwenpaw_upstream_main'`** ⇒ 它这里没有基线可比，"绿"不等于
 命名边界成立（判据 92 那一型的又一次：一条读不到输入的门禁会静默存违规）。要它真跑需要上游远端 ref，
@@ -410,6 +435,23 @@ lock 走"取上游 + 重新生成"，剩下真正要逐块判的是这 12 枚（
   把改动（stub→SDK）认成超时元凶；第二次 stub 在负载 26 同样红 ⇒ 该对比作废。
   这条尤其适用于**靠 `testTimeout` 兜住的粗用例**：实测同一条在安静时 12,724 ms、负载下 21,831–22,317 ms
   ⇒ 20,000 ms 的上限**在负载下不成立**，"全量绿"这个验收口径本身是负载依赖的。
+- **判据 109（"合并后全套绿"不是成果守住的证明，两类守卫各自失效）**：fork 自建的守卫文件钉在即将消失的宿主上时，
+  裁决 2 落地后它们从"用例红"变成"收集红"（§6 第 3 项那 11 条即是）—— 仍然报红，但**报的不再是行为**；
+  反过来，只存在于册内行数为证据的符号（一句 import、一个分支、一条错误消息）消失时**一条用例都不会红**。
+  所以合并验收要逐枚点名符号：刀 89 的"钉住一枚后端名"改写成"枚举注册表并要求每个注册名解析到各自的类"是一型，
+  §6 第 3 项那 11 条重指到新宿主是另一型。
+- **判据 110（同一宿主上，我们的在册行是待移植的小集，不是要保护的文件）**：现算 `src/qwenpaw/config/config.py`
+  —— 册内读 **+73/−3**（我们相对分叉点 `e111ec6fb` 的字节），上游 base→tip 同一枚路径读 **+2,190/−407**
+  ⇒ 合并时这一枚是大规模内容冲突，正确动作是把**那 73 行**逐 hunk 移植进上游重写后的文件，
+  而不是"保住这份文件"。凡是两侧数字差一个数量级的宿主都属于这一型，逐块判的靶子应该是我们的行，不是文件。
+- **判据 111（排刀前先核"待办"是不是已经做完）**：§6 原第 3 项写着"现在能先把回归用例写红"，
+  现数两枚文件里 11 条用例早就在（刀 40/46 的产物）⇒ 合并前工作量为 0，差点按旧措辞开一把重复的刀。
+  这条待办的**真**内容换了个方向：fork 自建的守卫钉在即将消失的宿主上，合并后全变 collection error，
+  守卫恰好在需要重放的那一刻失效 ⇒ 待办项的措辞要用现树核一遍再排。
+- **判据 112（接替者要逐枚比合同方向，同名符号存在 ≠ 等价）**：`_process_plan` 那类"同名但语义已改"
+  是一层，OAuth 注入是另一层 —— 上游的接替机制两条都与我们相反（过期**刷新** vs 我们**不注入**；
+  手动 header 已存在时**整个不注入** vs 我们**令牌覆盖**）。判据 104 让人去找接替者，112 要求找到之后
+  再问"它对同一输入的分支走向是不是我们那条"，否则合并后红的是断言而不是差异。
 - **判据 108（合并时 fork 自有的配置文件是静默删除的落点，不是豁免区）**：合并只会动上游自有文件；
   一份**fork 自建、上游看不见**的配置（本例 `console/vitest.config.ts`）在合并后原样留着，
   它指向的上游文件却可能被删 ⇒ 断点恰好长在这类文件里，而它既不在冲突表里、也不在任何"取上游字节"的动作里。
@@ -417,4 +459,5 @@ lock 走"取上游 + 重新生成"，剩下真正要逐块判的是这 12 枚（
 
 相关账目：已闭环 84–86（判据 84/85/86 原文在 `2026-10-07-trial-merge-conflict-table.md`）、
 已闭环 40、46、56、57、75、79–81、83–86、**87（`54bb86bc8` AnywhereChat 摘 plan 用点）、
-88（`ae732975e` 测试 alias → 已安装 SDK）、89（`358f0e7ba` 后端注册表用例改枚举）**。
+88（`ae732975e` 测试 alias → 已安装 SDK）、89（`358f0e7ba` 后端注册表用例改枚举）、
+90（本节 §6 第 3 项结清：MCP 两笔的接替者与合同分歧，判据 111/112）**。
