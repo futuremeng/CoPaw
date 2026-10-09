@@ -338,15 +338,17 @@ async def create_agent_config_watcher(
     # pylint: enable=protected-access
 
 
-async def create_project_knowledge_watcher(ws: "Workspace", _):
+async def create_project_knowledge_watcher(
+    ws: "Workspace",
+    _,
+    publish: Callable[[Any], None],
+):
     """Create project knowledge watcher for automatic project pipeline."""
-    # pylint: disable=protected-access
     from ..project_knowledge_watcher import ProjectKnowledgeWatcher
 
     watcher = ProjectKnowledgeWatcher(
         agent_id=ws.agent_id,
         workspace_dir=ws.workspace_dir,
     )
-    ws._service_manager.services["project_knowledge_watcher"] = watcher
+    publish(watcher)
     return watcher
-    # pylint: enable=protected-access
