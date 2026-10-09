@@ -1,6 +1,6 @@
+import { SettingsDrawer as Drawer } from "@/components/interaction/SettingsDrawer";
 import { useState, useEffect, useCallback } from "react";
 import {
-  Drawer,
   Tabs,
   Table,
   Button,
@@ -11,7 +11,7 @@ import {
   Space,
   Typography,
 } from "antd";
-import { DeleteOutlined, PlusOutlined } from "@ant-design/icons";
+import { Trash2 as DeleteOutlined, Plus as PlusOutlined } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import type React from "react";
 import { useAppMessage } from "../../../../hooks/useAppMessage";
@@ -27,9 +27,15 @@ interface AccessControlDrawerProps {
   onClose: () => void;
 }
 
-function toEntries(map: Record<string, string> | undefined): ACLUserEntry[] {
+function toEntries(
+  map: Record<string, { remark: string; username: string }> | undefined,
+): ACLUserEntry[] {
   if (!map) return [];
-  return Object.entries(map).map(([userId, remark]) => ({ userId, remark }));
+  return Object.entries(map).map(([userId, info]) => ({
+    userId,
+    remark: info?.remark ?? "",
+    username: info?.username ?? "",
+  }));
 }
 
 export function AccessControlDrawer({
@@ -42,6 +48,7 @@ export function AccessControlDrawer({
   const [selectedChannel, setSelectedChannel] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [newUserId, setNewUserId] = useState("");
+  const [newUsername, setNewUsername] = useState("");
   const [newRemark, setNewRemark] = useState("");
   const [activeTab, setActiveTab] = useState<"whitelist" | "blacklist">(
     "whitelist",
@@ -86,10 +93,12 @@ export function AccessControlDrawer({
           channel: selectedChannel,
           user_id: newUserId.trim(),
           remark: newRemark.trim(),
+          username: newUsername.trim(),
         },
       ]);
       message.success(t("channels.userAdded"));
       setNewUserId("");
+      setNewUsername("");
       setNewRemark("");
       await fetchACLs();
     } catch {
@@ -119,11 +128,16 @@ export function AccessControlDrawer({
       setAllACLs((prev) => {
         const channelData = prev[selectedChannel];
         if (!channelData) return prev;
+        const list = channelData[activeTab];
+        const existing = list[userId] ?? { remark: "", username: "" };
         return {
           ...prev,
           [selectedChannel]: {
             ...channelData,
-            [activeTab]: { ...channelData[activeTab], [userId]: remark },
+            [activeTab]: {
+              ...list,
+              [userId]: { ...existing, remark },
+            },
           },
         };
       });
@@ -162,7 +176,48 @@ export function AccessControlDrawer({
     ? toEntries(currentACL[activeTab])
     : [];
 
+  const handleUsernameSave = async (userId: string, username: string) => {
+    if (!selectedChannel) return;
+    try {
+      await accessControlApi.updateUsername(selectedChannel, userId, username);
+      setAllACLs((prev) => {
+        const channelData = prev[selectedChannel];
+        if (!channelData) return prev;
+        const list = channelData[activeTab];
+        const existing = list[userId] ?? { remark: "", username: "" };
+        return {
+          ...prev,
+          [selectedChannel]: {
+            ...channelData,
+            [activeTab]: {
+              ...list,
+              [userId]: { ...existing, username },
+            },
+          },
+        };
+      });
+    } catch {
+      message.error(t("channels.operationFailed"));
+    }
+  };
+
   const columns = [
+    {
+      title: t("channels.username"),
+      dataIndex: "username",
+      key: "username",
+      width: 120,
+      render: (username: string, record: ACLUserEntry) => (
+        <Typography.Text
+          editable={{
+            onChange: (value) => handleUsernameSave(record.userId, value),
+            text: username || "",
+          }}
+        >
+          {username || <span style={{ color: "#bbb" }}>-</span>}
+        </Typography.Text>
+      ),
+    },
     {
       title: t("channels.userId"),
       dataIndex: "userId",
@@ -234,7 +289,7 @@ export function AccessControlDrawer({
         tabBarExtraContent={
           <Button
             type="primary"
-            icon={<PlusOutlined />}
+            icon={<PlusOutlined size="1em" />}
             onClick={() => setAddModalOpen(true)}
             disabled={!selectedChannel}
           >
@@ -281,7 +336,7 @@ export function AccessControlDrawer({
             <Button
               danger
               size="small"
-              icon={<DeleteOutlined />}
+              icon={<DeleteOutlined size="1em" />}
               disabled={selectedRowKeys.length === 0}
               loading={batchLoading}
             >
@@ -319,6 +374,7 @@ export function AccessControlDrawer({
         onCancel={() => {
           setAddModalOpen(false);
           setNewUserId("");
+          setNewUsername("");
           setNewRemark("");
         }}
         onOk={async () => {
@@ -340,6 +396,19 @@ export function AccessControlDrawer({
               placeholder={t("channels.addUserPlaceholder")}
               value={newUserId}
               onChange={(e) => setNewUserId(e.target.value)}
+            />
+          </div>
+          <div>
+            <Typography.Text
+              strong
+              style={{ display: "block", marginBottom: 6 }}
+            >
+              {t("channels.username")}
+            </Typography.Text>
+            <Input
+              placeholder={t("channels.usernamePlaceholder")}
+              value={newUsername}
+              onChange={(e) => setNewUsername(e.target.value)}
             />
           </div>
           <div>

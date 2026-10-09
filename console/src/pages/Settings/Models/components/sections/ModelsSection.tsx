@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from "react";
-import { SaveOutlined } from "@ant-design/icons";
-import { Select, Button, Card } from "@agentscope-ai/design";
+import { Save as SaveOutlined } from "lucide-react";
+import { Select, Button } from "@agentscope-ai/design";
 import type { ModelSlotRequest } from "../../../../../api/types";
 import api from "../../../../../api";
 import { useTranslation } from "react-i18next";
@@ -21,10 +21,10 @@ interface ModelsSectionProps {
     require_api_key?: boolean;
   }>;
   activeModels: {
-    active_llm?: {
+    active_llm: {
       provider_id?: string;
       model?: string;
-    };
+    } | null;
   } | null;
   onSaved: () => void;
 }
@@ -53,6 +53,7 @@ export const ModelsSection = React.memo(function ModelsSection({
         const hasModels =
           (p.models?.length ?? 0) + (p.extra_models?.length ?? 0) > 0;
         if (!hasModels) return false;
+        if (p.id === "hub-managed") return true;
         if (p.require_api_key === false) return !!p.base_url;
         if (p.is_custom) return !!p.base_url;
         if (p.require_api_key ?? true) return !!p.api_key;
@@ -61,13 +62,13 @@ export const ModelsSection = React.memo(function ModelsSection({
     [providers],
   );
 
+  const slotProvider = currentSlot?.provider_id;
+  const slotModel = currentSlot?.model;
   useEffect(() => {
-    if (currentSlot) {
-      setSelectedProviderId(currentSlot.provider_id || undefined);
-      setSelectedModel(currentSlot.model || undefined);
-    }
+    setSelectedProviderId(slotProvider || undefined);
+    setSelectedModel(slotModel || undefined);
     setDirty(false);
-  }, [currentSlot?.provider_id, currentSlot?.model]);
+  }, [slotProvider, slotModel]);
 
   const chosenProvider = providers.find((p) => p.id === selectedProviderId);
   const modelOptions = [
@@ -133,7 +134,8 @@ export const ModelsSection = React.memo(function ModelsSection({
   const canSave = dirty && !!selectedProviderId && !!selectedModel;
 
   return (
-    <Card className={styles.slotSection} title={t("models.defaultLlm")}>
+    <div className={styles.defaultLlmBody}>
+      <p className={styles.llmDescription}>{t("models.llmDescription")}</p>
       <div className={styles.slotForm}>
         <div className={styles.slotField}>
           <label className={styles.slotLabel}>{t("models.provider")}</label>
@@ -163,7 +165,10 @@ export const ModelsSection = React.memo(function ModelsSection({
             onChange={handleModelChange}
             options={modelOptions.map((m) => ({
               value: m.id,
-              label: `${m.name} (${m.id})`,
+              label:
+                selectedProviderId === "hub-managed"
+                  ? m.name
+                  : `${m.name} (${m.id})`,
             }))}
           />
         </div>
@@ -180,13 +185,12 @@ export const ModelsSection = React.memo(function ModelsSection({
             disabled={!canSave}
             onClick={handleSave}
             block
-            icon={<SaveOutlined />}
+            icon={<SaveOutlined size="1em" />}
           >
             {isActive ? t("models.saved") : t("models.save")}
           </Button>
         </div>
       </div>
-      <p className={styles.slotDescription}>{t("models.llmDescription")}</p>
-    </Card>
+    </div>
   );
 });

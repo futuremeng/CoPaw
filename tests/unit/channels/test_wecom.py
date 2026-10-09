@@ -26,14 +26,129 @@ Run:
 # pylint: disable=broad-exception-raised
 from __future__ import annotations
 
+
 import threading
+import asyncio
 from pathlib import Path
 from typing import Generator
 from unittest.mock import AsyncMock, MagicMock, Mock, patch
 
 import pytest
 
+from qwenpaw.app.channels.renderer import ChannelDisplayConfig
+
 from qwenpaw.exceptions import ChannelError
+from qwenpaw.schemas import FileContent
+
+
+@pytest.mark.parametrize("media_type", ["file", "image"])
+@pytest.mark.parametrize("read_fails", [False, True])
+async def test_cancelled_upload_waits_for_open_file(
+    wecom_channel,
+    mock_ws_client,
+    media_type,
+    read_fails,
+):
+    """Cancellation closes background readers before Windows-style delete."""
+    loop = asyncio.get_running_loop()
+    started = asyncio.Event()
+    finished = asyncio.Event()
+    release = threading.Event()
+    locked = set()
+    paths = []
+    denied_deletes = []
+    original_unlink = Path.unlink
+
+    def slow_read(path):
+        try:
+            with path.open("rb") as handle:
+                locked.add(str(path))
+                paths.append(path)
+                loop.call_soon_threadsafe(started.set)
+                assert release.wait(timeout=5)
+                if read_fails:
+                    raise OSError("Read failed")
+                return handle.read()
+        finally:
+            locked.discard(str(path))
+            loop.call_soon_threadsafe(finished.set)
+
+    def windows_unlink(path, *args, **kwargs):
+        if str(path) in locked:
+            denied_deletes.append(path)
+            raise PermissionError("File is still open")
+        return original_unlink(path, *args, **kwargs)
+
+    wecom_channel._client = mock_ws_client
+    wecom_channel._upload_lock = asyncio.Lock()
+    wecom_channel._send_ws_cmd = AsyncMock()
+    with (
+        patch.object(Path, "read_bytes", slow_read),
+        patch.object(Path, "unlink", windows_unlink),
+    ):
+        task = asyncio.create_task(
+            wecom_channel._upload_media(
+                "data:image/png;base64,cG5nLWRhdGE=",
+                media_type,
+            ),
+        )
+        try:
+            await asyncio.wait_for(started.wait(), timeout=2)
+            task.cancel()
+            # Cancellation must stay pending while the worker owns the file.
+            with pytest.raises(asyncio.TimeoutError):
+                await asyncio.wait_for(asyncio.shield(task), timeout=0.1)
+            task.cancel()
+            with pytest.raises(asyncio.TimeoutError):
+                await asyncio.wait_for(asyncio.shield(task), timeout=0.1)
+            assert paths[0].is_file()
+        finally:
+            release.set()
+            await asyncio.gather(task, return_exceptions=True)
+            await asyncio.wait_for(finished.wait(), timeout=2)
+
+    assert task.cancelled()
+    assert not denied_deletes
+    assert not paths[0].exists()
+    wecom_channel._send_ws_cmd.assert_not_awaited()
+
+
+@pytest.mark.parametrize("source_type", ["data", "path", "file_url"])
+async def test_file_display_name_reaches_upload_init(
+    wecom_channel,
+    mock_ws_client,
+    tmp_path,
+    source_type,
+):
+    """The upload protocol receives display names, not temporary names."""
+    local_file = tmp_path / "local.pdf"
+    local_file.write_bytes(b"pdf-data")
+    sources = {
+        "data": "data:application/pdf;base64,cGRmLWRhdGE=",
+        "path": str(local_file),
+        "file_url": local_file.as_uri(),
+    }
+    wecom_channel._client = mock_ws_client
+    wecom_channel._upload_lock = asyncio.Lock()
+    wecom_channel._send_ws_cmd = AsyncMock(
+        side_effect=[{"upload_id": "upload"}, {}, {"media_id": "media"}],
+    )
+    await wecom_channel._send_media_part(
+        "recipient",
+        FileContent(file_url=sources[source_type], filename="report.pdf"),
+        None,
+    )
+
+    init = wecom_channel._send_ws_cmd.call_args_list[0].args[1]
+    expected = "report.pdf" if source_type == "data" else "local.pdf"
+    assert init["filename"] == expected
+    assert init["total_size"] == 8
+    mock_ws_client.send_message.assert_awaited_once()
+    assert local_file.read_bytes() == b"pdf-data"
+    if source_type == "data":
+        assert not list(wecom_channel._media_dir.iterdir())
+    else:
+        assert not wecom_channel._media_dir.exists()
 
 
 # =============================================================================
@@ -71,8 +186,10 @@ def wecom_channel(
         bot_prefix="[WeComBot] ",
         media_dir=str(tmp_path / "media"),
         welcome_text="Welcome to WeCom Bot!",
-        show_tool_details=False,
-        filter_tool_messages=True,
+        display_config=ChannelDisplayConfig(
+            show_tool_calls=False,
+            show_tool_results=False,
+        ),
         dm_policy="open",
         group_policy="open",
     )
@@ -304,18 +421,21 @@ class TestWecomChannelInit:
             secret="",
             bot_prefix="",
             media_dir=str(tmp_path / "media"),
-            show_tool_details=True,
-            filter_tool_messages=True,
-            filter_thinking=True,
+            display_config=ChannelDisplayConfig(
+                show_thinking=False,
+                show_tool_calls=False,
+                show_tool_results=False,
+            ),
             allow_from=["user1", "user2"],
             deny_message="Access denied",
             max_reconnect_attempts=5,
         )
 
         assert channel.enabled is False
-        assert channel._show_tool_details is True
-        assert channel._filter_tool_messages is True
-        assert channel._filter_thinking is True
+        assert channel._display_config.show_tool_details is True
+        assert channel._display_config.show_tool_calls is False
+        assert channel._display_config.show_tool_results is False
+        assert not channel._display_config.show_thinking
         assert channel.allow_from == {"user1", "user2"}
         assert channel.deny_message == "Access denied"
         assert channel._max_reconnect_attempts == 5
@@ -683,7 +803,7 @@ class TestWecomChannelBuildAgentRequest:
 
     def test_build_agent_request_from_native_basic(self, wecom_channel):
         """build_agent_request_from_native creates proper AgentRequest."""
-        from agentscope_runtime.engine.schemas.agent_schemas import TextContent
+        from qwenpaw.schemas import TextContent
 
         payload = {
             "channel_id": "wecom",
@@ -1041,7 +1161,7 @@ class TestWecomChannelSendMethods:
     ):
         """send_content_parts should send text content."""
         wecom_channel._client = mock_ws_client
-        from agentscope_runtime.engine.schemas.agent_schemas import TextContent
+        from qwenpaw.schemas import TextContent
 
         parts = [TextContent(type="text", text="Hello World")]
         meta = {"wecom_frame": {"test": "frame"}}
@@ -1063,7 +1183,7 @@ class TestWecomChannelSendMethods:
         """send_content_parts should apply bot prefix."""
         wecom_channel._client = mock_ws_client
         wecom_channel.bot_prefix = "[Bot]"
-        from agentscope_runtime.engine.schemas.agent_schemas import TextContent
+        from qwenpaw.schemas import TextContent
 
         parts = [TextContent(type="text", text="Hello")]
 
@@ -1085,7 +1205,7 @@ class TestWecomChannelSendMethods:
     ):
         """send_content_parts should use send_message when no frame."""
         wecom_channel._client = mock_ws_client
-        from agentscope_runtime.engine.schemas.agent_schemas import TextContent
+        from qwenpaw.schemas import TextContent
 
         parts = [TextContent(type="text", text="Hello")]
 
@@ -1189,6 +1309,28 @@ class TestWecomChannelMediaUpload:
         )
 
         assert media_id == "media_456"
+
+    @pytest.mark.asyncio
+    async def test_upload_media_data_url_success(
+        self,
+        wecom_channel,
+        mock_ws_client,
+    ):
+        """_upload_media should decode a Base64 data URL before upload."""
+        wecom_channel._client = mock_ws_client
+        wecom_channel._upload_lock = MagicMock()
+        wecom_channel._send_ws_cmd = AsyncMock(
+            side_effect=[
+                {"upload_id": "upload_data_url"},
+                {},
+                {"media_id": "media_data_url"},
+            ],
+        )
+
+        data_url = "data:image/png;base64,dGVzdCBpbWFnZSBkYXRh"
+        media_id = await wecom_channel._upload_media(data_url, "image")
+
+        assert media_id == "media_data_url"
 
     @pytest.mark.asyncio
     async def test_upload_media_no_client(self, wecom_channel, tmp_path):
@@ -1463,7 +1605,7 @@ class TestWecomChannelEdgeCases:
         wecom_channel._client = mock_ws_client
         wecom_channel._upload_media = AsyncMock(return_value="media_123")
 
-        from agentscope_runtime.engine.schemas.agent_schemas import (
+        from qwenpaw.schemas import (
             ImageContent,
         )
 
@@ -1492,7 +1634,7 @@ class TestWecomChannelEdgeCases:
         amr_file = tmp_path / "test.amr"
         amr_file.write_bytes(b"amr data")
 
-        from agentscope_runtime.engine.schemas.agent_schemas import (
+        from qwenpaw.schemas import (
             AudioContent,
         )
 

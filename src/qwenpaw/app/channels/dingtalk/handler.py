@@ -9,7 +9,7 @@ from typing import Any, Callable, Dict, List, Optional
 
 import dingtalk_stream
 from dingtalk_stream import CallbackMessage, ChatbotMessage
-from agentscope_runtime.engine.schemas.agent_schemas import (
+from qwenpaw.schemas import (
     TextContent,
 )
 
@@ -488,7 +488,7 @@ class DingTalkChannelHandler(dingtalk_stream.ChatbotHandler):
                 )
                 or getattr(incoming_message, "senderId", None)
                 or "",
-                "sender_nick": getattr(
+                "user_name": getattr(
                     incoming_message,
                     "sender_nick",
                     None,

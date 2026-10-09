@@ -1,15 +1,9 @@
 import { getApiUrl, clearAuthToken } from "./config";
 import { buildAuthHeaders } from "./authHeaders";
+import { getLoginHref, isLoginPath } from "../utils/navigationMode";
 
-const DEFAULT_REQUEST_TIMEOUT_MS = 15000;
 const NAVIGATION_CHANGE_EVENT = "qwenpaw:navigation-change";
-const routeAbortControllers = new Set<AbortController>();
 let navigationPatchInstalled = false;
-
-export interface RequestOptions extends RequestInit {
-  timeoutMs?: number;
-  abortOnNavigation?: boolean;
-}
 
 function installNavigationEventBridge() {
   if (navigationPatchInstalled || typeof window === "undefined") {
@@ -101,6 +95,46 @@ function buildHeaders(method?: string, extra?: HeadersInit): Headers {
   return headers;
 }
 
+export interface RequestOptions extends RequestInit {
+  /** Request timeout in milliseconds. Defaults to 30000 (30 seconds). */
+  timeout?: number;
+  /** Deprecated alias of `timeout`, kept for fork callers. */
+  timeoutMs?: number;
+  /** Number of retry attempts on timeout. Defaults to 0 (no retry). */
+  retries?: number;
+  /** Delay between retries in milliseconds. Defaults to 1000 (1 second). */
+  retryDelay?: number;
+  /** Abort the in-flight request when the app navigates. Defaults to true. */
+  abortOnNavigation?: boolean;
+}
+
+const DEFAULT_TIMEOUT_MS = 30000;
+const DEFAULT_RETRIES = 0;
+const DEFAULT_RETRY_DELAY_MS = 1000;
+
+function isRetryableNetworkError(error: unknown): boolean {
+  return error instanceof TypeError;
+}
+
+function waitForRetry(
+  delay: number,
+  signal?: AbortSignal | null,
+): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const onAbort = () => {
+      clearTimeout(timer);
+      signal?.removeEventListener("abort", onAbort);
+      reject(new DOMException("The operation was aborted", "AbortError"));
+    };
+    const timer = setTimeout(() => {
+      signal?.removeEventListener("abort", onAbort);
+      resolve();
+    }, delay);
+    signal?.addEventListener("abort", onAbort, { once: true });
+    if (signal?.aborted) onAbort();
+  });
+}
+
 export async function request<T = unknown>(
   path: string,
   options: RequestOptions = {},
@@ -108,114 +142,142 @@ export async function request<T = unknown>(
   const url = getApiUrl(path);
   const method = options.method || "GET";
   const headers = buildHeaders(method, options.headers);
-
   const {
-    timeoutMs = DEFAULT_REQUEST_TIMEOUT_MS,
+    timeout,
+    timeoutMs,
+    retries = DEFAULT_RETRIES,
+    retryDelay = DEFAULT_RETRY_DELAY_MS,
     abortOnNavigation = true,
-    signal,
-    ...rest
+    signal: callerSignal,
+    ...fetchOptions
   } = options;
-  const timeoutController = new AbortController();
-  const navigationController = abortOnNavigation ? new AbortController() : null;
-  const timeoutHandle = window.setTimeout(() => {
-    timeoutController.abort();
-  }, timeoutMs);
+  const timeoutMillis = timeoutMs ?? timeout ?? DEFAULT_TIMEOUT_MS;
 
-  const onNavigationChange = () => {
-    navigationController?.abort();
-  };
-  if (navigationController) {
-    installNavigationEventBridge();
-    routeAbortControllers.add(navigationController);
-    window.addEventListener(NAVIGATION_CHANGE_EVENT, onNavigationChange);
+  // Early exit: caller's signal already aborted before we even start
+  if (callerSignal?.aborted) {
+    throw new DOMException("The operation was aborted", "AbortError");
   }
 
-  let cleanupComposedSignal: (() => void) | undefined;
-  const composedSignal = (() => {
-    const parts = [timeoutController.signal];
-    if (navigationController) {
-      parts.push(navigationController.signal);
-    }
-    if (signal) {
-      parts.push(signal);
-    }
+  let lastError: Error | null = null;
 
-    if (parts.length === 1) {
-      return parts[0];
+  // Fork-owned: route changes abort in-flight requests.
+  if (abortOnNavigation) {
+    installNavigationEventBridge();
+  }
+
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    if (callerSignal?.aborted) {
+      throw new DOMException("The operation was aborted", "AbortError");
     }
-    if (parts.some((item) => item.aborted)) {
-      return parts.find((item) => item.aborted) || parts[0];
-    }
-
-    const composedController = new AbortController();
-    const abortComposed = () => composedController.abort();
-
-    parts.forEach((item) => item.addEventListener("abort", abortComposed));
-
-    cleanupComposedSignal = () => {
-      parts.forEach((item) =>
-        item.removeEventListener("abort", abortComposed),
-      );
+    // Create AbortController for timeout handling
+    const controller = new AbortController();
+    let timedOut = false;
+    let abortedByNavigation = false;
+    const onNavigationChange = () => {
+      abortedByNavigation = true;
+      controller.abort();
     };
+    if (abortOnNavigation) {
+      window.addEventListener(NAVIGATION_CHANGE_EVENT, onNavigationChange);
+    }
+    const timeoutId = setTimeout(() => {
+      timedOut = true;
+      controller.abort();
+    }, timeoutMillis);
 
-    return composedController.signal;
-  })();
+    // Wire caller's signal to our controller so external abort also works
+    let onCallerAbort: (() => void) | undefined;
+    if (callerSignal) {
+      if (callerSignal.aborted) {
+        controller.abort();
+      } else {
+        onCallerAbort = () => controller.abort();
+        callerSignal.addEventListener("abort", onCallerAbort, { once: true });
+      }
+    }
 
-  let response: Response;
-  try {
-    response = await fetch(url, {
-      ...rest,
-      headers,
-      signal: composedSignal,
-    });
-  } catch (error) {
-    if (error instanceof DOMException && error.name === "AbortError") {
-      const abortedByCaller = Boolean(signal?.aborted);
-      const abortedByNavigation = Boolean(navigationController?.signal.aborted);
-      if (abortedByCaller || abortedByNavigation) {
+    try {
+      const response = await fetch(url, {
+        ...fetchOptions,
+        headers,
+        signal: controller.signal,
+      });
+
+      if (!response.ok) {
+        if (response.status === 401) {
+          clearAuthToken();
+          if (!isLoginPath(window.location.pathname)) {
+            window.location.href = getLoginHref(window.location);
+          }
+          throw new Error("Not authenticated");
+        }
+
+        const text = await response.text().catch(() => "");
+        const contentType = response.headers.get("content-type") || "";
+        const errorMessage = getErrorMessageFromBody(text, contentType);
+
+        // Preserve raw body for parseErrorDetail() to extract structured fields
+        const finalMessage = errorMessage
+          ? `${errorMessage} - ${text}`
+          : `Request failed: ${response.status} ${response.statusText}`;
+
+        throw new Error(finalMessage);
+      }
+
+      if (response.status === 204) {
+        return undefined as T;
+      }
+
+      const contentType = response.headers.get("content-type") || "";
+      if (!contentType.includes("application/json")) {
+        return (await response.text()) as unknown as T;
+      }
+
+      return (await response.json()) as T;
+    } catch (error) {
+      if (abortedByNavigation) {
         throw new Error("Request aborted");
       }
-      throw new Error(`Request timeout after ${timeoutMs}ms`);
-    }
-    throw error;
-  } finally {
-    if (navigationController) {
-      routeAbortControllers.delete(navigationController);
-      window.removeEventListener(NAVIGATION_CHANGE_EVENT, onNavigationChange);
-    }
-    cleanupComposedSignal?.();
-    window.clearTimeout(timeoutHandle);
-  }
-
-  if (!response.ok) {
-    if (response.status === 401) {
-      clearAuthToken();
-      if (window.location.pathname !== "/login") {
-        window.location.href = "/login";
+      if (callerSignal?.aborted) {
+        throw new DOMException("The operation was aborted", "AbortError");
       }
-      throw new Error("Not authenticated");
+      if (
+        error instanceof DOMException &&
+        error.name === "AbortError" &&
+        !timedOut
+      ) {
+        // External abort (caller cancelled): do not retry, rethrow as-is
+        throw error;
+      }
+
+      if (error instanceof DOMException && error.name === "AbortError") {
+        // Timeout-triggered abort
+        lastError = new Error(
+          `Request timeout after ${timeoutMillis}ms: ${method} ${path}`,
+        );
+
+        // Retry if we have attempts remaining
+        if (attempt < retries) {
+          await waitForRetry(retryDelay, callerSignal);
+          continue;
+        }
+      } else if (isRetryableNetworkError(error) && attempt < retries) {
+        await waitForRetry(retryDelay, callerSignal);
+        continue;
+      } else {
+        throw error;
+      }
+    } finally {
+      clearTimeout(timeoutId);
+      if (abortOnNavigation) {
+        window.removeEventListener(NAVIGATION_CHANGE_EVENT, onNavigationChange);
+      }
+      if (onCallerAbort && callerSignal) {
+        callerSignal.removeEventListener("abort", onCallerAbort);
+      }
     }
-
-    const text = await response.text().catch(() => "");
-    const contentType = response.headers.get("content-type") || "";
-    const errorMessage = getErrorMessageFromBody(text, contentType);
-
-    // Preserve raw body for parseErrorDetail() to extract structured fields
-    const finalMessage = errorMessage
-      ? `${errorMessage} - ${text}`
-      : `Request failed: ${response.status} ${response.statusText}`;
-
-    throw new Error(finalMessage);
   }
 
-  if (response.status === 204) {
-    return undefined as T;
-  }
-
-  const contentType = response.headers.get("content-type") || "";
-  if (!contentType.includes("application/json")) {
-    return (await response.text()) as unknown as T;
-  }
-
-  return (await response.json()) as T;
+  // All retries exhausted
+  throw lastError;
 }

@@ -126,11 +126,17 @@ export const MCPOAuthSection: React.FC<MCPOAuthSectionProps> = ({
       });
 
       setPhase("waiting");
-      openExternalLink(resp.auth_url);
+      openExternalLink(resp.auth_url, "_blank", "popup,width=600,height=700");
       // The existing useEffect polls backend every 2s while phase === "waiting"
     } catch (err: unknown) {
       const msg =
         err instanceof Error ? err.message : t("mcp.oauth.startFailed");
+      if (
+        msg.includes("authorization server") ||
+        msg.includes("auth_endpoint")
+      ) {
+        setShowAdvanced(true);
+      }
       setPhase("error");
       setErrorMsg(msg);
     }

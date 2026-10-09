@@ -1,197 +1,64 @@
-import { useState, useCallback } from "react";
-import {
-  Form,
-  Switch,
-  Button,
-  Card,
-  Select,
-  Tabs,
-} from "@agentscope-ai/design";
-import { useAppMessage } from "../../../hooks/useAppMessage";
-import { PlusCircleOutlined } from "@ant-design/icons";
+import InlineHelp from "@/components/InlineHelp";
+import { Button, Tabs } from "@agentscope-ai/design";
 import { useTranslation } from "react-i18next";
-import api from "../../../api";
-import { useToolGuard, type MergedRule } from "./useToolGuard";
+import { useSecurityPage } from "./useSecurityPage";
 import {
-  RuleTable,
+  ToolGuardTab,
   RuleModal,
   PreviewModal,
   SkillScannerSection,
   FileGuardSection,
+  AllowNoAuthHostsTab,
 } from "./components";
 import { PageHeader } from "@/components/PageHeader";
 import styles from "./index.module.less";
 
-const BUILTIN_TOOLS = [
-  "execute_shell_command",
-  "execute_python_code",
-  "browser_use",
-  "desktop_screenshot",
-  "view_image",
-  "read_file",
-  "write_file",
-  "edit_file",
-  "append_file",
-  "view_text_file",
-  "write_text_file",
-  "send_file_to_user",
-];
-
 function SecurityPage() {
   const { t } = useTranslation();
-  const [form] = Form.useForm();
-  const [editForm] = Form.useForm();
-  const [saving, setSaving] = useState(false);
-  const [activeTab, setActiveTab] = useState("toolGuard");
-
-  // FileGuard handlers exposed from child component
-  const [fileGuardHandlers, setFileGuardHandlers] = useState<{
-    save: () => Promise<void>;
-    reset: () => void;
-    saving: boolean;
-  } | null>(null);
-
-  const onFileGuardHandlersReady = useCallback(
-    (handlers: {
-      save: () => Promise<void>;
-      reset: () => void;
-      saving: boolean;
-    }) => {
-      setFileGuardHandlers(handlers);
-    },
-    [],
-  );
 
   const {
+    activeTab,
+    setActiveTab,
+    form,
     config,
-    customRules,
-    builtinRules,
     enabled,
     setEnabled,
+    sandboxEnabled,
+    setSandboxEnabled,
+    sandboxReason,
+    denyPathsActive,
+    denyPathsLoading,
+    denyPathsProtectedPaths,
+    denyPathsPlatformSupported,
+    toggleDenyPaths,
+    toolOptions,
+    scheduleSave,
+    flushSave,
     mergedRules,
-    loading,
-    error,
-    fetchAll,
+    builtinRules,
+    customRules,
     toggleRule,
     toggleAutoDeny,
     deleteCustomRule,
-    addCustomRule,
-    updateCustomRule,
-    buildSaveBody,
-  } = useToolGuard();
-
-  // Modal states
-  const [editModal, setEditModal] = useState(false);
-  const [editingRule, setEditingRule] = useState<MergedRule | null>(null);
-  const [previewRule, setPreviewRule] = useState<MergedRule | null>(null);
-
-  const { message } = useAppMessage();
-
-  // Form handlers
-  const handleSave = useCallback(async () => {
-    try {
-      setSaving(true);
-      const values = await form.validateFields();
-      const guardedTools: string[] = values.guarded_tools ?? [];
-      const saveBody = buildSaveBody();
-      const body = {
-        enabled: values.enabled,
-        guarded_tools: guardedTools.length > 0 ? guardedTools : null,
-        denied_tools: values.denied_tools ?? [],
-        custom_rules: customRules,
-        disabled_rules: Array.from(saveBody.disabled_rules),
-        auto_denied_rules: Array.from(saveBody.auto_denied_rules),
-        shell_evasion_checks: saveBody.shell_evasion_checks,
-      };
-      await api.updateToolGuard(body);
-      setEnabled(body.enabled);
-      message.success(t("security.saveSuccess"));
-    } catch (err) {
-      if (err instanceof Error && "errorFields" in err) {
-        return;
-      }
-      const errMsg =
-        err instanceof Error ? err.message : t("security.saveFailed");
-      message.error(errMsg);
-    } finally {
-      setSaving(false);
-    }
-  }, [customRules, buildSaveBody, form, t]);
-
-  const handleReset = useCallback(() => {
-    form.resetFields();
-    fetchAll();
-  }, [form, fetchAll]);
-
-  // Rule modal handlers
-  const openAddRule = useCallback(() => {
-    setEditingRule(null);
-    setEditModal(true);
-  }, []);
-
-  const openEditRule = useCallback(
-    (rule: MergedRule) => {
-      setEditingRule(rule);
-      setEditModal(true);
-    },
-    [],
-  );
-
-  const handleEditSave = useCallback(async () => {
-    try {
-      const values = await editForm.validateFields();
-      const patterns = (values.patterns as string)
-        .split("\n")
-        .map((s: string) => s.trim())
-        .filter(Boolean);
-      const excludePatterns = ((values.exclude_patterns as string) || "")
-        .split("\n")
-        .map((s: string) => s.trim())
-        .filter(Boolean);
-
-      const rule = {
-        id: values.id,
-        tools: values.tools ?? [],
-        params: values.params ?? [],
-        category: values.category,
-        severity: values.severity,
-        patterns,
-        exclude_patterns: excludePatterns,
-        description: values.description || "",
-        remediation: values.remediation || "",
-      };
-
-      if (editingRule) {
-        updateCustomRule(editingRule.id, rule);
-      } else {
-        const allIds = [
-          ...builtinRules.map((r) => r.id),
-          ...customRules.map((r) => r.id),
-        ];
-        if (allIds.includes(rule.id)) {
-          message.error(t("security.rules.duplicateId"));
-          return;
-        }
-        addCustomRule(rule);
-      }
-      setEditModal(false);
-    } catch {
-      // validation failed
-    }
-  }, [
+    openAddRule,
+    openEditRule,
+    shellEvasionChecks,
+    toggleShellEvasionCheck,
+    editModal,
+    setEditModal,
     editingRule,
-    builtinRules,
-    customRules,
-    updateCustomRule,
-    addCustomRule,
     editForm,
-    t,
-  ]);
-
-  const toolOptions = BUILTIN_TOOLS.map((name) => ({
-    label: name,
-    value: name,
-  }));
+    handleEditSave,
+    previewRule,
+    setPreviewRule,
+    fileGuardHandlers,
+    onFileGuardHandlersReady,
+    allowNoAuthHostsHandlers,
+    onAllowNoAuthHostsHandlersReady,
+    loading,
+    error,
+    fetchAll,
+  } = useSecurityPage();
 
   // Loading state
   if (loading) {
@@ -229,7 +96,31 @@ function SecurityPage() {
         <Tabs
           className={styles.mainTabs}
           activeKey={activeTab}
-          onChange={setActiveTab}
+          tabBarExtraContent={
+            activeTab !== "allowNoAuthHosts" ? (
+              <InlineHelp
+                subject={t(
+                  activeTab === "toolGuard"
+                    ? "security.toolGuardTitle"
+                    : `security.${activeTab}.title`,
+                )}
+              >
+                {t(
+                  activeTab === "toolGuard"
+                    ? "security.toolGuardDescription"
+                    : `security.${activeTab}.description`,
+                )}
+              </InlineHelp>
+            ) : undefined
+          }
+          onChange={(value) => {
+            void (activeTab === "toolGuard"
+              ? flushSave()
+              : activeTab === "fileGuard"
+              ? fileGuardHandlers?.save()
+              : allowNoAuthHostsHandlers?.save());
+            setActiveTab(value);
+          }}
           items={[
             {
               key: "toolGuard",
@@ -239,99 +130,26 @@ function SecurityPage() {
                 </span>
               ),
               children: (
-                <div className={styles.tabContent}>
-                  <div className={styles.sectionConfigureContainer}>
-                    <p className={styles.tabDescription}>
-                      {t("security.toolGuardDescription")}
-                    </p>
-
-                    <Card className={styles.formCard}>
-                      <Form
-                        form={form}
-                        layout="vertical"
-                        className={styles.form}
-                        initialValues={{
-                          enabled: config?.enabled ?? true,
-                          guarded_tools: config?.guarded_tools ?? [],
-                          denied_tools: config?.denied_tools ?? [],
-                        }}
-                      >
-                        <Form.Item
-                          label={t("security.enabled")}
-                          name="enabled"
-                          valuePropName="checked"
-                          tooltip={t("security.enabledTooltip")}
-                        >
-                          <Switch onChange={(val) => setEnabled(val)} />
-                        </Form.Item>
-                        <div className={styles.toolGuardRow}>
-                          <Form.Item
-                            label={t("security.guardedTools")}
-                            name="guarded_tools"
-                            tooltip={t("security.guardedToolsTooltip")}
-                            style={{ marginBottom: 0 }}
-                          >
-                            <Select
-                              mode="tags"
-                              options={toolOptions}
-                              placeholder={t(
-                                "security.guardedToolsPlaceholder",
-                              )}
-                              disabled={!enabled}
-                              allowClear
-                              style={{ width: "100%" }}
-                            />
-                          </Form.Item>
-
-                          <Form.Item
-                            label={t("security.deniedTools")}
-                            name="denied_tools"
-                            tooltip={t("security.deniedToolsTooltip")}
-                            style={{ marginBottom: 0 }}
-                          >
-                            <Select
-                              mode="tags"
-                              options={toolOptions}
-                              placeholder={t("security.deniedToolsPlaceholder")}
-                              disabled={!enabled}
-                              allowClear
-                              style={{ width: "100%" }}
-                            />
-                          </Form.Item>
-                        </div>
-                      </Form>
-                    </Card>
-                  </div>
-
-                  <div className={styles.sectionContainer}>
-                    <div className={styles.sectionHeader}>
-                      <h2 className={styles.sectionTitle}>
-                        {t("security.rules.title")}
-                      </h2>
-                      <Button
-                        type="primary"
-                        icon={<PlusCircleOutlined />}
-                        onClick={openAddRule}
-                        disabled={!enabled}
-                        size="middle"
-                      >
-                        {t("security.rules.add")}
-                      </Button>
-                    </div>
-
-                    <Card className={styles.tableCard}>
-                      <RuleTable
-                        rules={mergedRules}
-                        enabled={enabled}
-                        onToggleRule={toggleRule}
-                        onToggleAutoDeny={toggleAutoDeny}
-                        onPreviewRule={setPreviewRule}
-                        onEditRule={openEditRule}
-                        onDeleteRule={deleteCustomRule}
-                      />
-                    </Card>
-                  </div>
-                </div>
+                <ToolGuardTab
+                  onValuesChange={scheduleSave}
+                  form={form}
+                  config={config}
+                  enabled={enabled}
+                  setEnabled={setEnabled}
+                  sandboxEnabled={sandboxEnabled}
+                  setSandboxEnabled={setSandboxEnabled}
+                  sandboxReason={sandboxReason}
+                  toolOptions={toolOptions}
+                  mergedRules={mergedRules}
+                  toggleRule={toggleRule}
+                  toggleAutoDeny={toggleAutoDeny}
+                  onPreviewRule={setPreviewRule}
+                  onEditRule={openEditRule}
+                  onDeleteRule={deleteCustomRule}
+                  openAddRule={openAddRule}
+                  shellEvasionChecks={shellEvasionChecks}
+                  toggleShellEvasionCheck={toggleShellEvasionCheck}
+                />
               ),
             },
             {
@@ -344,10 +162,16 @@ function SecurityPage() {
               children: (
                 <div className={styles.tabContent}>
                   <div className={styles.sectionFileGuardContainer}>
-                    <p className={styles.tabDescription}>
-                      {t("security.fileGuard.description")}
-                    </p>
-                    <FileGuardSection onSave={onFileGuardHandlersReady} />
+                    <FileGuardSection
+                      onSave={onFileGuardHandlersReady}
+                      denyPathsActive={denyPathsActive}
+                      denyPathsLoading={denyPathsLoading}
+                      denyPathsProtectedPaths={denyPathsProtectedPaths}
+                      denyPathsPlatformSupported={denyPathsPlatformSupported}
+                      sandboxEnabled={sandboxEnabled}
+                      sandboxReason={sandboxReason}
+                      toggleDenyPaths={toggleDenyPaths}
+                    />
                   </div>
                 </div>
               ),
@@ -362,51 +186,25 @@ function SecurityPage() {
               children: (
                 <div className={styles.tabContent}>
                   <div className={styles.sectionSkillScannerContainer}>
-                    <p className={styles.tabDescription}>
-                      {t("security.skillScanner.description")}
-                    </p>
                     <SkillScannerSection />
                   </div>
                 </div>
               ),
             },
+            {
+              key: "allowNoAuthHosts",
+              label: (
+                <span className={styles.tabLabel}>
+                  {t("security.allowNoAuthHosts.title")}
+                </span>
+              ),
+              children: (
+                <AllowNoAuthHostsTab onSave={onAllowNoAuthHostsHandlersReady} />
+              ),
+            },
           ]}
         />
       </div>
-
-      {activeTab === "toolGuard" && (
-        <div className={styles.footerButtons}>
-          <Button
-            onClick={handleReset}
-            disabled={saving}
-            style={{ marginRight: 8 }}
-          >
-            {t("common.reset")}
-          </Button>
-          <Button type="primary" onClick={handleSave} loading={saving}>
-            {t("common.save")}
-          </Button>
-        </div>
-      )}
-
-      {activeTab === "fileGuard" && fileGuardHandlers && (
-        <div className={styles.footerButtons}>
-          <Button
-            onClick={fileGuardHandlers.reset}
-            disabled={fileGuardHandlers.saving}
-            style={{ marginRight: 8 }}
-          >
-            {t("common.reset")}
-          </Button>
-          <Button
-            type="primary"
-            onClick={fileGuardHandlers.save}
-            loading={fileGuardHandlers.saving}
-          >
-            {t("common.save")}
-          </Button>
-        </div>
-      )}
 
       <RuleModal
         open={editModal}

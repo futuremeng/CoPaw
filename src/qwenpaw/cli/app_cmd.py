@@ -8,11 +8,13 @@ import click
 import uvicorn
 
 from ..app.auth import is_auth_enabled
-from ..constant import LOG_LEVEL_ENV
+from ..browser.control_link.chrome.protocol import NM_MAX_INBOUND_BYTES
 from ..config.utils import write_last_api
-from ..utils.http import is_loopback_host
-from ..utils.logging import setup_logger, SuppressPathAccessLogFilter
-
+from ..constant import LOG_LEVEL_ENV
+from ..utils.http import is_loopback_host, probe_host_for_bind_host
+from ..utils.logging import SuppressPathAccessLogFilter, setup_logger
+from ..utils.platform import warn_unelevated_sandbox
+from .windows_shutdown import install_shutdown_handlers
 
 logger = logging.getLogger(__name__)
 
@@ -49,6 +51,34 @@ Recommended:
         click.echo(warning, err=True)
 
 
+def configure_server_process(
+    host: str,
+    port: int,
+    log_level: str,
+    hide_access_paths: tuple[str, ...],
+    *,
+    reload: bool = False,
+) -> None:
+    """Configure shared process state for an HTTP server command."""
+    write_last_api(probe_host_for_bind_host(host), port)
+    os.environ[LOG_LEVEL_ENV] = log_level
+    if reload:
+        os.environ["QWENPAW_RELOAD_MODE"] = "1"
+
+    setup_logger(log_level)
+    if log_level in ("debug", "trace"):
+        from .main import log_init_timings
+
+        log_init_timings()
+
+    paths = [path for path in hide_access_paths if path]
+    if paths:
+        logging.getLogger("uvicorn.access").addFilter(
+            SuppressPathAccessLogFilter(paths),
+        )
+    warn_unelevated_sandbox()
+
+
 @click.command("app")
 @click.option(
     "--host",
@@ -77,7 +107,7 @@ Recommended:
 @click.option(
     "--hide-access-paths",
     multiple=True,
-    default=("/console/push-messages",),
+    default=("/console/push-messages", "/console/inbox/events"),
     show_default=True,
     help="Path substrings to hide from uvicorn access log (repeatable).",
 )
@@ -98,7 +128,14 @@ def app_cmd(
     hide_access_paths: tuple[str, ...],
 ) -> None:
     """Run QwenPaw FastAPI app."""
-    # Handle deprecated --workers parameter
+    # NOTE: the server intentionally runs UNPRIVILEGED. The Windows
+    # restricted-token sandbox no longer requires the whole server to be
+    # elevated (which PR #5931 forced via ShellExecuteW("runas"), breaking
+    # headless / VBS launchers with a surprise UAC prompt and a detached,
+    # un-closable window). If sandbox is enabled but the process is not
+    # admin, warn_unelevated_sandbox() below will log a warning about
+    # reduced isolation before the server starts.
+
     if workers is not None:
         click.echo(
             "⚠️  WARNING: --workers option is deprecated and will be removed "
@@ -112,33 +149,25 @@ def app_cmd(
         )
         click.echo(err=True)
 
-    # Persist last used host/port for other terminals
-    if host == "0.0.0.0":
-        write_last_api("127.0.0.1", port)
-    else:
-        write_last_api(host, port)
-    os.environ[LOG_LEVEL_ENV] = log_level
+    if os.environ.get(
+        "QWENPAW_RUNTIME_PROVISIONER",
+    ) == "local" and os.environ.get("QWENPAW_RUNTIME_ID"):
+        # Imported lazily: init_cmd pulls in the interactive setup wizard's
+        # dependency tree (providers_cmd, channels_cmd, ...), which is not
+        # needed on the common startup path.
+        from .init_cmd import ensure_local_runtime_initialized
 
-    # Signal reload mode to browser_control.py for Windows
-    # compatibility: use sync Playwright + ThreadPool only when reload=True
-    if reload:
-        os.environ["QWENPAW_RELOAD_MODE"] = "1"
-    else:
-        os.environ.pop("QWENPAW_RELOAD_MODE", None)
+        ensure_local_runtime_initialized()
 
-    setup_logger(log_level)
-    if log_level in ("debug", "trace"):
-        from .main import log_init_timings
-
-        log_init_timings()
-
-    paths = [p for p in hide_access_paths if p]
-    if paths:
-        logging.getLogger("uvicorn.access").addFilter(
-            SuppressPathAccessLogFilter(paths),
-        )
-
+    configure_server_process(
+        host,
+        port,
+        log_level,
+        hide_access_paths,
+        reload=reload,
+    )
     _warn_if_auth_off_non_loopback_bind(host, port)
+    install_shutdown_handlers()
 
     uvicorn.run(
         "qwenpaw.app._app:app",
@@ -147,4 +176,9 @@ def app_cmd(
         reload=reload,
         workers=1,
         log_level=log_level,
+        # Bound shutdown so workspace SSE connections cannot block exit.
+        timeout_graceful_shutdown=5,
+        # Chrome Native Messaging inbound limit; this server-wide value is a
+        # protocol fact rather than a user-configurable WebSocket capacity.
+        ws_max_size=NM_MAX_INBOUND_BYTES,
     )

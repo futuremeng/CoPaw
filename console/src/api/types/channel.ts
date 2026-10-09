@@ -1,12 +1,16 @@
 export interface BaseChannelConfig {
   enabled: boolean;
   bot_prefix: string;
-  filter_tool_messages?: boolean;
-  filter_thinking?: boolean;
+  show_tool_calls?: boolean;
+  show_tool_results?: boolean;
+  tool_call_max_length?: number;
+  tool_result_max_length?: number;
+  show_thinking?: boolean;
   dm_policy?: "open" | "allowlist";
   group_policy?: "open" | "allowlist";
   allow_from?: string[];
   require_mention?: boolean;
+  no_text_debounce?: boolean;
 }
 
 export interface IMessageChannelConfig extends BaseChannelConfig {
@@ -19,6 +23,8 @@ export interface DiscordConfig extends BaseChannelConfig {
   http_proxy: string;
   http_proxy_auth: string;
   accept_bot_messages?: boolean;
+  streaming_enabled?: boolean;
+  media_dir?: string;
 }
 
 export interface DingTalkConfig extends BaseChannelConfig {
@@ -30,7 +36,10 @@ export interface DingTalkConfig extends BaseChannelConfig {
   card_template_key: string;
   robot_code: string;
   at_sender_on_reply?: boolean;
+  card_auto_layout?: boolean;
   streaming_enabled?: boolean;
+  share_session_in_group?: boolean;
+  endpoint?: string;
 }
 
 export interface FeishuConfig extends BaseChannelConfig {
@@ -41,19 +50,30 @@ export interface FeishuConfig extends BaseChannelConfig {
   media_dir: string;
   domain?: "feishu" | "lark";
   streaming_enabled?: boolean;
+  share_session_in_group?: boolean;
+  auto_collapse_thinking?: boolean;
 }
 
 export interface QQConfig extends BaseChannelConfig {
   app_id: string;
   client_secret: string;
   ack_message?: string;
+  user_openid?: string;
 }
 
 export interface TelegramConfig extends BaseChannelConfig {
   bot_token: string;
+  base_url: string;
   http_proxy: string;
   http_proxy_auth: string;
   show_typing?: boolean;
+  streaming_enabled?: boolean;
+}
+
+export interface SlackConfig extends BaseChannelConfig {
+  bot_token: string;
+  app_token: string;
+  proxy?: string;
   streaming_enabled?: boolean;
 }
 
@@ -77,6 +97,8 @@ export interface MatrixConfig extends BaseChannelConfig {
   homeserver: string;
   user_id: string;
   access_token: string;
+  share_session_in_group?: boolean;
+  streaming_enabled?: boolean;
 }
 
 export interface MattermostConfig extends BaseChannelConfig {
@@ -139,7 +161,6 @@ export interface XiaoYiConfig extends BaseChannelConfig {
   ak: string;
   sk: string;
   agent_id: string;
-  ws_url: string;
   task_timeout_ms?: number;
 }
 
@@ -157,12 +178,17 @@ export interface YuanbaoConfig extends BaseChannelConfig {
   app_secret: string;
   api_domain: string;
   media_dir?: string;
+  accept_bot_messages?: boolean;
 }
 
 export interface OneBotConfig extends BaseChannelConfig {
   ws_host: string;
   ws_port: number;
   access_token: string;
+  media_dir?: string;
+  media_base64: boolean;
+  media_base64_max_mb: number;
+  media_download_max_mb: number;
   share_session_in_group: boolean;
 }
 
@@ -173,6 +199,7 @@ export interface ChannelConfig {
   feishu: FeishuConfig;
   qq: QQConfig;
   telegram: TelegramConfig;
+  slack: SlackConfig;
   mqtt: MQTTConfig;
   matrix: MatrixConfig;
   mattermost: MattermostConfig;
@@ -194,6 +221,7 @@ export type SingleChannelConfig =
   | QQConfig
   | ConsoleConfig
   | TelegramConfig
+  | SlackConfig
   | MQTTConfig
   | MatrixConfig
   | MattermostConfig

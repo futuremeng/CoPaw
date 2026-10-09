@@ -1,17 +1,29 @@
 import { request } from "../request";
 import { getApiUrl } from "../config";
 import { buildAuthHeaders } from "../authHeaders";
+import {
+  DownloadCancelledError,
+  downloadFileFromUrl,
+} from "../../utils/downloadFileFromUrl";
 import type {
   BackupMeta,
   BackupTrustMode,
   BackupDetail,
   BackupProgressEvent,
+  BackupJobSnapshot,
   BackupConflictResponse,
   CreateBackupRequest,
   RestoreBackupRequest,
   RestoreBackupResponse,
   DeleteBackupsResponse,
 } from "../types/backup";
+
+/**
+ * Restore rewrites workspaces and global configuration synchronously before
+ * the backend can return. It can legitimately outlive the general API
+ * timeout, especially for large archives or slow disks.
+ */
+export const RESTORE_BACKUP_TIMEOUT_MS = 5 * 60 * 1000;
 
 export const backupApi = {
   listBackups: () => request<BackupMeta[]>("/backups"),
@@ -59,10 +71,62 @@ export const backupApi = {
     return meta;
   },
 
+  startBackupJob: (data: CreateBackupRequest) =>
+    request<BackupJobSnapshot>("/backups/jobs", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+
+  getActiveBackupJob: () =>
+    request<BackupJobSnapshot | null>("/backups/jobs/active"),
+
+  getBackupJob: (jobId: string) =>
+    request<BackupJobSnapshot>(`/backups/jobs/${jobId}`),
+
+  cancelBackupJob: (jobId: string) =>
+    request<BackupJobSnapshot>(`/backups/jobs/${jobId}/cancel`, {
+      method: "POST",
+    }),
+
+  streamBackupJob: async (
+    jobId: string,
+    onSnapshot: (snapshot: BackupJobSnapshot) => void,
+    signal?: AbortSignal,
+  ): Promise<void> => {
+    const url = getApiUrl(`/backups/jobs/${jobId}/events`);
+    const res = await fetch(url, {
+      headers: buildAuthHeaders(),
+      signal,
+    });
+    if (!res.ok) {
+      const text = await res.text().catch(() => "");
+      throw new Error(text || `Request failed: ${res.status}`);
+    }
+
+    if (!res.body) throw new Error("No backup event stream received");
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const chunks = buffer.split("\n\n");
+      buffer = chunks.pop() ?? "";
+      for (const chunk of chunks) {
+        if (!chunk.startsWith("data: ")) continue;
+        const snapshot = JSON.parse(chunk.slice(6)) as BackupJobSnapshot;
+        onSnapshot(snapshot);
+      }
+    }
+  },
+
   restoreBackup: (id: string, data: RestoreBackupRequest) =>
     request<RestoreBackupResponse>(`/backups/${id}/restore`, {
       method: "POST",
       body: JSON.stringify(data),
+      timeout: RESTORE_BACKUP_TIMEOUT_MS,
     }),
 
   deleteBackups: (ids: string[]) =>
@@ -74,29 +138,17 @@ export const backupApi = {
   exportBackup: async (id: string, name: string) => {
     const url = getApiUrl(`/backups/${id}/export`);
 
-    // In pywebview desktop, <a>.click() downloads are silently ignored.
-    // Use the native save dialog exposed via the pywebview bridge instead.
-    const pywebview = (window as any).pywebview;
-    if (pywebview?.api?.save_file) {
-      // save_file needs a full URL; construct one from location + api path.
-      const fullUrl = url.startsWith("http")
-        ? url
-        : `${window.location.origin}${url}`;
-      const saved = await pywebview.api.save_file(fullUrl, `${name}.zip`);
-      // False means the user cancelled the OS save dialog — not an error.
-      if (!saved) return;
-      return;
+    try {
+      await downloadFileFromUrl(url, `${name}.zip`, {
+        headers: buildAuthHeaders(),
+        errorMessage: "Export failed",
+      });
+    } catch (error) {
+      if (error instanceof DownloadCancelledError) {
+        return;
+      }
+      throw error;
     }
-
-    // Fallback for regular browsers: trigger download via invisible <a>
-    const res = await fetch(url, { headers: buildAuthHeaders() });
-    if (!res.ok) throw new Error("Export failed");
-    const blob = await res.blob();
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(blob);
-    a.download = `${name}.zip`;
-    a.click();
-    URL.revokeObjectURL(a.href);
   },
 
   importBackup: async (

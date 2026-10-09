@@ -1,14 +1,26 @@
 import { useCallback, useEffect, useState } from "react";
 import { useAppMessage } from "../../../hooks/useAppMessage";
 import api from "../../../api";
-import type { MCPClientInfo } from "../../../api/types";
+import type { MCPAccessPolicy, MCPClientInfo } from "../../../api/types";
 import { useTranslation } from "react-i18next";
 import { useAgentStore } from "../../../stores/agentStore";
+import {
+  harnessApi,
+  type HarnessDiscoveredMCPServer,
+} from "../../../api/modules/harness";
 
 export function useMCP() {
   const { t } = useTranslation();
-  const { selectedAgent } = useAgentStore();
+  const { selectedAgent, agents } = useAgentStore();
+  const selectedAgentInfo = agents.find((item) => item.id === selectedAgent);
+  const selectedBackend = selectedAgentInfo?.backend ?? "qwenpaw";
+  const canDiscoverProviderMCP = Boolean(
+    selectedAgentInfo?.backend_capabilities?.provider_mcp_discovery,
+  );
   const [clients, setClients] = useState<MCPClientInfo[]>([]);
+  const [providerServers, setProviderServers] = useState<
+    HarnessDiscoveredMCPServer[]
+  >([]);
   const [loading, setLoading] = useState(false);
   const [queuedRefreshKeys, setQueuedRefreshKeys] = useState<string[]>([]);
   const [refreshingKeys, setRefreshingKeys] = useState<string[]>([]);
@@ -22,6 +34,20 @@ export function useMCP() {
     try {
       const data = await api.listMCPClients();
       setClients(data);
+      if (selectedBackend !== "qwenpaw" && canDiscoverProviderMCP) {
+        try {
+          const discovered = await harnessApi.listMCP(selectedBackend);
+          setProviderServers(discovered.servers);
+          if (discovered.message) {
+            message.warning(discovered.message);
+          }
+        } catch (error) {
+          console.warn("Failed to discover Provider MCP servers:", error);
+          setProviderServers([]);
+        }
+      } else {
+        setProviderServers([]);
+      }
     } catch (error) {
       console.error("Failed to load MCP clients:", error);
       if (!silent) {
@@ -32,7 +58,7 @@ export function useMCP() {
         setLoading(false);
       }
     }
-  }, [message, t]);
+  }, [canDiscoverProviderMCP, message, selectedBackend, t]);
 
   useEffect(() => {
     loadClients();
@@ -60,6 +86,7 @@ export function useMCP() {
         args?: string[];
         env?: Record<string, string>;
         cwd?: string;
+        http_timeout?: number;
       },
     ) => {
       try {
@@ -70,13 +97,14 @@ export function useMCP() {
         message.success(t("mcp.createSuccess"));
         await loadClients();
         return true;
-      } catch (error: any) {
-        const errorMsg = error?.message || t("mcp.createError");
+      } catch (error) {
+        const errorMsg =
+          error instanceof Error ? error.message : t("mcp.createError");
         message.error(errorMsg);
         return false;
       }
     },
-    [loadClients, message, t],
+    [message, t, loadClients],
   );
 
   const updateClient = useCallback(
@@ -93,35 +121,43 @@ export function useMCP() {
         args?: string[];
         env?: Record<string, string>;
         cwd?: string;
+        http_timeout?: number;
       },
     ) => {
       try {
         await api.updateMCPClient(key, updates);
-        message.success(t("mcp.updateSuccess"));
-        await loadClients();
+        setClients((current) =>
+          current.map((item) =>
+            item.key === key ? { ...item, ...updates } : item,
+          ),
+        );
         return true;
-      } catch (error: any) {
-        const errorMsg = error?.message || t("mcp.updateError");
+      } catch (error) {
+        const errorMsg =
+          error instanceof Error ? error.message : t("mcp.updateError");
         message.error(errorMsg);
         return false;
       }
     },
-    [loadClients, message, t],
+    [message, t],
   );
 
   const toggleEnabled = useCallback(
     async (client: MCPClientInfo) => {
       try {
         await api.toggleMCPClient(client.key);
-        message.success(
-          client.enabled ? t("mcp.disableSuccess") : t("mcp.enableSuccess"),
+        setClients((current) =>
+          current.map((item) =>
+            item.key === client.key
+              ? { ...item, enabled: !client.enabled }
+              : item,
+          ),
         );
-        await loadClients();
-      } catch (error) {
+      } catch {
         message.error(t("mcp.toggleError"));
       }
     },
-    [loadClients, message, t],
+    [message, t],
   );
 
   const deleteClient = useCallback(
@@ -130,11 +166,28 @@ export function useMCP() {
         await api.deleteMCPClient(client.key);
         message.success(t("mcp.deleteSuccess"));
         await loadClients();
-      } catch (error) {
+      } catch {
         message.error(t("mcp.deleteError"));
       }
     },
-    [loadClients, message, t],
+    [message, t, loadClients],
+  );
+
+  const updatePolicy = useCallback(
+    async (clientKey: string, policy: MCPAccessPolicy) => {
+      try {
+        await api.updateMCPPolicy(clientKey, policy);
+        message.success(t("mcp.access.saveSuccess"));
+        await loadClients();
+        return true;
+      } catch (error) {
+        const errorMsg =
+          error instanceof Error ? error.message : t("mcp.access.saveError");
+        message.error(errorMsg);
+        return false;
+      }
+    },
+    [message, t, loadClients],
   );
 
   const refreshClients = useCallback(async () => {
@@ -179,6 +232,7 @@ export function useMCP() {
 
   return {
     clients,
+    providerServers,
     loading,
     refreshClients,
     refreshStatuses,
@@ -186,6 +240,7 @@ export function useMCP() {
     refreshingKeys,
     createClient,
     updateClient,
+    updatePolicy,
     toggleEnabled,
     deleteClient,
   };

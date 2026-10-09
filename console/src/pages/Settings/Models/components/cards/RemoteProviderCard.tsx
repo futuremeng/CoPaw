@@ -1,12 +1,19 @@
-import React from "react";
-import { Card, Button, Modal } from "@agentscope-ai/design";
+import { ProviderCredentialField } from "./ProviderCredentialField";
+import { ProviderCardStatus } from "./ProviderCardStatus";
+import { InteractiveCard } from "@/components/interaction/InteractiveCard";
+import { ChevronRight } from "lucide-react";
+import { ProviderCloseButton } from "./ProviderCloseButton";
+import React, { useState } from "react";
+import { Modal } from "@agentscope-ai/design";
 import type { ProviderInfo } from "../../../../../api/types";
 import api from "../../../../../api";
 import { useTranslation } from "react-i18next";
 import { useAppMessage } from "../../../../../hooks/useAppMessage";
 import { getIsConfigured } from "../../utils";
 import styles from "../../index.module.less";
+import HubProviderUsage from "./HubProviderUsage";
 import { ProviderIcon } from "../ProviderIconComponent";
+import { OAuthConfirmModal } from "../../../../Chat/ModelSelector/OAuthConfirmModal";
 
 interface RemoteProviderCardProps {
   provider: ProviderInfo;
@@ -23,10 +30,16 @@ export const RemoteProviderCard = React.memo(function RemoteProviderCard({
 }: RemoteProviderCardProps) {
   const { t } = useTranslation();
   const { message } = useAppMessage();
+  const [oauthModalOpen, setOauthModalOpen] = useState(false);
+
+  const isManaged = provider.id === "hub-managed";
+  const needsOAuth =
+    provider.supports_oauth && !provider.api_key && !provider.oauth_connected;
 
   const handleDeleteProvider = (e: React.MouseEvent) => {
     e.stopPropagation();
     Modal.confirm({
+      className: styles.modelConfirmModal,
       title: t("models.deleteProvider"),
       content: t("models.deleteProviderConfirm", { name: provider.name }),
       okText: t("common.delete"),
@@ -48,136 +61,116 @@ export const RemoteProviderCard = React.memo(function RemoteProviderCard({
     });
   };
 
-  const totalCount = provider.models.length + provider.extra_models.length;
+  const totalCount = new Set(
+    [...provider.models, ...provider.extra_models].map((model) => model.id),
+  ).size;
   const isConfigured = getIsConfigured(provider);
-  const hasModels = totalCount > 0;
-  const isAvailable = isConfigured && hasModels;
 
-  const providerTag = provider.is_custom ? (
+  const providerTag = isManaged ? (
+    <span className={styles.customTag}>
+      {t("hub.governance.provider.organization")}
+    </span>
+  ) : provider.is_custom ? (
     <span className={styles.customTag}>{t("models.custom")}</span>
-  ) : (
-    <span className={styles.builtinTag}>{t("models.builtin")}</span>
-  );
-
-  const statusLabel = isAvailable
-    ? t("models.providerAvailable")
-    : isConfigured
-    ? t("models.providerNoModels")
-    : t("models.providerNotConfigured");
-  const statusType = isAvailable
-    ? "enabled"
-    : isConfigured
-    ? "partial"
-    : "disabled";
-  const statusDotColor = isAvailable
-    ? "rgba(20, 184, 166, 1)"
-    : isConfigured
-    ? "#faad14"
-    : "#d9d9d9";
-  const statusDotShadow = isAvailable
-    ? "0 0 0 2px rgba(82, 196, 26, 0.2)"
-    : isConfigured
-    ? "0 0 0 2px rgba(250, 173, 20, 0.2)"
-    : "none";
+  ) : null;
 
   return (
-    <Card hoverable className={styles.providerCard}>
-      {/* Card Header with Icon and Status */}
-      <div className={styles.cardHeaderRow}>
-        <ProviderIcon providerId={provider.id} size={32} />
-        <div className={styles.cardStatusHeader}>
-          <span
-            className={styles.statusDot}
-            style={{
-              backgroundColor: statusDotColor,
-              boxShadow: statusDotShadow,
-            }}
-          />
-          <span
-            className={`${styles.statusText} ${
-              statusType === "enabled"
-                ? styles.enabled
-                : statusType === "partial"
-                ? styles.partial
-                : styles.disabled
-            }`}
-          >
-            {statusLabel}
-          </span>
-        </div>
+    <InteractiveCard
+      layoutId={`provider:${provider.id}`}
+      className={styles.groupCardGlass}
+      tilt={2}
+    >
+      {!isManaged && (
+        <ProviderCloseButton
+          ids={[provider.id]}
+          onSaved={onSaved}
+          onConfigure={() => onOpenConfig(provider)}
+        />
+      )}
+      {/* Header - same layout as GroupCard */}
+      <div className={styles.groupCardHeader}>
+        <ProviderIcon providerId={provider.id} size={36} />
+        <span className={styles.groupCardName}>{provider.name}</span>
       </div>
-
-      {/* Title Row */}
-      <div className={styles.cardTitleRow}>
-        <span className={styles.cardName}>{provider.name}</span>
+      <ProviderCardStatus
+        configured={isConfigured}
+        disabled={provider.enabled === false}
+        free={provider.is_free_tier}
+      >
         {providerTag}
-      </div>
+      </ProviderCardStatus>
 
-      {/* Info Section */}
-      <div className={styles.cardInfo}>
-        <div className={styles.infoRow}>
-          <span className={styles.infoLabel}>Base URL:</span>
-          {provider.base_url ? (
-            <span className={styles.infoValue} title={provider.base_url}>
-              {provider.base_url}
-            </span>
-          ) : (
-            <span className={styles.infoEmpty}>{t("models.notSet")}</span>
-          )}
-        </div>
-        <div className={styles.infoRow}>
-          <span className={styles.infoLabel}>API Key:</span>
-          {provider.api_key ? (
-            <span className={styles.infoValue}>{provider.api_key}</span>
-          ) : (
-            <span className={styles.infoEmpty}>{t("models.notSet")}</span>
-          )}
-        </div>
-        <div className={styles.infoRow}>
-          <span className={styles.infoLabel}>Model:</span>
-          <span className={styles.infoValue}>
-            {totalCount > 0
-              ? t("models.modelsCount", { count: totalCount })
-              : t("models.noModels")}
+      {/* Content - same layout as GroupCard */}
+      <div className={styles.groupCardContent}>
+        {!isManaged && (
+          <>
+            <div className={styles.groupCardField}>
+              <span className={styles.groupCardFieldLabel}>
+                {t("models.baseURL")}
+              </span>
+              <div className={styles.groupCardMono}>
+                {provider.base_url || "—"}
+              </div>
+            </div>
+
+            <ProviderCredentialField
+              provider={provider}
+              onEdit={onOpenConfig}
+            />
+          </>
+        )}
+        <button
+          type="button"
+          className={styles.selectedModelsLink}
+          onClick={() => onOpenModels(provider)}
+        >
+          <span>
+            {t(
+              provider.model_count == null
+                ? "models.pool.enabledCount"
+                : "models.pool.modelCount",
+              {
+                count: totalCount,
+                total: provider.model_count ?? "—",
+              },
+            )}
           </span>
-        </div>
+          <ChevronRight size={16} />
+        </button>
+        {isManaged && <HubProviderUsage />}
       </div>
 
-      <div className={styles.cardActions}>
-        <Button
-          type="default"
-          size="small"
-          onClick={(e) => {
-            e.stopPropagation();
-            onOpenModels(provider);
-          }}
-          className={styles.actionBtn}
-        >
-          {t("models.models")}
-        </Button>
-        <Button
-          type="default"
-          size="small"
-          onClick={(e) => {
-            e.stopPropagation();
-            onOpenConfig(provider);
-          }}
-          className={styles.actionBtn}
-        >
-          {t("models.settings")}
-        </Button>
-        {provider.is_custom && (
-          <Button
-            type="default"
-            size="small"
-            danger
+      {/* Actions - same layout as GroupCard */}
+      <div className={styles.groupCardActions}>
+        {needsOAuth && (
+          <button
+            className={styles.groupCardActBtn}
+            onClick={() => setOauthModalOpen(true)}
+          >
+            {t("models.connect")}
+          </button>
+        )}
+        {!isManaged && provider.is_custom && (
+          <button
+            className={`${styles.groupCardActBtn} ${styles.groupCardActBtnDanger}`}
             onClick={handleDeleteProvider}
-            className={styles.actionBtn}
           >
             {t("common.delete")}
-          </Button>
+          </button>
         )}
       </div>
-    </Card>
+
+      <OAuthConfirmModal
+        open={oauthModalOpen}
+        className={styles.modelManageModal}
+        providerId={provider.id}
+        providerName={provider.name}
+        onSuccess={() => {
+          setOauthModalOpen(false);
+          onSaved();
+        }}
+        onCancel={() => setOauthModalOpen(false)}
+      />
+    </InteractiveCard>
   );
 });

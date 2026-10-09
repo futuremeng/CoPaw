@@ -9,7 +9,7 @@
 <p align="center">
   <a href="https://github.com/agentscope-ai/CloudPaw/blob/main/LICENSE"><img src="https://img.shields.io/badge/License-Apache%202.0-blue.svg" alt="License" /></a>
   <a href="https://www.python.org/downloads/"><img src="https://img.shields.io/badge/Python-3.10%2B-blue.svg" alt="Python" /></a>
-  <a href="#"><img src="https://img.shields.io/badge/version-0.0.2-green.svg" alt="Version" /></a>
+  <a href="#"><img src="https://img.shields.io/badge/version-0.0.4-green.svg" alt="Version" /></a>
 </p>
 
 <p align="center">
@@ -46,17 +46,13 @@ CloudPaw полностью работает в вашей собственно�
 
 1. Запустите QwenPaw (`qwenpaw app`), откройте http://127.0.0.1:8088/
 2. Нажмите «Менеджер плагинов» в левой боковой панели (в разделе «Настройки»), затем нажмите «Установить плагин»
-3. Установите одним из способов:
-   - Введите URL для скачивания плагина: `https://qwenpaw-download.oss-ap-southeast-1.aliyuncs.com/files/plugins/cloudpaw/cloudpaw-0.0.2.zip`
-   - Перетащите папку `cloudpaw/` в диалог установки или выберите ZIP-файл (CloudPaw предустановлен в QwenPaw v1.1.7+ в `plugins/bundle/cloudpaw/`)
+3. Перетащите папку `cloudpaw/` в диалог установки или выберите ZIP-файл (CloudPaw предустановлен в QwenPaw v1.1.7+ в `plugins/bundle/cloudpaw/`)
 4. Дождитесь завершения установки
 
 **Через CLI:**
 
 ```bash
 qwenpaw plugin install /path/to/cloudpaw
-# Или установка через URL
-qwenpaw plugin install https://qwenpaw-download.oss-ap-southeast-1.aliyuncs.com/files/plugins/cloudpaw/cloudpaw-0.0.2.zip
 ```
 
 > **⚠️ ВАЖНО: После установки необходимо принудительно обновить браузер** (`Ctrl+Shift+R` / `Cmd+Shift+R`) для загрузки обновлений фронтенда. Пользовательские UI-компоненты CloudPaw (выбор предложений, управление PRD и т.д.) не появятся до обновления страницы. Если после установки функции отсутствуют, сначала попробуйте обновить страницу.

@@ -7,21 +7,41 @@ import { invalidateSkillCache } from "../../../api/modules/skill";
 import type { SkillSpec } from "../../../api/types";
 import { useTranslation } from "react-i18next";
 import { useAgentStore } from "../../../stores/agentStore";
+import {
+  harnessApi,
+  type HarnessDiscoveredSkill,
+} from "../../../api/modules/harness";
 import { parseErrorDetail } from "../../../utils/error";
 import {
   handleScanError,
   checkScanWarnings as checkScanWarningsShared,
   showScanErrorModal,
 } from "../../../utils/scanError";
+import { subscribeToSkillChanges } from "../../../utils/skillChangeEvents";
 
 type SkillActionResult =
   | { success: true; name?: string; imported?: string[] }
-  | { success: false; conflict?: Record<string, any> };
+  | {
+      success: false;
+      conflict?: {
+        suggested_name?: string;
+        skill_name?: string;
+        conflicts?: { suggested_name?: string; skill_name?: string }[];
+      };
+    };
 
 export function useSkills() {
   const { t } = useTranslation();
-  const { selectedAgent } = useAgentStore();
+  const { selectedAgent, agents } = useAgentStore();
+  const selectedAgentInfo = agents.find((item) => item.id === selectedAgent);
+  const selectedBackend = selectedAgentInfo?.backend ?? "qwenpaw";
+  const canDiscoverProviderSkills = Boolean(
+    selectedAgentInfo?.backend_capabilities?.provider_skills_discovery,
+  );
   const [skills, setSkills] = useState<SkillSpec[]>([]);
+  const [providerSkills, setProviderSkills] = useState<
+    HarnessDiscoveredSkill[]
+  >([]);
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [importing, setImporting] = useState(false);
@@ -38,7 +58,7 @@ export function useSkills() {
       message.error(msg);
       return false;
     },
-    [t],
+    [message, t],
   );
 
   const checkScanWarnings = useCallback(
@@ -52,6 +72,23 @@ export function useSkills() {
     [t],
   );
 
+  const loadProviderSkills = useCallback(async () => {
+    if (selectedBackend === "qwenpaw" || !canDiscoverProviderSkills) {
+      setProviderSkills([]);
+      return;
+    }
+    try {
+      const result = await harnessApi.listSkills(selectedBackend);
+      setProviderSkills(result.skills);
+      if (result.message) {
+        message.warning(result.message);
+      }
+    } catch (error) {
+      console.warn("Failed to discover Provider Skills:", error);
+      setProviderSkills([]);
+    }
+  }, [canDiscoverProviderSkills, message, selectedBackend]);
+
   const fetchSkills = useCallback(async () => {
     setLoading(true);
     try {
@@ -61,9 +98,10 @@ export function useSkills() {
       console.error(t("skills.loadFailed"), error);
       message.error(t("skills.loadFailed"));
     } finally {
+      await loadProviderSkills();
       setLoading(false);
     }
-  }, [selectedAgent]);
+  }, [loadProviderSkills, message, selectedAgent, t]);
 
   const hardRefresh = useCallback(async () => {
     setLoading(true);
@@ -71,19 +109,30 @@ export function useSkills() {
       invalidateSkillCache({ agentId: selectedAgent });
       const data = await api.refreshSkills(selectedAgent);
       setSkills(data || []);
+      await loadProviderSkills();
     } catch (error) {
       console.error(t("skills.refreshFailed"), error);
       message.error(t("skills.refreshFailed"));
     } finally {
       setLoading(false);
     }
-  }, [selectedAgent]);
+  }, [loadProviderSkills, message, selectedAgent, t]);
 
   // Invalidate cache when agent changes
   useEffect(() => {
     invalidateSkillCache({ agentId: selectedAgent });
     void fetchSkills();
   }, [selectedAgent, fetchSkills]);
+
+  useEffect(
+    () =>
+      subscribeToSkillChanges((change) => {
+        if (change.agentId !== selectedAgent) return;
+        invalidateSkillCache({ agentId: selectedAgent });
+        void fetchSkills();
+      }),
+    [fetchSkills, selectedAgent],
+  );
 
   const createSkill = async (
     name: string,
@@ -305,6 +354,7 @@ export function useSkills() {
 
   return {
     skills,
+    providerSkills,
     loading,
     uploading,
     importing,

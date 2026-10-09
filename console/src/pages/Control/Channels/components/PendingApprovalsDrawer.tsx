@@ -1,6 +1,6 @@
+import { SettingsDrawer as Drawer } from "@/components/interaction/SettingsDrawer";
 import { useState, useEffect, useCallback, useMemo } from "react";
 import {
-  Drawer,
   Table,
   Button,
   Space,
@@ -10,10 +10,10 @@ import {
   Popconfirm,
 } from "antd";
 import {
-  CheckOutlined,
-  CloseOutlined,
-  DeleteOutlined,
-} from "@ant-design/icons";
+  Check as CheckOutlined,
+  X as CloseOutlined,
+  Trash2 as DeleteOutlined,
+} from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useAppMessage } from "../../../../hooks/useAppMessage";
 import {
@@ -117,6 +117,25 @@ export function PendingApprovalsDrawer({
     }
   };
 
+  const handleUsernameSave = async (entry: PendingEntry, username: string) => {
+    try {
+      await accessControlApi.updateUsername(
+        entry.channel,
+        entry.user_id,
+        username,
+      );
+      setPending((prev) =>
+        prev.map((p) =>
+          p.channel === entry.channel && p.user_id === entry.user_id
+            ? { ...p, username }
+            : p,
+        ),
+      );
+    } catch {
+      message.error(t("channels.operationFailed"));
+    }
+  };
+
   const handleAction = async (entry: PendingEntry, action: PendingAction) => {
     const key = `${entry.channel}:${entry.user_id}`;
     setActionLoading(key);
@@ -163,6 +182,22 @@ export function PendingApprovalsDrawer({
             <span>{getChannelLabel(channel as ChannelKey, t)}</span>
           </Space>
         </Tooltip>
+      ),
+    },
+    {
+      title: t("channels.username"),
+      dataIndex: "username",
+      key: "username",
+      width: 120,
+      render: (username: string, record: PendingEntry) => (
+        <Text
+          editable={{
+            onChange: (value) => handleUsernameSave(record, value),
+            text: username || "",
+          }}
+        >
+          {username || <span style={{ color: "#bbb" }}>-</span>}
+        </Text>
       ),
     },
     {
@@ -308,7 +343,7 @@ export function PendingApprovalsDrawer({
             <Button
               type="primary"
               size="small"
-              icon={<CheckOutlined />}
+              icon={<CheckOutlined size="1em" />}
               disabled={!hasSelection}
               loading={batchLoading}
             >
@@ -324,7 +359,7 @@ export function PendingApprovalsDrawer({
           >
             <Button
               size="small"
-              icon={<CloseOutlined />}
+              icon={<CloseOutlined size="1em" />}
               disabled={!hasSelection}
               loading={batchLoading}
             >
@@ -341,7 +376,7 @@ export function PendingApprovalsDrawer({
             <Button
               danger
               size="small"
-              icon={<DeleteOutlined />}
+              icon={<DeleteOutlined size="1em" />}
               disabled={!hasSelection}
               loading={batchLoading}
             >

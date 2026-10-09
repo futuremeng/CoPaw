@@ -39,13 +39,17 @@ pub(super) fn create(app: &tauri::AppHandle) -> Result<Command, String> {
             .current_dir(repo_root)
             .env("PYTHONPATH", source_path.display().to_string())
     };
-    Ok(command)
+    Ok(apply_contributed_environment(app, command))
 }
 
 /// Builds the command used to start the packaged Python backend sidecar.
 #[cfg(not(debug_assertions))]
 pub(super) fn create(app: &tauri::AppHandle) -> Result<Command, String> {
     let backend = packaged_backend_executable(app)?;
+    let resource_dir = app
+        .path()
+        .resource_dir()
+        .map_err(|err| format!("failed to resolve resource directory: {err}"))?;
     let backend_dir = backend
         .parent()
         .ok_or_else(|| format!("backend executable has no parent: {}", backend.display()))?
@@ -55,11 +59,93 @@ pub(super) fn create(app: &tauri::AppHandle) -> Result<Command, String> {
         backend.display(),
         backend_dir.display(),
     );
-    Ok(app
+    let command = app
         .shell()
         .command(backend)
         .current_dir(&backend_dir)
-        .env(path_env_key(), path_with_backend_dir(&backend_dir)?))
+        .env(path_env_key(), path_with_backend_dir(&backend_dir)?)
+        .env(
+            "QWENPAW_TAURI_RESOURCE_DIR",
+            resource_dir.to_string_lossy().to_string(),
+        );
+    let mut command = apply_contributed_environment(app, command);
+    // A complete Playwright Chromium payload exceeds the practical NSIS
+    // installer mapping limit on Windows. The sidecar downloads the exact
+    // driver-matched revision into the user's QwenPaw data directory instead.
+    if cfg!(windows) {
+        command = command.env("QWENPAW_DESKTOP_MANAGED_PLAYWRIGHT", "1");
+    }
+    // Bundled standalone Python used by the backend to install third-party
+    // plugin dependencies (sys.executable is the frozen backend, not Python).
+    if let Some(python) = packaged_python_runtime(app) {
+        log::info!("[backend] bundled python runtime: {}", python.display());
+        command = command.env(
+            "QWENPAW_DESKTOP_PY_RUNTIME",
+            python.to_string_lossy().to_string(),
+        );
+    } else {
+        log::warn!(
+            "[backend] bundled python runtime not found; plugin dependency \
+             installation will be unavailable"
+        );
+    }
+    if let Some(node_runtime) = packaged_node_runtime(app) {
+        log::info!("[backend] bundled node runtime: {}", node_runtime.display());
+        command = command.env(
+            "QWENPAW_DESKTOP_NODE_RUNTIME",
+            node_runtime.to_string_lossy().to_string(),
+        );
+    } else {
+        log::warn!("[backend] bundled node runtime not found");
+    }
+    Ok(command)
+}
+
+#[cfg(not(debug_assertions))]
+fn packaged_python_runtime(app: &tauri::AppHandle) -> Option<PathBuf> {
+    let base = app
+        .path()
+        .resource_dir()
+        .ok()?
+        .join("binaries")
+        .join("python-runtime")
+        .join("python");
+    let candidates = if cfg!(windows) {
+        vec![base.join("python.exe")]
+    } else {
+        vec![
+            base.join("bin").join("python3"),
+            base.join("bin").join("python"),
+        ]
+    };
+    candidates.into_iter().find(|path| path.is_file())
+}
+
+/// Add the variables desktop features contribute to the backend's environment.
+///
+/// The set comes from [`crate::runtime_env`], so this stays independent of which
+/// feature needs what.
+fn apply_contributed_environment(app: &tauri::AppHandle, mut command: Command) -> Command {
+    for (key, value) in crate::runtime_env::collect(app) {
+        command = command.env(key, value);
+    }
+    command
+}
+
+#[cfg(not(debug_assertions))]
+fn packaged_node_runtime(app: &tauri::AppHandle) -> Option<PathBuf> {
+    let root = app
+        .path()
+        .resource_dir()
+        .ok()?
+        .join("binaries")
+        .join("node-runtime");
+    let node = if cfg!(windows) {
+        root.join("node.exe")
+    } else {
+        root.join("bin").join("node")
+    };
+    node.is_file().then_some(root)
 }
 
 #[cfg(not(debug_assertions))]

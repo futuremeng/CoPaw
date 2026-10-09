@@ -11,17 +11,20 @@ tokens, etc.) stored on disk.  Secrets are encrypted with Fernet (AES-128-CBC
 Encrypted values carry an ``ENC:`` prefix so readers can distinguish them
 from legacy plaintext and transparently migrate on first access.
 """
+
 from __future__ import annotations
 
 import base64
+import hashlib
 import logging
 import os
 import secrets
+import stat
 import threading
 from pathlib import Path
 from typing import Optional
 
-from ..constant import EnvVarLoader
+from ..constant import EnvVarLoader, KEYRING_ACCOUNT_ENV
 
 logger = logging.getLogger(__name__)
 
@@ -36,6 +39,48 @@ def _get_secret_dir() -> Path:
     from ..constant import SECRET_DIR
 
     return SECRET_DIR
+
+
+def _keyring_account() -> str:
+    """Return the keychain account name for the current install.
+
+    The OS keychain is a single, machine-global namespace keyed by
+    ``(service, account)``.  Because the service/account pair used to be a
+    fixed constant, *every* install on the machine read and wrote the same
+    keychain item regardless of where its ``SECRET_DIR`` lived.  A
+    development checkout pointed at a separate working dir (e.g. ``.devdata``
+    via ``QWENPAW_WORKING_DIR``) would therefore share — and silently
+    overwrite — the stable install's master key, leaving the stable install
+    unable to decrypt its own secrets.
+
+    Resolution:
+
+    1. Explicit ``QWENPAW_KEYRING_ACCOUNT`` override always wins (useful for
+       CI or for naming a dev profile deterministically).
+    2. If the install has *not* relocated its config/secrets via env
+       override, keep the historical ``master_key`` account verbatim so that
+       existing default and auto-detected legacy installs are completely
+       unaffected (no new keychain entry, no re-prompt).
+    3. Otherwise the user has explicitly opted into a separate location, so
+       derive a per-install account from the resolved ``SECRET_DIR`` path.
+       Distinct secret dirs get distinct, stable keychain items and never
+       collide.
+    """
+    explicit = EnvVarLoader.get_str(KEYRING_ACCOUNT_ENV)
+    if explicit:
+        return explicit
+
+    relocated = bool(
+        EnvVarLoader.get_str("QWENPAW_WORKING_DIR")
+        or EnvVarLoader.get_str("QWENPAW_SECRET_DIR"),
+    )
+    if not relocated:
+        return _KEYRING_ACCOUNT
+
+    digest = hashlib.sha256(
+        str(_get_secret_dir()).encode("utf-8"),
+    ).hexdigest()[:16]
+    return f"{_KEYRING_ACCOUNT}:{digest}"
 
 
 # ---------------------------------------------------------------------------
@@ -65,6 +110,11 @@ def _should_skip_keyring() -> bool:
         ``_KEYRING_TIMEOUT`` seconds regardless of what this function
         returns.
     """
+    # Explicit escape hatch for CI, containers, and remote/headless hosts
+    # where OS keyring access is unavailable or may block.
+    if EnvVarLoader.get_bool("QWENPAW_DISABLE_KEYRING"):
+        return True
+
     if EnvVarLoader.get_bool("QWENPAW_RUNNING_IN_CONTAINER"):
         return True
 
@@ -129,17 +179,19 @@ def _try_keyring_get() -> Optional[str]:
     try:
         import keyring
 
+        account = _keyring_account()
+
         def _get():
             value = keyring.get_password(
                 _KEYRING_SERVICE,
-                _KEYRING_ACCOUNT,
+                account,
             )
             if value:
                 return value
             # Backward compatibility: read legacy CoPaw keyring entry.
             return keyring.get_password(
                 _KEYRING_SERVICE_LEGACY,
-                _KEYRING_ACCOUNT,
+                account,
             )
 
         result, timed_out = _call_with_timeout(_get, _KEYRING_TIMEOUT)
@@ -167,10 +219,12 @@ def _try_keyring_set(key_hex: str) -> bool:
     try:
         import keyring
 
+        account = _keyring_account()
+
         def _set():
             keyring.set_password(
                 _KEYRING_SERVICE,
-                _KEYRING_ACCOUNT,
+                account,
                 key_hex,
             )
 
@@ -207,6 +261,31 @@ def _read_key_file() -> Optional[str]:
                     len(content),
                 )
                 return None
+            if os.name != "nt":
+                try:
+                    mode = stat.S_IMODE(path.stat().st_mode)
+                    if mode & 0o077:
+                        # Remove permissions granted to group/other without
+                        # making stricter owner permissions (for example
+                        # 0o400) more permissive.
+                        corrected_mode = mode & 0o600
+                        os.chmod(path, corrected_mode)
+                        logger.warning(
+                            "Master key file had insecure permissions %#o; "
+                            "corrected to %#o",
+                            mode,
+                            corrected_mode,
+                        )
+                except OSError:
+                    # Keep using the existing key: treating a permission
+                    # hardening failure as a missing key would make the
+                    # caller generate a replacement and strand all secrets
+                    # encrypted with the original key.
+                    logger.warning(
+                        "Could not verify or correct master key file "
+                        "permissions; continuing with the existing key",
+                        exc_info=True,
+                    )
             return content
         except (OSError, ValueError):
             logger.warning(
@@ -411,3 +490,36 @@ def decrypt_dict_fields(
         ):
             result[field] = decrypt(result[field])
     return result
+
+
+# ---------------------------------------------------------------------------
+# Console-facing secret masking helpers.
+#
+# Pure string manipulation with no protocol-specific dependency; consumers
+# outside MCP (e.g. builtin tool config endpoints) import directly from here
+# instead of an MCP adapter module.
+# ---------------------------------------------------------------------------
+
+
+def mask_secret_value(value: str) -> str:
+    """Mask a secret value for Console display."""
+    if not value:
+        return value
+    length = len(value)
+    if length <= 8:
+        return "*" * length
+    if length <= 12:
+        return f"{value[:1]}{'*' * max(length - 2, 4)}{value[-1:]}"
+    prefix_len = 3 if length > 2 and value[2] == "-" else 2
+    prefix = value[:prefix_len]
+    suffix_len = 4 if length >= 16 else 2
+    suffix = value[-suffix_len:]
+    masked_len = max(length - prefix_len - suffix_len, 4)
+    return f"{prefix}{'*' * masked_len}{suffix}"
+
+
+def restore_masked_secret_value(incoming: str, existing: str) -> str:
+    """Return the existing secret when incoming equals its masked display."""
+    if existing and incoming == mask_secret_value(existing):
+        return existing
+    return incoming

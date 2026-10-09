@@ -12,6 +12,25 @@ import React, { createContext, useContext, useEffect, useState } from "react";
 import { pluginSystem } from "./hostExternals";
 import { loadAllPlugins } from "./usePluginLoader";
 import type { PluginRouteDeclaration } from "./hostExternals";
+import {
+  routeRegistry,
+  subscribe as registrySubscribe,
+} from "./registry/store";
+
+/** Derive the legacy PluginRouteDeclaration[] shape from routeRegistry. */
+function derivePluginRoutes(): PluginRouteDeclaration[] {
+  // Include both legacy (registerRoutes shim) routes and any new route.add
+  // registrations from a plugin source. Built-in `core.*` routes are excluded.
+  return routeRegistry
+    .snapshot()
+    .filter((r) => r.source !== "core")
+    .map((r) => ({
+      path: r.path,
+      component: r.Component,
+      label: r.id,
+      icon: "",
+    }));
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Context shape
@@ -49,31 +68,71 @@ export function PluginProvider({ children }: { children: React.ReactNode }) {
     Record<string, React.FC<any>>
   >(pluginSystem.getToolRenderConfig());
   const [pluginRoutes, setPluginRoutes] = useState<PluginRouteDeclaration[]>(
-    pluginSystem.getRoutes(),
+    derivePluginRoutes(),
   );
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    let disposed = false;
-
-    // Re-sync state whenever any plugin registers new capabilities
-    const unsub = pluginSystem.subscribe(() => {
-      if (disposed) return;
+    let cancelled = false;
+    // Re-sync state whenever any plugin registers new capabilities — both
+    // the legacy pluginSystem (toolRenderers) and the new registry
+    // (routes via shim + direct route.add) notify on change.
+    const unsubA = pluginSystem.subscribe(() => {
       setToolRenderConfig(pluginSystem.getToolRenderConfig());
-      setPluginRoutes(pluginSystem.getRoutes());
+    });
+    const unsubB = registrySubscribe(() => {
+      setPluginRoutes(derivePluginRoutes());
     });
 
-    // Load all installed plugins (non-fatal: one bad plugin won’t block others)
-    loadAllPlugins().then(({ failed }) => {
-      if (disposed) return;
-      if (failed.length > 0) setError(failed.join("; "));
-      setLoading(false);
-    });
+    const initialize = async () => {
+      const [{ installHostSdk }, { registerBuiltinCards }] = await Promise.all([
+        import("./hostSdk/install"),
+        import("../components/Chat/ToolCards/registerBuiltinCards"),
+      ]);
+      installHostSdk();
+      registerBuiltinCards();
+      return loadAllPlugins();
+    };
+
+    const runWhenIdle = () => {
+      void initialize()
+        .then(({ failed }) => {
+          if (!cancelled && failed.length > 0) {
+            setError(failed.join("; "));
+          }
+        })
+        .catch((loadError: unknown) => {
+          if (!cancelled) {
+            setError(
+              loadError instanceof Error
+                ? loadError.message
+                : "Plugin initialization failed",
+            );
+          }
+        })
+        .finally(() => {
+          if (!cancelled) setLoading(false);
+        });
+    };
+
+    const idleWindow = window as Window & {
+      requestIdleCallback?: (callback: () => void) => number;
+      cancelIdleCallback?: (handle: number) => void;
+    };
+    const handle = idleWindow.requestIdleCallback
+      ? idleWindow.requestIdleCallback(runWhenIdle)
+      : window.setTimeout(runWhenIdle, 1000);
 
     return () => {
-      disposed = true;
-      unsub();
+      cancelled = true;
+      unsubA();
+      unsubB();
+      if (idleWindow.cancelIdleCallback) {
+        idleWindow.cancelIdleCallback(handle);
+      } else {
+        window.clearTimeout(handle);
+      }
     };
   }, []);
 

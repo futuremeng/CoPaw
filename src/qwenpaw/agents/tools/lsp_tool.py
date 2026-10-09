@@ -14,10 +14,10 @@ from pathlib import Path
 from typing import Any, Callable, Optional
 
 from agentscope.message import TextBlock
-from agentscope.tool import ToolResponse
+from agentscope.tool import ToolChunk
+from agentscope.message import ToolResultState
 
-from ...config.context import get_current_workspace_dir
-from ...constant import WORKING_DIR
+from ...config.context import get_tool_base_dir
 from . import _lsp_client as lsp_client
 from . import _lsp_servers as lsp_servers
 from .file_io import _resolve_file_path
@@ -46,38 +46,29 @@ _ALL_OPERATIONS = _OPERATIONS_REQUIRING_FILE | {"workspaceSymbol"}
 # ---------------------------------------------------------------------
 
 
-def _make_response(text: str) -> ToolResponse:
-    return ToolResponse(content=[TextBlock(type="text", text=text)])
+def _make_response(text: str) -> ToolChunk:
+    return ToolChunk(
+        is_last=True,
+        state=ToolResultState.SUCCESS,
+        content=[TextBlock(type="text", text=text)],
+    )
 
 
 def _resolve_root() -> Path:
-    workspace = get_current_workspace_dir()
-    if workspace is not None:
-        return workspace
-    return WORKING_DIR
+    return get_tool_base_dir()
 
 
-def _resolve_file(
-    file_path: str,
-    root: Path,
-) -> "Path | ToolResponse":
-    """Resolve ``file_path`` and ensure it lives inside ``root``."""
+def _resolve_file(file_path: str) -> "Path | ToolChunk":
+    """Resolve ``file_path`` through the shared tool-layer policy.
+
+    Relative paths join onto the primary project dir. Containment is
+    deliberately not checked here: with several granted roots the LSP
+    server root is only one of them, and a file in an extra root must
+    still be servable. Access itself is gated by the governance rules.
+    """
     if not file_path:
         return _make_response("Error: missing `file_path`.")
-    candidate = Path(_resolve_file_path(file_path)).expanduser()
-    try:
-        resolved = candidate.resolve()
-    except OSError as exc:
-        return _make_response(
-            f"Error: cannot resolve path {candidate} — {exc}",
-        )
-    try:
-        resolved.relative_to(root.resolve())
-    except ValueError:
-        return _make_response(
-            f"Error: path {file_path} is outside the project root "
-            f"{root.resolve()}.",
-        )
+    resolved = Path(_resolve_file_path(file_path))
     if not resolved.exists():
         return _make_response(
             f"Error: path {resolved} does not exist.",
@@ -175,7 +166,7 @@ def make_lsp_tool(  # noqa: C901  pylint: disable=too-many-statements
         line: int = 0,
         character: int = 0,
         query: str = "",
-    ) -> ToolResponse:
+    ) -> ToolChunk:
         # pylint: disable=too-many-return-statements,too-many-branches
         if operation not in _ALL_OPERATIONS:
             return _make_response(
@@ -205,8 +196,8 @@ def make_lsp_tool(  # noqa: C901  pylint: disable=too-many-statements
             )
             target_file: Optional[Path] = None
         else:
-            resolved_or_err = _resolve_file(file_path, root)
-            if isinstance(resolved_or_err, ToolResponse):
+            resolved_or_err = _resolve_file(file_path)
+            if isinstance(resolved_or_err, ToolChunk):
                 return resolved_or_err
             target_file = resolved_or_err
             language_id = lsp_servers.language_for_file(target_file) or ""
@@ -249,11 +240,14 @@ def make_lsp_tool(  # noqa: C901  pylint: disable=too-many-statements
             )
 
         try:
-            result = await asyncio.wait_for(
+            from ...tool_calls import cancellable_wait
+
+            result = await cancellable_wait(
                 asyncio.to_thread(_run),
-                timeout=_REQUEST_TIMEOUT,
+                fallback_secs=_REQUEST_TIMEOUT,
+                as_kill_deadline=True,
             )
-        except asyncio.TimeoutError:
+        except (asyncio.TimeoutError, asyncio.CancelledError):
             return _make_response(
                 f"Error: LSP {operation} timed out after "
                 f"{_REQUEST_TIMEOUT}s.",

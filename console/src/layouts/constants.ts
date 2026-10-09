@@ -5,77 +5,22 @@
 // purpose: it is upstream's content asset, and CoPaw has no equivalent yet
 // (design section 9.3).
 
-import { githubUrl, releasesUrl } from "../generated/releaseChannel";
+import {
+  RELEASE_CHANNEL,
+  githubUrl,
+  releasesUrl,
+} from "../generated/releaseChannel";
 
 export { githubUrl as GITHUB_URL, releasesUrl };
 
-// ── Navigation ────────────────────────────────────────────────────────────
+// The PyPI release feed is queried from our own distribution name, never from
+// upstream's package: `pypi` is still listed in RELEASE_CHANNEL.pending, so this
+// URL 404s until phase 2 publishes it, and the update badge stays off.
+export const PYPI_URL = `https://pypi.org/pypi/${RELEASE_CHANNEL.pypi_project}/json`;
 
-export const DEFAULT_OPEN_KEYS = [
-  "chat-group",
-  "control-group",
-  "agent-group",
-  "settings-group",
-];
+// ── Timing ────────────────────────────────────────────────────────────────
 
-export const KEY_TO_PATH: Record<string, string> = {
-  chat: "/chat",
-  channels: "/channels",
-  sessions: "/sessions",
-  inbox: "/inbox",
-  "cron-jobs": "/cron-jobs",
-  heartbeat: "/heartbeat",
-  knowledge: "/knowledge",
-  skills: "/skills",
-  "skill-pool": "/skill-pool",
-  market: "/market",
-  tools: "/tools",
-  mcp: "/mcp",
-  acp: "/acp",
-  workspace: "/workspace",
-  projects: "/projects",
-  pipelines: "/pipelines",
-  agents: "/agents",
-  models: "/models",
-  environments: "/environments",
-  "agent-config": "/agent-config",
-  security: "/security",
-  "token-usage": "/token-usage",
-  "agent-stats": "/agent-stats",
-  "voice-transcription": "/voice-transcription",
-  nlp: "/nlp",
-  debug: "/debug",
-  backups: "/backups",
-  "plugin-manager": "/plugin-manager",
-};
-
-export const KEY_TO_LABEL: Record<string, string> = {
-  chat: "nav.chat",
-  channels: "nav.channels",
-  sessions: "nav.sessions",
-  inbox: "nav.inbox",
-  "cron-jobs": "nav.cronJobs",
-  heartbeat: "nav.heartbeat",
-  knowledge: "nav.knowledge",
-  skills: "nav.skills",
-  "skill-pool": "nav.skillPool",
-  market: "nav.market",
-  tools: "nav.tools",
-  mcp: "nav.mcp",
-  acp: "nav.acp",
-  "agent-config": "nav.agentConfig",
-  workspace: "nav.workspace",
-  projects: "nav.projects",
-  pipelines: "nav.pipelines",
-  models: "nav.models",
-  environments: "nav.environments",
-  security: "nav.security",
-  "token-usage": "nav.tokenUsage",
-  agents: "nav.agents",
-  nlp: "nav.nlp",
-  debug: "nav.debug",
-  backups: "nav.backups",
-};
+export const ONE_HOUR_MS = 60 * 60 * 1000;
 
 // ── URL helpers ───────────────────────────────────────────────────────────
 
@@ -95,6 +40,55 @@ export const getFeatureDemosUrl = (lang: string): string =>
   `https://qwenpaw.agentscope.io/docs/functiondemo?lang=${getWebsiteLang(
     lang,
   )}`;
+
+// ── Version helpers ────────────────────────────────────────────────────────
+
+// Filter out pre-release versions; post-releases are treated as stable.
+// PEP 440 pre-release suffixes: aN / bN / rcN (or cN) / devN.
+export const isStableVersion = (v: string): boolean =>
+  !/(\d)(a|alpha|b|beta|rc|c|dev)\d*/i.test(v);
+
+// Compare two PEP 440 version strings. Returns >0 if a>b, <0 if a<b, 0 if equal.
+// .postN releases sort after their base version (e.g. 1.0.0.post1 > 1.0.0).
+// Pre-release versions (aN, bN, rcN) sort before their base version.
+export const compareVersions = (a: string, b: string): number => {
+  const normalise = (v: string): number[] => {
+    // Handle .postN suffix
+    const postMatch = v.match(/\.post(\d+)$/i);
+    const postNum = postMatch ? Number(postMatch[1]) : 0;
+    const baseVersion = v.replace(/\.post\d+$/i, "");
+
+    // Handle pre-release suffix (e.g., 1.0.1b1 -> base=1.0.1, preType=b, preNum=1)
+    const preMatch = baseVersion.match(/^(.+?)(a|alpha|b|beta|rc|c)(\d*)$/i);
+    let coreVersion = baseVersion;
+    let preType = 0; // 0 = stable, -3 = alpha, -2 = beta, -1 = rc
+    let preNum = 0;
+    if (preMatch) {
+      coreVersion = preMatch[1];
+      const preLabel = preMatch[2].toLowerCase();
+      preType =
+        preLabel === "a" || preLabel === "alpha"
+          ? -3
+          : preLabel === "b" || preLabel === "beta"
+          ? -2
+          : -1; // rc or c
+      preNum = preMatch[3] ? Number(preMatch[3]) : 0;
+    }
+
+    const parts = coreVersion.split(/[.\-]/).map((seg) => Number(seg) || 0);
+    // Append: preType (0 for stable, negative for pre-release), preNum, postNum
+    return [...parts, preType, preNum, postNum];
+  };
+
+  const aN = normalise(a);
+  const bN = normalise(b);
+  const len = Math.max(aN.length, bN.length);
+  for (let i = 0; i < len; i++) {
+    const diff = (aN[i] ?? 0) - (bN[i] ?? 0);
+    if (diff !== 0) return diff;
+  }
+  return 0;
+};
 
 // ── Update markdown ───────────────────────────────────────────────────────
 // CoPaw is published only on GitHub Releases today: the PyPI distribution and

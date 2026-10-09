@@ -32,7 +32,11 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from agentscope_runtime.engine.schemas.agent_schemas import (
+from qwenpaw.app.channels.renderer import ChannelDisplayConfig
+from qwenpaw.app.channels import utils as channel_utils
+from qwenpaw.app.channels.telegram import channel as telegram_module
+
+from qwenpaw.schemas import (
     TextContent,
     ImageContent,
     VideoContent,
@@ -42,9 +46,98 @@ from agentscope_runtime.engine.schemas.agent_schemas import (
 )
 
 
+_MARKDOWN_TABLE = "| A | B |\n|---|---|\n| 1 | 2 |"
+
+
+@pytest.mark.parametrize("filename", [None, "report.pdf"])
+async def test_data_url_document_preserves_filename(
+    telegram_channel,
+    mock_telegram_bot,
+    filename,
+):
+    """Telegram receives named bytes without creating or reading files."""
+    telegram_channel._application = MagicMock(bot=mock_telegram_bot)
+    part = FileContent(
+        file_url="data:application/pdf;base64,cGRmLWRhdGE=",
+        filename=filename,
+    )
+    with (
+        patch.object(
+            channel_utils.tempfile,
+            "mkstemp",
+            side_effect=AssertionError("Unexpected temporary file"),
+        ),
+        patch.object(
+            Path,
+            "read_bytes",
+            side_effect=AssertionError("Unexpected file read"),
+        ),
+    ):
+        await telegram_channel.send_media("12345", part)
+
+    payload = mock_telegram_bot.send_document.call_args.kwargs["document"]
+    assert payload.filename == (filename or "document.pdf")
+    assert payload.input_file_content == b"pdf-data"
+    assert not telegram_channel._media_dir.exists()
+
+
+async def test_data_url_invalid_payload_is_unavailable(telegram_channel):
+    """Invalid Base64 retains the channel's existing media error behavior."""
+    bot = AsyncMock()
+    with pytest.raises(telegram_module._MediaFileUnavailableError):
+        await telegram_channel._send_media_value(
+            bot=bot,
+            chat_id="recipient",
+            value="data:application/pdf;base64,invalid!",
+            method_name="send_document",
+            payload_name="document",
+            message_thread_id=None,
+        )
+    bot.send_document.assert_not_awaited()
+    assert not telegram_channel._media_dir.exists()
+
+
+async def test_data_url_decode_cancellation_propagates(
+    telegram_channel,
+):
+    """Decode cancellation propagates without sending any media."""
+    bot = AsyncMock()
+
+    with (
+        patch.object(
+            telegram_module,
+            "parse_data_url_async",
+            side_effect=asyncio.CancelledError,
+        ),
+        pytest.raises(asyncio.CancelledError),
+    ):
+        await telegram_channel._send_media_value(
+            bot=bot,
+            chat_id="recipient",
+            value="data:application/pdf;base64,cGRmLWRhdGE=",
+            method_name="send_document",
+            payload_name="document",
+            message_thread_id=None,
+        )
+
+    bot.send_document.assert_not_awaited()
+    assert not telegram_channel._media_dir.exists()
+
+
 # =============================================================================
 # Fixtures
 # =============================================================================
+
+
+def test_telegram_base_urls_derive_api_and_file_prefixes():
+    """Custom root URL should derive Bot API and file API prefixes."""
+    from qwenpaw.app.channels.telegram.channel import _telegram_base_urls
+
+    assert _telegram_base_urls("") == ("", "")
+    assert _telegram_base_urls(" https://tg-api.example.com/ ") == (
+        "https://tg-api.example.com/bot",
+        "https://tg-api.example.com/file/bot",
+    )
 
 
 @pytest.fixture
@@ -77,12 +170,13 @@ def telegram_channel(
         http_proxy_auth="",
         bot_prefix="[TestBot] ",
         on_reply_sent=None,
-        show_tool_details=True,
         media_dir=str(tmp_path / "media"),
         workspace_dir=tmp_path / "workspace",
         show_typing=True,
-        filter_tool_messages=False,
-        filter_thinking=False,
+        display_config=ChannelDisplayConfig(
+            show_tool_calls=True,
+            show_tool_results=True,
+        ),
         dm_policy="open",
         group_policy="open",
         allow_from=None,
@@ -118,6 +212,8 @@ def mock_telegram_bot() -> MagicMock:
     bot.username = "test_bot"
     bot.id = 123456789
     bot.send_message = AsyncMock()
+    bot.do_api_request = AsyncMock()
+    bot.edit_message_text = AsyncMock()
     bot.send_chat_action = AsyncMock()
     bot.send_photo = AsyncMock()
     bot.send_video = AsyncMock()
@@ -400,6 +496,7 @@ class TestTelegramChannelFromConfig:
 
         assert channel.enabled is True
         assert channel._bot_token == "config_token"
+        assert channel._base_url == ""
         assert channel._http_proxy == "http://config.proxy:8080"
         assert channel._http_proxy_auth == "config_user:config_pass"
         assert channel.bot_prefix == "[ConfigBot]"
@@ -433,6 +530,23 @@ class TestTelegramChannelFromConfig:
 
         assert channel._bot_token == "obj_token"
         assert channel.bot_prefix == "[Obj]"
+
+    def test_from_config_uses_base_url(
+        self,
+        mock_process_handler,
+    ):
+        """from_config should pass custom Telegram API root URL."""
+        from qwenpaw.app.channels.telegram.channel import TelegramChannel
+
+        channel = TelegramChannel.from_config(
+            process=mock_process_handler,
+            config={
+                "bot_token": "config_token",
+                "base_url": " https://tg-api.example.com/ ",
+            },
+        )
+
+        assert channel._base_url == "https://tg-api.example.com"
 
     def test_from_config_defaults(
         self,
@@ -681,6 +795,7 @@ class TestTelegramSend:
 
         await telegram_channel.send("12345", "Hello world", {})
 
+        mock_telegram_bot.do_api_request.assert_not_awaited()
         mock_telegram_bot.send_message.assert_called_once()
         call_kwargs = mock_telegram_bot.send_message.call_args.kwargs
         assert call_kwargs["chat_id"] == "12345"
@@ -772,6 +887,212 @@ class TestTelegramSend:
         # Should not raise
         result = await telegram_channel.send("12345", "Hello", {})
         assert result is None
+
+
+class TestTelegramRichMessages:
+    """Tests for native table delivery and legacy fallback."""
+
+    @pytest.mark.parametrize(
+        ("text", "expected"),
+        [
+            ("A | B\n:--- | ---:\n1 | 2", True),
+            ("| A | B |\n|---|---|", True),
+            ("| `a\\|b` | B |\n|---|---|\n| 1 | 2 |", True),
+            ("| [A](https://example.com/a|b) | B |\n|---|---|", True),
+            ("A | B\nnot a delimiter | row", False),
+            ("\n|---|---|\n1 | 2", False),
+            pytest.param(
+                f"{'[' * 32000}\n{_MARKDOWN_TABLE}",
+                True,
+                id="unclosed-brackets",
+            ),
+        ],
+    )
+    def test_rich_message_candidates(self, text, expected):
+        """Detect delimiters without interpreting inline Markdown."""
+        assert telegram_module._can_send_rich_message(text) is expected
+
+    @pytest.mark.parametrize("fence", ["```", "~~~", "````"])
+    def test_table_detection_ignores_fenced_code(self, fence):
+        """Only tables outside a matching code fence use the Rich API."""
+        text = f"{fence}markdown\n```\n{_MARKDOWN_TABLE}\n{fence}"
+        if fence == "```":
+            text = f"{fence}markdown\n{_MARKDOWN_TABLE}\n{fence}"
+        assert not telegram_module._can_send_rich_message(text)
+        assert telegram_module._can_send_rich_message(
+            f"{text}\n{_MARKDOWN_TABLE}",
+        )
+
+    @pytest.mark.parametrize(
+        ("columns", "expected"),
+        [(20, True), (21, False)],
+    )
+    def test_rich_table_column_limit(self, columns, expected):
+        """A wider table anywhere in a message requires legacy delivery."""
+        header = " | ".join(["A"] * columns)
+        delimiter = " | ".join(["---"] * columns)
+        text = f"{_MARKDOWN_TABLE}\n\n{header}\n{delimiter}\n{header}"
+
+        assert telegram_module._can_send_rich_message(text) is expected
+
+    @pytest.mark.parametrize(
+        "suffix",
+        ["[" * 131072, "\u4e2d" * 11000],
+        ids=["oversized-ascii", "oversized-utf8"],
+    )
+    def test_size_limit_is_checked_before_table_detection(self, suffix):
+        """Reject oversized ASCII and UTF-8 input before delimiter scanning."""
+        text = f"{_MARKDOWN_TABLE}\n{suffix}"
+        with patch.object(
+            telegram_module.re,
+            "fullmatch",
+            side_effect=AssertionError("Unexpected delimiter scan"),
+        ):
+            assert not telegram_module._can_send_rich_message(text)
+
+    def test_rich_message_accepts_exact_byte_limit(self):
+        """A message at the Rich API byte limit remains eligible."""
+        padding = 32768 - len(_MARKDOWN_TABLE) - 1
+        text = f"{_MARKDOWN_TABLE}\n{'x' * padding}"
+
+        assert telegram_module._can_send_rich_message(text)
+
+    @pytest.mark.asyncio
+    async def test_send_rich_message_payload_and_thread(
+        self,
+        telegram_channel,
+        mock_telegram_bot,
+    ):
+        """Table messages use the Rich API with the original Markdown."""
+        telegram_channel._application = MagicMock(bot=mock_telegram_bot)
+
+        await telegram_channel.send(
+            "chat",
+            _MARKDOWN_TABLE,
+            {"message_thread_id": 42},
+        )
+
+        mock_telegram_bot.do_api_request.assert_awaited_once_with(
+            "sendRichMessage",
+            api_kwargs={
+                "chat_id": "chat",
+                "message_thread_id": 42,
+                "rich_message": {"markdown": _MARKDOWN_TABLE},
+            },
+        )
+        mock_telegram_bot.send_message.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("streaming", [False, True])
+    @pytest.mark.parametrize(
+        "error",
+        [
+            telegram_module.BadRequest("unsupported"),
+            telegram_module.EndPointNotFound("unsupported"),
+        ],
+    )
+    async def test_send_falls_back_when_rich_api_is_unavailable(
+        self,
+        telegram_channel,
+        mock_telegram_bot,
+        error,
+        streaming,
+    ):
+        """Legacy fallback preserves code, paths, links, and table syntax."""
+        telegram_channel._application = MagicMock(bot=mock_telegram_bot)
+        mock_telegram_bot.do_api_request.side_effect = error
+        text = (
+            "| Code | Value |\n|---|---|\n"
+            "| `__init__` | `C:\\my_project_dir` |\n"
+            "| Manual | [Manual](https://docs.python.org/3/) |"
+        )
+
+        if streaming:
+            await telegram_channel.on_streaming_end(
+                None,
+                "chat",
+                None,
+                {"_tg_stream": {"message_ids": {"message": 99}}},
+                "message",
+                text,
+            )
+            legacy_request = mock_telegram_bot.edit_message_text
+            mock_telegram_bot.send_message.assert_not_awaited()
+        else:
+            await telegram_channel.send("chat", text)
+            legacy_request = mock_telegram_bot.send_message
+            mock_telegram_bot.edit_message_text.assert_not_awaited()
+
+        mock_telegram_bot.do_api_request.assert_awaited_once()
+        legacy_request.assert_awaited_once()
+        kwargs = legacy_request.call_args.kwargs
+        assert kwargs["parse_mode"] == telegram_module.ParseMode.HTML
+        assert "<pre>" not in kwargs["text"]
+        assert "|---|---|" in kwargs["text"]
+        assert "<code>__init__</code>" in kwargs["text"]
+        assert "<code>C:\\my_project_dir</code>" in kwargs["text"]
+        assert 'href="https://docs.python.org/3/"' in kwargs["text"]
+
+    @pytest.mark.asyncio
+    async def test_table_over_rich_limit_uses_legacy_path(
+        self,
+        telegram_channel,
+        mock_telegram_bot,
+    ):
+        """Messages above the Rich limit must use the legacy API."""
+        telegram_channel._application = MagicMock(bot=mock_telegram_bot)
+        text = f"{'[' * 131072}\n{_MARKDOWN_TABLE}"
+
+        await telegram_channel.send("chat", text)
+
+        mock_telegram_bot.do_api_request.assert_not_awaited()
+        assert mock_telegram_bot.send_message.await_count > 1
+
+    @pytest.mark.asyncio
+    async def test_rich_network_error_does_not_duplicate_send(
+        self,
+        telegram_channel,
+        mock_telegram_bot,
+    ):
+        """Do not retry an uncertain Rich request through sendMessage."""
+        telegram_channel._application = MagicMock(bot=mock_telegram_bot)
+        mock_telegram_bot.do_api_request.side_effect = RuntimeError("timeout")
+
+        await telegram_channel.send("chat", _MARKDOWN_TABLE)
+
+        mock_telegram_bot.do_api_request.assert_awaited_once()
+        mock_telegram_bot.send_message.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_streaming_table_uses_rich_message_edit(
+        self,
+        telegram_channel,
+        mock_telegram_bot,
+    ):
+        """Streaming completion edits the placeholder as Rich content."""
+        telegram_channel._application = MagicMock(bot=mock_telegram_bot)
+        send_meta = {
+            "_tg_stream": {"message_ids": {"message": 99}},
+        }
+
+        await telegram_channel.on_streaming_end(
+            None,
+            "chat",
+            None,
+            send_meta,
+            "message",
+            _MARKDOWN_TABLE,
+        )
+
+        mock_telegram_bot.do_api_request.assert_awaited_once_with(
+            "editMessageText",
+            api_kwargs={
+                "chat_id": "chat",
+                "message_id": 99,
+                "rich_message": {"markdown": _MARKDOWN_TABLE},
+            },
+        )
+        mock_telegram_bot.edit_message_text.assert_not_awaited()
 
 
 # =============================================================================
@@ -1149,52 +1470,6 @@ class TestTelegramBuildAgentRequest:
 
 
 # =============================================================================
-# P1: No Text Debounce
-# =============================================================================
-
-
-class TestTelegramNoTextDebounce:
-    """Tests for _apply_no_text_debounce override."""
-
-    def test_media_only_triggers_immediate_processing(
-        self,
-        telegram_channel,
-    ):
-        """Media-only content should trigger immediate processing."""
-        parts = [
-            ImageContent(
-                type=ContentType.IMAGE,
-                image_url="http://example.com/img.jpg",
-            ),
-        ]
-
-        should_process, merged = telegram_channel._apply_no_text_debounce(
-            "session_1",
-            parts,
-        )
-
-        assert should_process is True
-        assert len(merged) == 1
-
-    def test_text_content_uses_base_behavior(
-        self,
-        telegram_channel,
-    ):
-        """Text content should use base class debounce logic."""
-        parts = [
-            TextContent(type=ContentType.TEXT, text="Hello"),
-        ]
-
-        should_process, merged = telegram_channel._apply_no_text_debounce(
-            "session_2",
-            parts,
-        )
-
-        assert should_process is True
-        assert len(merged) == 1
-
-
-# =============================================================================
 # P1: Module-Level File Download
 # =============================================================================
 
@@ -1334,6 +1609,30 @@ class TestTelegramResolveFileUrl:
 
         expected = (
             "https://api.telegram.org/file/botmy_bot_token/photos/file_123.jpg"
+        )
+        assert result == expected
+
+    async def test_resolve_api_url_with_custom_base_url(self):
+        """Should construct custom Telegram file API URL."""
+        from qwenpaw.app.channels.telegram.channel import (
+            _resolve_telegram_file_url,
+        )
+
+        mock_bot = MagicMock()
+        mock_file = MagicMock()
+        mock_file.file_path = "photos/file_123.jpg"
+        mock_bot.get_file = AsyncMock(return_value=mock_file)
+
+        result = await _resolve_telegram_file_url(
+            bot=mock_bot,
+            file_id="file123",
+            bot_token="my_bot_token",
+            base_url="https://tg-api.example.com/",
+        )
+
+        expected = (
+            "https://tg-api.example.com/file/"
+            "botmy_bot_token/photos/file_123.jpg"
         )
         assert result == expected
 
@@ -1759,6 +2058,34 @@ class TestTelegramProxyUrl:
                 not hasattr(mock_builder, "proxy")
                 or not mock_builder.proxy.called
             )
+            assert not mock_builder.base_url.called
+            assert not mock_builder.base_file_url.called
+
+    def test_custom_base_url_configures_builder(self, telegram_channel):
+        """Should configure PTB Bot API and file API prefixes."""
+        telegram_channel._base_url = "https://tg-api.example.com"
+        telegram_channel._bot_token = "test_token"
+
+        with patch("telegram.ext.Application.builder") as mock_builder_class:
+            mock_builder = MagicMock()
+            mock_builder_class.return_value = mock_builder
+            mock_builder.token.return_value = mock_builder
+            mock_builder.base_url.return_value = mock_builder
+            mock_builder.base_file_url.return_value = mock_builder
+            mock_builder.get_updates_read_timeout.return_value = mock_builder
+            mock_builder.get_updates_connect_timeout.return_value = (
+                mock_builder
+            )
+            mock_builder.build.return_value = MagicMock()
+
+            telegram_channel._build_application()
+
+            mock_builder.base_url.assert_called_once_with(
+                "https://tg-api.example.com/bot",
+            )
+            mock_builder.base_file_url.assert_called_once_with(
+                "https://tg-api.example.com/file/bot",
+            )
 
     def test_proxy_without_auth(self, telegram_channel):
         """Should use proxy without auth when no auth provided."""
@@ -1804,3 +2131,137 @@ class TestTelegramProxyUrl:
 
             expected_proxy = "http://user:pass@proxy.example.com:8080"
             mock_builder.proxy.assert_called_once_with(expected_proxy)
+
+
+# =============================================================================
+# Polling reconnect / 409 conflict handling
+# =============================================================================
+
+
+class TestTelegramPollingReconnect:
+    """Cover conflict/network classification and reconnect backoff timing."""
+
+    def test_conflict_classification(self, telegram_channel):
+        """Conflict errors are detected by class name or message text."""
+        from qwenpaw.app.channels.telegram.channel import TelegramChannel
+
+        class Conflict(Exception):
+            pass
+
+        assert TelegramChannel._looks_like_polling_conflict(Conflict("x"))
+        assert TelegramChannel._looks_like_polling_conflict(
+            Exception(
+                "Conflict: terminated by other getUpdates request; "
+                "make sure that only one bot instance is running",
+            ),
+        )
+        assert not TelegramChannel._looks_like_polling_conflict(
+            Exception("some unrelated error"),
+        )
+
+    def test_network_classification(self, telegram_channel):
+        """Transport errors (OSError etc.) are treated as network errors."""
+        from qwenpaw.app.channels.telegram.channel import TelegramChannel
+
+        assert TelegramChannel._looks_like_network_error(OSError("boom"))
+        assert not TelegramChannel._looks_like_network_error(
+            Exception("logic error"),
+        )
+
+    def test_conflict_backoff_is_monotonic_and_capped(self, telegram_channel):
+        """Conflict delay escalates and never exceeds the safety cap."""
+        from qwenpaw.app.channels.telegram.channel import (
+            _POLLING_CONFLICT_RETRY_MAX_S,
+        )
+
+        delays = []
+        for expected_attempt in range(1, 8):
+            attempt, delay = telegram_channel._plan_polling_reconnect(
+                "conflict",
+            )
+            assert attempt == expected_attempt
+            assert delay <= _POLLING_CONFLICT_RETRY_MAX_S
+            delays.append(delay)
+
+        # Non-decreasing and eventually pinned to the cap.
+        assert delays == sorted(delays)
+        assert delays[0] < delays[-1]
+        assert delays[-1] == _POLLING_CONFLICT_RETRY_MAX_S
+
+    def test_conflict_cap_exceeds_read_timeout(self):
+        """Regression lock: worst-case wait must clear a lingering poll."""
+        from qwenpaw.app.channels.telegram.channel import (
+            _GET_UPDATES_READ_TIMEOUT_S,
+            _POLLING_CONFLICT_RETRY_MAX_S,
+        )
+
+        assert _POLLING_CONFLICT_RETRY_MAX_S >= _GET_UPDATES_READ_TIMEOUT_S + 1
+
+    def test_conflict_and_network_counters_are_mutually_reset(
+        self,
+        telegram_channel,
+    ):
+        """Switching reason resets the other counter (fresh backoff)."""
+        c_attempt1, _ = telegram_channel._plan_polling_reconnect("conflict")
+        assert c_attempt1 == 1
+        telegram_channel._plan_polling_reconnect("conflict")
+
+        n_attempt1, _ = telegram_channel._plan_polling_reconnect("network")
+        assert n_attempt1 == 1
+        assert telegram_channel._polling_conflict_count == 0
+
+        # Back to conflict: counter restarts from 1.
+        c_again, _ = telegram_channel._plan_polling_reconnect("conflict")
+        assert c_again == 1
+        assert telegram_channel._polling_network_error_count == 0
+
+    @pytest.mark.asyncio
+    async def test_request_reconnect_stops_updater_and_sets_event(
+        self,
+        telegram_channel,
+    ):
+        """Reconnect request stops the updater and wakes the watchdog."""
+        telegram_channel._pending_reconnect_reason = None
+        telegram_channel._reconnect_event.clear()
+
+        app = MagicMock()
+        app.updater = MagicMock()
+        app.updater.running = True
+        app.updater.stop = AsyncMock()
+
+        await telegram_channel._request_polling_reconnect(
+            app,
+            reason="conflict",
+            error=Exception("Conflict"),
+        )
+
+        app.updater.stop.assert_awaited_once()
+        assert telegram_channel._reconnect_event.is_set()
+        assert telegram_channel._pending_reconnect_reason == "conflict"
+
+    @pytest.mark.asyncio
+    async def test_teardown_swallows_errors_and_settles(
+        self,
+        telegram_channel,
+    ):
+        """Teardown shuts down the app and applies the settle delay."""
+        from qwenpaw.app.channels.telegram.channel import TelegramChannel
+
+        app = MagicMock()
+        app.updater = MagicMock()
+        app.updater.running = True
+        app.updater.stop = AsyncMock()
+        app.running = True
+        app.stop = AsyncMock()
+        app.shutdown = AsyncMock()
+
+        with patch(
+            "qwenpaw.app.channels.telegram.channel.asyncio.sleep",
+            new=AsyncMock(),
+        ) as mock_sleep:
+            await TelegramChannel._teardown_application(app)
+
+        app.updater.stop.assert_awaited_once()
+        app.stop.assert_awaited_once()
+        app.shutdown.assert_awaited_once()
+        mock_sleep.assert_awaited_once()

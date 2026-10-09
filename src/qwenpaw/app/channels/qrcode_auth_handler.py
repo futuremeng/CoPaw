@@ -21,14 +21,19 @@ from __future__ import annotations
 
 import base64
 import io
+import logging
+import os
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Any, Dict
+from typing import Any, Dict, Tuple
 
 import segno
+from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from fastapi import HTTPException, Request
 
 from ...constant import PROJECT_NAME
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -202,9 +207,8 @@ class WecomQRCodeAuthHandler(QRCodeAuthHandler):
             ) from exc
 
         settings_match = re.search(
-            r"window\.settings\s*=\s*(\{.*\})",
+            r"window\.settings\s*=\s*(\{[^<]+\})",
             html,
-            re.DOTALL,
         )
         if not settings_match:
             raise HTTPException(
@@ -268,6 +272,25 @@ class WecomQRCodeAuthHandler(QRCodeAuthHandler):
 
 _DINGTALK_API_BASE = "https://oapi.dingtalk.com"
 _DINGTALK_SOURCE = "QWENPAW"
+# Statuses that mean "keep polling": no credentials have been issued yet.
+# DingTalk keeps adding intermediate steps, so any unknown status is
+# treated the same way (and logged) instead of aborting the flow.
+_DINGTALK_PENDING_STATUSES = (
+    "WAITING",
+    "CREATING",
+    "PUBLISHING",
+    "APPROVING",
+)
+_DINGTALK_FAILED_STATUSES = ("FAIL", "EXPIRED")
+
+
+def _clean_str(value: Any) -> str:
+    """Return a stripped string only for real string values.
+
+    JSON ``null`` (``None``) and non-string types are treated as absent so
+    that e.g. ``client_id: null`` never turns into the literal ``"None"``.
+    """
+    return value.strip() if isinstance(value, str) else ""
 
 
 class DingtalkQRCodeAuthHandler(QRCodeAuthHandler):
@@ -276,7 +299,21 @@ class DingtalkQRCodeAuthHandler(QRCodeAuthHandler):
     Flow:
     1. POST /app/registration/init   → nonce (5 min TTL)
     2. POST /app/registration/begin  → device_code + verification_uri_complete
-    3. POST /app/registration/poll   → client_id + client_secret on SUCCESS
+    3. POST /app/registration/poll   → client_id + client_secret once issued
+
+    Observed ``poll`` status sequences (device_code TTL is 2 hours and
+    ``poll`` is idempotent, so a terminal payload can be fetched again).
+    Intermediate steps may be missed depending on the poll interval:
+
+    * Org without app approval:
+      ``WAITING`` → ``CREATING`` → ``PUBLISHING`` → ``SUCCESS``
+    * Org with app approval enabled:
+      ``WAITING`` → ``CREATING`` → ``PUBLISHING`` → ``APPROVING``
+
+    Credentials are issued as soon as the app exists, which happens at
+    ``APPROVING`` as well, i.e. before the admin approves the app.  The
+    status name is therefore only used for logging and the presence of
+    both ``client_id`` and ``client_secret`` decides success.
     """
 
     async def fetch_qrcode(self, request: Request) -> QRCodeResult:
@@ -364,28 +401,46 @@ class DingtalkQRCodeAuthHandler(QRCodeAuthHandler):
                 detail=f"DingTalk status check failed: {exc}",
             ) from exc
 
-        status = data.get("status", "WAITING")
+        status = _clean_str(data.get("status")).upper()
+        client_id = _clean_str(data.get("client_id"))
+        client_secret = _clean_str(data.get("client_secret"))
 
-        if status == "SUCCESS":
+        if client_id and client_secret:
+            logger.info(
+                f"dingtalk registration poll: credentials issued "
+                f"(status={status or 'unknown'})",
+            )
             return PollResult(
                 status="success",
                 credentials={
-                    "client_id": data.get("client_id", ""),
-                    "client_secret": data.get("client_secret", ""),
+                    "client_id": client_id,
+                    "client_secret": client_secret,
                 },
             )
-        elif status == "FAIL":
+
+        if status in _DINGTALK_FAILED_STATUSES:
+            fail_reason = _clean_str(data.get("fail_reason"))
+            logger.warning(
+                f"dingtalk registration poll: status={status} "
+                f"errcode={data.get('errcode')} "
+                f"errmsg={data.get('errmsg')} reason={fail_reason}",
+            )
             return PollResult(
-                status="fail",
-                credentials={
-                    "fail_reason": data.get("fail_reason", ""),
-                },
+                status="expired" if status == "EXPIRED" else "fail",
+                credentials={"fail_reason": fail_reason},
             )
-        elif status == "EXPIRED":
-            return PollResult(status="expired", credentials={})
+
+        if status not in _DINGTALK_PENDING_STATUSES:
+            logger.warning(
+                f"dingtalk registration poll: unknown status={status!r} "
+                f"errcode={data.get('errcode')} "
+                f"errmsg={data.get('errmsg')}",
+            )
         else:
-            # WAITING or any other status
-            return PollResult(status="waiting", credentials={})
+            logger.debug(
+                f"dingtalk registration poll: status={status}",
+            )
+        return PollResult(status="waiting", credentials={})
 
 
 # ---------------------------------------------------------------------------
@@ -588,6 +643,183 @@ class FeishuQRCodeAuthHandler(QRCodeAuthHandler):
 
 
 # ---------------------------------------------------------------------------
+# Cryptographic helpers
+# ---------------------------------------------------------------------------
+
+_AES_KEY_LENGTH = 32  # 256 bits
+
+
+def _generate_bind_key() -> str:
+    """Return a base64-encoded 256-bit AES key."""
+    return base64.b64encode(os.urandom(_AES_KEY_LENGTH)).decode()
+
+
+def _decrypt_secret(
+    encrypted_base64: str,
+    key_base64: str,
+    associated_data: bytes | None = None,
+) -> str:
+    """Decrypt an AES-256-GCM ciphertext (base64)."""
+    key = base64.b64decode(key_base64)
+    raw = base64.b64decode(encrypted_base64)
+
+    if len(raw) < 28:  # 12-byte IV + at least 16 bytes (ciphertext+tag)
+        raise ValueError(f"Ciphertext too short: {len(raw)} bytes (min 28)")
+
+    iv = raw[:12]
+    ciphertext_with_tag = raw[12:]
+    aesgcm = AESGCM(key)
+    plaintext = aesgcm.decrypt(iv, ciphertext_with_tag, associated_data)
+    return plaintext.decode("utf-8")
+
+
+def _encode_poll_token(task_id: str, aes_key: str) -> str:
+    """Combine task_id and AES key into a stateless token."""
+    import json
+
+    payload = json.dumps(
+        {"task_id": task_id, "key": aes_key},
+        separators=(",", ":"),
+    )
+    return base64.urlsafe_b64encode(payload.encode()).decode()
+
+
+def _decode_poll_token(token: str) -> Tuple[str, str]:
+    """Decode token back to (task_id, aes_key)."""
+    import json
+
+    try:
+        decoded = base64.urlsafe_b64decode(token.encode()).decode()
+        data = json.loads(decoded)
+        return data["task_id"], data["key"]
+    except Exception as exc:
+        raise ValueError(f"Invalid poll token: {exc}") from exc
+
+
+# ---------------------------------------------------------------------------
+# QQ QR code handler
+# ---------------------------------------------------------------------------
+
+
+class QQQRCodeAuthHandler(QRCodeAuthHandler):
+    """QR code auth handler for QQ bot authorization via Portal bind task."""
+
+    _PORTAL_HOST: str = os.getenv("QQ_PORTAL_HOST", "q.qq.com")
+    _CREATE_PATH: str = "/lite/create_bind_task"
+    _POLL_PATH: str = "/lite/poll_bind_result"
+    _FRONTEND_PATH: str = "/qqbot/openclaw/connect.html"
+
+    async def fetch_qrcode(self, request: Request) -> QRCodeResult:
+        import httpx
+        from urllib.parse import urlencode
+
+        aes_key = _generate_bind_key()
+        url = f"https://{self._PORTAL_HOST}{self._CREATE_PATH}"
+
+        try:
+            async with httpx.AsyncClient(timeout=15) as client:
+                resp = await client.post(
+                    url,
+                    json={"key": aes_key},
+                    headers={"Content-Type": "application/json"},
+                )
+                resp.raise_for_status()
+                data = resp.json()
+        except Exception as exc:
+            raise HTTPException(
+                status_code=502,
+                detail=f"QQ create_bind_task failed: {exc}",
+            ) from exc
+
+        if data.get("retcode") != 0:
+            raise HTTPException(
+                status_code=502,
+                detail=f"QQ create_bind_task error: {data.get('msg', '')}",
+            )
+
+        task_id = data.get("data", {}).get("task_id")
+        if not task_id:
+            raise HTTPException(
+                status_code=502,
+                detail="QQ create_bind_task returned empty task_id",
+            )
+
+        params = urlencode(
+            {"task_id": task_id, "_wv": "2", "source": PROJECT_NAME},
+        )
+        scan_url = f"https://{self._PORTAL_HOST}{self._FRONTEND_PATH}?{params}"
+        poll_token = _encode_poll_token(task_id, aes_key)
+        return QRCodeResult(scan_url=scan_url, poll_token=poll_token)
+
+    async def poll_status(self, token: str, request: Request) -> PollResult:
+        import httpx
+
+        try:
+            task_id, aes_key = _decode_poll_token(token)
+        except ValueError as exc:
+            raise HTTPException(
+                status_code=400,
+                detail="Invalid poll token",
+            ) from exc
+
+        url = f"https://{self._PORTAL_HOST}{self._POLL_PATH}"
+
+        try:
+            async with httpx.AsyncClient(timeout=10) as client:
+                resp = await client.post(
+                    url,
+                    json={"task_id": task_id},
+                    headers={"Content-Type": "application/json"},
+                )
+                resp.raise_for_status()
+                data = resp.json()
+        except Exception as exc:
+            raise HTTPException(
+                status_code=502,
+                detail=f"QQ poll_bind_result failed: {exc}",
+            ) from exc
+
+        retcode = data.get("retcode")
+        if retcode != 0:
+            return PollResult(
+                status="fail",
+                credentials={"fail_reason": data.get("msg", "unknown")},
+            )
+
+        result_data = data.get("data", {})
+        status = result_data.get("status", -1)
+
+        if status == 2:
+            # Completed – decrypt secret
+            raw_appid = result_data.get("bot_appid")
+            encrypted_secret = result_data.get("bot_encrypt_secret", "")
+            if not raw_appid or not encrypted_secret:
+                return PollResult(
+                    status="fail",
+                    credentials={"fail_reason": "Missing app_id or secret"},
+                )
+            try:
+                client_secret = _decrypt_secret(encrypted_secret, aes_key)
+            except Exception:
+                return PollResult(
+                    status="fail",
+                    credentials={"fail_reason": "Secret decryption failed"},
+                )
+            return PollResult(
+                status="success",
+                credentials={
+                    "app_id": str(raw_appid),
+                    "client_secret": client_secret,
+                    "user_openid": str(result_data.get("user_openid", "")),
+                },
+            )
+        elif status == 3:
+            return PollResult(status="expired", credentials={})
+        else:
+            return PollResult(status="waiting", credentials={})
+
+
+# ---------------------------------------------------------------------------
 # Handler registry – add new channels here
 # ---------------------------------------------------------------------------
 
@@ -596,4 +828,5 @@ QRCODE_AUTH_HANDLERS: Dict[str, QRCodeAuthHandler] = {
     "wecom": WecomQRCodeAuthHandler(),
     "dingtalk": DingtalkQRCodeAuthHandler(),
     "feishu": FeishuQRCodeAuthHandler(),
+    "qq": QQQRCodeAuthHandler(),
 }

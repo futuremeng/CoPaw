@@ -1,241 +1,116 @@
 ---
 name: make-skill
-description: "用于把当前会话沉淀为可复用的 workspace skill。当用户希望把当前对话、工作流或排错路径写成 SKILL.md 时触发。触发表达包括「把这个变成 skill」「记住我是怎么做 X 的」「保存这个工作流」「make a skill from this」以及任何 /make-skill <focus> 调用。"
+description: "将当前对话中可复用的决策、知识、模板或工作流创建为聚焦的 workspace Skill。适用于带 focus 参数的 /make-skill，以及“保存这个流程”“把它做成 skill”等请求；不适用于一次性总结或普通文件创建。"
 metadata:
-  builtin_skill_version: "1.0"
+  builtin_skill_version: "2.1"
   qwenpaw:
     emoji: "✍️"
     requires: {}
 ---
 
-<!--
-  参考 Anthropic 的 `skill-creator` skill（尤其 "creating a skill" 部分），
-  为 QwenPaw 改写。
-  Credit: https://github.com/anthropics/skills/blob/main/skill-creator/SKILL.md
--->
+# 创建 Skill
 
-# Make Skill
+从当前对话创建一个新的 workspace Skill，依次完成规划、用户批准、草稿编写、校验和发布。
 
-把当前会话沉淀为可复用的 workspace skill。
+从运行时目录上下文获取 `<workspace>`：使用当前 agent workspace 的绝对路径（未单独配置项目时，也是工作目录）。整个生命周期传入同一个值，与任务的 project directory 和脚本 `cwd` 分开确定。生命周期产物归属 `<workspace>/.qwenpaw/make-skill/`，发布后的 Skill 归属 `<workspace>/skills/`。
 
-你自己编排两阶段流程：
+## 脚本接口
 
-* **Phase A.** 提出一份精简的计划，让出 turn 等用户 approve。
-* **Phase B.** 用户 approve 后，基于 THIS 会话撰写完整 SKILL.md 正文，
-  通过 `materialize_skill` 持久化。
+通过 `execute_shell_command` 运行 `python scripts/<script>`，将 `cwd` 设为 available-skills 条目中本 Skill 的 `<dir>`。每个脚本从 stdin（或 `--input <file>`）读取一个 JSON 对象，返回一个 JSON 对象。每次输入均包含 `workspace`；下表列出其余顶层字段。
 
-**不要**用 `write_file` 直接写 SKILL.md。必须走 `materialize_skill`，
-它会跑安全扫描并原子写入 manifest。
+| 操作 | 脚本 | 其余输入字段 | 成功返回 |
+|---|---|---|---|
+| 创建计划 | `create_plan.py` | `plan` | `plan_id`、规范化 `plan` |
+| 修改该计划 | `create_plan.py` | `plan_id`、完整新 `plan` | 同一个 `plan_id`、规范化 `plan` |
+| 批准后初始化 | `init_draft.py` | `plan_id` | `draft_id`、`skill_dir` |
+| 校验草稿 | `validate_skill.py` | `draft_id` | `digest` |
+| 发布已校验草稿 | `publish_skill.py` | `draft_id`、来自校验结果的 `expected_digest` | 发布结果 |
 
-## 步骤 0. 确定 focus 并派生 skill 名
+`plan_id` 标识一份可修改的计划，修订和改名时均沿用。`draft_id` 标识初始化后的草稿，用于校验、测试和发布；`skill_dir` 是其 package 文件的编写位置。原样使用返回值，不根据名称或路径推算 ID。
 
-两种触发入口：
+## 计划
 
-* `/make-skill <focus>`。focus 紧跟在命令后面。
-* 自然语言（「把这个变成 skill」「保存这个工作流」「把刚才的 X 流程
-  变成 skill」「make a skill from this」）。从用户想保存的对话主题里
-  提炼一个简短 focus 短语。如果模糊，先问一句澄清。
+`/make-skill <focus>` 的 focus 必填；自然语言请求则结合请求和当前对话推断。用户较晚的纠正会替换冲突的旧规则。保留会改变未来 agent 行为的稳定指导、契约、模板和流程，排除一次性数据、临时路径、密钥与重试噪声。
 
-按**这条规则**从 focus 派生 skill 名：
+阅读[主类型与包结构](references/type-and-package.md)，选择一个主类型和实际需要的文件。计划的测试模式不是 `off` 时，在定义测试目标前阅读[行为测试](references/behavior-testing.md)。
 
-```
-skill_name = "-".join(focus.split())
-```
+### Batch workflow
 
-内部空白（空格、tab、全角空格、连续空格）折叠成单个 `-`。其他字符
-原样保留。
+存储 Batch 是随 workflow Skill 一起提供的参数化 `run_tool_batch` 程序。当一个可复用区域的动作、分支和成功条件能在执行前说明，并且存储入口能实质减少 agent 与工具往返时，设置 `batch: true`。该区域可以是完整 workflow、一个 substantial helper，或一个语义完整的 tool-native action；action 数量不是判据。只要处理规则已经确定，运行时数据、observation 和最终 agent review 都不妨碍使用 Batch。
 
-例子：
+只有运行时必须重新发明下一步或成功条件，或者统一入口没有实际复用价值时，才设置 `batch: false`。用户明确要求 Batch 时，将该选择纳入计划，不再争论 eligibility。
 
-* `cooking` → `cooking`
-* `view image debug` → `view-image-debug`
-* `烹饪 食谱` → `烹饪-食谱`
-* `Stock Price` → `Stock-Price`（大小写保留）
+只有选择 `batch: true` 后，才在最终确定 workflow 和文件树前阅读[运行 Batch](references/run-batch.md)；`batch: false` 时不要读取。
 
-这个 `skill_name` 在以下场合**保持一致使用**：步骤 1 的 `plan.name`、
-步骤 3 的 `materialize_skill` 的 `name=` 参数。
+### 保存并展示计划
 
-## 步骤 1. 提出计划，让出 turn 等用户 approve
+计划阶段除通过 `create_plan.py` 保存计划外只读：依据对话证据和已有产物判断，不执行或探测候选工作流，不创建 package 文件，也不初始化 draft。首次创建不传 `plan_id`，传入完整候选计划：
 
-调用 `create_plan`，**四个必填参数**（`name`、`description`、
-`expected_outcome`、`subtasks`）都要给：
-
-* **`name`**：步骤 0 中标准化的 `skill_name`。
-* **`description`**：精简 preview（这是用户审核的内容），两部分：
-  * **Part 1：触发预览。** 2 到 4 句话，日常语言。必须覆盖三点：
-    * **Goal.** 这个 skill 产生什么端到端结果。
-    * **Trigger.** 哪些用户表达和场景应该触发它。稍微 push 一些
-      同义词。
-    * **I/O.** 期望什么输入，产出什么输出。
-    这里不是 SKILL.md frontmatter 格式，frontmatter 后面再 distill。
-  * **Part 2：步骤大纲。** 编号列表，每行一个简短动词短语。不写细
-    节、不写参数、不写错误处理、不写 sub-bullet、不写 `##` 子标题。
-    只给出形状，让用户能快速判断顺序和范围，决定要不要改。
-    格式示例（**不要**抄这个内容）：
-    ```
-    1. <verb phrase, ~5-10 words>
-    2. <verb phrase, ~5-10 words>
-    3. <…>
-    ```
-    步骤名要从 THIS 会话里实际发生的事情里提取。不要编造；会话里没
-    依据的就省略。
-* **`expected_outcome`**（plan 顶层，**必填**，与 subtask 的
-  `expected_outcome` 不是同一个）：一句具体描述整个 skill 创建的成功
-  状态。直接用这个字面值（替换 `<skill_name>`）即可：
-  `"A new workspace skill <skill_name> is created, enabled, and invocable via /<skill_name>."`
-* **`subtasks`**：一个长度为 1 的列表，包含唯一一个 subtask：
-  * `name`：`"Write and materialize skill"`
-  * `description`：`"Write the SKILL.md body and call materialize_skill."`
-  * `expected_outcome`：`"Skill created and visible via /skills."`
-
-`plan.name` 和 `plan.description` 用**与用户最近消息相同的语言**。
-`expected_outcome` 保留英文即可。
-
-`create_plan` 返回后，**让出 turn**。用户会回复 approve、refine 或
-cancel。`/plan` 模式的标准机制接管：
-
-* Refine：调 `revise_current_plan`，把反馈合到 name、description、或步
-  骤大纲里。
-* Cancel：调 `finish_plan` with `state="abandoned"`。
-
-向用户呈现计划时用标准 plan card 格式。**不要**在 chat 里另搞
-`Subtask: …` / `Focus: …` 这种自定义字段，用标准化后的 `plan.name`，
-不要用 raw focus。
-
-### Plan 工具不可用时的 fallback
-
-如果 `create_plan` 不在你的 toolkit 里（workspace 未启用 plan mode），
-退回到文本式计划：
-
-1. 把同样的精简 preview（Part 1 触发预览 + Part 2 步骤大纲）作为普通
-   聊天消息发给用户。
-2. 消息末尾请用户回复 approve、refine 或 cancel。
-3. **让出 turn。** approve → 用你提出的大纲跳到步骤 2 写正文；
-   refine → 修文本计划再让出 turn；cancel → 停止。
-4. 跳过步骤 5 的 `finish_subtask` / `finish_plan`，没 plan 就没这两个
-   动作。
-
-## 步骤 2. 用户 approve 后撰写 SKILL.md 正文
-
-用户 approve 计划、唯一的 subtask 转为 in-progress 后，基于 THIS 会话
-写完整的 SKILL.md 正文。**内容能撑得起就不嫌长。**
-
-写作风格：
-
-* 使用祈使句。
-* 对**非显而易见**的指令简要解释 WHY（next agent 的 theory of mind）。
-  避免硬邦邦的 `MUST`。
-* 正文目标少于约 500 行。接近上限就拆 sub-section + 加清晰指针。
-
-### 2a. 与已 approve 的步骤大纲 1-to-1 对齐
-
-正文主章节与 `plan.description` Part 2 一一对应：同序、同范围。章节
-标题用对应步骤的动词短语。如果用户在 approve 阶段对 Part 2 做了
-refine，**按 refined 版本**写。
-
-### 2b. 每个步骤从 THIS 会话取实料
-
-对每个步骤，**从会话事实出发**回答四个具体问题（不是凭常识猜）：
-
-* **真正跑通的是哪个 tool、API、文件、命令？** 直接写真名。如果尝试
-  过多个，**只**记录跑通的那个。
-* **它使用的具体参数是什么？** 用会话中真实的参数值，不要占位符。
-  未来的 agent 要能照搬直接跑。
-* **本路径上撞过哪些错？怎么提前避开？** 写成预防性提示。例如：
-  *「注意：该 endpoint 每秒被调用超过一次就返回 429。直接传
-  `delay=2` 避开之前出现的重试循环。」*
-* **哪些死路要跳过？** 试过三条路一条跑通时，只把跑通的那条完整写
-  出。失败的那几条**仅**以简短的「避免 X」提醒带过，不要展开成
-  子流程。
-
-如果会话里没有某个问题的真实答案，**省略**这一项，不要编造。编造参
-数或错误提示是本 skill 最常见的失败模式。
-
-### 2c. 可选小节
-
-只在能帮到 future agent 时才加，没有固定 schema：
-
-* **Prerequisites。** 环境变量、auth 凭证、期待的输入文件、工具版本。
-* **Worked example。** 一个真实调用，input 到 output。
-* **Failure modes and recovery。** 已知失败模式与处理方式。
-* **Edge cases。** 未来 agent 可能踩到的意外。
-
-不适用就跳过。**空章节比省略更糟。**
-
-### 2d. 输出格式（仅当稳定时）
-
-如果会话里输出形态固定下来（表格、JSON schema、markdown 模板），在产
-出该输出的步骤顶部用 `ALWAYS use this template:` 块**写一次**即可：
-
-```markdown
-ALWAYS use this exact template:
-
-| Ticker | Last close | Currency | Source |
-|--------|-----------|----------|--------|
-| <symbol> | <price> | <iso-4217> | <api-name> |
+```json
+{
+  "workspace": "<workspace>",
+  "plan": {
+    "revision": 1,
+    "focus": "一句话说明提炼范围",
+    "name": "lowercase-hyphen-name",
+    "goal": "未来 agent 要达成的结果",
+    "type": "workflow",
+    "batch": true,
+    "steps": ["用户可判断的流程步骤"],
+    "package": ["SKILL.md", "scripts/run.batch.json"],
+    "execution": "foreground",
+    "test": {"mode": "off", "target": ""},
+    "warnings": []
+  }
+}
 ```
 
-如果输出本质是自由形态，跳过本步。
+修订时，在上述输入的顶层加入返回的 `plan_id`，并将 `plan` 替换为完整修订计划，而非局部 patch。这会更新原计划，不创建副本。更新返回 `missing-plan` 时，返回规划和批准流程，不继续构建。计划已保存不代表用户已批准。
 
-### 2e. 持久化前自查
+用中文渲染规范化计划，并把已选值和全部可选项一起展示，让用户无需了解 schema 也能修改。用户可见计划必须包含下列紧凑选项表，不得用散文或批准提示代替；非 workflow 省略 `Batch` 行：
 
-完整通读一遍正文，**单 pass** 检查全部三项：
+| 选项 | 当前值 | 全部可选 |
+|---|---|---|
+| 类型 | 当前中文值 | 指令 / 模板 / 工作流 |
+| Batch（仅 workflow） | 启用或关闭 | 启用 / 关闭 |
+| 执行方式 | 前台或后台 | 前台 / 后台 |
+| 行为测试 | 当前中文值 | 关闭 / 冒烟测试 / 完整评测 |
 
-* **精简。** 无冗余，不重复前面章节已说过的内容。
-* **覆盖 focus end-to-end。** `plan.description` Part 2 的每个步骤都已
-  落到正文，且有事实支撑。
-* **正确。** 每个 tool 名、API 名、参数值、错误提示都准确反映真实发
-  生的事。**没有编造的事实，没有猜测的参数。**
+传给脚本的值仍分别使用 `instruction/template/workflow`、`true/false`、`foreground/background` 和 `off/smoke/eval`。同时展示名称、目标、工作流、完整文件树、适用时的测试目标和警告。不得发明脚本 schema 之外的选项；不展示 Batch 关闭理由、schema、revision 或内部 enum。请用户批准、修改或取消，然后结束当前响应，不再调用工具。
 
-任何一项不通过就回去修。
+只有后续新的用户消息明确批准最近一次已展示的 `create_plan.py` 返回计划，才可进入构建。`/make-skill` 发起的是规划；此前的任务讨论或手写方案不能替代这次计划展示与批准。
 
-## 步骤 3. 通过 `materialize_skill` 持久化
+- 用户修改后合并反馈、增加 `revision`，更新同一份计划。在当前会话中串行修订，然后展示完整返回计划，等待批准；旧批准不适用于修改后的计划。
+- 取消时停止，保留计划，不创建 draft。区分知悉与批准；用户意图不明确时，只追问一次简短确认并等待回复。
+- execution 和 test 已在计划中，不再单独询问。
 
-调用 `materialize_skill`：
+本版本只创建新 Skill；名称冲突时通过新 revision 重新批准名称，不覆盖已有 Skill。
 
-* **`name`**：与 `plan.name` 相同的标准化 `skill_name`。
-* **`description`**：从 `plan.description` Part 1 浓缩出的紧凑
-  `Use this skill when …` 串。≤ 200 字符。**保留** preview 中的同义词
-  与邻近表达（LLM 倾向于**少触发** skill，描述稍微「推一下」比窄定
-  义更可靠）。
-* **`body`**：已 review 过的 SKILL.md 正文。**不含 frontmatter**，工
-  具会自己渲染。
+## 构建
 
-**不要**用 `write_file` 直接写 SKILL.md。
+批准后，将已保存的 `plan_id` 传给 `init_draft.py`。初始化会将当前计划快照保存到新 draft；后续修改 plan 不会更新该 draft。不接受内联替代计划。计划缺失或无效时返回规划阶段，不继续构建。
 
-## 步骤 4. 处理 `materialize_skill` 的错误
+`execution` 决定由当前 agent 还是后台 subagent 完成 Skill 创建。选择 `background` 时，初始化后调用 `spawn_subagent` 并设置 `background: true`，将完整批准计划、最新纠正、`workspace`、`draft_id` 和 `skill_dir` 交给通用 subagent，由其编写文件、校验、执行已批准的行为测试并发布，不再请求批准。完成后报告创建结果；除已批准的行为测试外，运行生成的 Skill 需用户另行要求。
 
-### 命名冲突（skill 名已存在）
+只在返回的 `skill_dir` 中创建批准文件。生成的 `SKILL.md` 使用合法 frontmatter：
 
-工具会返回冲突 skill 名 + 一个建议的改名。**自动恢复，不要再问用户。**
+```yaml
+---
+name: lowercase-hyphen-name
+description: 简要说明能力及适用场景。
+---
+```
 
-1. 挑一个新名字。工具的建议（例如带时间戳的）可以直接用，但只要避开
-   冲突，任何合理改名都行。例如原名 `cooking` 已占用时可以用：
-   `cooking-v2`、`cooking-2`、`cooking-new`。
-2. 调 `revise_current_plan` 把 `plan.name` 改成新名（文本式计划
-   fallback 时直接在内存里换掉工作名）。
-3. 用新名字再调一次 `materialize_skill`。
-4. 步骤 5 报告成功时**说明改名了**，让用户知道原名被占用。例如：
-   *「已存为 `cooking-v2`，因为 `cooking` 已被占用。如果想用回原名，
-   可以删掉旧的再跑 `/make-skill`。」*
+正文只保留必要流程和约束，不重复 description；无需 type metadata。
 
-### 格式错误
+校验前，从“未来 agent 看不到原始对话”的视角通读 package。除非资源确实随包提供且可复用，否则删除对原任务目录、旧输出、临时 ID、当前 case 示例或 make-skill draft/publish 话术的引用。复用已有 helper 时，要泛化路径、docstring 和结果说明，并确认实现仍符合最终可复用规则。这只是一轮作者自查，不增加 case-specific lifecycle 检查。
 
-修正 SKILL.md 内容（frontmatter 字段、正文章节等）再调一次。
-**`materialize_skill` 没成功前不要**调 `finish_subtask`。
+## 校验、测试并发布
 
-### 安全扫描拒绝
+执行任何 draft script 或 batch 前，先对初始化后的草稿运行 `validate_skill.py`。
 
-移除被 flag 的模式再重试。
+按静态或安全错误修复 draft 并重新校验。测试与 Batch 相互独立：按[行为测试](references/behavior-testing.md)只运行已批准的测试，`off` 不执行 draft。测试或 Batch 运行失败时保留 draft，报告具体错误；如果修正方向明确，就修改 Skill 后重新校验，不用 fallback 隐藏失败。
 
-### 其他错误
+通过 `publish_skill.py` 发布未经改动且已校验的 draft，将校验结果中的 `digest` 作为 `expected_digest` 传入。
 
-调整输入再重试，或如果不可恢复就 abandon 计划。
-
-## 步骤 5. 收尾
-
-`materialize_skill` 返回成功后：
-
-1. 对唯一的 subtask 调 `finish_subtask`。
-2. 调 `finish_plan` with `state="completed"`。
-3. 告知用户：新 skill 已创建并启用，可通过 `/<skill_name>` 调用。
+成功后报告 package tree、校验摘要、已执行的测试结果和调用命令 `/<name>`；冲突或失败时保留 draft 并报告错误。发布 Skill 已经完成持久化；除非用户另行明确要求，不再写入 `MEMORY.md` 或 daily memory。

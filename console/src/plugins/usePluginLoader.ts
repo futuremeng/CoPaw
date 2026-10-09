@@ -1,73 +1,77 @@
-/**
- * usePluginLoader.ts — plugin loading utility
- *
- * Fetches the plugin list, downloads each frontend bundle, and executes it
- * via a same-origin Blob URL so plugins can self-register into the
- * `pluginSystem` singleton (hostExternals.ts).
- *
- * Exports `loadAllPlugins()` — the single function PluginContext calls.
- */
+/** Frontend plugin loading utilities. */
 
-import { getApiUrl, getApiToken } from "../api/config";
+import { getApiToken, getApiUrl } from "../api/config";
+import { removePluginRuntime } from "./pluginRuntimeCleanup";
+import { routeRegistry } from "./registry/store";
 
 const PLUGIN_LIST_TIMEOUT_MS = 8000;
 const PLUGIN_SCRIPT_TIMEOUT_MS = 12000;
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Plugin manifest type (mirrors backend PluginInfo)
-// ─────────────────────────────────────────────────────────────────────────────
-
-interface PluginInfo {
+interface FrontendPluginInfo {
   id: string;
   name: string;
+  plugin_type?: string;
   frontend_entry?: string;
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Internal helpers
-// ─────────────────────────────────────────────────────────────────────────────
-
-/**
- * Resolve a backend-relative API path (e.g. `/plugins/…/files/index.js`)
- * to a full URL using the same base that all other API calls use.
- */
-function resolveUrl(pluginId: string, apiPath: string): string {
-  return getApiUrl(`frontend_plugin/${pluginId}/files/${apiPath}`);
+export interface PluginLoadSummary {
+  loaded: number;
+  failed: string[];
 }
 
-/**
- * Fetch a plugin's JS source, wrap it in a same-origin Blob URL, and
- * execute it via dynamic import.  Blob URL is revoked immediately after.
- */
-async function executePluginScript(entryUrl: string): Promise<void> {
-  const token = getApiToken();
-  const headers: Record<string, string> = {};
-  if (token) headers["Authorization"] = `Bearer ${token}`;
+const loadingPlugins = new Map<string, Promise<void>>();
 
+function authHeaders(): Record<string, string> {
+  const token = getApiToken();
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
+async function fetchWithTimeout(
+  url: string,
+  timeoutMs: number,
+): Promise<Response> {
   const controller = new AbortController();
   const timeoutHandle = window.setTimeout(() => {
     controller.abort();
-  }, PLUGIN_SCRIPT_TIMEOUT_MS);
-
-  let response: Response;
+  }, timeoutMs);
   try {
-    response = await fetch(entryUrl, { headers, signal: controller.signal });
+    return await fetch(url, {
+      headers: authHeaders(),
+      signal: controller.signal,
+    });
   } catch (error) {
     if (error instanceof DOMException && error.name === "AbortError") {
-      throw new Error(`Timeout ${PLUGIN_SCRIPT_TIMEOUT_MS}ms for ${entryUrl}`);
+      throw new Error(`Timeout ${timeoutMs}ms for ${url}`);
     }
     throw error;
   } finally {
     window.clearTimeout(timeoutHandle);
   }
+}
 
+function resolveUrl(pluginId: string, apiPath: string): string {
+  return getApiUrl(`frontend_plugin/${pluginId}/files/${apiPath}`);
+}
+
+async function fetchFrontendPlugins(): Promise<FrontendPluginInfo[]> {
+  const response = await fetchWithTimeout(
+    getApiUrl("/frontend_plugin"),
+    PLUGIN_LIST_TIMEOUT_MS,
+  );
+  if (!response.ok) {
+    throw new Error(`Failed to list frontend plugins (${response.status})`);
+  }
+  return response.json();
+}
+
+async function executePluginScript(entryUrl: string): Promise<void> {
+  const response = await fetchWithTimeout(entryUrl, PLUGIN_SCRIPT_TIMEOUT_MS);
   if (!response.ok) {
     throw new Error(`HTTP ${response.status} for ${entryUrl}`);
   }
 
-  const jsText = await response.text();
   const blobUrl = URL.createObjectURL(
-    new Blob([jsText], { type: "application/javascript" }),
+    new Blob([await response.text()], { type: "application/javascript" }),
   );
   try {
     await import(/* @vite-ignore */ blobUrl);
@@ -76,82 +80,131 @@ async function executePluginScript(entryUrl: string): Promise<void> {
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Public API
-// ─────────────────────────────────────────────────────────────────────────────
-
-/**
- * Fetch the plugin list from `GET /api/plugins`, then load every plugin that
- * has a `frontend_entry` in parallel.  Failures are isolated per plugin so
- * one bad plugin never blocks the others.
- *
- * Returns a summary `{ loaded, failed }` for the caller to surface as an error.
- */
-export async function loadAllPlugins(): Promise<{
-  loaded: number;
-  failed: string[];
-}> {
-  const failed: string[] = [];
-
-  let plugins: PluginInfo[];
+/** Load every installed frontend plugin during Console startup. */
+export async function loadAllPlugins(): Promise<PluginLoadSummary> {
+  let plugins: FrontendPluginInfo[];
   try {
-    const token = getApiToken();
-    const headers: Record<string, string> = {};
-    if (token) headers["Authorization"] = `Bearer ${token}`;
-    const controller = new AbortController();
-    const timeoutHandle = window.setTimeout(() => {
-      controller.abort();
-    }, PLUGIN_LIST_TIMEOUT_MS);
-
-    let res: Response;
-    try {
-      res = await fetch(getApiUrl("/frontend_plugin"), {
-        headers,
-        signal: controller.signal,
-      });
-    } catch (error) {
-      if (error instanceof DOMException && error.name === "AbortError") {
-        console.warn(
-          `[PluginLoader] /api/frontend_plugin timed out after ${PLUGIN_LIST_TIMEOUT_MS}ms`,
-        );
-        return { loaded: 0, failed: [] };
-      }
-      throw error;
-    } finally {
-      window.clearTimeout(timeoutHandle);
-    }
-
-    if (!res.ok) {
-      console.warn(`[PluginLoader] /api/plugins returned ${res.status}`);
-      return { loaded: 0, failed: [] };
-    }
-    plugins = await res.json();
-  } catch (err) {
-    console.warn("[PluginLoader] failed to fetch plugin list:", err);
+    plugins = await fetchFrontendPlugins();
+  } catch (error) {
+    console.warn("[PluginLoader] failed to fetch plugin list:", error);
     return { loaded: 0, failed: [] };
   }
 
-  const frontendPlugins = plugins.filter((p) => p.frontend_entry);
-
+  const loadable = plugins.filter((plugin) => plugin.frontend_entry);
   const results = await Promise.allSettled(
-    frontendPlugins.map(async (p) => {
-      await executePluginScript(resolveUrl(p.id, p.frontend_entry!));
-      console.info(`[PluginLoader] ✓ ${p.id}`);
-    }),
+    loadable.map((plugin) =>
+      executePluginScript(resolveUrl(plugin.id, plugin.frontend_entry!)),
+    ),
   );
+  const failed = results.flatMap((result, index) =>
+    result.status === "rejected"
+      ? [`${loadable[index].id}: ${result.reason}`]
+      : [],
+  );
+  return { loaded: loadable.length - failed.length, failed };
+}
 
-  results.forEach((r, i) => {
-    if (r.status === "rejected") {
-      const msg = `${frontendPlugins[i].id}: ${r.reason}`;
-      console.error(`[PluginLoader] ✗ ${msg}`);
-      failed.push(msg);
+interface LoadPluginOptions {
+  force?: boolean;
+  expectedType?: "app";
+  entryPage?: string;
+}
+
+function loadFrontendPlugin(
+  pluginId: string,
+  options: LoadPluginOptions = {},
+): Promise<void> {
+  const registered = () =>
+    routeRegistry
+      .snapshot()
+      .some(
+        (route) =>
+          route.source === pluginId &&
+          route.path.startsWith("/apps/") &&
+          (!options.entryPage || route.path === options.entryPage),
+      );
+
+  if (!options.force && options.expectedType === "app" && registered()) {
+    return Promise.resolve();
+  }
+
+  const promise = (async () => {
+    const plugins = await fetchFrontendPlugins();
+    const plugin = plugins.find((item) => item.id === pluginId);
+    if (!plugin?.frontend_entry) {
+      if (options.expectedType === "app") {
+        throw new Error(`PawApp frontend plugin not found: ${pluginId}`);
+      }
+      return;
     }
+    if (options.expectedType && plugin.plugin_type !== options.expectedType) {
+      throw new Error(`PawApp frontend plugin not found: ${pluginId}`);
+    }
+    if (options.force) removePluginRuntime(pluginId);
+    try {
+      await executePluginScript(resolveUrl(plugin.id, plugin.frontend_entry));
+      if (options.expectedType === "app" && !registered()) {
+        throw new Error(`PawApp ${pluginId} did not register its app route`);
+      }
+    } catch (error) {
+      removePluginRuntime(pluginId);
+      throw error;
+    }
+  })().finally(() => {
+    loadingPlugins.delete(pluginId);
   });
 
-  console.info(
-    `[PluginLoader] ${frontendPlugins.length - failed.length}/${
-      frontendPlugins.length
-    } plugin(s) loaded`,
-  );
-  return { loaded: frontendPlugins.length - failed.length, failed };
+  loadingPlugins.set(pluginId, promise);
+  return promise;
+}
+
+/** Load one newly installed PawApp without reloading the page. */
+export function loadPawApp(
+  appId: string,
+  entryPage?: string,
+  options: { force?: boolean } = {},
+): Promise<void> {
+  if (options.force) return reloadPawApp(appId, entryPage);
+  const pending = loadingPlugins.get(appId);
+  if (pending) return pending;
+  return loadFrontendPlugin(appId, {
+    expectedType: "app",
+    entryPage,
+    force: options.force,
+  });
+}
+
+/** Force reload an installed PawApp after an update. */
+export function reloadPawApp(appId: string, entryPage?: string): Promise<void> {
+  const pending = loadingPlugins.get(appId);
+  if (pending) {
+    return pending.then(() =>
+      loadFrontendPlugin(appId, {
+        expectedType: "app",
+        entryPage,
+        force: true,
+      }),
+    );
+  }
+  return loadFrontendPlugin(appId, {
+    expectedType: "app",
+    entryPage,
+    force: true,
+  });
+}
+
+/** Reload a frontend plugin after installation or update. */
+export function reloadFrontendPlugin(pluginId: string): Promise<boolean> {
+  const pending = loadingPlugins.get(pluginId);
+  if (pending) {
+    return pending.then(() =>
+      loadFrontendPlugin(pluginId, { force: true }).then(() => true),
+    );
+  }
+  return loadFrontendPlugin(pluginId, { force: true }).then(() => true);
+}
+
+/** Reset pending loads between unit tests. */
+export function resetPawAppLoaderForTests(): void {
+  loadingPlugins.clear();
 }

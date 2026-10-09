@@ -19,24 +19,28 @@ Run:
     pytest tests/unit/channels/test_dingtalk.py -v
     pytest tests/unit/channels/test_dingtalk.py::TestDingTalkSessionWebhook -v
 """
+
 # pylint: disable=redefined-outer-name,protected-access,unused-argument
 # pylint: disable=broad-exception-raised,using-constant-test,unused-import
 # pylint: disable=reimported
 from __future__ import annotations
 
+
 import asyncio
 import json
 import threading
 import time
+from concurrent.futures import Future
 from pathlib import Path
 from typing import Generator
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from qwenpaw.app.channels.renderer import ChannelDisplayConfig
+
 from qwenpaw.exceptions import ChannelError
 from tests.fixtures.channels.mock_http import MockAiohttpSession
-
 
 # =============================================================================
 # Fixtures
@@ -88,8 +92,34 @@ def dingtalk_channel(
         client_secret="test_client_secret",
         bot_prefix="[TestBot] ",
         media_dir=str(temp_media_dir),
-        show_tool_details=False,
-        filter_tool_messages=True,
+        display_config=ChannelDisplayConfig(
+            show_tool_calls=False,
+            show_tool_results=False,
+        ),
+    )
+    yield channel
+
+
+@pytest.fixture
+def dingtalk_channel_shared_group(
+    mock_process_handler,
+    temp_media_dir,
+) -> Generator:
+    """Create a DingTalkChannel sharing one session per group."""
+    from qwenpaw.app.channels.dingtalk.channel import DingTalkChannel
+
+    channel = DingTalkChannel(
+        process=mock_process_handler,
+        enabled=True,
+        client_id="test_client_id",
+        client_secret="test_client_secret",
+        bot_prefix="[TestBot] ",
+        media_dir=str(temp_media_dir),
+        share_session_in_group=True,
+        display_config=ChannelDisplayConfig(
+            show_tool_calls=False,
+            show_tool_results=False,
+        ),
     )
     yield channel
 
@@ -109,8 +139,10 @@ def dingtalk_channel_with_workspace(
         client_secret="test_client_secret",
         bot_prefix="[TestBot] ",
         workspace_dir=temp_workspace_dir,
-        show_tool_details=False,
-        filter_tool_messages=True,
+        display_config=ChannelDisplayConfig(
+            show_tool_calls=False,
+            show_tool_results=False,
+        ),
     )
     yield channel
 
@@ -950,6 +982,232 @@ class TestDingTalkResolveSession:
 
 
 # =============================================================================
+# P2: Group session sharing (share_session_in_group)
+# =============================================================================
+
+
+def _shared_sid(conversation_id: str) -> str:
+    """Expected shared-group session_id for a conversation_id."""
+    from qwenpaw.app.channels.dingtalk.content_utils import (
+        shared_group_session_id_from_conversation_id,
+    )
+
+    return shared_group_session_id_from_conversation_id(conversation_id)
+
+
+class TestDingTalkShareSessionInGroup:
+    """Tests for per-user vs shared context in group chats."""
+
+    @staticmethod
+    def _group_payload() -> dict:
+        return {
+            "channel_id": "dingtalk",
+            "sender_id": "Alice#1234",
+            "acl_sender_id": "staff_alice",
+            "content_parts": [],
+            "meta": {
+                "conversation_id": "cidQWERTY7890XYZ",
+                "conversation_type": "group",
+                "is_group": True,
+            },
+        }
+
+    @staticmethod
+    def _dm_payload() -> dict:
+        return {
+            "channel_id": "dingtalk",
+            "sender_id": "Alice#1234",
+            "acl_sender_id": "staff_alice",
+            "content_parts": [],
+            "meta": {
+                "conversation_id": "cidDM0987654321",
+                "conversation_type": "dm",
+                "is_group": False,
+            },
+        }
+
+    def test_default_is_disabled(self, dingtalk_channel):
+        """Group members stay isolated unless sharing is enabled."""
+        assert dingtalk_channel.share_session_in_group is False
+
+    def test_group_isolated_keeps_sender_as_user_id(self, dingtalk_channel):
+        """Isolated mode keeps per-member user_id (own context)."""
+        request = dingtalk_channel.build_agent_request_from_native(
+            self._group_payload(),
+        )
+
+        assert request.user_id == "Alice#1234"
+        assert request.session_id == "Y7890XYZ"
+
+    def test_group_shared_collapses_user_id(
+        self,
+        dingtalk_channel_shared_group,
+    ):
+        """Shared mode collapses user_id so members share one context."""
+        channel = dingtalk_channel_shared_group
+        request = channel.build_agent_request_from_native(
+            self._group_payload(),
+        )
+
+        assert request.user_id == "group"
+        assert request.session_id == _shared_sid("cidQWERTY7890XYZ")
+        assert request.session_id != "Y7890XYZ"
+
+    def test_shared_user_id_has_no_underscore(
+        self,
+        dingtalk_channel_shared_group,
+    ):
+        """Shared user_id must stay splittable in the webhook key."""
+        channel = dingtalk_channel_shared_group
+        request = channel.build_agent_request_from_native(
+            self._group_payload(),
+        )
+        to_handle = channel.to_handle_from_target(
+            user_id=request.user_id,
+            session_id=request.session_id,
+        )
+
+        sid = _shared_sid("cidQWERTY7890XYZ")
+        assert to_handle == f"dingtalk:sw:group_{sid}"
+        fallback = channel._suffix_only_webhook_key(to_handle)
+        assert fallback == f"dingtalk:sw:{sid}"
+
+    def test_dm_unaffected_by_sharing(self, dingtalk_channel_shared_group):
+        """Direct messages keep their own user_id when sharing is on."""
+        channel = dingtalk_channel_shared_group
+        request = channel.build_agent_request_from_native(self._dm_payload())
+
+        assert request.user_id == "Alice#1234"
+
+    def test_debounce_key_isolated_appends_sender(self, dingtalk_channel):
+        """Isolated mode routes each member to its own queue."""
+        key = dingtalk_channel.get_debounce_key(self._group_payload())
+
+        assert key == "Y7890XYZ:Alice#1234"
+
+    def test_debounce_key_shared_drops_sender(
+        self,
+        dingtalk_channel_shared_group,
+    ):
+        """Shared mode routes the whole group to one queue."""
+        key = dingtalk_channel_shared_group.get_debounce_key(
+            self._group_payload(),
+        )
+
+        assert key == _shared_sid("cidQWERTY7890XYZ")
+
+    def test_debounce_key_shared_dm_keeps_sender(
+        self,
+        dingtalk_channel_shared_group,
+    ):
+        """DM queues keep sender isolation when sharing is on."""
+        key = dingtalk_channel_shared_group.get_debounce_key(
+            self._dm_payload(),
+        )
+
+        assert key == "87654321:Alice#1234"
+
+    def test_from_config_passes_flag(self, mock_process_handler):
+        """from_config should forward share_session_in_group."""
+        from qwenpaw.app.channels.dingtalk.channel import DingTalkChannel
+        from qwenpaw.config.config import DingTalkConfig
+
+        config = DingTalkConfig(
+            enabled=True,
+            client_id="cid",
+            client_secret="secret",
+            share_session_in_group=True,
+        )
+        channel = DingTalkChannel.from_config(
+            process=mock_process_handler,
+            config=config,
+        )
+
+        assert channel.share_session_in_group is True
+
+    def test_merge_two_members_keeps_first_sender_identity(
+        self,
+        dingtalk_channel_shared_group,
+    ):
+        """Merging members must not mix sender identity fields."""
+        channel = dingtalk_channel_shared_group
+        alice = self._group_payload()
+        alice["meta"]["sender_staff_id"] = "staff_alice"
+        alice["meta"]["user_name"] = "Alice"
+        bob = self._group_payload()
+        bob["sender_id"] = "Bob#5678"
+        bob["acl_sender_id"] = "staff_bob"
+        bob["meta"]["sender_staff_id"] = "staff_bob"
+        bob["meta"]["user_name"] = "Bob"
+
+        merged = channel.merge_native_items([alice, bob])
+
+        assert merged["sender_id"] == "Alice#1234"
+        assert merged["acl_sender_id"] == "staff_alice"
+        assert merged["meta"]["user_name"] == "Alice"
+        assert merged["meta"]["sender_staff_id"] == "staff_alice"
+
+    def test_merge_two_members_tracks_newest_session(
+        self,
+        dingtalk_channel_shared_group,
+    ):
+        """Conversation/webhook state still follows the newest item."""
+        channel = dingtalk_channel_shared_group
+        alice = self._group_payload()
+        alice["meta"]["session_webhook"] = "https://old.example"
+        bob = self._group_payload()
+        bob["sender_id"] = "Bob#5678"
+        bob["meta"]["session_webhook"] = "https://new.example"
+
+        merged = channel.merge_native_items([alice, bob])
+
+        assert merged["meta"]["session_webhook"] == "https://new.example"
+        assert merged["meta"]["batched_count"] == 2
+
+    def test_shared_groups_with_same_suffix_stay_separate(
+        self,
+        dingtalk_channel_shared_group,
+    ):
+        """Groups sharing an 8-char suffix stay isolated."""
+        channel = dingtalk_channel_shared_group
+        first = self._group_payload()
+        first["meta"]["conversation_id"] = "cidAAAASAME8888"
+        second = self._group_payload()
+        second["meta"]["conversation_id"] = "cidBBBBSAME8888"
+
+        req_a = channel.build_agent_request_from_native(first)
+        req_b = channel.build_agent_request_from_native(second)
+
+        assert first["meta"]["conversation_id"][-8:] == (
+            second["meta"]["conversation_id"][-8:]
+        )
+        assert req_a.session_id != req_b.session_id
+        assert channel.get_debounce_key(first) != channel.get_debounce_key(
+            second,
+        )
+
+    def test_shared_session_id_is_underscore_free(
+        self,
+        dingtalk_channel_shared_group,
+    ):
+        """Hash must stay "_"-free for the webhook fallback key split."""
+        channel = dingtalk_channel_shared_group
+        request = channel.build_agent_request_from_native(
+            self._group_payload(),
+        )
+
+        assert "_" not in request.session_id
+
+    def test_isolated_mode_keeps_short_suffix(self, dingtalk_channel):
+        """Isolated mode keeps the legacy suffix (no state migration)."""
+        request = dingtalk_channel.build_agent_request_from_native(
+            self._group_payload(),
+        )
+
+        assert request.session_id == "Y7890XYZ"
+
+
+# =============================================================================
 # P2: Open API Fallback (Critical for CHAN-D02)
 # =============================================================================
 
@@ -1513,7 +1771,7 @@ class TestDingTalkWorkspaceIntegration:
         dingtalk_with_workspace,
     ):
         """_stream_with_tracker should yield SSE formatted events."""
-        from agentscope_runtime.engine.schemas.agent_schemas import (
+        from qwenpaw.schemas import (
             RunStatus,
             Event,
             Message,
@@ -1584,6 +1842,95 @@ class TestDingTalkSendContentParts:
             )
 
             mock_send.assert_not_called()
+
+    async def test_send_content_parts_whitespace_text_skipped(
+        self,
+        dingtalk_channel,
+    ):
+        """Whitespace-only text should not send a prefix-only message."""
+        from qwenpaw.app.channels.base import TextContent, ContentType
+
+        parts = [TextContent(type=ContentType.TEXT, text="   \n\t")]
+
+        with patch.object(
+            dingtalk_channel,
+            "send",
+            new_callable=AsyncMock,
+        ) as mock_send:
+            await dingtalk_channel.send_content_parts(
+                to_handle="dingtalk:sw:test",
+                parts=parts,
+                meta={"bot_prefix": "[TestBot] "},
+            )
+
+            mock_send.assert_not_called()
+
+    async def test_send_content_parts_text_failure_logs_without_strict_meta(
+        self,
+        dingtalk_channel,
+    ):
+        """Conversation replies should not fail the whole agent pipeline."""
+        from qwenpaw.app.channels.base import TextContent, ContentType
+
+        parts = [TextContent(type=ContentType.TEXT, text="Hello")]
+
+        with (
+            patch.object(
+                dingtalk_channel,
+                "_send_via_session_webhook",
+                new_callable=AsyncMock,
+                return_value=False,
+            ) as mock_webhook,
+            patch.object(
+                dingtalk_channel,
+                "_try_open_api_fallback",
+                new_callable=AsyncMock,
+                return_value=False,
+            ) as mock_fallback,
+        ):
+            # Should complete without raising even when both hops fail.
+            await dingtalk_channel.send_content_parts(
+                to_handle="dingtalk:sw:test",
+                parts=parts,
+                meta={"session_webhook": "http://webhook.url"},
+            )
+
+            # Verify the full webhook -> Open API fallback chain ran.
+            mock_webhook.assert_awaited()
+            mock_fallback.assert_awaited()
+
+    async def test_send_content_parts_text_failure_raises_for_api_send(
+        self,
+        dingtalk_channel,
+    ):
+        """Explicit API delivery failure should surface to callers."""
+        from qwenpaw.app.channels.base import TextContent, ContentType
+
+        parts = [TextContent(type=ContentType.TEXT, text="Hello")]
+
+        with (
+            patch.object(
+                dingtalk_channel,
+                "_send_via_session_webhook",
+                new_callable=AsyncMock,
+                return_value=False,
+            ),
+            patch.object(
+                dingtalk_channel,
+                "_try_open_api_fallback",
+                new_callable=AsyncMock,
+                return_value=False,
+            ),
+        ):
+            with pytest.raises(ChannelError, match="Open API fallback"):
+                await dingtalk_channel.send_content_parts(
+                    to_handle="dingtalk:sw:test",
+                    parts=parts,
+                    meta={
+                        "_api_send": True,
+                        "session_webhook": "http://webhook.url",
+                    },
+                )
 
     async def test_send_content_parts_with_file(
         self,
@@ -2460,6 +2807,69 @@ class TestDingTalkFileDownload:
 # =============================================================================
 
 
+class TestDingTalkStreamRequestTimeout:
+    """Tests for bounded synchronous requests in the stream SDK."""
+
+    def test_stream_and_chatbot_requests_use_default_timeout(
+        self,
+        dingtalk_channel,
+        monkeypatch,
+    ):
+        """Connection and chatbot ACK requests should share timeouts."""
+        from qwenpaw.app.channels.dingtalk.channel import (
+            _DINGTALK_REQUESTS_WITH_TIMEOUT,
+            dingtalk_chatbot_module,
+            dingtalk_stream_module,
+        )
+
+        mock_post = MagicMock(return_value=MagicMock())
+        monkeypatch.setattr(
+            "qwenpaw.app.channels.dingtalk.channel.requests.post",
+            mock_post,
+        )
+        monkeypatch.setattr(
+            dingtalk_stream_module,
+            "requests",
+            MagicMock(),
+        )
+        monkeypatch.setattr(
+            dingtalk_chatbot_module,
+            "requests",
+            MagicMock(),
+        )
+
+        dingtalk_channel._apply_stream_request_timeout()
+
+        assert (
+            dingtalk_stream_module.requests is _DINGTALK_REQUESTS_WITH_TIMEOUT
+        )
+        assert (
+            dingtalk_chatbot_module.requests is _DINGTALK_REQUESTS_WITH_TIMEOUT
+        )
+
+        incoming_message = MagicMock()
+        incoming_message.session_webhook = (
+            "https://api.dingtalk.com/session-webhook"
+        )
+        incoming_message.sender_staff_id = "user_123"
+        handler = dingtalk_chatbot_module.ChatbotHandler()
+
+        handler.reply_text(" ", incoming_message)
+
+        mock_post.assert_called_once_with(
+            "https://api.dingtalk.com/session-webhook",
+            headers={
+                "Content-Type": "application/json",
+                "Accept": "*/*",
+            },
+            data=(
+                '{"msgtype": "text", "text": {"content": " "}, '
+                '"at": {"atUserIds": ["user_123"]}}'
+            ),
+            timeout=(10, 30),
+        )
+
+
 @pytest.mark.asyncio
 class TestDingTalkStreamMode:
     """Tests for Stream/WebSocket mode."""
@@ -2516,6 +2926,165 @@ class TestDingTalkStreamMode:
         dingtalk_channel.robot_code = "robot_123"
 
         assert dingtalk_channel._ai_card_enabled() is False
+
+
+@pytest.mark.asyncio
+class TestDingTalkHealthCheck:
+    """Tests for DingTalk connection health reporting."""
+
+    @staticmethod
+    def _set_runtime_state(
+        channel,
+        *,
+        thread_alive: bool = True,
+        websocket_state: str = "OPEN",
+        stream_loop_running: bool = True,
+    ):
+        loop = asyncio.get_running_loop()
+        websocket = MagicMock()
+        websocket.state.name = websocket_state
+        websocket.ping = AsyncMock()
+        pong_waiter = loop.create_future()
+        pong_waiter.set_result(0.01)
+        websocket.ping.return_value = pong_waiter
+        client = MagicMock()
+        client.websocket = websocket
+        channel._client = client
+        channel._stream_thread = MagicMock()
+        channel._stream_thread.is_alive.return_value = thread_alive
+        if stream_loop_running:
+            channel._stream_event_loop = loop
+        else:
+            channel._stream_event_loop = MagicMock()
+            channel._stream_event_loop.is_running.return_value = False
+        channel._http = MagicMock()
+        channel._http.closed = False
+        return websocket
+
+    async def test_reports_healthy_for_live_stream(
+        self,
+        dingtalk_channel,
+    ):
+        """A connected and responsive stream should be healthy."""
+        websocket = self._set_runtime_state(dingtalk_channel)
+
+        result = await dingtalk_channel.health_check()
+
+        assert result["status"] == "healthy"
+        websocket.ping.assert_awaited_once_with()
+
+    @pytest.mark.parametrize(
+        (
+            "thread_alive",
+            "websocket_state",
+            "stream_loop_running",
+            "expected_detail",
+        ),
+        [
+            (False, "OPEN", True, "Stream thread is not running"),
+            (True, "CLOSED", True, "WebSocket connection is not open"),
+            (True, "OPEN", False, "Stream event loop is not running"),
+        ],
+    )
+    async def test_reports_unhealthy_for_broken_stream_state(
+        self,
+        dingtalk_channel,
+        thread_alive,
+        websocket_state,
+        stream_loop_running,
+        expected_detail,
+    ):
+        """Broken stream states should not be reported as healthy."""
+        self._set_runtime_state(
+            dingtalk_channel,
+            thread_alive=thread_alive,
+            websocket_state=websocket_state,
+            stream_loop_running=stream_loop_running,
+        )
+
+        result = await dingtalk_channel.health_check()
+
+        assert result["status"] == "unhealthy"
+        assert expected_detail in result["detail"]
+
+    async def test_reports_unhealthy_when_pong_times_out(
+        self,
+        dingtalk_channel,
+    ):
+        """An open socket without a Pong response should be unhealthy."""
+        websocket = self._set_runtime_state(dingtalk_channel)
+        websocket.ping.return_value = (
+            asyncio.get_running_loop().create_future()
+        )
+
+        with patch(
+            "qwenpaw.app.channels.dingtalk.channel."
+            "_STREAM_HEALTH_PING_TIMEOUT_SECONDS",
+            0.01,
+        ):
+            result = await dingtalk_channel.health_check()
+
+        assert result["status"] == "unhealthy"
+        assert "WebSocket Ping timed out" in result["detail"]
+
+    async def test_reports_unhealthy_when_ping_fails(
+        self,
+        dingtalk_channel,
+    ):
+        """A Ping transport error should be reported as unhealthy."""
+        websocket = self._set_runtime_state(dingtalk_channel)
+        websocket.ping.side_effect = ConnectionError("socket closed")
+
+        result = await dingtalk_channel.health_check()
+
+        assert result["status"] == "unhealthy"
+        assert "WebSocket Ping failed: ConnectionError" in result["detail"]
+
+    async def test_reports_unhealthy_when_ping_is_cancelled(
+        self,
+        dingtalk_channel,
+    ):
+        """A Ping cancelled by Stream reconnect should be unhealthy."""
+        self._set_runtime_state(dingtalk_channel)
+
+        def cancel_probe(coro, _loop):
+            coro.close()
+            future = Future()
+            future.cancel()
+            return future
+
+        with patch(
+            "asyncio.run_coroutine_threadsafe",
+            side_effect=cancel_probe,
+        ):
+            result = await dingtalk_channel.health_check()
+
+        assert result["status"] == "unhealthy"
+        assert "WebSocket Ping was cancelled" in result["detail"]
+
+    async def test_reports_unhealthy_when_stream_loop_is_blocked(
+        self,
+        dingtalk_channel,
+    ):
+        """Health should time out if the Stream loop cannot run Ping."""
+        self._set_runtime_state(dingtalk_channel)
+
+        def leave_probe_pending(coro, _loop):
+            coro.close()
+            return Future()
+
+        with patch(
+            "asyncio.run_coroutine_threadsafe",
+            side_effect=leave_probe_pending,
+        ), patch(
+            "qwenpaw.app.channels.dingtalk.channel."
+            "_STREAM_HEALTH_PING_TIMEOUT_SECONDS",
+            0.01,
+        ):
+            result = await dingtalk_channel.health_check()
+
+        assert result["status"] == "unhealthy"
+        assert "WebSocket Ping timed out" in result["detail"]
 
 
 # =============================================================================
@@ -2649,35 +3218,67 @@ class TestDingTalkSendMethodsExtended:
             meta={},
         )
 
-    async def test_send_no_webhook_warning(
+    async def test_send_no_delivery_target_logs_without_strict_meta(
         self,
         dingtalk_channel,
         mock_http_session,
     ):
-        """Should log warning when no webhook available."""
-        from unittest.mock import patch
-
-        # Set http session (required for send to proceed)
+        """Conversation replies should not raise on missing target metadata."""
         dingtalk_channel._http = mock_http_session
 
-        # Patch logger.warning to capture the call
         with patch(
             "qwenpaw.app.channels.dingtalk.channel.logger.warning",
         ) as mock_warning:
+            # Should return quietly (no raise) for non-API sends.
             await dingtalk_channel.send(
                 to_handle="unknown_handle",
                 text="Test message",
                 meta={},
             )
 
-            # Check that the warning was logged with 'no sessionWebhook'
-            # Filter for calls containing 'no sessionWebhook'
-            warning_calls = [
-                call
-                for call in mock_warning.call_args_list
-                if "no sessionWebhook" in str(call)
-            ]
-            assert len(warning_calls) == 1
+        assert any(
+            "no sessionWebhook" in str(call)
+            for call in mock_warning.call_args_list
+        )
+
+    async def test_send_no_delivery_target_raises_for_api_send(
+        self,
+        dingtalk_channel,
+        mock_http_session,
+    ):
+        """Explicit send should fail when no DingTalk target is reachable."""
+        dingtalk_channel._http = mock_http_session
+
+        with pytest.raises(ChannelError, match="no sessionWebhook"):
+            await dingtalk_channel.send(
+                to_handle="unknown_handle",
+                text="Test message",
+                meta={"_api_send": True},
+            )
+
+    async def test_send_open_api_fallback_failure_raises_for_api_send(
+        self,
+        dingtalk_channel,
+        mock_http_session,
+    ):
+        """Open API transport failure should fail explicit sends."""
+        dingtalk_channel._http = mock_http_session
+
+        with patch.object(
+            dingtalk_channel,
+            "_send_robot_message",
+            new_callable=AsyncMock,
+            return_value=False,
+        ):
+            with pytest.raises(ChannelError, match="Open API send failed"):
+                await dingtalk_channel.send(
+                    to_handle="unknown_handle",
+                    text="Test message",
+                    meta={
+                        "_api_send": True,
+                        "conversation_id": "cid_test",
+                    },
+                )
 
 
 # =============================================================================

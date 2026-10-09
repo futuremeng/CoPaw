@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 """Skills hub client and install helpers."""
+
 from __future__ import annotations
 
 import asyncio
@@ -12,20 +13,24 @@ import os
 import re
 import time
 import zipfile
+from collections import OrderedDict
 from contextlib import asynccontextmanager, contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Awaitable, Callable, Literal
-from urllib.parse import quote, urlparse, unquote
+from urllib.parse import quote, urljoin, urlparse, unquote
 
 import frontmatter
 import httpx
 import yaml
 
-from agentscope_runtime.engine.schemas.exception import ConfigurationException
-from ...exceptions import SkillsError
+from ...exceptions import (
+    ConfigurationException,
+    SkillConflictError,
+    SkillImportCancelled,
+    SkillsError,
+)
 from ...constant import EnvVarLoader
-from .models import SkillConflictError
 from .pool_service import SkillPoolService
 from .store import suggest_conflict_name
 from .workspace_service import SkillService
@@ -40,6 +45,7 @@ InstallOrigin = Literal[
     "skills-sh",
     "github",
     "lobehub",
+    "qwenpaw",
     "modelscope",
     "aliyun",
     "skillsmp",
@@ -66,10 +72,6 @@ class HubInstallResult:
     enabled: bool
     source_url: str
     installed_from: InstallOrigin = ""
-
-
-class SkillImportCancelled(RuntimeError):
-    """Raised when a skill import task is cancelled by user."""
 
 
 def _build_hub_conflict(name: str) -> dict[str, Any]:
@@ -100,22 +102,28 @@ RETRYABLE_HTTP_STATUS = {
     504,
 }
 
-LOBEHUB_MAX_ZIP_ENTRIES = 256
-LOBEHUB_MAX_ZIP_BYTES = 5 * 1024 * 1024
-HTTP_READ_CHUNK_BYTES = 64 * 1024
+SKILL_PACKAGE_MAX_ENTRIES = 4096
+SKILL_PACKAGE_MAX_BYTES = 200 * 1024 * 1024
+HTTP_READ_CHUNK_BYTES = 256 * 1024
 
 _GITHUB_CACHE_DEFAULT_TTL = 300  # 5 minutes
+_GITHUB_CACHE_MAX_ENTRIES = 500
 _GITHUB_CACHE_MISS = object()
 
 # ---------- Module-level mutable state -------------------------------------
 
 # GitHub response cache: key → (timestamp, value).
-_github_cache: dict[str, tuple[float, Any]] = {}
+_github_cache: OrderedDict[str, tuple[float, Any]] = OrderedDict()
 
-# Per-key locks for the GitHub response cache. Without these, two
-# concurrent callers seeing the same cache miss both fire the same HTTP
-# request and burn the GitHub rate-limit budget twice.
-_github_cache_key_locks: dict[str, asyncio.Lock] = {}
+
+@dataclass
+class _GitHubCacheLockEntry:
+    lock: asyncio.Lock
+    users: int = 0
+
+
+# Locks exist only while a cache miss for that key is running or waiting.
+_github_cache_key_locks: dict[str, _GitHubCacheLockEntry] = {}
 _github_cache_locks_lock = asyncio.Lock()
 
 # Lazy module-level httpx singleton.
@@ -258,14 +266,30 @@ def _with_cancel_checker(checker: Any | None):
 # ---------- GitHub response cache ------------------------------------------
 
 
+def _github_cache_prune(*, now: float | None = None) -> None:
+    """Globally expire old entries and enforce the LRU size threshold."""
+    current_time = time.monotonic() if now is None else now
+    ttl = _github_cache_ttl()
+    expired = [
+        key
+        for key, (timestamp, _) in _github_cache.items()
+        if current_time - timestamp > ttl
+    ]
+    for key in expired:
+        _github_cache.pop(key, None)
+    while len(_github_cache) > _GITHUB_CACHE_MAX_ENTRIES:
+        _github_cache.popitem(last=False)
+
+
 def _github_cache_get(key: str) -> Any:
     entry = _github_cache.get(key)
     if entry is None:
         return None
-    ts, value = entry
-    if time.monotonic() - ts > _github_cache_ttl():
-        del _github_cache[key]
+    timestamp, value = entry
+    if time.monotonic() - timestamp > _github_cache_ttl():
+        _github_cache.pop(key, None)
         return None
+    _github_cache.move_to_end(key)
     return value
 
 
@@ -276,22 +300,35 @@ def _github_cached(key: str) -> Any:
 
 def _github_cache_set(key: str, value: Any) -> None:
     _github_cache[key] = (time.monotonic(), value)
+    _github_cache.move_to_end(key)
+    if len(_github_cache) > _GITHUB_CACHE_MAX_ENTRIES:
+        _github_cache_prune()
 
 
-async def _github_cache_lock_for(key: str) -> asyncio.Lock:
+@asynccontextmanager
+async def _github_cache_lock(key: str) -> Any:
     async with _github_cache_locks_lock:
-        lock = _github_cache_key_locks.get(key)
-        if lock is None:
-            lock = asyncio.Lock()
-            _github_cache_key_locks[key] = lock
-        return lock
+        entry = _github_cache_key_locks.get(key)
+        if entry is None:
+            entry = _GitHubCacheLockEntry(lock=asyncio.Lock())
+            _github_cache_key_locks[key] = entry
+        entry.users += 1
+
+    try:
+        async with entry.lock:
+            yield
+    finally:
+        async with _github_cache_locks_lock:
+            entry.users -= 1
+            if entry.users == 0 and _github_cache_key_locks.get(key) is entry:
+                _github_cache_key_locks.pop(key, None)
 
 
 async def _github_cached_call(
     key: str,
     factory: Callable[[], Awaitable[Any]],
 ) -> Any:
-    """Return cached value or run factory under a per-key lock.
+    """Return cached value or run factory under a temporary per-key lock.
 
     Prevents thundering-herd when multiple coroutines miss the same key:
     only the first one fires the network call; the rest wait on the lock
@@ -300,8 +337,7 @@ async def _github_cached_call(
     cached = _github_cached(key)
     if cached is not _GITHUB_CACHE_MISS:
         return cached
-    lock = await _github_cache_lock_for(key)
-    async with lock:
+    async with _github_cache_lock(key):
         cached = _github_cached(key)
         if cached is not _GITHUB_CACHE_MISS:
             return cached
@@ -534,6 +570,18 @@ async def _http_fetch(
         except httpx.HTTPStatusError as e:
             last_error = e
             status = e.response.status_code
+            if status == 409:
+                try:
+                    conflict = e.response.json()
+                except ValueError:
+                    conflict = None
+                if (
+                    isinstance(conflict, dict)
+                    and conflict.get("code") == "AMBIGUOUS_SKILL_SLUG"
+                ):
+                    raise SkillsError(
+                        message=e.response.text,
+                    ) from e
             if status == 403 and "api.github.com" in host:
                 body_text = ""
                 try:
@@ -1015,6 +1063,49 @@ def _extract_modelscope_skill_spec(
     return owner, skill_name, version_hint
 
 
+def _extract_qwenpaw_skill_spec(
+    url: str,
+) -> tuple[str, str, str] | None:
+    """Parse a QwenPaw skill URL into (owner, name_or_id, version).
+
+    Public detail pages use ``/skills/{uuid}``; archive URLs use the
+    ModelScope-compatible ``/skills/{owner}/{name}/...`` shape. An empty
+    owner marks the UUID detail-page form.
+    """
+    parsed = urlparse(url)
+    host = (parsed.netloc or "").lower()
+    if host != "platform.agentscope.io":
+        return None
+    parts = [unquote(p) for p in parsed.path.split("/") if p]
+    if not parts or parts[0] != "skills":
+        return None
+
+    if len(parts) == 2 and re.fullmatch(
+        r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-"
+        r"[0-9a-fA-F]{4}-[0-9a-fA-F]{12}",
+        parts[1],
+    ):
+        return "", parts[1], ""
+
+    if len(parts) < 3:
+        return None
+
+    # Owner kept verbatim (incl. any leading `@`); the archive endpoint
+    # accepts both `@agentscope` and `agentscope`.
+    owner = parts[1].strip()
+    skill_name = parts[2].strip()
+    if not owner or not skill_name:
+        return None
+
+    version_hint = ""
+    if len(parts) >= 6 and parts[3] == "archive" and parts[4] == "zip":
+        archive_name = parts[5].strip()
+        if archive_name.endswith(".zip"):
+            archive_name = archive_name[: -len(".zip")]
+        version_hint = archive_name
+    return owner, skill_name, version_hint
+
+
 def _extract_aliyun_skill_spec(url: str) -> str | None:
     """Parse an Aliyun AgentExplorer skill URL and return the skill id.
 
@@ -1236,7 +1327,7 @@ async def _github_collect_tree_files(
     repo: str,
     ref: str,
     root: str,
-    max_files: int = 200,
+    max_files: int = 4096,
 ) -> dict[str, str]:
     files: dict[str, str] = {}
     pending = [root] if root else [""]
@@ -1524,12 +1615,12 @@ def _lobehub_zip_to_bundle(identifier: str, payload: bytes) -> dict[str, Any]:
                 if info.is_dir():
                     continue
                 entry_count += 1
-                if entry_count > LOBEHUB_MAX_ZIP_ENTRIES:
+                if entry_count > SKILL_PACKAGE_MAX_ENTRIES:
                     raise SkillsError(
                         message="LobeHub skill package has too many files",
                     )
                 total_bytes += max(0, info.file_size)
-                if total_bytes > LOBEHUB_MAX_ZIP_BYTES:
+                if total_bytes > SKILL_PACKAGE_MAX_BYTES:
                     raise SkillsError(
                         message="LobeHub skill package is too large to import",
                     )
@@ -1589,7 +1680,7 @@ async def _fetch_bundle_from_lobehub_url(
             _lobehub_download_url(identifier),
             params=params,
             accept="application/zip, application/octet-stream, */*",
-            max_bytes=LOBEHUB_MAX_ZIP_BYTES,
+            max_bytes=SKILL_PACKAGE_MAX_BYTES,
         )
     except httpx.HTTPStatusError as e:
         raise SkillsError(
@@ -1598,7 +1689,12 @@ async def _fetch_bundle_from_lobehub_url(
         ) from e
     except ValueError as e:
         raise SkillsError(message=f"LobeHub skill download failed: {e}") from e
-    return _lobehub_zip_to_bundle(identifier, payload), bundle_url
+    bundle = await asyncio.to_thread(
+        _lobehub_zip_to_bundle,
+        identifier,
+        payload,
+    )
+    return bundle, bundle_url
 
 
 # ---------- Provider: ModelScope (archive zip) -----------------------------
@@ -1625,12 +1721,12 @@ def _modelscope_archive_to_bundle(
             if info.is_dir():
                 continue
             entry_count += 1
-            if entry_count > LOBEHUB_MAX_ZIP_ENTRIES:
+            if entry_count > SKILL_PACKAGE_MAX_ENTRIES:
                 raise SkillsError(
                     message="ModelScope archive has too many files",
                 )
             total_bytes += max(0, info.file_size)
-            if total_bytes > LOBEHUB_MAX_ZIP_BYTES:
+            if total_bytes > SKILL_PACKAGE_MAX_BYTES:
                 raise SkillsError(
                     message="ModelScope archive is too large to import",
                 )
@@ -1659,6 +1755,109 @@ def _modelscope_archive_to_bundle(
     return {"name": name, "files": files}
 
 
+def _qwenpaw_detail_archive_to_bundle(
+    payload: bytes,
+    fallback_name: str,
+) -> dict[str, Any]:
+    """Convert the flat zip returned by QwenPaw's UUID download endpoint."""
+    try:
+        zf = zipfile.ZipFile(io.BytesIO(payload))
+    except zipfile.BadZipFile as e:
+        raise SkillsError(
+            message="QwenPaw archive is not a valid zip",
+        ) from e
+
+    files: dict[str, str] = {}
+    entry_count = 0
+    total_bytes = 0
+    with zf:
+        for info in zf.infolist():
+            if info.is_dir():
+                continue
+            entry_count += 1
+            if entry_count > SKILL_PACKAGE_MAX_ENTRIES:
+                raise SkillsError(
+                    message="QwenPaw archive has too many files",
+                )
+            total_bytes += max(0, info.file_size)
+            if total_bytes > SKILL_PACKAGE_MAX_BYTES:
+                raise SkillsError(
+                    message="QwenPaw archive is too large to import",
+                )
+            parts = _safe_path_parts(info.filename.replace("\\", "/"))
+            if not parts:
+                continue
+            rel = "/".join(parts)
+            raw = zf.read(info)
+            if not _is_probably_text_blob(raw):
+                continue
+            files[rel] = raw.decode("utf-8", errors="replace")
+
+    if "SKILL.md" not in files:
+        raise SkillsError(
+            message="QwenPaw archive is missing SKILL.md",
+        )
+
+    name = fallback_name
+    try:
+        post = frontmatter.loads(files["SKILL.md"])
+        fm_name = post.get("name")
+        if isinstance(fm_name, str) and fm_name.strip():
+            name = fm_name.strip()
+    except yaml.YAMLError:
+        pass
+    return {"name": name, "files": files}
+
+
+async def _fetch_bundle_from_qwenpaw_url(
+    bundle_url: str,
+    requested_version: str,
+) -> tuple[Any, str]:
+    spec = _extract_qwenpaw_skill_spec(bundle_url)
+    if spec is None:
+        raise ConfigurationException(
+            config_key="skills_hub.bundle_url",
+            message="Invalid QwenPaw URL format. Use URL like "
+            "https://platform.agentscope.io/skills/@owner/skill-name",
+        )
+    owner, skill_name, version_hint = spec
+    if owner:
+        branch = requested_version.strip() or version_hint or "master"
+        archive_url = (
+            "https://platform.agentscope.io/skills/"
+            f"{quote(owner, safe='@')}/{quote(skill_name, safe='')}"
+            f"/archive/zip/{quote(branch, safe='')}"
+        )
+    else:
+        archive_url = (
+            "https://platform.agentscope.io/api/v1/skills/"
+            f"{quote(skill_name, safe='')}/download"
+        )
+    try:
+        payload = await _http_bytes_get(
+            archive_url,
+            max_bytes=SKILL_PACKAGE_MAX_BYTES,
+        )
+    except httpx.HTTPStatusError as e:
+        raise SkillsError(
+            message=(
+                "QwenPaw archive download failed: "
+                f"{_format_http_error_body(e)}."
+            ),
+        ) from e
+    converter = (
+        _modelscope_archive_to_bundle
+        if owner
+        else _qwenpaw_detail_archive_to_bundle
+    )
+    bundle = await asyncio.to_thread(
+        converter,
+        payload,
+        fallback_name=skill_name,
+    )
+    return bundle, bundle_url
+
+
 async def _fetch_bundle_from_modelscope_url(
     bundle_url: str,
     requested_version: str,
@@ -1680,7 +1879,7 @@ async def _fetch_bundle_from_modelscope_url(
     try:
         payload = await _http_bytes_get(
             archive_url,
-            max_bytes=LOBEHUB_MAX_ZIP_BYTES,
+            max_bytes=SKILL_PACKAGE_MAX_BYTES,
         )
     except httpx.HTTPStatusError as e:
         raise SkillsError(
@@ -1692,10 +1891,12 @@ async def _fetch_bundle_from_modelscope_url(
                 "instead."
             ),
         ) from e
-    return (
-        _modelscope_archive_to_bundle(payload, fallback_name=skill_name),
-        bundle_url,
+    bundle = await asyncio.to_thread(
+        _modelscope_archive_to_bundle,
+        payload,
+        fallback_name=skill_name,
     )
+    return bundle, bundle_url
 
 
 # ---------- Provider: Aliyun AgentExplorer (signed API) --------------------
@@ -1765,7 +1966,7 @@ async def _fetch_bundle_from_aliyun_url(
             pathname=f"/openapi/skills/{quote(skill_id, safe='')}",
             method="GET",
         )
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         raise SkillsError(
             message=f"Aliyun GetSkillContent failed: {exc}",
         ) from exc
@@ -1783,6 +1984,7 @@ async def _hydrate_clawhub_payload(
     *,
     slug: str,
     requested_version: str,
+    owner: str = "",
 ) -> Any:
     """Convert ClawHub metadata responses into a bundle with file contents."""
     if _bundle_has_content(data):
@@ -1811,7 +2013,10 @@ async def _hydrate_clawhub_payload(
             base,
             _hub_version_path().format(slug=skill_slug, version=version_hint),
         )
-        version_data = await _http_json_get(version_url)
+        version_data = await _http_json_get(
+            version_url,
+            params={"owner": owner} if owner else None,
+        )
         version_obj = (
             version_data.get("version")
             if isinstance(version_data, dict)
@@ -1838,6 +2043,8 @@ async def _hydrate_clawhub_payload(
         if not isinstance(path, str) or not path:
             continue
         params = {"path": path}
+        if owner:
+            params["owner"] = owner
         if version_str:
             params["version"] = version_str
         try:
@@ -1863,6 +2070,7 @@ async def _hydrate_clawhub_payload(
 async def _fetch_bundle_from_clawhub_slug(
     slug: str,
     version: str,
+    owner: str = "",
 ) -> tuple[Any, str]:
     if not slug:
         raise ConfigurationException(
@@ -1877,6 +2085,10 @@ async def _fetch_bundle_from_clawhub_slug(
     data: Any | None = None
     source_url = ""
     for candidate in candidates:
+        if owner:
+            candidate = str(
+                httpx.URL(candidate).copy_merge_params({"owner": owner}),
+            )
         try:
             data = await _http_json_get(candidate)
             source_url = candidate
@@ -1891,6 +2103,7 @@ async def _fetch_bundle_from_clawhub_slug(
         data,
         slug=slug,
         requested_version=version,
+        owner=owner,
     )
     return hydrated, source_url
 
@@ -1906,7 +2119,19 @@ async def _fetch_bundle_from_clawhub_url(
             config_key="skills_hub.bundle_url",
             message="Invalid ClawHub URL format",
         )
-    return await _fetch_bundle_from_clawhub_slug(slug, requested_version)
+    # Accept both /owner/skills/slug and legacy /owner/slug pages.
+    # /slug and /skills/slug remain valid for globally unique slugs.
+    parts = [unquote(p) for p in urlparse(bundle_url).path.split("/") if p]
+    owner = ""
+    if (len(parts) == 2 and parts[0] != "skills") or (
+        len(parts) == 3 and parts[1] == "skills"
+    ):
+        owner = parts[0]
+    return await _fetch_bundle_from_clawhub_slug(
+        slug,
+        requested_version,
+        owner=owner,
+    )
 
 
 # ---------- Public search API ----------------------------------------------
@@ -1950,7 +2175,15 @@ async def search_hub_skills(
                     item.get("description") or item.get("summary") or "",
                 ),
                 version=str(item.get("version") or ""),
-                source_url=str(item.get("url") or ""),
+                source_url=urljoin(
+                    base,
+                    str(item.get("canonicalUrl") or item.get("url") or "")
+                    or (
+                        f"/{owner_handle}/skills/{slug}"
+                        if owner_handle
+                        else f"/{slug}"
+                    ),
+                ),
                 author=owner_display or owner_handle,
                 icon_url=owner_image,
             ),
@@ -1970,6 +2203,11 @@ PROVIDERS: list[tuple[InstallOrigin, _ProviderMatcher, _ProviderFetcher]] = [
     ("skills-sh", _extract_skills_sh_spec, _fetch_bundle_from_skills_sh_url),
     ("github", _extract_github_spec, _fetch_bundle_from_github_url),
     ("lobehub", _extract_lobehub_identifier, _fetch_bundle_from_lobehub_url),
+    (
+        "qwenpaw",
+        _extract_qwenpaw_skill_spec,
+        _fetch_bundle_from_qwenpaw_url,
+    ),
     (
         "modelscope",
         _extract_modelscope_skill_spec,

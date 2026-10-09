@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import asyncio
 import html
-import importlib
 import inspect
 import io
 import logging
@@ -17,6 +16,7 @@ import os
 import re
 import time
 import urllib.parse
+from collections import OrderedDict
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
@@ -50,6 +50,7 @@ from nio import (
     ToDeviceError,
     UploadResponse,
 )
+from nio.crypto import ENCRYPTION_ENABLED
 from nio.event_builders.direct_messages import ToDeviceMessage
 from nio.events.to_device import RoomKeyRequest, RoomKeyRequestCancellation
 from nio.responses import (
@@ -59,7 +60,7 @@ from nio.responses import (
     WhoamiResponse,
 )
 
-from agentscope_runtime.engine.schemas.agent_schemas import (
+from qwenpaw.schemas import (
     AudioContent,
     ContentType,
     FileContent,
@@ -68,8 +69,10 @@ from agentscope_runtime.engine.schemas.agent_schemas import (
     VideoContent,
 )
 
+from ....app.channels.renderer import ChannelDisplayConfig
 from ....app.channels.base import BaseChannel
 from ....app.channels.utils import file_url_to_local_path
+from ....app.channels.utils import data_url_filename, parse_data_url_async
 from ....constant import WORKING_DIR
 
 logger = logging.getLogger("qwenpaw.channels.matrix")
@@ -83,6 +86,25 @@ TYPING_SERVER_TIMEOUT_MS = 30000
 TYPING_RENEWAL_INTERVAL_S = 25
 TYPING_MAX_DURATION_S = 120
 DM_CACHE_TTL_MS = 30_000
+DM_ROOM_CACHE_MAX_ENTRIES = 1_000
+ROOM_HISTORY_MAX_ROOMS = 256
+VERIFICATION_STATE_MAX_ENTRIES = 1_024
+VERIFICATION_STATE_TTL_S = 60 * 60
+
+# nio's _send() retries transport errors but not unparseable HTTP
+# responses (e.g. 502 before Synapse is ready).  login()/whoami()
+# return LoginError/WhoamiError with status_code=None and start()
+# gives up.  These constants drive a retry loop covering that gap.
+_NON_RETRYABLE_AUTH_CODES = frozenset(
+    {
+        "M_FORBIDDEN",
+        "M_MISSING_TOKEN",
+        "M_UNKNOWN_TOKEN",
+        "M_USER_DEACTIVATED",
+    },
+)
+_LOGIN_RETRY_INITIAL_DELAY = 5.0
+_LOGIN_RETRY_MAX_DELAY = 60.0
 
 # Known QwenPaw slash commands — used to decide whether to strip
 # @mention prefix
@@ -158,35 +180,14 @@ CURRENT_MESSAGE_MARKER = "[Current message - respond to this]"
 DEFAULT_HISTORY_LIMIT = 50
 
 
-class QwenPawMatrixClient(AsyncClient):
-    """Keep query-token auth for homeservers/proxies that drop auth headers."""
+@dataclass(frozen=True)
+class _UploadedMedia:
+    """Metadata shared by the media upload and its room event."""
 
-    async def send(
-        self,
-        method: str,
-        path: str,
-        data: Any = None,
-        headers: Optional[Dict[str, str]] = None,
-        trace_context: Optional[Any] = None,
-        timeout: Optional[float] = None,
-    ) -> Any:
-        if self.access_token and "access_token=" not in path:
-            url = urllib.parse.urlparse(path)
-            query = urllib.parse.parse_qs(url.query)
-            query["access_token"] = [self.access_token]
-            path = urllib.parse.urlunparse(
-                url._replace(
-                    query=urllib.parse.urlencode(query, doseq=True),
-                ),
-            )
-        return await super().send(
-            method,
-            path,
-            data,
-            headers,
-            trace_context,
-            timeout,
-        )
+    uri: str
+    filename: str
+    mime_type: str
+    size: int
 
 
 @dataclass
@@ -209,6 +210,10 @@ class MatrixChannel(BaseChannel):
     channel = CHANNEL_KEY  # type: ignore[assignment]
     uses_manager_queue: bool = True
 
+    # Streaming constants — placeholder message + in-place edit
+    _STREAM_PLACEHOLDER = "..."
+    _STREAM_DELTA_MIN_INTERVAL_S: float = 1.0
+
     def __init__(
         self,
         process: Callable,
@@ -226,21 +231,22 @@ class MatrixChannel(BaseChannel):
         history_limit: int = DEFAULT_HISTORY_LIMIT,
         sync_timeout_ms: int = 30000,
         on_reply_sent: Optional[Callable] = None,
-        show_tool_details: bool = True,
-        filter_tool_messages: bool = False,
-        filter_thinking: bool = False,
+        display_config: ChannelDisplayConfig | None = None,
+        no_text_debounce: bool = True,
+        streaming_enabled: bool = False,
         workspace_dir: Path | None = None,
         access_control_dm: bool = False,
         access_control_group: bool = False,
         enabled: bool = True,
+        share_session_in_group: bool = True,
         **_kwargs: Any,
     ) -> None:
         super().__init__(
             process=process,
             on_reply_sent=on_reply_sent,
-            show_tool_details=show_tool_details,
-            filter_tool_messages=filter_tool_messages,
-            filter_thinking=filter_thinking,
+            display_config=display_config,
+            no_text_debounce=no_text_debounce,
+            streaming_enabled=streaming_enabled,
             access_control_dm=access_control_dm,
             access_control_group=access_control_group,
         )
@@ -253,6 +259,7 @@ class MatrixChannel(BaseChannel):
         self.device_id: str = device_id
         self.encryption: bool = encryption
         self.enabled: bool = enabled
+        self.share_session_in_group: bool = share_session_in_group
         # Channel-level mute
         self.dm_disabled: bool = dm_disabled
         self.group_disabled: bool = group_disabled
@@ -269,13 +276,27 @@ class MatrixChannel(BaseChannel):
         self._client: Optional[AsyncClient] = None
         self._user_id: Optional[str] = None
         self._sync_task: Optional[asyncio.Task] = None
+        self._stop_event: Optional[asyncio.Event] = None
         self._typing_tasks: Dict[str, asyncio.Task] = {}
-        self._room_histories: Dict[str, List[HistoryEntry]] = {}
-        self._dm_room_cache: Dict[str, Dict[str, Any]] = {}
+        self._room_histories: OrderedDict[
+            str,
+            List[HistoryEntry],
+        ] = OrderedDict()
+        self._dm_room_cache: OrderedDict[str, Dict[str, Any]] = OrderedDict()
         self._http_client: Optional[httpx.AsyncClient] = None
-        self._handled_verification_requests: set[str] = set()
-        self._verification_tx_peers: dict[str, tuple[str, str]] = {}
-        self._sent_verification_done: set[str] = set()
+        self._handled_verification_requests: OrderedDict[
+            str,
+            float,
+        ] = OrderedDict()
+        self._verification_tx_peers: OrderedDict[
+            str,
+            tuple[str, str],
+        ] = OrderedDict()
+        self._verification_tx_timestamps: OrderedDict[
+            str,
+            float,
+        ] = OrderedDict()
+        self._sent_verification_done: OrderedDict[str, float] = OrderedDict()
 
     # ------------------------------------------------------------------
     # Debounce key — serialize by room_id (avoid concurrent session access)
@@ -300,9 +321,8 @@ class MatrixChannel(BaseChannel):
         process: Callable,
         config: Any,
         on_reply_sent: Optional[Callable] = None,
-        show_tool_details: bool = True,
-        filter_tool_messages: bool = False,
-        filter_thinking: bool = False,
+        display_config: ChannelDisplayConfig | None = None,
+        no_text_debounce: bool = True,
         workspace_dir: Path | None = None,
     ) -> "MatrixChannel":
         # Support pydantic model, dict, or SimpleNamespace
@@ -330,17 +350,17 @@ class MatrixChannel(BaseChannel):
             history_limit=raw.get("history_limit", DEFAULT_HISTORY_LIMIT),
             sync_timeout_ms=raw.get("sync_timeout_ms", 30000),
             on_reply_sent=on_reply_sent,
-            show_tool_details=show_tool_details,
-            filter_tool_messages=(
-                filter_tool_messages or raw.get("filter_tool_messages", False)
-            ),
-            filter_thinking=(
-                filter_thinking or raw.get("filter_thinking", False)
-            ),
+            display_config=display_config
+            or ChannelDisplayConfig.from_config(raw),
+            no_text_debounce=no_text_debounce,
+            streaming_enabled=raw.get("streaming_enabled", False),
             workspace_dir=workspace_dir,
             access_control_dm=bool(raw.get("access_control_dm", False)),
             access_control_group=bool(raw.get("access_control_group", False)),
             enabled=raw.get("enabled", True),
+            share_session_in_group=bool(
+                raw.get("share_session_in_group", True),
+            ),
         )
 
     @classmethod
@@ -436,20 +456,23 @@ class MatrixChannel(BaseChannel):
         )
 
     def _preflight_e2ee_dependencies(self) -> None:
-        """Probe olm before creating AsyncClientConfig;
-        disable E2EE if absent."""
+        """Disable E2EE when matrix-nio has no crypto backend.
+
+        Checks ``nio.crypto.ENCRYPTION_ENABLED`` — the same flag
+        ``AsyncClientConfig`` validates — instead of probing backend
+        module names, which are version-dependent (#6476).
+        """
         if not self.encryption:
             return
-        try:
-            importlib.import_module("olm")
-        except ImportError:
-            logger.error(
-                "MatrixChannel: olm not installed — falling back to "
-                "non-encrypted mode. "
-                "To enable E2EE: pip install matrix-nio[e2e] && "
-                "apt/dnf install libolm-dev",
-            )
-            self.encryption = False
+        if ENCRYPTION_ENABLED:
+            return
+        logger.error(
+            "MatrixChannel: matrix-nio has no E2EE backend available "
+            "— falling back to non-encrypted mode. To enable E2EE: "
+            "pip install 'matrix-nio[e2e]' (matrix-nio >= 0.26 on "
+            "Python 3.12+).",
+        )
+        self.encryption = False
 
     def _init_async_client(self, resolved_device_id: str) -> None:
         # E2EE: when encryption is enabled, provide store_path so matrix-nio
@@ -463,7 +486,7 @@ class MatrixChannel(BaseChannel):
         client_config = self._build_client_config(
             encryption=self.encryption,
         )
-        self._client = QwenPawMatrixClient(
+        self._client = AsyncClient(
             self.homeserver,
             # Keep user neutral before auth; token/whoami or login response
             # will set the canonical MXID.
@@ -582,6 +605,42 @@ class MatrixChannel(BaseChannel):
                     "device_id; E2EE store may not be reusable",
                 )
 
+    def _is_stopping(self) -> bool:
+        """Return True if stop() has been requested."""
+        return self._stop_event is not None and self._stop_event.is_set()
+
+    def _is_retryable_auth_failure(self, response: Any) -> bool:
+        """Return True if a login/whoami error may recover on retry.
+
+        Checks both the Matrix errcode (``status_code``) and the
+        underlying HTTP status -- only 5xx / 408 / 429 are retried.
+        """
+        code = getattr(response, "status_code", None)
+        if code in _NON_RETRYABLE_AUTH_CODES:
+            return False
+        http_status = getattr(
+            getattr(response, "transport_response", None),
+            "status",
+            None,
+        )
+        if http_status is None:
+            return True
+        return http_status >= 500 or http_status in (408, 429)
+
+    async def _wait_backoff_or_stop(self, delay: float) -> bool:
+        """Sleep for delay; return True if stop() was called."""
+        if self._stop_event is None:
+            await asyncio.sleep(delay)
+            return False
+        try:
+            await asyncio.wait_for(
+                self._stop_event.wait(),
+                timeout=delay,
+            )
+            return True
+        except asyncio.TimeoutError:
+            return False
+
     async def _login_with_password(
         self,
         login_user: str,
@@ -596,58 +655,104 @@ class MatrixChannel(BaseChannel):
             login_kwargs,
             resolved_device_id,
         )
-        resp, last_exc = await self._try_password_login_variants(attempts)
-        if last_exc is not None:
-            raise last_exc
-        if isinstance(resp, LoginResponse):
-            self._handle_password_login_success(resp)
-            return True
-        logger.error("MatrixChannel: password login failed: %s", resp)
-        return False
+        delay = _LOGIN_RETRY_INITIAL_DELAY
+        while True:
+            if self._is_stopping():
+                return False
+            resp, last_exc = await self._try_password_login_variants(
+                attempts,
+            )
+            if last_exc is not None:
+                raise last_exc
+            if isinstance(resp, LoginResponse):
+                if self._is_stopping():
+                    return False
+                self._handle_password_login_success(resp)
+                return True
+            if not self._is_retryable_auth_failure(resp):
+                logger.error(
+                    "MatrixChannel: password login rejected: %s",
+                    resp,
+                )
+                return False
+            logger.warning(
+                "MatrixChannel: password login temporarily "
+                "failed, retrying in %.1fs: %s",
+                delay,
+                resp,
+            )
+            if await self._wait_backoff_or_stop(delay):
+                return False
+            delay = min(delay * 2, _LOGIN_RETRY_MAX_DELAY)
 
     async def _login_with_access_token(self) -> bool:
         self._client.access_token = self.access_token
-        whoami = await self._client.whoami()
-        if isinstance(whoami, WhoamiResponse):
-            if self.matrix_user_id and self.matrix_user_id != whoami.user_id:
+        delay = _LOGIN_RETRY_INITIAL_DELAY
+        while True:
+            if self._is_stopping():
+                return False
+            whoami = await self._client.whoami()
+            if isinstance(whoami, WhoamiResponse):
+                if self._is_stopping():
+                    return False
+                return self._handle_token_login_success(whoami)
+            if not self._is_retryable_auth_failure(whoami):
                 logger.error(
-                    "MatrixChannel: configured user_id=%s does not match "
-                    "access_token owner=%s; refusing stale credentials",
-                    self.matrix_user_id,
-                    whoami.user_id,
+                    "MatrixChannel: token login rejected: %s",
+                    whoami,
                 )
                 return False
-            self._user_id = whoami.user_id
-            self._client.user_id = whoami.user_id
-            self._client.user = whoami.user_id
-            # E2EE requires device_id to associate Olm keys with this
-            # device
-            if whoami.device_id:
-                self._client.device_id = whoami.device_id
-            logger.info(
-                "MatrixChannel: logged in as %s (token, device=%s)",
-                self._user_id,
-                whoami.device_id,
+            logger.warning(
+                "MatrixChannel: token login temporarily failed, "
+                "retrying in %.1fs: %s",
+                delay,
+                whoami,
             )
-            self._save_auth_state()
-            # Load crypto store after user_id and device_id are set
-            if self.encryption and self._client.store_path:
-                if self._client.device_id:
-                    self._client.load_store()
-                    logger.info(
-                        "MatrixChannel: crypto store loaded from %s",
-                        self._client.store_path,
-                    )
-                else:
-                    logger.error(
-                        "MatrixChannel: E2EE enabled but whoami returned "
-                        "no device_id — encryption disabled "
-                        "(token may lack device scope)",
-                    )
-                    self.encryption = False
-            return True
-        logger.error("MatrixChannel: token login failed: %s", whoami)
-        return False
+            if await self._wait_backoff_or_stop(delay):
+                return False
+            delay = min(delay * 2, _LOGIN_RETRY_MAX_DELAY)
+
+    def _handle_token_login_success(
+        self,
+        whoami: WhoamiResponse,
+    ) -> bool:
+        if self.matrix_user_id and self.matrix_user_id != whoami.user_id:
+            logger.error(
+                "MatrixChannel: configured user_id=%s does not match "
+                "access_token owner=%s; refusing stale credentials",
+                self.matrix_user_id,
+                whoami.user_id,
+            )
+            return False
+        self._user_id = whoami.user_id
+        self._client.user_id = whoami.user_id
+        self._client.user = whoami.user_id
+        # E2EE requires device_id to associate Olm keys with this
+        # device
+        if whoami.device_id:
+            self._client.device_id = whoami.device_id
+        logger.info(
+            "MatrixChannel: logged in as %s (token, device=%s)",
+            self._user_id,
+            whoami.device_id,
+        )
+        self._save_auth_state()
+        # Load crypto store after user_id and device_id are set
+        if self.encryption and self._client.store_path:
+            if self._client.device_id:
+                self._client.load_store()
+                logger.info(
+                    "MatrixChannel: crypto store loaded from %s",
+                    self._client.store_path,
+                )
+            else:
+                logger.error(
+                    "MatrixChannel: E2EE enabled but whoami returned "
+                    "no device_id — encryption disabled "
+                    "(token may lack device scope)",
+                )
+                self.encryption = False
+        return True
 
     def _register_plain_room_callbacks(self) -> None:
         self._client.add_event_callback(
@@ -721,6 +826,7 @@ class MatrixChannel(BaseChannel):
                 "MatrixChannel: homeserver not configured, skipping",
             )
             return
+        self._stop_event = asyncio.Event()
         self._preflight_e2ee_dependencies()
         login_user = (self.matrix_user_id or "").strip()
         has_password_creds = bool(login_user and self.password)
@@ -761,6 +867,8 @@ class MatrixChannel(BaseChannel):
         logger.info("MatrixChannel: sync loop started")
 
     async def stop(self) -> None:
+        if self._stop_event:
+            self._stop_event.set()
         if self._sync_task:
             self._sync_task.cancel()
             try:
@@ -772,6 +880,12 @@ class MatrixChannel(BaseChannel):
             self._http_client = None
         if self._client:
             await self._client.close()
+        self._room_histories.clear()
+        self._dm_room_cache.clear()
+        self._handled_verification_requests.clear()
+        self._verification_tx_peers.clear()
+        self._verification_tx_timestamps.clear()
+        self._sent_verification_done.clear()
         logger.info("MatrixChannel: stopped")
 
     # ------------------------------------------------------------------
@@ -991,6 +1105,7 @@ class MatrixChannel(BaseChannel):
                         event.sender,
                         getattr(event, "reason", ""),
                     )
+                self._clear_verification_transaction(event.transaction_id)
             else:
                 logger.info(
                     "MatrixChannel: unhandled verification event type=%s "
@@ -1080,6 +1195,7 @@ class MatrixChannel(BaseChannel):
         methods = content.get("methods", []) or []
 
         request_key = f"{sender}|{from_device}|{transaction_id}"
+        self._prune_verification_state()
         if request_key in self._handled_verification_requests:
             logger.debug(
                 "MatrixChannel: verification request already handled "
@@ -1089,7 +1205,7 @@ class MatrixChannel(BaseChannel):
                 transaction_id,
             )
             return
-        self._handled_verification_requests.add(request_key)
+        self._remember_verification_request(request_key)
 
         if not sender or not from_device:
             logger.warning(
@@ -1101,7 +1217,11 @@ class MatrixChannel(BaseChannel):
             )
             return
 
-        self._verification_tx_peers[transaction_id] = (sender, from_device)
+        self._remember_verification_peer(
+            transaction_id,
+            sender,
+            from_device,
+        )
 
         our_device = getattr(self._client, "device_id", "") or ""
         if not our_device:
@@ -1183,7 +1303,9 @@ class MatrixChannel(BaseChannel):
         """Accept Element's SAS start, querying device keys if needed."""
         if not self._client or not self._client.olm:
             return
-        self._verification_tx_peers[event.transaction_id] = (
+        self._prune_verification_state()
+        self._remember_verification_peer(
+            event.transaction_id,
             event.sender,
             event.from_device,
         )
@@ -1279,7 +1401,8 @@ class MatrixChannel(BaseChannel):
             )
             return
 
-        self._sent_verification_done.add(transaction_id)
+        self._remember_sent_verification_done(transaction_id)
+        self._clear_verification_transaction(transaction_id)
         logger.info(
             "MatrixChannel: sent verification done "
             "(tx=%s, sender=%s, device=%s)",
@@ -1287,6 +1410,62 @@ class MatrixChannel(BaseChannel):
             sender,
             device_id,
         )
+
+    def _prune_verification_state(self) -> None:
+        """Expire old verification dedupe state and enforce hard caps."""
+        cutoff = time.monotonic() - VERIFICATION_STATE_TTL_S
+        for store in (
+            self._handled_verification_requests,
+            self._sent_verification_done,
+        ):
+            while store:
+                key, timestamp = next(iter(store.items()))
+                if (
+                    timestamp >= cutoff
+                    and len(store) <= VERIFICATION_STATE_MAX_ENTRIES
+                ):
+                    break
+                store.pop(key)
+
+        while self._verification_tx_timestamps:
+            transaction_id, timestamp = next(
+                iter(self._verification_tx_timestamps.items()),
+            )
+            if (
+                timestamp >= cutoff
+                and len(self._verification_tx_timestamps)
+                <= VERIFICATION_STATE_MAX_ENTRIES
+            ):
+                break
+            self._verification_tx_timestamps.pop(transaction_id)
+            self._verification_tx_peers.pop(transaction_id, None)
+
+    def _remember_verification_request(self, request_key: str) -> None:
+        self._handled_verification_requests[request_key] = time.monotonic()
+        self._handled_verification_requests.move_to_end(request_key)
+        self._prune_verification_state()
+
+    def _remember_sent_verification_done(self, transaction_id: str) -> None:
+        self._sent_verification_done[transaction_id] = time.monotonic()
+        self._sent_verification_done.move_to_end(transaction_id)
+        self._prune_verification_state()
+
+    def _remember_verification_peer(
+        self,
+        transaction_id: str,
+        sender: str,
+        device_id: str,
+    ) -> None:
+        self._verification_tx_peers[transaction_id] = (sender, device_id)
+        self._verification_tx_peers.move_to_end(transaction_id)
+        self._verification_tx_timestamps[transaction_id] = time.monotonic()
+        self._verification_tx_timestamps.move_to_end(transaction_id)
+        self._prune_verification_state()
+
+    def _clear_verification_transaction(self, transaction_id: str) -> None:
+        """Release peer metadata after a cancelled or completed transaction."""
+        self._verification_tx_peers.pop(transaction_id, None)
+        self._verification_tx_timestamps.pop(transaction_id, None)
 
     async def _recover_key_verification_start(
         self,
@@ -1730,15 +1909,19 @@ class MatrixChannel(BaseChannel):
         if limit <= 0:
             return
         history = self._room_histories.setdefault(room_id, [])
+        self._room_histories.move_to_end(room_id)
         history.append(entry)
         while len(history) > limit:
             history.pop(0)
+        while len(self._room_histories) > ROOM_HISTORY_MAX_ROOMS:
+            self._room_histories.popitem(last=False)
 
     def _build_history_prefix(self, room_id: str) -> str:
         """Format buffered history entries as a multi-line text block."""
         entries = self._room_histories.get(room_id, [])
         if not entries:
             return ""
+        self._room_histories.move_to_end(room_id)
         lines: list[str] = []
         for e in entries:
             line = f"{e.sender}: {e.body}"
@@ -1908,26 +2091,31 @@ class MatrixChannel(BaseChannel):
         """Download mxc:// to a local file; return path or None."""
         if not mxc_url.startswith("mxc://"):
             return None
-        try:
-            rest = mxc_url[6:]  # strip "mxc://"
-            server, media_id = rest.split("/", 1)
-            url = (
-                f"{self.homeserver}/_matrix/media/v3/download"
-                f"/{server}/{media_id}"
+        if not self._client:
+            logger.warning(
+                "MatrixChannel: _download_mxc called without client",
             )
-            headers = {"Authorization": f"Bearer {self.access_token}"}
-            if not self._http_client:
-                logger.warning("MatrixChannel: HTTP client not initialized")
+            return None
+        try:
+            resp = await self._client.download(mxc=mxc_url)
+            from nio.responses import DownloadError
+
+            if isinstance(resp, DownloadError):
+                logger.warning(
+                    "MatrixChannel: failed to download mxc %s: %s %s",
+                    mxc_url,
+                    type(resp).__name__,
+                    getattr(resp, "message", ""),
+                )
                 return None
-            resp = await self._http_client.get(url, headers=headers)
-            resp.raise_for_status()
+
             dest = self._media_dir() / filename
-            dest.write_bytes(resp.content)
+            dest.write_bytes(resp.body)
             logger.debug("MatrixChannel: downloaded %s → %s", mxc_url, dest)
             return str(dest)
         except Exception as exc:
-            logger.warning(
-                "MatrixChannel: failed to download %s: %s",
+            logger.exception(
+                "MatrixChannel: unexpected error downloading %s: %s",
                 mxc_url,
                 exc,
             )
@@ -1949,29 +2137,23 @@ class MatrixChannel(BaseChannel):
         if not mxc_url.startswith("mxc://") or not self._client:
             return None
         try:
-            rest = mxc_url[6:]
-            server, media_id = rest.split("/", 1)
-            url = (
-                f"{self.homeserver}/_matrix/media/v3/download"
-                f"/{server}/{media_id}"
-            )
-            headers = {"Authorization": f"Bearer {self.access_token}"}
-            if not self._http_client:
-                logger.warning("MatrixChannel: HTTP client not initialized")
+            resp = await self._client.download(mxc=mxc_url)
+            from nio.responses import DownloadError
+
+            if isinstance(resp, DownloadError):
+                logger.warning(
+                    "MatrixChannel: failed to download encrypted %s: %s %s",
+                    mxc_url,
+                    type(resp).__name__,
+                    getattr(resp, "message", ""),
+                )
                 return None
-            resp = await self._http_client.get(url, headers=headers)
-            resp.raise_for_status()
 
             from nio.crypto.attachments import decrypt_attachment
 
             jwk_key = key.get("k", "")
             sha256_hash = hashes.get("sha256", "")
-            plaintext = decrypt_attachment(
-                resp.content,
-                jwk_key,
-                sha256_hash,
-                iv,
-            )
+            plaintext = decrypt_attachment(resp.body, jwk_key, sha256_hash, iv)
 
             dest = self._media_dir() / filename
             dest.write_bytes(plaintext)
@@ -1982,7 +2164,7 @@ class MatrixChannel(BaseChannel):
             )
             return str(dest)
         except Exception as exc:
-            logger.warning(
+            logger.exception(
                 "MatrixChannel: failed to download encrypted %s: %s",
                 mxc_url,
                 exc,
@@ -2184,6 +2366,7 @@ class MatrixChannel(BaseChannel):
                 "worker_name": worker_name,
                 "event_id": event.event_id,
                 "sender_id": sender_id,
+                "user_name": self._get_display_name(room, sender_id),
             },
         }
 
@@ -2198,11 +2381,38 @@ class MatrixChannel(BaseChannel):
     # send_media outbound path (same role as worker _upload_file).
     # ------------------------------------------------------------------
 
-    async def _upload_file(self, file_ref: str) -> Optional[str]:
-        """Upload a local file to Matrix; return mxc:// URI or None."""
+    async def _upload_file(
+        self,
+        file_ref: str,
+        filename_hint: Optional[str] = None,
+    ) -> Optional[_UploadedMedia]:
+        """Upload media and return the URI and metadata for its room event."""
         if not self._client:
             return None
         try:
+            data_media = await parse_data_url_async(file_ref)
+            if data_media is not None:
+                data = data_media.data
+                mime_type = data_media.media_type
+                filename = data_url_filename(filename_hint, data_media.suffix)
+                resp, _ = await self._client.upload(
+                    io.BytesIO(data),
+                    content_type=mime_type,
+                    filename=filename,
+                    filesize=len(data),
+                )
+                if isinstance(resp, UploadResponse):
+                    return _UploadedMedia(
+                        uri=resp.content_uri,
+                        filename=filename,
+                        mime_type=mime_type,
+                        size=len(data),
+                    )
+                logger.warning(
+                    f"MatrixChannel: data URL upload failed: {resp}",
+                )
+                return None
+
             # file_ref may be a file:// URI or a plain path
             path = Path(file_url_to_local_path(file_ref) or file_ref)
             if not path.exists():
@@ -2226,7 +2436,12 @@ class MatrixChannel(BaseChannel):
                     path.name,
                     resp.content_uri,
                 )
-                return resp.content_uri
+                return _UploadedMedia(
+                    uri=resp.content_uri,
+                    filename=path.name,
+                    mime_type=mime_type,
+                    size=len(data),
+                )
             logger.warning("MatrixChannel: upload failed: %s", resp)
             return None
         except Exception as exc:
@@ -2264,6 +2479,18 @@ class MatrixChannel(BaseChannel):
         except Exception:
             return False
 
+    def _prune_dm_room_cache(self, now_ms: int) -> None:
+        """Evict expired or least-recently-used room membership entries."""
+        cutoff = now_ms - DM_CACHE_TTL_MS
+        while self._dm_room_cache:
+            room_id, cached = next(iter(self._dm_room_cache.items()))
+            if (
+                cached["ts"] >= cutoff
+                and len(self._dm_room_cache) <= DM_ROOM_CACHE_MAX_ENTRIES
+            ):
+                break
+            self._dm_room_cache.pop(room_id)
+
     async def _is_dm_room(
         self,
         room_id: str,
@@ -2290,6 +2517,7 @@ class MatrixChannel(BaseChannel):
         # Check cache
         cached = self._dm_room_cache.get(room_id)
         if cached and (now - cached["ts"]) < DM_CACHE_TTL_MS:
+            self._dm_room_cache.move_to_end(room_id)
             members = cached["members"]
             is_dm = (
                 len(members) == 2
@@ -2310,7 +2538,12 @@ class MatrixChannel(BaseChannel):
             if isinstance(resp, JoinedMembersResponse):
                 members = [m.user_id for m in resp.members]
                 # Update cache
-                self._dm_room_cache[room_id] = {"members": members, "ts": now}
+                self._dm_room_cache[room_id] = {
+                    "members": members,
+                    "ts": now,
+                }
+                self._dm_room_cache.move_to_end(room_id)
+                self._prune_dm_room_cache(now)
 
                 is_dm = (
                     len(members) == 2
@@ -2483,6 +2716,7 @@ class MatrixChannel(BaseChannel):
                 "worker_name": worker_name,
                 "event_id": event.event_id,
                 "sender_id": sender_id,
+                "user_name": self._get_display_name(room, sender_id),
             },
         }
 
@@ -2643,6 +2877,7 @@ class MatrixChannel(BaseChannel):
                 "worker_name": worker_name,
                 "event_id": event.event_id,
                 "sender_id": sender_id,
+                "user_name": self._get_display_name(room, sender_id),
             },
         }
 
@@ -2810,13 +3045,13 @@ class MatrixChannel(BaseChannel):
         if not content:
             content = [TextContent(type=ContentType.TEXT, text="")]
 
-        # Use room_id as the AgentRequest user_id so that all participants
-        # in the same room share one session (QwenPaw keys session state on
-        # both session_id AND user_id).  The real sender is preserved in
-        # meta["sender_id"] for reply mentions.
         req = self.build_agent_request_from_user_content(
             channel_id=CHANNEL_KEY,
-            sender_id=room_id,
+            sender_id=(
+                sender_id
+                if meta.get("is_group") and not self.share_session_in_group
+                else room_id
+            ),
             session_id=session_id,
             content_parts=content,
             channel_meta=meta,
@@ -2843,7 +3078,14 @@ class MatrixChannel(BaseChannel):
 
     def get_to_handle_from_request(self, request: Any) -> str:
         meta = getattr(request, "channel_meta", {}) or {}
-        return meta.get("room_id", getattr(request, "user_id", ""))
+        room_id = meta.get("room_id")
+        if room_id:
+            return room_id
+        # Recover the room from session_id when metadata is unavailable.
+        session_id = getattr(request, "session_id", "") or ""
+        if session_id.startswith("matrix:"):
+            return session_id[len("matrix:") :]
+        return getattr(request, "user_id", "")
 
     # ------------------------------------------------------------------
     # Mention helper — MSC3952 m.mentions from body text scan
@@ -2996,19 +3238,142 @@ class MatrixChannel(BaseChannel):
             )
 
     # ------------------------------------------------------------------
-    # Outgoing send — text
-    # Markdown→HTML (formatted_body); m.mentions when meta has sender_id.
+    # Streaming — placeholder message + in-place edit (MSC2676 m.replace)
     # ------------------------------------------------------------------
 
-    async def send(
+    def _get_stream_state(
+        self,
+        send_meta: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        """Per-request streaming state stored in *send_meta*."""
+        state = send_meta.get("_matrix_stream")
+        if state is None:
+            state = {"event_ids": {}}
+            send_meta["_matrix_stream"] = state
+        return state
+
+    async def _edit_stream_message(
+        self,
+        room_id: str,
+        event_id: str,
+        text: str,
+    ) -> bool:
+        """Edit a previously sent message using MSC2676 ``m.replace``."""
+        if not self._client:
+            return False
+        html_body = _md_to_html(text)
+        content: dict[str, Any] = {
+            "msgtype": "m.text",
+            "body": f"* {text}",
+            "format": "org.matrix.custom.html",
+            "formatted_body": f"* {html_body}",
+            "m.new_content": {
+                "msgtype": "m.text",
+                "body": text,
+                "format": "org.matrix.custom.html",
+                "formatted_body": html_body,
+            },
+            "m.relates_to": {
+                "rel_type": "m.replace",
+                "event_id": event_id,
+            },
+        }
+        try:
+            await self._prepare_room_send(room_id)
+            await self._client.room_send(
+                room_id,
+                "m.room.message",
+                content,
+                ignore_unverified_devices=True,
+            )
+            return True
+        except Exception:
+            logger.debug(
+                "MatrixChannel: stream edit failed for %s in %s",
+                event_id,
+                room_id,
+                exc_info=True,
+            )
+            return False
+
+    async def on_streaming_start(
+        self,
+        request: Any,
+        to_handle: str,
+        event: Any,
+        send_meta: Dict[str, Any],
+        stream_type: str,
+        accumulated_text: str = "",
+    ) -> None:
+        state = self._get_stream_state(send_meta)
+        event_id = await self._send_message(
+            to_handle,
+            self._STREAM_PLACEHOLDER,
+            send_meta,
+        )
+        if event_id:
+            state["event_ids"][stream_type] = event_id
+
+    async def on_streaming_delta(
+        self,
+        request: Any,
+        to_handle: str,
+        event: Any,
+        send_meta: Dict[str, Any],
+        stream_type: str,
+        accumulated_text: str = "",
+    ) -> None:
+        state = send_meta.get("_matrix_stream")
+        if not state:
+            return
+        event_id = state["event_ids"].get(stream_type)
+        if not event_id:
+            return
+        room_id = send_meta.get("room_id") or to_handle
+        await self._edit_stream_message(room_id, event_id, accumulated_text)
+
+    async def on_streaming_end(
+        self,
+        request: Any,
+        to_handle: str,
+        event: Any,
+        send_meta: Dict[str, Any],
+        stream_type: str,
+        accumulated_text: str = "",
+    ) -> None:
+        state = send_meta.get("_matrix_stream")
+        event_id = state["event_ids"].pop(stream_type, None) if state else None
+        room_id = send_meta.get("room_id") or to_handle
+
+        if not event_id or not accumulated_text:
+            if accumulated_text:
+                await self.send(to_handle, accumulated_text, send_meta)
+            return
+
+        success = await self._edit_stream_message(
+            room_id,
+            event_id,
+            accumulated_text,
+        )
+        if not success:
+            await self.send(to_handle, accumulated_text, send_meta)
+
+    # ------------------------------------------------------------------
+    # Outgoing send — text
+    # Markdown→HTML (formatted_body); m.mentions when meta has sender_id.
+    # Returns the event_id of the sent message, or None on failure.
+    # ------------------------------------------------------------------
+
+    async def _send_message(
         self,
         to_handle: str,
         text: str,
         meta: Optional[Dict[str, Any]] = None,
-    ) -> None:
+    ) -> Optional[str]:
+        """Internal send that returns the Matrix event_id (or None)."""
         if not self._client:
             logger.error("MatrixChannel: send called but client not ready")
-            return
+            return None
 
         room_id = (meta or {}).get("room_id") or to_handle
 
@@ -3021,7 +3386,7 @@ class MatrixChannel(BaseChannel):
                 room_id,
             )
             await self._send_typing(room_id, False)
-            return
+            return None
 
         html_body = _md_to_html(text)
         content: dict[str, Any] = {
@@ -3045,20 +3410,30 @@ class MatrixChannel(BaseChannel):
 
         try:
             await self._prepare_room_send(room_id)
-            await self._client.room_send(
+            resp = await self._client.room_send(
                 room_id,
                 "m.room.message",
                 content,
                 ignore_unverified_devices=True,
             )
+            return getattr(resp, "event_id", None)
         except Exception as exc:
             logger.exception(
                 "MatrixChannel: send failed to %s: %s",
                 room_id,
                 exc,
             )
+            return None
         finally:
             await self._send_typing(room_id, False)
+
+    async def send(
+        self,
+        to_handle: str,
+        text: str,
+        meta: Optional[Dict[str, Any]] = None,
+    ) -> None:
+        await self._send_message(to_handle, text, meta)
 
     # ------------------------------------------------------------------
     # Outgoing send — media
@@ -3101,8 +3476,11 @@ class MatrixChannel(BaseChannel):
             return
 
         # Upload to Matrix media repository
-        mxc_uri = await self._upload_file(file_ref)
-        if not mxc_uri:
+        uploaded = await self._upload_file(
+            file_ref,
+            filename_hint=getattr(part, "filename", None),
+        )
+        if not uploaded:
             logger.warning(
                 "MatrixChannel: send_media upload failed for %s",
                 file_ref,
@@ -3111,22 +3489,13 @@ class MatrixChannel(BaseChannel):
 
         # Build and send the Matrix room event
         try:
-            path_str = file_url_to_local_path(file_ref) or file_ref
-            filename = os.path.basename(path_str) or "file"
-            mime_type, _ = mimetypes.guess_type(path_str)
-            mime_type = mime_type or "application/octet-stream"
-            try:
-                file_size = os.path.getsize(path_str)
-            except OSError:
-                file_size = 0
-
             event_content: dict[str, Any] = {
                 "msgtype": matrix_msgtype,
-                "body": filename,
-                "url": mxc_uri,
+                "body": uploaded.filename,
+                "url": uploaded.uri,
                 "info": {
-                    "mimetype": mime_type,
-                    "size": file_size,
+                    "mimetype": uploaded.mime_type,
+                    "size": uploaded.size,
                 },
             }
             sender_id = (meta or {}).get("sender_id") or (meta or {}).get(
@@ -3145,7 +3514,7 @@ class MatrixChannel(BaseChannel):
             logger.debug(
                 "MatrixChannel: sent %s %s to %s",
                 matrix_msgtype,
-                filename,
+                uploaded.filename,
                 room_id,
             )
         except Exception as exc:

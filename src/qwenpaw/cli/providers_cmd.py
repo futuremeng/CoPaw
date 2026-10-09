@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 """CLI commands for managing LLM providers."""
+
 from __future__ import annotations
 
 import asyncio
@@ -8,7 +9,7 @@ from typing import Optional
 
 import click
 
-from agentscope_runtime.engine.schemas.exception import (
+from qwenpaw.exceptions import (
     AppBaseException,
 )
 
@@ -211,9 +212,14 @@ def configure_provider_api_key_interactive(
         )
         return provider_id
 
-    hint = (
-        f"prefix: {defn.api_key_prefix}" if defn.api_key_prefix else "optional"
+    prefixes = (
+        defn.api_key_prefixes
+        if defn.api_key_prefixes
+        else [defn.api_key_prefix]
+        if defn.api_key_prefix
+        else []
     )
+    hint = f"prefix: {', '.join(prefixes)}" if prefixes else "optional"
     api_key = click.prompt(
         f"API key ({hint})",
         default=current_key or "",
@@ -262,8 +268,7 @@ def _add_models_interactive(provider_id: str) -> None:
     if provider_id == "ollama":
         return
 
-    extra = list(defn.extra_models)
-    all_models = list(defn.models) + extra
+    all_models = defn.all_models()
 
     if all_models:
         click.echo(f"\nCurrent models for {defn.name}:")
@@ -332,8 +337,7 @@ def _select_llm_model(defn, pid, current_slot, *, use_defaults):
         else ""
     )
 
-    extra = list(defn.extra_models)
-    all_models = list(defn.models) + extra
+    all_models = defn.all_models()
 
     if use_defaults:
         return cur or (all_models[0].id if all_models else "")
@@ -513,16 +517,22 @@ def list_cmd() -> None:
                 f"  {'api_key':16s}: "
                 f"{_mask_api_key(cur_key) or '(not set)'}",
             )
-            if defn.api_key_prefix:
+            prefixes = (
+                defn.api_key_prefixes
+                if defn.api_key_prefixes
+                else [defn.api_key_prefix]
+                if defn.api_key_prefix
+                else []
+            )
+            if prefixes:
                 click.echo(
-                    f"  {'api_key_prefix':16s}: {defn.api_key_prefix}",
+                    f"  {'api_key_prefix':16s}: {', '.join(prefixes)}",
                 )
 
-            extra = list(defn.extra_models)
-            all_models = list(defn.models) + extra
+            all_models = defn.all_models()
             if all_models:
                 click.echo(f"  {'models':16s}:")
-                extra_ids = {m.id for m in extra}
+                extra_ids = {m.id for m in defn.extra_models}
                 for m in all_models:
                     label = " [user-added]" if m.id in extra_ids else ""
                     click.echo(f"    - {m.name} ({m.id}){label}")

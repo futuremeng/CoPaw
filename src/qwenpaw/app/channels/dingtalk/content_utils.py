@@ -5,11 +5,12 @@ from __future__ import annotations
 
 import base64
 import binascii
+import hashlib
 import re
 from typing import Any, Optional
 from urllib.parse import parse_qs, urlparse
 
-from agentscope_runtime.engine.schemas.agent_schemas import (
+from qwenpaw.schemas import (
     AudioContent,
     FileContent,
     ImageContent,
@@ -20,6 +21,7 @@ from ..base import ContentType
 
 from .constants import (
     DINGTALK_SESSION_ID_SUFFIX_LEN,
+    DINGTALK_SHARED_SESSION_HASH_LEN,
     DINGTALK_TYPE_MAPPING,
 )
 
@@ -124,6 +126,14 @@ def short_session_id_from_conversation_id(conversation_id: str) -> str:
     return (
         conversation_id[-n:] if len(conversation_id) >= n else conversation_id
     )
+
+
+def shared_group_session_id_from_conversation_id(
+    conversation_id: str,
+) -> str:
+    """Hash a group conversation ID into a short stable session ID."""
+    digest = hashlib.sha256(conversation_id.encode("utf-8")).hexdigest()
+    return digest[:DINGTALK_SHARED_SESSION_HASH_LEN]
 
 
 def session_param_from_webhook_url(url: str) -> Optional[str]:

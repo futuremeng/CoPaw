@@ -9,20 +9,29 @@ WebSocket operations
 Run:
     pytest tests/unit/channels/test_xiaoyi.py -v
 """
+
 # pylint: disable=redefined-outer-name,protected-access,unused-argument
 from __future__ import annotations
 
-import asyncio
 import json
 from unittest.mock import AsyncMock, MagicMock, Mock, patch
 
 import pytest
-import aiohttp
 
+from qwenpaw.exceptions import ChannelError
 
 # =============================================================================
 # Fixtures
 # =============================================================================
+
+
+@pytest.fixture(autouse=True)
+def isolated_default_media_dir(monkeypatch, tmp_path):
+    monkeypatch.setattr(
+        "qwenpaw.app.channels.xiaoyi.channel.DEFAULT_MEDIA_DIR",
+        tmp_path / "media",
+    )
+    monkeypatch.delenv("XIAOYI_MEDIA_DIR", raising=False)
 
 
 @pytest.fixture
@@ -40,24 +49,6 @@ def mock_process():
 
 
 @pytest.fixture
-def mock_ws():
-    """Create mock WebSocket connection."""
-    ws = MagicMock()
-    ws.send_json = AsyncMock()
-    ws.close = AsyncMock()
-    return ws
-
-
-@pytest.fixture
-def mock_session(mock_ws):
-    """Create mock aiohttp ClientSession with WebSocket."""
-    session = MagicMock()
-    session.ws_connect = AsyncMock(return_value=mock_ws)
-    session.close = AsyncMock()
-    return session
-
-
-@pytest.fixture
 def xiaoyi_channel(mock_process, tmp_path):
     """Create XiaoYiChannel instance for testing."""
     from qwenpaw.app.channels.xiaoyi.channel import XiaoYiChannel
@@ -68,7 +59,6 @@ def xiaoyi_channel(mock_process, tmp_path):
         ak="test_ak_123456",
         sk="test_sk_abcdef",
         agent_id="test_agent_123",
-        ws_url="wss://test.example.com/ws",
         task_timeout_ms=3600000,
         bot_prefix="[小艺] ",
         media_dir=str(tmp_path / "media"),
@@ -76,23 +66,11 @@ def xiaoyi_channel(mock_process, tmp_path):
     return channel
 
 
-@pytest.fixture
-def mock_auth_headers():
-    """Mock authentication headers."""
-    return {
-        "x-access-key": "test_ak_123456",
-        "x-sign": "mock_signature",
-        "x-ts": "1234567890",
-        "x-agent-id": "test_agent_123",
-    }
-
-
 # =============================================================================
 # P0: Initialization Tests
 # =============================================================================
 
 
-@pytest.mark.asyncio
 class TestXiaoYiChannelInit:
     """
     P0: XiaoYiChannel initialization tests.
@@ -108,7 +86,6 @@ class TestXiaoYiChannelInit:
             ak="test_ak",
             sk="test_sk",
             agent_id="test_agent",
-            ws_url="wss://test.example.com/ws",
             task_timeout_ms=5000,
             bot_prefix="[Test] ",
             media_dir=str(tmp_path / "media"),
@@ -118,7 +95,6 @@ class TestXiaoYiChannelInit:
         assert channel.ak == "test_ak"
         assert channel.sk == "test_sk"
         assert channel.agent_id == "test_agent"
-        assert channel.ws_url == "wss://test.example.com/ws"
         assert channel.task_timeout_ms == 5000
         assert channel.bot_prefix == "[Test] "
         assert channel._media_dir == tmp_path / "media"
@@ -137,15 +113,16 @@ class TestXiaoYiChannelInit:
             ak="test_ak",
             sk="test_sk",
             agent_id="test_agent",
-            ws_url="wss://test.example.com/ws",
         )
 
         assert hasattr(channel, "_session_task_map")
         assert isinstance(channel._session_task_map, dict)
-        assert channel._ws is None
-        assert channel._session is None
+        assert channel._conn_primary is None
+        assert channel._conn_backup is None
         assert channel._connected is False
         assert channel._reconnect_attempts == 0
+        assert hasattr(channel, "_session_server_map")
+        assert isinstance(channel._session_server_map, dict)
 
     def test_init_with_workspace_dir(self, mock_process, tmp_path):
         """Constructor uses workspace-specific media dir when provided."""
@@ -158,7 +135,6 @@ class TestXiaoYiChannelInit:
             ak="test_ak",
             sk="test_sk",
             agent_id="test_agent",
-            ws_url="wss://test.example.com/ws",
             workspace_dir=workspace,
         )
 
@@ -170,7 +146,6 @@ class TestXiaoYiChannelInit:
 # =============================================================================
 
 
-@pytest.mark.asyncio
 class TestXiaoYiChannelFactoryMethods:
     """
     P0: Factory method tests - from_env and from_config.
@@ -189,7 +164,6 @@ class TestXiaoYiChannelFactoryMethods:
         monkeypatch.setenv("XIAOYI_AK", "env_ak_value")
         monkeypatch.setenv("XIAOYI_SK", "env_sk_value")
         monkeypatch.setenv("XIAOYI_AGENT_ID", "env_agent_123")
-        monkeypatch.setenv("XIAOYI_WS_URL", "wss://env.example.com/ws")
         monkeypatch.setenv("XIAOYI_MEDIA_DIR", str(tmp_path / "media"))
 
         channel = XiaoYiChannel.from_env(process=mock_process)
@@ -198,7 +172,6 @@ class TestXiaoYiChannelFactoryMethods:
         assert channel.ak == "env_ak_value"
         assert channel.sk == "env_sk_value"
         assert channel.agent_id == "env_agent_123"
-        assert channel.ws_url == "wss://env.example.com/ws"
 
     def test_from_env_uses_defaults(self, monkeypatch, mock_process):
         """from_env uses default values when env vars are missing."""
@@ -208,7 +181,6 @@ class TestXiaoYiChannelFactoryMethods:
         monkeypatch.delenv("XIAOYI_AK", raising=False)
         monkeypatch.delenv("XIAOYI_SK", raising=False)
         monkeypatch.delenv("XIAOYI_AGENT_ID", raising=False)
-        monkeypatch.delenv("XIAOYI_WS_URL", raising=False)
 
         channel = XiaoYiChannel.from_env(process=mock_process)
 
@@ -216,9 +188,6 @@ class TestXiaoYiChannelFactoryMethods:
         assert channel.ak == ""
         assert channel.sk == ""
         assert channel.agent_id == ""
-        assert (
-            channel.ws_url == "wss://hag.cloud.huawei.com/openclaw/v1/ws/link"
-        )
 
     def test_from_config_with_object(self, mock_process, tmp_path):
         """from_config should use config object values."""
@@ -229,7 +198,6 @@ class TestXiaoYiChannelFactoryMethods:
         config.ak = "config_ak"
         config.sk = "config_sk"
         config.agent_id = "config_agent"
-        config.ws_url = "wss://config.example.com/ws"
         config.task_timeout_ms = 60000
         config.bot_prefix = "[Config] "
         config.media_dir = str(tmp_path / "media")
@@ -255,7 +223,6 @@ class TestXiaoYiChannelFactoryMethods:
             "ak": "dict_ak",
             "sk": "dict_sk",
             "agent_id": "dict_agent",
-            "ws_url": "wss://dict.example.com/ws",
             "task_timeout_ms": 30000,
             "bot_prefix": "[Dict] ",
         }
@@ -269,7 +236,6 @@ class TestXiaoYiChannelFactoryMethods:
         assert channel.ak == "dict_ak"
         assert channel.sk == "dict_sk"
         assert channel.agent_id == "dict_agent"
-        assert channel.ws_url == "wss://dict.example.com/ws"
 
 
 # =============================================================================
@@ -277,7 +243,6 @@ class TestXiaoYiChannelFactoryMethods:
 # =============================================================================
 
 
-@pytest.mark.asyncio
 class TestXiaoYiChannelValidation:
     """
     P0: Configuration validation tests.
@@ -293,7 +258,6 @@ class TestXiaoYiChannelValidation:
             ak="",
             sk="test_sk",
             agent_id="test_agent",
-            ws_url="wss://test.example.com/ws",
         )
 
         with pytest.raises(ValueError, match="AK"):
@@ -309,7 +273,6 @@ class TestXiaoYiChannelValidation:
             ak="test_ak",
             sk="",
             agent_id="test_agent",
-            ws_url="wss://test.example.com/ws",
         )
 
         with pytest.raises(ValueError, match="SK"):
@@ -325,7 +288,6 @@ class TestXiaoYiChannelValidation:
             ak="test_ak",
             sk="test_sk",
             agent_id="",
-            ws_url="wss://test.example.com/ws",
         )
 
         with pytest.raises(ValueError, match="Agent ID"):
@@ -337,7 +299,6 @@ class TestXiaoYiChannelValidation:
 # =============================================================================
 
 
-@pytest.mark.asyncio
 class TestXiaoYiChannelLifecycle:
     """
     P0/P1: Lifecycle tests for start/stop operations.
@@ -361,9 +322,11 @@ class TestXiaoYiChannelLifecycle:
                 "_wait_and_register_connection",
                 new_callable=AsyncMock,
             ):
-                with patch("aiohttp.ClientSession") as MockSession:
-                    mock_session = MockSession.return_value
-                    mock_session.ws_connect = AsyncMock()
+                with patch.object(
+                    xiaoyi_channel,
+                    "_start_connections",
+                    new_callable=AsyncMock,
+                ):
                     await xiaoyi_channel.start()
                     mock_validate.assert_called_once()
 
@@ -376,53 +339,52 @@ class TestXiaoYiChannelLifecycle:
 
         assert xiaoyi_channel._connected is False
 
-    async def test_stop_cleans_up_resources(self, xiaoyi_channel, mock_ws):
+    async def test_stop_cleans_up_resources(self, xiaoyi_channel):
         """stop() should clean up all resources."""
-        xiaoyi_channel._ws = mock_ws
-        xiaoyi_channel._session = MagicMock()
-        xiaoyi_channel._session.close = AsyncMock()
+        from qwenpaw.app.channels.xiaoyi.channel import XiaoYiConnection
+
+        mock_conn = MagicMock(spec=XiaoYiConnection)
+        mock_conn.disconnect = AsyncMock()
+        mock_conn.connected = True
+        xiaoyi_channel._conn_primary = mock_conn
+        xiaoyi_channel._conn_backup = None
         xiaoyi_channel._connected = True
-        xiaoyi_channel._heartbeat_task = None
-        xiaoyi_channel._receive_task = None
 
         await xiaoyi_channel.stop()
 
         assert xiaoyi_channel._connected is False
         assert xiaoyi_channel._stopping is True
-        mock_ws.close.assert_called_once()
+        mock_conn.disconnect.assert_called_once()
+        assert xiaoyi_channel._conn_primary is None
 
-    async def test_stop_handles_missing_ws(self, xiaoyi_channel):
-        """stop() should handle missing WebSocket gracefully."""
-        xiaoyi_channel._ws = None
-        xiaoyi_channel._session = None
+    async def test_stop_handles_no_connections(self, xiaoyi_channel):
+        """stop() should handle missing connections gracefully."""
+        xiaoyi_channel._conn_primary = None
+        xiaoyi_channel._conn_backup = None
         xiaoyi_channel._connected = True
 
         await xiaoyi_channel.stop()
 
         assert xiaoyi_channel._connected is False
 
-    async def test_stop_cancels_tasks(self, xiaoyi_channel, mock_ws):
-        """stop() should cancel running tasks."""
-        xiaoyi_channel._ws = mock_ws
-        xiaoyi_channel._session = MagicMock()
-        xiaoyi_channel._session.close = AsyncMock()
+    async def test_stop_disconnects_both_connections(self, xiaoyi_channel):
+        """stop() should disconnect both connections."""
+        from qwenpaw.app.channels.xiaoyi.channel import XiaoYiConnection
+
+        conn1 = MagicMock(spec=XiaoYiConnection)
+        conn1.disconnect = AsyncMock()
+        conn2 = MagicMock(spec=XiaoYiConnection)
+        conn2.disconnect = AsyncMock()
+        xiaoyi_channel._conn_primary = conn1
+        xiaoyi_channel._conn_backup = conn2
         xiaoyi_channel._connected = True
-        xiaoyi_channel._stopping = False
-
-        # Create a real cancelled task for proper await
-        async def dummy_task():
-            while True:
-                await asyncio.sleep(0.1)
-
-        task1 = asyncio.create_task(dummy_task())
-        task2 = asyncio.create_task(dummy_task())
-        xiaoyi_channel._heartbeat_task = task1
-        xiaoyi_channel._receive_task = task2
 
         await xiaoyi_channel.stop()
 
-        assert task1.cancelled() or task1.done()
-        assert task2.cancelled() or task2.done()
+        conn1.disconnect.assert_called_once()
+        conn2.disconnect.assert_called_once()
+        assert xiaoyi_channel._conn_primary is None
+        assert xiaoyi_channel._conn_backup is None
 
 
 # =============================================================================
@@ -430,90 +392,80 @@ class TestXiaoYiChannelLifecycle:
 # =============================================================================
 
 
-@pytest.mark.asyncio
 class TestXiaoYiChannelWebSocketConnection:
     """
-    P0: WebSocket connection tests.
+    P0: WebSocket connection tests (single connection + fallback).
     """
 
-    async def test_connect_establishes_websocket(
+    async def test_start_connections_primary_success(
         self,
         xiaoyi_channel,
-        mock_session,
-        mock_ws,
-        mock_auth_headers,
     ):
-        """_connect should establish WebSocket connection with auth headers."""
+        """_start_connections should connect both endpoints in parallel."""
         with patch(
-            "qwenpaw.app.channels.xiaoyi.channel.generate_auth_headers",
-            return_value=mock_auth_headers,
-        ):
-            with patch("aiohttp.ClientSession", return_value=mock_session):
-                await xiaoyi_channel._connect()
+            "qwenpaw.app.channels.xiaoyi.channel.XiaoYiConnection",
+        ) as MockConn:
+            mock_instance = MagicMock()
+            mock_instance.connect = AsyncMock(return_value=True)
+            mock_instance.disconnect = AsyncMock()
+            mock_instance.connected = True
+            MockConn.return_value = mock_instance
 
-        mock_session.ws_connect.assert_called_once()
+            await xiaoyi_channel._start_connections()
+
+        # Both primary and backup created
+        assert MockConn.call_count == 2
         assert xiaoyi_channel._connected is True
-        assert xiaoyi_channel._ws == mock_ws
 
-    async def test_connect_sends_init_message(
+    async def test_start_connections_fallback_to_backup(
         self,
         xiaoyi_channel,
-        mock_session,
-        mock_ws,
-        mock_auth_headers,
     ):
-        """_connect should send init message after connection."""
+        """_start_connections should succeed if at least one connects."""
+        call_count = 0
+
+        async def side_effect_connect():
+            nonlocal call_count
+            call_count += 1
+            return call_count != 1  # First fails, second succeeds
+
         with patch(
-            "qwenpaw.app.channels.xiaoyi.channel.generate_auth_headers",
-            return_value=mock_auth_headers,
-        ):
-            with patch("aiohttp.ClientSession", return_value=mock_session):
-                await xiaoyi_channel._connect()
+            "qwenpaw.app.channels.xiaoyi.channel.XiaoYiConnection",
+        ) as MockConn:
+            mock_instance = MagicMock()
+            mock_instance.connect = AsyncMock(side_effect=side_effect_connect)
+            mock_instance.disconnect = AsyncMock()
+            MockConn.return_value = mock_instance
 
-        mock_ws.send_json.assert_called_once()
-        call_args = mock_ws.send_json.call_args
-        sent_msg = call_args[0][0]
-        assert sent_msg["msgType"] == "clawd_bot_init"
-        assert sent_msg["agentId"] == xiaoyi_channel.agent_id
+            await xiaoyi_channel._start_connections()
 
-    async def test_connect_starts_heartbeat_and_receive(
+        assert MockConn.call_count == 2
+        assert xiaoyi_channel._connected is True
+
+    async def test_start_connections_no_backup(
         self,
         xiaoyi_channel,
-        mock_session,
-        mock_ws,
-        mock_auth_headers,
     ):
-        """_connect should start heartbeat and receive loops."""
-        with patch(
-            "qwenpaw.app.channels.xiaoyi.channel.generate_auth_headers",
-            return_value=mock_auth_headers,
+        """_start_connections with empty backup constant skips backup."""
+        with (
+            patch(
+                "qwenpaw.app.channels.xiaoyi.channel.DEFAULT_WS_URL_BACKUP",
+                "",
+            ),
+            patch(
+                "qwenpaw.app.channels.xiaoyi.channel.XiaoYiConnection",
+            ) as MockConn,
         ):
-            with patch("aiohttp.ClientSession", return_value=mock_session):
-                await xiaoyi_channel._connect()
+            mock_instance = MagicMock()
+            mock_instance.connect = AsyncMock(return_value=True)
+            mock_instance.disconnect = AsyncMock()
+            MockConn.return_value = mock_instance
 
-        assert xiaoyi_channel._heartbeat_task is not None
-        assert xiaoyi_channel._receive_task is not None
+            await xiaoyi_channel._start_connections()
 
-    async def test_connect_handles_connection_error(
-        self,
-        xiaoyi_channel,
-        mock_session,
-        mock_auth_headers,
-    ):
-        """_connect should handle connection errors."""
-        mock_session.ws_connect = AsyncMock(
-            side_effect=aiohttp.ClientError("Connection failed"),
-        )
-
-        with patch(
-            "qwenpaw.app.channels.xiaoyi.channel.generate_auth_headers",
-            return_value=mock_auth_headers,
-        ):
-            with patch("aiohttp.ClientSession", return_value=mock_session):
-                with pytest.raises(aiohttp.ClientError):
-                    await xiaoyi_channel._connect()
-
-        assert xiaoyi_channel._connected is False
+            assert MockConn.call_count == 1
+            assert xiaoyi_channel._conn_backup is None
+            assert xiaoyi_channel._connected is True
 
 
 # =============================================================================
@@ -521,14 +473,13 @@ class TestXiaoYiChannelWebSocketConnection:
 # =============================================================================
 
 
-@pytest.mark.asyncio
 class TestXiaoYiChannelMessageHandling:
     """
     P0/P1: Message handling tests.
     """
 
     async def test_handle_message_parses_json(self, xiaoyi_channel):
-        """_handle_message should parse JSON messages."""
+        """_handle_incoming_message should dispatch messages."""
         message = {
             "msgType": "message",
             "agentId": "test_agent_123",
@@ -547,11 +498,14 @@ class TestXiaoYiChannelMessageHandling:
             "_handle_a2a_request",
             new_callable=AsyncMock,
         ) as mock_handle:
-            await xiaoyi_channel._handle_message(json.dumps(message))
+            await xiaoyi_channel._handle_incoming_message(
+                message,
+                "primary",
+            )
             mock_handle.assert_called_once()
 
     async def test_handle_message_validates_agent_id(self, xiaoyi_channel):
-        """_handle_message should validate agent_id."""
+        """_handle_incoming_message should validate agent_id."""
         message = {
             "msgType": "message",
             "agentId": "wrong_agent",
@@ -563,11 +517,41 @@ class TestXiaoYiChannelMessageHandling:
             "_handle_a2a_request",
             new_callable=AsyncMock,
         ) as mock_handle:
-            await xiaoyi_channel._handle_message(json.dumps(message))
+            await xiaoyi_channel._handle_incoming_message(
+                message,
+                "primary",
+            )
             mock_handle.assert_not_called()
 
+    async def test_handle_message_tracks_session_server(
+        self,
+        xiaoyi_channel,
+    ):
+        """_handle_incoming_message should track session->server."""
+        message = {
+            "agentId": "test_agent_123",
+            "method": "message/stream",
+            "params": {
+                "sessionId": "session_456",
+                "id": "task_456",
+                "message": {
+                    "parts": [{"kind": "text", "text": "Hi"}],
+                },
+            },
+        }
+
+        mock_enqueue = MagicMock()
+        xiaoyi_channel._enqueue = mock_enqueue
+
+        await xiaoyi_channel._handle_incoming_message(
+            message,
+            "backup",
+        )
+
+        assert xiaoyi_channel._session_server_map["session_456"] == "backup"
+
     async def test_handle_message_handles_clear_context(self, xiaoyi_channel):
-        """_handle_message should handle clearContext messages."""
+        """_handle_incoming_message should handle clearContext."""
         message = {
             "agentId": "test_agent_123",
             "method": "clearContext",
@@ -580,11 +564,14 @@ class TestXiaoYiChannelMessageHandling:
             "_handle_clear_context",
             new_callable=AsyncMock,
         ) as mock_handle:
-            await xiaoyi_channel._handle_message(json.dumps(message))
+            await xiaoyi_channel._handle_incoming_message(
+                message,
+                "primary",
+            )
             mock_handle.assert_called_once()
 
     async def test_handle_message_handles_tasks_cancel(self, xiaoyi_channel):
-        """_handle_message should handle tasks/cancel messages."""
+        """_handle_incoming_message should handle tasks/cancel."""
         message = {
             "agentId": "test_agent_123",
             "method": "tasks/cancel",
@@ -598,13 +585,11 @@ class TestXiaoYiChannelMessageHandling:
             "_handle_tasks_cancel",
             new_callable=AsyncMock,
         ) as mock_handle:
-            await xiaoyi_channel._handle_message(json.dumps(message))
+            await xiaoyi_channel._handle_incoming_message(
+                message,
+                "primary",
+            )
             mock_handle.assert_called_once()
-
-    async def test_handle_message_handles_invalid_json(self, xiaoyi_channel):
-        """_handle_message should handle invalid JSON gracefully."""
-        # Should not raise
-        await xiaoyi_channel._handle_message("invalid json{{{")
 
 
 # =============================================================================
@@ -612,7 +597,6 @@ class TestXiaoYiChannelMessageHandling:
 # =============================================================================
 
 
-@pytest.mark.asyncio
 class TestXiaoYiChannelA2ARequestHandling:
     """
     P1: A2A request handling tests.
@@ -718,7 +702,6 @@ class TestXiaoYiChannelA2ARequestHandling:
 # =============================================================================
 
 
-@pytest.mark.asyncio
 class TestXiaoYiChannelSend:
     """
     P0: Send message tests.
@@ -727,12 +710,15 @@ class TestXiaoYiChannelSend:
     async def test_send_skips_when_disabled(self, xiaoyi_channel):
         """send() should skip when channel is disabled."""
         xiaoyi_channel.enabled = False
-        xiaoyi_channel._ws = MagicMock()
         xiaoyi_channel._connected = True
 
-        await xiaoyi_channel.send("user123", "Hello")
-
-        xiaoyi_channel._ws.send_json.assert_not_called()
+        with patch.object(
+            xiaoyi_channel,
+            "_send_to_session_server",
+            new_callable=AsyncMock,
+        ) as mock_send:
+            await xiaoyi_channel.send("user123", "Hello")
+            mock_send.assert_not_called()
 
     async def test_send_skips_when_not_connected(self, xiaoyi_channel):
         """send() should skip when not connected."""
@@ -741,23 +727,135 @@ class TestXiaoYiChannelSend:
 
         await xiaoyi_channel.send("user123", "Hello")
 
-    async def test_send_skips_empty_text(self, xiaoyi_channel, mock_ws):
-        """send() should skip empty text."""
-        xiaoyi_channel._ws = mock_ws
+    async def test_api_send_raises_when_not_connected(self, xiaoyi_channel):
+        """API sends should report a disconnected channel as a failure."""
+        xiaoyi_channel.enabled = True
+        xiaoyi_channel._connected = False
+
+        with pytest.raises(ChannelError, match="not connected"):
+            await xiaoyi_channel.send(
+                "session_123",
+                "Hello",
+                meta={"_api_send": True},
+            )
+
+    async def test_api_send_normalizes_prefixed_session(self, xiaoyi_channel):
+        """API sends should resolve task IDs using the native session ID."""
+        from qwenpaw.schemas import ContentType, TextContent
+
         xiaoyi_channel._connected = True
         xiaoyi_channel._session_task_map["session_123"] = "task_123"
 
-        await xiaoyi_channel.send(
+        with patch.object(
+            xiaoyi_channel,
+            "_send_chunk",
+            new_callable=AsyncMock,
+            return_value=True,
+        ) as mock_send:
+            await xiaoyi_channel.send_content_parts(
+                "session_123",
+                [TextContent(type=ContentType.TEXT, text="Hello")],
+                meta={
+                    "_api_send": True,
+                    "session_id": "xiaoyi:session_123",
+                },
+            )
+
+        mock_send.assert_awaited_once()
+        assert mock_send.await_args.args[:2] == (
             "session_123",
-            "   ",
-            meta={"session_id": "session_123"},
+            "task_123",
         )
 
-        mock_ws.send_json.assert_not_called()
+    async def test_api_send_raises_when_task_id_missing(
+        self,
+        xiaoyi_channel,
+    ):
+        """API sends should report a missing task mapping as a failure."""
+        xiaoyi_channel._connected = True
 
-    async def test_send_chunks_large_messages(self, xiaoyi_channel, mock_ws):
+        with pytest.raises(ChannelError, match="No task_id"):
+            await xiaoyi_channel.send(
+                "session_123",
+                "Hello",
+                meta={"_api_send": True},
+            )
+
+    async def test_normal_reply_keeps_missing_task_id_tolerant(
+        self,
+        xiaoyi_channel,
+    ):
+        """Normal conversation replies should retain warning-only behavior."""
+        xiaoyi_channel._connected = True
+
+        await xiaoyi_channel.send("session_123", "Hello")
+
+    async def test_api_send_raises_when_transport_fails(
+        self,
+        xiaoyi_channel,
+    ):
+        """API sends should report failure when both WebSockets reject it."""
+        from qwenpaw.app.channels.xiaoyi.channel import XiaoYiConnection
+
+        xiaoyi_channel._connected = True
+        xiaoyi_channel._session_task_map["session_123"] = "task_123"
+        primary = MagicMock(spec=XiaoYiConnection)
+        primary.send_json = AsyncMock(return_value=False)
+        backup = MagicMock(spec=XiaoYiConnection)
+        backup.send_json = AsyncMock(return_value=False)
+        xiaoyi_channel._conn_primary = primary
+        xiaoyi_channel._conn_backup = backup
+
+        with pytest.raises(ChannelError, match="Failed to send message"):
+            await xiaoyi_channel.send(
+                "session_123",
+                "Hello",
+                meta={"_api_send": True},
+            )
+
+        primary.send_json.assert_awaited_once()
+        backup.send_json.assert_awaited_once()
+
+    async def test_normal_reply_keeps_transport_failure_tolerant(
+        self,
+        xiaoyi_channel,
+    ):
+        """Normal replies should not raise when the transport send fails."""
+        from qwenpaw.app.channels.xiaoyi.channel import XiaoYiConnection
+
+        xiaoyi_channel._connected = True
+        xiaoyi_channel._session_task_map["session_123"] = "task_123"
+        primary = MagicMock(spec=XiaoYiConnection)
+        primary.send_json = AsyncMock(return_value=False)
+        backup = MagicMock(spec=XiaoYiConnection)
+        backup.send_json = AsyncMock(return_value=False)
+        xiaoyi_channel._conn_primary = primary
+        xiaoyi_channel._conn_backup = backup
+
+        await xiaoyi_channel.send("session_123", "Hello")
+
+        primary.send_json.assert_awaited_once()
+        backup.send_json.assert_awaited_once()
+
+    async def test_send_skips_empty_text(self, xiaoyi_channel):
+        """send() should skip empty text."""
+        xiaoyi_channel._connected = True
+        xiaoyi_channel._session_task_map["session_123"] = "task_123"
+
+        with patch.object(
+            xiaoyi_channel,
+            "_send_to_session_server",
+            new_callable=AsyncMock,
+        ) as mock_send:
+            await xiaoyi_channel.send(
+                "session_123",
+                "   ",
+                meta={"session_id": "session_123"},
+            )
+            mock_send.assert_not_called()
+
+    async def test_send_chunks_large_messages(self, xiaoyi_channel):
         """send() should chunk large messages."""
-        xiaoyi_channel._ws = mock_ws
         xiaoyi_channel._connected = True
         xiaoyi_channel._session_task_map["session_123"] = "task_123"
 
@@ -786,22 +884,36 @@ class TestXiaoYiChannelSend:
     async def test_send_final_message_sends_correct_format(
         self,
         xiaoyi_channel,
-        mock_ws,
     ):
-        """send_final_message should send correct format."""
-        xiaoyi_channel._ws = mock_ws
+        """send_final_message should send status-update + artifact."""
         xiaoyi_channel._connected = True
 
-        await xiaoyi_channel.send_final_message(
-            "session_123",
-            "task_123",
-            "msg_123",
-        )
+        with patch.object(
+            xiaoyi_channel,
+            "_send_to_session_server",
+            new_callable=AsyncMock,
+        ) as mock_send:
+            await xiaoyi_channel.send_final_message(
+                "session_123",
+                "task_123",
+                "msg_123",
+            )
 
-        mock_ws.send_json.assert_called_once()
-        call_args = mock_ws.send_json.call_args[0][0]
-        assert call_args["msgType"] == "agent_response"
-        assert call_args["agentId"] == xiaoyi_channel.agent_id
+            # Two calls: status-update + artifact-update
+            assert mock_send.call_count == 2
+
+            # First call: status-update with state=completed
+            status_msg = mock_send.call_args_list[0][0][1]
+            assert status_msg["msgType"] == "agent_response"
+            status_detail = json.loads(status_msg["msgDetail"])
+            assert status_detail["result"]["kind"] == "status-update"
+            assert status_detail["result"]["status"]["state"] == "completed"
+
+            # Second call: artifact-update with final=true
+            final_msg = mock_send.call_args_list[1][0][1]
+            final_detail = json.loads(final_msg["msgDetail"])
+            assert final_detail["result"]["kind"] == "artifact-update"
+            assert final_detail["result"]["final"] is True
 
 
 # =============================================================================
@@ -853,7 +965,6 @@ class TestXiaoYiChannelChunking:
 # =============================================================================
 
 
-@pytest.mark.asyncio
 class TestXiaoYiChannelMedia:
     """
     P1: Media sending tests.
@@ -866,13 +977,12 @@ class TestXiaoYiChannelMedia:
 
         await xiaoyi_channel.send_media("user123", mock_part)
 
-    async def test_send_media_handles_image(self, xiaoyi_channel, mock_ws):
+    async def test_send_media_handles_image(self, xiaoyi_channel):
         """send_media should handle image parts."""
-        xiaoyi_channel._ws = mock_ws
         xiaoyi_channel._connected = True
         xiaoyi_channel._session_task_map["session_123"] = "task_123"
 
-        from agentscope_runtime.engine.schemas.agent_schemas import (
+        from qwenpaw.schemas import (
             ImageContent,
             ContentType,
         )
@@ -882,37 +992,46 @@ class TestXiaoYiChannelMedia:
             image_url="http://example.com/image.png",
         )
 
-        await xiaoyi_channel.send_media(
-            "session_123",
-            image_part,
-            meta={"session_id": "session_123"},
-        )
+        with patch.object(
+            xiaoyi_channel,
+            "_send_to_session_server",
+            new_callable=AsyncMock,
+        ) as mock_send:
+            await xiaoyi_channel.send_media(
+                "session_123",
+                image_part,
+                meta={"session_id": "session_123"},
+            )
 
-        mock_ws.send_json.assert_called_once()
-        call_args = mock_ws.send_json.call_args[0][0]
-        msg_detail = json.loads(call_args["msgDetail"])
-        assert msg_detail["result"]["artifact"]["parts"][0]["kind"] == "file"
+            mock_send.assert_called_once()
+            msg = mock_send.call_args[0][1]
+            msg_detail = json.loads(msg["msgDetail"])
+            assert (
+                msg_detail["result"]["artifact"]["parts"][0]["kind"] == "file"
+            )
 
     async def test_send_media_handles_unknown_type(
         self,
         xiaoyi_channel,
-        mock_ws,
     ):
         """send_media should skip unknown part types."""
-        xiaoyi_channel._ws = mock_ws
         xiaoyi_channel._connected = True
         xiaoyi_channel._session_task_map["session_123"] = "task_123"
 
         mock_part = MagicMock()
         mock_part.type = "unknown_type"
 
-        await xiaoyi_channel.send_media(
-            "session_123",
-            mock_part,
-            meta={"session_id": "session_123"},
-        )
-
-        mock_ws.send_json.assert_not_called()
+        with patch.object(
+            xiaoyi_channel,
+            "_send_to_session_server",
+            new_callable=AsyncMock,
+        ) as mock_send:
+            await xiaoyi_channel.send_media(
+                "session_123",
+                mock_part,
+                meta={"session_id": "session_123"},
+            )
+            mock_send.assert_not_called()
 
 
 # =============================================================================
@@ -920,42 +1039,49 @@ class TestXiaoYiChannelMedia:
 # =============================================================================
 
 
-@pytest.mark.asyncio
 class TestXiaoYiChannelResponseHandling:
     """
     P1: Response handling tests.
     """
 
-    async def test_send_clear_context_response(self, xiaoyi_channel, mock_ws):
+    async def test_send_clear_context_response(self, xiaoyi_channel):
         """_send_clear_context_response should send correct format."""
-        xiaoyi_channel._ws = mock_ws
         xiaoyi_channel._connected = True
 
-        await xiaoyi_channel._send_clear_context_response(
-            "req_123",
-            "session_123",
-        )
+        with patch.object(
+            xiaoyi_channel,
+            "_send_to_session_server",
+            new_callable=AsyncMock,
+        ) as mock_send:
+            await xiaoyi_channel._send_clear_context_response(
+                "req_123",
+                "session_123",
+            )
 
-        mock_ws.send_json.assert_called_once()
-        call_args = mock_ws.send_json.call_args[0][0]
-        assert call_args["msgType"] == "agent_response"
-        msg_detail = json.loads(call_args["msgDetail"])
-        assert msg_detail["result"]["status"]["state"] == "cleared"
+            mock_send.assert_called_once()
+            msg = mock_send.call_args[0][1]
+            assert msg["msgType"] == "agent_response"
+            msg_detail = json.loads(msg["msgDetail"])
+            assert msg_detail["result"]["status"]["state"] == "cleared"
 
-    async def test_send_tasks_cancel_response(self, xiaoyi_channel, mock_ws):
+    async def test_send_tasks_cancel_response(self, xiaoyi_channel):
         """_send_tasks_cancel_response should send correct format."""
-        xiaoyi_channel._ws = mock_ws
         xiaoyi_channel._connected = True
 
-        await xiaoyi_channel._send_tasks_cancel_response(
-            "req_123",
-            "session_123",
-        )
+        with patch.object(
+            xiaoyi_channel,
+            "_send_to_session_server",
+            new_callable=AsyncMock,
+        ) as mock_send:
+            await xiaoyi_channel._send_tasks_cancel_response(
+                "req_123",
+                "session_123",
+            )
 
-        mock_ws.send_json.assert_called_once()
-        call_args = mock_ws.send_json.call_args[0][0]
-        msg_detail = json.loads(call_args["msgDetail"])
-        assert msg_detail["result"]["status"]["state"] == "canceled"
+            mock_send.assert_called_once()
+            msg = mock_send.call_args[0][1]
+            msg_detail = json.loads(msg["msgDetail"])
+            assert msg_detail["result"]["status"]["state"] == "canceled"
 
 
 # =============================================================================
@@ -1056,6 +1182,7 @@ class TestXiaoYiChannelArtifactBuilding:
         assert msg_detail["id"] == "msg_123"
         assert msg_detail["result"]["kind"] == "artifact-update"
         assert msg_detail["result"]["append"] is True
+        assert msg_detail["result"]["lastChunk"] is True
 
     def test_build_artifact_msg_with_final(self, xiaoyi_channel):
         """_build_artifact_msg should set final flag when specified."""
@@ -1066,7 +1193,6 @@ class TestXiaoYiChannelArtifactBuilding:
             "task_123",
             "msg_123",
             parts,
-            last_chunk=True,
             final=True,
         )
 
@@ -1090,7 +1216,7 @@ class TestXiaoYiChannelPartsExtraction:
         mock_message = MagicMock()
         mock_message.type = "message"
 
-        from agentscope_runtime.engine.schemas.agent_schemas import (
+        from qwenpaw.schemas import (
             TextContent,
             ContentType,
         )
@@ -1098,11 +1224,41 @@ class TestXiaoYiChannelPartsExtraction:
         text_content = TextContent(type=ContentType.TEXT, text="Hello World")
         mock_message.content = [text_content]
 
-        result = xiaoyi_channel._extract_xiaoyi_parts(mock_message)
+        result, media = xiaoyi_channel._extract_xiaoyi_parts(mock_message)
 
         assert len(result) == 1
+        assert media == []
         assert result[0]["kind"] == "text"
         assert "\n\nHello World" in result[0]["text"]
+
+    @pytest.mark.parametrize(
+        "headline",
+        [
+            "⟦ 当前格式的内部检索标题 ⟧",
+            "<!-- ⟦ 旧格式的内部检索标题 ⟧ -->",
+        ],
+    )
+    def test_extract_xiaoyi_parts_hides_scroll_headline(
+        self,
+        xiaoyi_channel,
+        headline,
+    ):
+        """XiaoYi must not expose Scroll's display-only headline."""
+        from qwenpaw.schemas import ContentType, TextContent
+
+        mock_message = MagicMock()
+        mock_message.type = "message"
+        mock_message.content = [
+            TextContent(
+                type=ContentType.TEXT,
+                text=f"正常答复\n{headline}",
+            ),
+        ]
+
+        result, media = xiaoyi_channel._extract_xiaoyi_parts(mock_message)
+
+        assert media == []
+        assert result == [{"kind": "text", "text": "\n\n正常答复"}]
 
     def test_extract_xiaoyi_parts_empty_content(self, xiaoyi_channel):
         """_extract_xiaoyi_parts should handle empty content."""
@@ -1110,12 +1266,51 @@ class TestXiaoYiChannelPartsExtraction:
         mock_message.type = "message"
         mock_message.content = []
 
-        result = xiaoyi_channel._extract_xiaoyi_parts(mock_message)
+        result, media = xiaoyi_channel._extract_xiaoyi_parts(mock_message)
 
         # When content is empty, returns a fallback text with message type
         assert len(result) == 1
+        assert media == []
         assert result[0]["kind"] == "text"
         assert "message" in result[0]["text"]
+
+    def test_hidden_tool_result_keeps_media(self, xiaoyi_channel):
+        from qwenpaw.schemas import (
+            DataContent,
+            Message,
+            MessageType,
+            Role,
+            RunStatus,
+        )
+
+        xiaoyi_channel._display_config.show_tool_results = False
+        message = Message(
+            type=MessageType.PLUGIN_CALL_OUTPUT,
+            role=Role.TOOL,
+            status=RunStatus.Completed,
+            content=[
+                DataContent(
+                    data={
+                        "name": "image_tool",
+                        "output": [
+                            {"type": "text", "text": "hidden"},
+                            {
+                                "type": "image",
+                                "source": {
+                                    "type": "url",
+                                    "url": "https://example.com/image.png",
+                                },
+                            },
+                        ],
+                    },
+                ),
+            ],
+        )
+
+        parts, media = xiaoyi_channel._extract_xiaoyi_parts(message)
+
+        assert parts == []
+        assert len(media) == 1
 
 
 # =============================================================================
@@ -1149,7 +1344,6 @@ class TestXiaoYiChannelSessionTaskMap:
 # =============================================================================
 
 
-@pytest.mark.asyncio
 class TestXiaoYiChannelConnectionRegistry:
     """
     P1: Connection registry tests.

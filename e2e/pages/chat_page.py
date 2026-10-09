@@ -7,6 +7,7 @@ Wraps all interactions on the Chat page and exposes business-level methods.
 from __future__ import annotations
 
 import logging
+import re
 from typing import Optional, List, Tuple
 from pathlib import Path
 from playwright.sync_api import Page, Locator, expect, TimeoutError
@@ -37,12 +38,37 @@ class ChatPage(BasePage):
     # ========== Selector definitions ==========
     # Page components use the qwenpaw- CSS prefix
 
-    # Navigation and new chat (compatible with both spark-icon and anticon icon sets)
-    NEW_CHAT_BTN = 'button:has(.spark-icon-spark-newChat-fill), button:has(.anticon-plus), button:has([class*="newChat"])'
-    SESSION_LIST_BTN = 'button:has(.spark-icon-spark-history-line), button:has(.anticon-history), button:has([class*="history"])'
+    # Sidebar.tsx exposes the current action through its translated accessible
+    # name. ``:visible`` excludes the duplicate compact/expanded surface.
+    NEW_CHAT_BTN = (
+        'button[aria-label="New task"]:visible, '
+        'button[aria-label="新建任务"]:visible, '
+        'button:has-text("New task"):visible, '
+        'button:has-text("新建任务"):visible'
+    )
+    # Conversation-history disclosure button in the sidebar.
+    #
+    # The previous value ended with a very broad ``button:has([class*="history"])``
+    # which, after #7502, matches *two different* buttons: the
+    # ``sidebarSessionList-module__historyHeader`` disclosure toggle (onClick =
+    # ``setHistoryCollapsed(c => !c)``) and, when the sidebar is collapsed, the
+    # ``collapsedNavItem`` history button in ``Sidebar.tsx`` whose onClick opens a
+    # Popover instead of expanding the inline list. Playwright resolves a
+    # comma-separated selector as a union and ``.first`` picks the *first match in
+    # DOM order* — not the first alternative written — so listing a precise
+    # anchor before a broad one does **not** create a preference order. Anchor on
+    # the module-scoped ``historyHeader`` class instead: it exists in the same
+    # ``sidebarSessionList.module.less`` both before and after #7502, and the
+    # element is a ``<button>`` in both, so one selector covers both generations.
+    # ``button`` also excludes the sibling ``historyHeaderRow`` container (a
+    # ``<div>``) whose scoped name contains ``historyHeader`` as a substring.
+    SESSION_LIST_BTN = 'button[class*="historyHeader"]'
 
     # Input area
-    CHAT_INPUT = 'textarea.qwenpaw-sender-input'
+    CHAT_INPUT = (
+        '.qwenpaw-sender [role="textbox"][contenteditable="true"]:visible, '
+        "textarea.qwenpaw-sender-input:visible"
+    )
     SEND_BTN = 'button.qwenpaw-sender-actions-btn.qwenpaw-btn-primary'
     FILE_INPUT = 'input[type="file"]'
     UPLOAD_WRAPPER = 'span.qwenpaw-upload-wrapper'
@@ -54,21 +80,188 @@ class ChatPage(BasePage):
     MESSAGE_LIST = '.qwenpaw-bubble-list-scroll'
 
     # Welcome screen (check input visibility)
-    WELCOME_TEXT = 'textarea.qwenpaw-sender-input'
+    WELCOME_TEXT = CHAT_INPUT
     QUICK_ACTIONS = '.quick-action'
 
-    # Session management (through the history drawer, using CSS Modules class names)
-    SESSION_ITEM = '[class*=chatSessionItem]'
-    SESSION_ACTIVE = '[class*=chatSessionItem][class*=active]'
-    SESSION_NAME = '[class*=chatSessionItem] [class*=name]'
+    # Session management.
+    #
+    # Upstream #7502 ("redesign sidebar and settings experience") removed the
+    # right-side "All Chats" drawer entirely: ``ChatSessionDrawer`` is gone
+    # (upstream now asserts it is not even referenced — see
+    # ``console/src/pages/Chat/index.module.test.ts``) and the session list
+    # lives only in ``console/src/layouts/SidebarSessionList.tsx``. The list
+    # container changed from ``styles.listWrapper`` to ``styles.scroll``
+    # (``listWrapper`` survives only as the *ref variable name*
+    # ``listWrapperRef``), so the ancestor prefix ``[class*=listWrapper]`` used
+    # to scope these selectors no longer matches anything and every session
+    # lookup silently returned 0 items.
+    #
+    # The ``SessionItem`` component itself did *not* change shape: both before
+    # and after #7502 its root element is
+    # ``<div className={cls} role="button">`` where ``cls`` is built from
+    # ``styles.item`` of ``sessionItem.module.less``. With the build's
+    # ``generateScopedName: "[name]__[local]__[hash:base64:5]"`` that renders as
+    # ``sessionItem-module__item__<hash>``. So the module-scoped class name plus
+    # ``role="button"`` is a stable two-anchor handle across both generations,
+    # and — because ``SessionItem`` has exactly one render site in the whole
+    # console — it needs no ancestor prefix to stay unambiguous.
+    #
+    # ``[class*="chatSessionItem"]`` is kept as a fallback for builds older than
+    # the v2.0.0 redesign.
+    SESSION_ITEM = (
+        'div[role="button"][class*="sessionItem-module__item"], '
+        '[class*=chatSessionItem]'
+    )
+    # Active item: ``.active`` is nested (``&.active``) inside ``.item`` in the
+    # same module, so its scoped name carries the ``sessionItem-module__``
+    # prefix too. Matching the prefixed name rather than a bare
+    # ``[class*=active]`` keeps the selector from latching onto unrelated
+    # active-looking classes.
+    SESSION_ACTIVE = (
+        'div[role="button"][class*="sessionItem-module__item"]'
+        '[class*="sessionItem-module__active"], '
+        '[class*=chatSessionItem][class*=active]'
+    )
+    # Session title element: ``<div className={styles.name}>``. Scoped to
+    # ``sessionItem-module__name`` on purpose — a bare ``[class*=name]`` also
+    # matches the sibling ``styles.renameInput`` element ("re**name**Input"),
+    # which would return the edit box instead of the title.
+    SESSION_NAME = (
+        'div[role="button"][class*="sessionItem-module__item"] '
+        '[class*="sessionItem-module__name"], '
+        '[class*=chatSessionItem] [class*=name]'
+    )
+    # SessionItem actions live behind a "more" button. The current console
+    # renders a custom Popover menu with role-based action buttons.
+    SESSION_MORE_BTN = '[class*=moreBtn]'
+    # ``:text-is`` is exact so "Pin" does not also match "Unpin".
+    SESSION_MENU_PIN = (
+        'div[role="menu"] button[role="menuitem"]:text-is("Pin"), '
+        'div[role="menu"] button[role="menuitem"]:text-is("置顶")'
+    )
+    SESSION_MENU_UNPIN = (
+        'div[role="menu"] button[role="menuitem"]:text-is("Unpin"), '
+        'div[role="menu"] button[role="menuitem"]:text-is("取消置顶")'
+    )
+    SESSION_MENU_RENAME = (
+        'div[role="menu"] button[role="menuitem"]:has-text("Rename"), '
+        'div[role="menu"] button[role="menuitem"]:has-text("重命名")'
+    )
+    SESSION_MENU_DELETE = (
+        'div[role="menu"] button[role="menuitem"]:has-text("Delete"), '
+        'div[role="menu"] button[role="menuitem"]:has-text("删除")'
+    )
+    # Inline rename input rendered when a SessionItem enters edit mode.
+    SESSION_RENAME_INPUT = 'input[class*=renameInput]'
+    # Conversation search box (filters sessions by title).
+    # Since #7502 this input is only mounted on demand — see
+    # ``open_session_search()`` for the two clicks that reveal it, and for why
+    # this selector alone is not enough any more.
+    SESSION_SEARCH_INPUT = '[class*=searchContainer] input'
+    # The overflow button next to the history header that opens the dropdown
+    # holding "Search conversations" / "New group". Its accessible name comes
+    # from ``sidebar.more``. Named ``..._MORE_ACTIONS_BTN`` to keep it distinct
+    # from ``SESSION_MORE_BTN`` below, which is the per-session-item action
+    # button (Pin / Rename / Archive / Delete) and an unrelated element.
+    SESSION_MORE_ACTIONS_BTN = (
+        'button[aria-label="More"], button[aria-label="更多"]'
+    )
+    # The search entry inside that dropdown. Label comes from
+    # ``chat.sessionPanel.searchConversations`` ("Search conversations…" /
+    # "搜索对话…"); matched on the prefix so the trailing ellipsis cannot
+    # break it.
+    SESSION_SEARCH_MENU_ITEM = (
+        '.qwenpaw-dropdown-menu-item:has-text("Search conversations"), '
+        '.ant-dropdown-menu-item:has-text("Search conversations"), '
+        '.qwenpaw-dropdown-menu-item:has-text("搜索对话"), '
+        '.ant-dropdown-menu-item:has-text("搜索对话")'
+    )
+    # Legacy hover-button selectors (kept for older builds / fallbacks).
     SESSION_PIN_BTN = 'button:has(.spark-icon-spark-mark-line), button:has(.anticon-pushpin)'
     SESSION_EDIT_BTN = 'button:has(.spark-icon-spark-edit-line), button:has(.anticon-edit)'
     SESSION_DELETE_BTN = 'button:has(.spark-icon-spark-delete-line), button:has(.anticon-delete)'
+
+    # --- Tool approval level toggle (composer / sender area) — upstream #5685 ---
+    # Upstream #7334 rebuilt ApprovalLevelToggle from an antd Tag into a plain
+    # ``<button class="...trigger">`` (CSS-module hash class, not stable), so
+    # the old ``span.qwenpaw-tag`` anchor no longer exists. The button carries
+    # ``aria-label=<i18n toolExecutionLevelTitle>`` — the same handle upstream
+    # uses in its own unit test (ApprovalToggle.test.tsx) — so we anchor on it.
+    # Note: #7368 renamed that title from "Tool Execution Security" to
+    # "Tool Approval Mode" (zh: 工具审批模式). In non-compact desktop mode the
+    # button text also contains the current level label (e.g. "Strict Mode");
+    # in compact/mobile mode it is icon-only. Only one of ApprovalLevelToggle /
+    # HarnessApprovalToggle renders at a time (mutually exclusive in the
+    # composer), and the harness variant uses a different aria-label, so the
+    # locator below is unambiguous.
+    APPROVAL_TOGGLE = (
+        'button[aria-label="Tool Approval Mode"], '
+        'button[aria-label="工具审批模式"]'
+    )
+    APPROVAL_LEVELS = {
+        "STRICT": ("Strict Mode", "严格模式"),
+        "SMART": ("Smart Mode", "智能模式"),
+        "AUTO": ("Auto Mode", "自动模式"),
+        "OFF": ("Off Mode", "关闭模式"),
+    }
+    # Only items inside the currently-open dropdown (antd keeps closed menus in
+    # the DOM with a ``-hidden`` modifier). The #7334 rebuild kept the antd
+    # Dropdown for the menu itself, so this selector is unchanged.
+    APPROVAL_MENU_ITEM = (
+        '.qwenpaw-dropdown:not(.qwenpaw-dropdown-hidden) '
+        '.qwenpaw-dropdown-menu-item'
+    )
 
     # Settings and model
     MODEL_SELECTOR = '.qwenpaw-dropdown-trigger'
     MODEL_OPTION = '.qwenpaw-dropdown-menu-item'
     AGENT_SELECTOR = '.qwenpaw-select-selector'
+
+    # --- Sidebar agent switcher (components/AgentSelector) ---
+    # The antd Select sits inside a CSS-module wrapper whose hashed class
+    # keeps the "agentSelector" basename; scoping avoids other Selects.
+    AGENT_SWITCHER = '[class*="agentSelector"] .qwenpaw-select-selector'
+    AGENT_SWITCHER_VALUE = (
+        '[class*="agentSelector"] .qwenpaw-select-selection-item'
+    )
+    AGENT_SWITCHER_OPTION = (
+        '.qwenpaw-select-dropdown:not(.qwenpaw-select-dropdown-hidden) '
+        '.qwenpaw-select-item-option'
+    )
+
+    # --- Slash-command suggestion popup (@ant-design/x Suggestion) ---
+    # Opens while the input starts with "/" and has no whitespace yet.
+    # Two nodes carry .qwenpaw-suggestion (inline content + the cascader
+    # dropdown); anchor on the dropdown, excluding its hidden state.
+    SUGGESTION_POPUP = (
+        '.qwenpaw-suggestion.qwenpaw-select-dropdown'
+        ':not(.qwenpaw-select-dropdown-hidden)'
+    )
+    SUGGESTION_ITEM = '.qwenpaw-suggestion-item'
+
+    # --- Sidebar session date groups — upstream #5643 ---
+    # SidebarSessionList renders one <button class={styles.groupLabel}> per
+    # non-empty bucket (Pinned / Today / Within 7 days / Within 30 days /
+    # Earlier); clicking toggles collapse. "month" + "older" start collapsed.
+    SIDEBAR_GROUP_LABEL = 'div[role="button"][class*="SessionGroupHeader"]'
+    SIDEBAR_DATE_LABEL = '[data-date-group]'
+    SIDEBAR_GROUP_CHEVRON = 'span[class*="groupChevron"]'
+    SIDEBAR_GROUP_TEXTS = {
+        "pinned": ("Pinned", "置顶"),
+        "today": ("Today", "今天"),
+        "week": ("Within 7 days", "7天内"),
+        "month": ("Within 30 days", "30天内"),
+        "older": ("Earlier", "更早"),
+    }
+
+    # --- Non-owner tab banner — upstream #5664 ---
+    # antd <Alert type="info" banner> injected into the sender beforeUI slot
+    # when this tab lost the qwenpaw:queue-owner:<sessionId> Web Lock. Appears
+    # only after a 300ms ownershipResolved fallback timer.
+    QUEUE_BANNER = '.qwenpaw-alert-banner'
+    _QUEUE_BANNER_RE = re.compile(
+        r"This tab queues only|当前标签页仅入队"
+    )
 
     # Action buttons
     COPY_BTN = 'span[title="复制"]'
@@ -133,13 +326,14 @@ class ChatPage(BasePage):
     def open(self) -> "ChatPage":
         """Open the Chat page."""
         logger.info("Opening Chat page")
-        try:
-            self.goto()
-        except Exception:
-            # networkidle may time out due to long-lived connections / SSE; fall back to 'load'
-            logger.warning("Chat page networkidle timeout, falling back to 'load'")
-            self.page.goto(self.PAGE_URL, wait_until="load", timeout=60000)
-        self.wait_for_loading()
+        self.goto()
+        # The chat page keeps SSE connections open, so ``networkidle``
+        # never fires. Wait for the textarea to be visible instead —
+        # that's a strong signal that React has booted and the page is
+        # interactive.
+        self.page.locator(self.CHAT_INPUT).first.wait_for(
+            state="visible", timeout=self.timeout
+        )
         self.step_shot("open_chat_page")
         return self
     
@@ -169,12 +363,20 @@ class ChatPage(BasePage):
             del self._has_sent_message
         self._ai_count_before_send = 0
         
-        new_chat_btn = self.find(self.NEW_CHAT_BTN)
-        if new_chat_btn.count() > 0:
-            new_chat_btn.click()
-            # Wait for page navigation and full load
-            self.page.wait_for_load_state("networkidle")
-            self.page.locator(self.CHAT_INPUT).wait_for(state="visible", timeout=10000)
+        new_chat_btn = self.find(self.NEW_CHAT_BTN).first
+        expect(new_chat_btn).to_be_visible(timeout=self.timeout)
+        new_chat_btn.click()
+        # The chat page keeps an SSE connection open, so ``networkidle`` is
+        # not a useful completion signal. The new-task event is complete once
+        # the previous transcript is gone and the composer is interactive.
+        expect(self.page.locator(self.MESSAGE_CONTAINER)).to_have_count(
+            0,
+            timeout=self.timeout,
+        )
+        self.page.locator(self.CHAT_INPUT).first.wait_for(
+            state="visible",
+            timeout=self.timeout,
+        )
         self.step_shot("create_new_chat_done")
         return self
     
@@ -311,7 +513,7 @@ class ChatPage(BasePage):
 
         # ---- Fill the input box ----
         input_box = self.page.locator(self.CHAT_INPUT)
-        input_box.click()
+        input_box.focus()
         self.wait(300)
         input_box.fill("")
         self.wait(200)
@@ -344,7 +546,7 @@ class ChatPage(BasePage):
         except (TimeoutError, AssertionError, Exception):
             logger.warning("[send_message] user bubble missing, retrying with Enter")
             input_box = self.page.locator(self.CHAT_INPUT)
-            input_box.click()
+            input_box.focus()
             self.wait(200)
             input_box.press("Enter")
             # Verify again after retry; if still failing, raise for real
@@ -416,7 +618,11 @@ class ChatPage(BasePage):
         messages = self.get_ai_messages()
         return messages[-1] if messages else None
 
-    def wait_for_ai_response(self, timeout: int = 30000) -> Optional[Locator]:
+    def wait_for_ai_response(
+        self,
+        timeout: int = 30000,
+        stability_cap_ms: int = 30000,
+    ) -> Optional[Locator]:
         """
         Wait for the AI reply to truly complete (strict version, eliminate false positives).
 
@@ -431,6 +637,11 @@ class ChatPage(BasePage):
 
         Args:
             timeout: overall timeout (ms), shared budget across gates
+            stability_cap_ms: ceiling of the gate-2/3 window. The default
+                (30000) preserves the historical behaviour for every
+                existing caller. Long multi-round cases (e.g. the 25-round
+                compression case) hit transient stalls that a 30 s window
+                cannot absorb; they pass a larger cap.
 
         Returns:
             Locator of the last AI message; returns None on any gate failure.
@@ -482,7 +693,15 @@ class ChatPage(BasePage):
         #     and "button recovered" as the fast-path accelerator; whichever signal is ready first releases.
         #   - Still filter out the "Thinking / Loading" placeholder + require >= 2 real characters -> eliminates false positives.
         #   - Stability window widened to 2500ms (more stable than the original 800ms; avoids misjudging long-token streaming gaps).
-        stability_timeout = min(timeout, 30000)
+        #   - Path C added 2026-09-18: the SDK can leave a stale EMPTY streaming
+        #     bubble after the reply already finished (streaming-end signal
+        #     lost). Paths A/B both require real text in the LAST bubble, so a
+        #     trailing empty bubble wedges them until the window expires even
+        #     though the answer is fully rendered one bubble earlier. Path C
+        #     releases on stability of the newest REAL-text bubble that belongs
+        #     to this round (index >= expectedCount); the index guard prevents
+        #     misreading the previous round's content as this round's reply.
+        stability_timeout = min(timeout, stability_cap_ms)
         passed_via = None
         try:
             self.page.wait_for_function(
@@ -538,6 +757,51 @@ class ChatPage(BasePage):
                     if (contentStable) {
                         window.__qwenpaw_wait_passed_via__ = 'content_stable';
                         return true;
+                    }
+                    // Path C (2026-09-18): tolerate the known SDK behaviour where
+                    // a stale EMPTY streaming bubble is left behind after the
+                    // reply already finished (streaming-end signal lost). In that
+                    // state `last` is empty forever, so Path A (needs real text)
+                    // and Path B (needs real text) can never release, and the
+                    // round fails after the whole stability window even though
+                    // the reply is fully rendered one bubble earlier. Evidence:
+                    // CI step_shot at the FAIL moment shows the round's answer
+                    // complete ("Completed 1 steps" + full text) with a trailing
+                    // empty spinner bubble. Path C releases when the NEWEST
+                    // bubble that carries real text AND belongs to this round
+                    // (index >= expectedCount) is stable for 1500ms. The
+                    // index guard is what keeps this from misreading the
+                    // PREVIOUS round's content as this round's reply.
+                    let newestReal = null;
+                    for (let i = aiMsgs.length - 1; i >= expectedCount; i--) {
+                        const t = (aiMsgs[i].innerText || '').trim();
+                        const s = t
+                            .replace(/Thinking/gi, '')
+                            .replace(/Loading/gi, '')
+                            .trim();
+                        if (s.length >= 2) {
+                            newestReal = { raw: t, idx: i };
+                            break;
+                        }
+                    }
+                    if (newestReal) {
+                        const keyC = '__qwenpaw_ai_stable_cache_c__';
+                        const nowC = Date.now();
+                        const cacheC = window[keyC] || {};
+                        if (
+                            cacheC.text !== newestReal.raw ||
+                            cacheC.idx !== newestReal.idx
+                        ) {
+                            window[keyC] = {
+                                text: newestReal.raw,
+                                idx: newestReal.idx,
+                                since: nowC,
+                            };
+                        } else if (nowC - cacheC.since >= 1500) {
+                            window.__qwenpaw_wait_passed_via__ =
+                                'content_stable_new_round';
+                            return true;
+                        }
                     }
                     return false;
                 }""",
@@ -690,6 +954,14 @@ class ChatPage(BasePage):
             pass
         self.wait(300)
 
+        # Idempotency: if session items are already visible, the panel
+        # is open — skip the toggle click to avoid closing it.
+        existing = self.page.locator(self.SESSION_ITEM).first
+        if existing.count() > 0 and existing.is_visible():
+            logger.info("[open_session_list] panel already open, skipping toggle")
+            self.step_shot("session_list_opened")
+            return self
+
         # Fallback: if the button is not found in a short time (maybe the sidebar is hidden by an abnormal state), try reloading the page
         session_btn_locator = self.page.locator(self.SESSION_LIST_BTN).first
         try:
@@ -730,11 +1002,32 @@ class ChatPage(BasePage):
         return self
 
     def close_session_list(self) -> "ChatPage":
-        """Close the session list."""
+        """Close the session list.
+
+        The panel may be rendered as an antd Drawer (``.qwenpaw-drawer``)
+        or as an embedded panel (``[class*=historyPanel]``). The close
+        button is the **last** button inside ``[class*=headerRight]``
+        (the first is pin/unpin). If neither selector matches, fall back
+        to clicking the session-list toggle button which toggles the
+        panel closed.
+        """
         logger.info("Closing session list")
-        close_btn = self.page.locator('.qwenpaw-drawer ' + self.DRAWER_CLOSE)
-        if close_btn.count() > 0:
-            close_btn.first.click()
+        for container in (
+            '.qwenpaw-drawer',
+            '[class*="historyPanel"]',
+            '[class*="embeddedPanel"]',
+        ):
+            close_btn = self.page.locator(
+                f'{container} {self.DRAWER_CLOSE}'
+            )
+            if close_btn.count() > 0:
+                close_btn.last.click()
+                self.wait(500)
+                return self
+        # Fallback: toggle the session-list button to close the panel.
+        toggle = self.page.locator(self.SESSION_LIST_BTN).first
+        if toggle.count() > 0 and toggle.is_visible():
+            toggle.click()
             self.wait(500)
         return self
 
@@ -770,74 +1063,138 @@ class ChatPage(BasePage):
             self.step_shot(f"switch_to_session_{index}")
         return self
 
-    def rename_session(self, index: int, new_name: str) -> "ChatPage":
+    def _open_session_menu(self, index: int) -> bool:
+        """Hover a session item and open its actions dropdown.
+
+        The dropdown is triggered by the SparkMoreLine "more" button and
+        holds Pin / Rename / Archive / Delete items. Returns True when the
+        menu is visible.
+
+        The ``moreBtn`` is a ``<span>`` that is ``pointer-events:none`` until
+        the row is ``:hover``-ed, and antd opens the menu on a real click. In
+        headless CI the CSS ``:hover`` can be lost between hovering the row and
+        clicking, so a plain/force click may land on the element *behind* the
+        span and never open the menu. We therefore hover the row and the
+        button, try a normal click, and fall back to a DOM
+        ``dispatchEvent('click')`` that bypasses the pointer-events gate
+        (React's delegated onClick still fires). Two attempts total.
         """
-        Rename a session (hover, click the edit button, type a new name, then press Enter).
-
-        Args:
-            index: session index
-            new_name: new name
-
-        Returns:
-            self
-        """
-        logger.info(f"Renaming session {index} to: {new_name}")
-
         sessions = self.get_session_items()
         if not sessions or index >= len(sessions):
             logger.warning(f"Session at index {index} not found")
+            return False
+        # The sidebar is a virtual list: rows are recycled, so a locator
+        # captured via .all() can detach mid-interaction. Re-resolve by
+        # nth() right before each interaction attempt instead.
+        target = self.page.locator(self.SESSION_ITEM).nth(index)
+
+        open_menu_item = 'div[role="menu"] button[role="menuitem"]'
+
+        def _menu_visible(timeout: int) -> bool:
+            try:
+                self.page.locator(open_menu_item).first.wait_for(
+                    state="visible", timeout=timeout
+                )
+                return True
+            except (TimeoutError, Exception):
+                return False
+
+        for attempt in range(2):
+            # Reset any stale hover / overlay before (re)trying.
+            try:
+                self.page.mouse.move(0, 0)
+            except Exception:
+                pass
+            # Virtual list: off-viewport rows are not in the DOM at all.
+            # Scroll the list container so the target row gets rendered
+            # before resolving it.
+            try:
+                if not target.is_visible():
+                    self.page.locator(
+                        '[class*="listWrapper"] [class*="scroll"], '
+                        '[class*="listWrapper"]'
+                    ).first.evaluate(
+                        "el => el.scrollTo({top: el.scrollHeight})"
+                    )
+                    self.wait(500)
+            except Exception as exc:
+                logger.warning(f"[_open_session_menu] scroll failed: {exc}")
+            try:
+                target.scroll_into_view_if_needed(timeout=5000)
+                target.hover(timeout=8000)
+            except Exception:
+                try:
+                    target.hover(force=True, timeout=5000)
+                except Exception as exc:
+                    logger.warning(f"[_open_session_menu] hover failed: {exc}")
+            self.wait(300)
+
+            more_btn = target.locator(self.SESSION_MORE_BTN).first
+            if more_btn.count() == 0:
+                logger.warning("[_open_session_menu] more button not found")
+                return False
+
+            # Hover the button so the row stays :hover-ed (moreBtn is
+            # pointer-events:none otherwise), then click.
+            try:
+                more_btn.hover(timeout=3000)
+            except Exception:
+                pass
+            try:
+                more_btn.click(timeout=4000)
+            except Exception:
+                pass
+            if _menu_visible(4000):
+                self.wait(200)
+                return True
+
+            # The click may have been swallowed by the pointer-events gate;
+            # fire it via the DOM so React's delegated onClick still opens the
+            # menu.
+            try:
+                more_btn.dispatch_event("click")
+            except Exception as exc:
+                logger.warning(
+                    f"[_open_session_menu] dispatch click failed: {exc}"
+                )
+            if _menu_visible(3000):
+                self.wait(200)
+                return True
+
+            logger.warning(
+                f"[_open_session_menu] dropdown did not appear "
+                f"(attempt {attempt + 1})"
+            )
+
+        return False
+
+    def rename_session(self, index: int, new_name: str) -> "ChatPage":
+        """Rename a session via more-menu → Rename → inline input → Enter."""
+        logger.info(f"Renaming session {index} to: {new_name}")
+
+        if not self._open_session_menu(index):
+            self.step_shot(f"rename_session_{index}_menu_failed")
             return self
 
-        target_session = sessions[index]
-
-        # Hover the session item to reveal action buttons
-        target_session.hover()
+        rename_item = self.page.locator(self.SESSION_MENU_RENAME).first
+        if rename_item.count() == 0 or not rename_item.is_visible():
+            logger.warning("Rename menu item not found, skipping rename")
+            self.page.keyboard.press("Escape")
+            return self
+        rename_item.click()
         self.wait(500)
 
-        # Approach 1: click the edit button
-        edit_btn = target_session.locator(self.SESSION_EDIT_BTN)
-        if edit_btn.count() > 0:
-            edit_btn.first.click()
-            self.wait(500)
-        else:
-            # Approach 2: double-click the session name to trigger edit mode
-            logger.info("Edit button not found, trying double-click on session name")
-            name_el = target_session.locator(self.SESSION_NAME)
-            if name_el.count() > 0:
-                name_el.first.dblclick()
-            else:
-                target_session.dblclick()
-            self.wait(500)
-
-        # Try several selectors to find the input (may live inside or outside the session item)
-        rename_input = None
-        input_selectors = [
-            'input.qwenpaw-input',
-            'input[type="text"]',
-            'input',
-        ]
-
-        # Search inside the session item first
-        for selector in input_selectors:
-            locator = target_session.locator(selector)
-            if locator.count() > 0 and locator.first.is_visible():
-                rename_input = locator.first
-                logger.info(f"Found rename input inside session with selector: {selector}")
-                break
-
-        # If not found inside the session item, search globally on the page
-        if rename_input is None:
-            for selector in input_selectors:
-                locator = self.page.locator(f'.qwenpaw-modal input, .qwenpaw-drawer input, {self.SESSION_ITEM} {selector}')
-                if locator.count() > 0 and locator.first.is_visible():
-                    rename_input = locator.first
-                    logger.info(f"Found rename input globally with selector: {selector}")
-                    break
-        
-        if rename_input is None:
-            logger.warning("Rename input not found with any selector, skipping rename")
+        # Inline rename input (autofocus). Fall back to any visible input in
+        # the drawer if the class-based selector misses.
+        rename_input = self.page.locator(self.SESSION_RENAME_INPUT).first
+        if rename_input.count() == 0 or not rename_input.is_visible():
+            rename_input = self.page.locator(
+                '[class*=listWrapper] input, .qwenpaw-drawer input'
+            ).first
+        if rename_input.count() == 0 or not rename_input.is_visible():
+            logger.warning("Rename input not found, skipping rename")
             return self
-        
+
         rename_input.fill(new_name)
         self.step_shot(f"rename_input_filled_{new_name[:20]}")
         rename_input.press("Enter")
@@ -846,134 +1203,238 @@ class ChatPage(BasePage):
         logger.info(f"Session renamed to: {new_name}")
         self.step_shot(f"rename_done_{new_name[:20]}")
         return self
+
     
     def pin_session(self, index: int) -> "ChatPage":
-        """
-        Pin a session (hover, then click the pin button inside the session item).
-
-        WARNING: pin/edit/delete buttons are all hover-only; clicking without hovering first will
-        cause Playwright to wait up to 60s for an invisible button.
-        """
+        """Pin a session via more-menu → Pin."""
         logger.info(f"Pinning session at index {index}")
-
-        sessions = self.get_session_items()
-        if not sessions or index >= len(sessions):
-            logger.warning(f"Session at index {index} not found")
-            self.step_shot(f"pin_session_{index}_not_found")
+        if not self._open_session_menu(index):
+            self.step_shot(f"pin_session_{index}_menu_failed")
             return self
 
-        target_session = sessions[index]
-        # Must scroll into view + hover first to reveal the action buttons
-        try:
-            target_session.scroll_into_view_if_needed(timeout=5000)
-            target_session.hover(timeout=10000)
-        except Exception as e:
-            logger.warning(f"[pin_session] regular hover failed ({e}), trying force hover")
-            try:
-                target_session.hover(force=True, timeout=10000)
-            except Exception as e2:
-                logger.warning(f"[pin_session] force hover also failed: {e2}")
-                self.step_shot(f"pin_session_{index}_hover_failed")
-                return self
-        self.wait(400)
-        self.step_shot(f"pin_session_{index}_after_hover")
-
-        # Click the pin button (short timeout; force click if still not visible)
-        pin_btn = target_session.locator(self.SESSION_PIN_BTN)
-        if pin_btn.count() == 0:
-            logger.warning("Pin button not found in session item")
-            self.step_shot(f"pin_session_{index}_btn_missing")
+        pin_item = self.page.locator(self.SESSION_MENU_PIN).first
+        if pin_item.count() == 0 or not pin_item.is_visible():
+            # No "Pin" item means it is already pinned ("Unpin" shown).
+            logger.info("Pin menu item not present (already pinned?)")
+            self.page.keyboard.press("Escape")
             return self
-
-        try:
-            pin_btn.first.click(timeout=5000)
-        except Exception as e:
-            logger.warning(f"[pin_session] regular click failed ({e}), trying force click")
-            try:
-                pin_btn.first.click(force=True, timeout=5000)
-            except Exception as e2:
-                logger.warning(f"[pin_session] force click also failed: {e2}")
-                self.step_shot(f"pin_session_{index}_click_failed")
-                return self
-
+        pin_item.click()
         self.wait(1000)
         logger.info("Session pinned")
         self.step_shot(f"pin_session_{index}_done")
         return self
 
     def delete_session(self, index: int) -> "ChatPage":
-        """
-        Delete a session (hover then click the delete button; deletes directly with no confirmation popup).
-
-        WARNING: the delete button is hover-only -- it is only shown while hovering the session item.
-        Between step_shot/wait the mouse may "drift" and the button gets hidden again, so
-        Playwright will wait up to 60s by default. Therefore:
-        - Do not wait for long before taking the screenshot
-        - click must use a short timeout + force-click fallback
-        - Re-hover before retrying click to ensure the button is visible
-        """
+        """Delete a session via more-menu → Delete (confirm modal if shown)."""
         logger.info(f"Deleting session at index {index}")
-
         sessions_before = self.get_session_count()
-        sessions = self.get_session_items()
 
-        if not sessions or index >= len(sessions):
-            logger.warning(f"Session at index {index} not found")
+        if not self._open_session_menu(index):
+            self.step_shot(f"delete_session_{index}_menu_failed")
             return self
 
-        target_session = sessions[index]
-
-        # Hover the session item to reveal action buttons (scroll into view first)
-        try:
-            target_session.scroll_into_view_if_needed(timeout=5000)
-            target_session.hover(timeout=10000)
-        except Exception:
-            logger.warning(f"Session {index} not visible, trying force hover")
-            try:
-                target_session.hover(force=True, timeout=10000)
-            except Exception as e:
-                logger.warning(f"[delete_session] force hover also failed: {e}")
-                self.step_shot(f"delete_session_{index}_hover_failed")
-                return self
-        self.wait(300)
-        # Screenshot: hover done, before clicking delete (take screenshot only 200ms later to avoid mouse drift)
-        self.step_shot(f"delete_session_{index}_before_click")
-
-        # Click the delete button (deletes directly, no confirmation popup)
-        del_btn = target_session.locator(self.SESSION_DELETE_BTN)
-        if del_btn.count() == 0:
-            logger.warning("Delete button not found")
-            self.step_shot(f"delete_session_{index}_btn_missing")
+        del_item = self.page.locator(self.SESSION_MENU_DELETE).first
+        if del_item.count() == 0 or not del_item.is_visible():
+            logger.warning("Delete menu item not found")
+            self.page.keyboard.press("Escape")
+            self.step_shot(f"delete_session_{index}_item_missing")
             return self
+        del_item.click()
+        self.wait(800)
 
-        # Short timeout + force click triple fallback: hover state may already be lost
+        # A confirmation modal may appear; confirm it when present.
+        confirm = self.page.locator(
+            '.qwenpaw-modal-confirm-btns button.qwenpaw-btn-dangerous, '
+            '.qwenpaw-modal button.qwenpaw-btn-dangerous, '
+            '.qwenpaw-modal-confirm-btns button.qwenpaw-btn-primary'
+        ).first
         try:
-            del_btn.first.click(timeout=3000)
-        except Exception as e:
-            logger.warning(f"[delete_session] regular click failed ({e}), re-hover and retry")
-            try:
-                # Re-hover so the button becomes visible again
-                target_session.hover(force=True, timeout=5000)
-                self.wait(200)
-                del_btn.first.click(timeout=3000)
-            except Exception as e2:
-                logger.warning(f"[delete_session] retry click failed ({e2}), trying force click")
-                try:
-                    del_btn.first.click(force=True, timeout=5000)
-                except Exception as e3:
-                    logger.warning(f"[delete_session] force click also failed: {e3}")
-                    self.step_shot(f"delete_session_{index}_click_failed")
-                    return self
+            if confirm.count() > 0 and confirm.is_visible(timeout=1500):
+                confirm.click()
+                self.wait(500)
+        except (TimeoutError, Exception):
+            pass
 
-        self.wait(1000)
-        logger.info(f"Session deleted (before: {sessions_before}, after: {self.get_session_count()})")
+        self.wait(800)
+        logger.info(
+            f"Session deleted (before: {sessions_before}, "
+            f"after: {self.get_session_count()})"
+        )
         self.step_shot(f"delete_session_{index}_done")
         return self
 
     def verify_pinned_session(self) -> bool:
-        """Verify that at least one session is pinned (checked via the data-pinned attribute)."""
-        pinned_btn = self.page.locator('[class*=pinButton][data-pinned="true"]')
-        return pinned_btn.count() > 0
+        """Verify the top session is pinned.
+
+        A pinned session's more-menu shows "Unpin" instead of "Pin"; we
+        re-open the first session's menu and look for that item.
+        """
+        if not self._open_session_menu(0):
+            return False
+        unpin = self.page.locator(self.SESSION_MENU_UNPIN).first
+        result = unpin.count() > 0 and unpin.is_visible()
+        try:
+            self.page.keyboard.press("Escape")
+        except Exception:
+            pass
+        self.wait(300)
+        return result
+
+    def open_session_search(self) -> "ChatPage":
+        """Reveal the conversation search box in the sidebar session list.
+
+        Before #7502 the search input was always rendered inside the list
+        container. After #7502 it is mounted only on demand — see
+        ``console/src/layouts/SidebarSessionList.tsx``:
+
+            {!historyCollapsed && (searchOpen || creatingGroup) && (
+              <div className={styles.searchContainer}>
+                {searchOpen && <Input className={styles.searchInput} ... />}
+
+        so ``searchOpen`` has to be flipped first by opening the "More"
+        overflow dropdown (``aria-label`` from ``sidebar.more``) and picking the
+        "Search conversations" entry (``chat.sessionPanel.searchConversations``).
+        ``handleOpenSearch`` also focuses the input, so the box is ready to fill
+        by the time this returns.
+
+        Idempotent: if the box is already visible nothing is clicked, which
+        matters because the "More" dropdown toggles rather than opens.
+        """
+        existing = self.page.locator(self.SESSION_SEARCH_INPUT).first
+        if existing.count() > 0 and existing.is_visible():
+            return self
+
+        more_btn = self.page.locator(self.SESSION_MORE_ACTIONS_BTN).first
+        more_btn.wait_for(state="visible", timeout=5000)
+        more_btn.click()
+        self.wait(300)
+
+        search_item = self.page.locator(self.SESSION_SEARCH_MENU_ITEM).first
+        search_item.wait_for(state="visible", timeout=5000)
+        search_item.click()
+        self.wait(400)
+        return self
+
+    def search_sessions(self, keyword: str) -> "ChatPage":
+        """Filter the session list via the conversation search box."""
+        self.open_session_search()
+        box = self.page.locator(self.SESSION_SEARCH_INPUT).first
+        box.wait_for(state="visible", timeout=5000)
+        box.fill(keyword)
+        self.wait(800)
+        return self
+
+    def clear_session_search(self) -> "ChatPage":
+        """Clear the drawer conversation search box."""
+        box = self.page.locator(self.SESSION_SEARCH_INPUT).first
+        if box.count() > 0 and box.is_visible():
+            box.fill("")
+            self.wait(800)
+        return self
+
+    # ========== Tool approval level toggle ==========
+
+    def get_approval_toggle(self) -> Locator:
+        """Locate the approval-level trigger button in the composer.
+
+        Upstream #7334 replaced the antd Tag with a ``<button>`` carrying an
+        ``aria-label`` (localized approval-mode title); we anchor on that
+        attribute, exactly like upstream's own ApprovalToggle.test.tsx.
+        """
+        return self.page.locator(self.APPROVAL_TOGGLE).first
+
+    def open_approval_menu(self) -> "ChatPage":
+        """Click the approval Tag and wait for its dropdown to render."""
+        self.get_approval_toggle().click()
+        self.page.locator(self.APPROVAL_MENU_ITEM).first.wait_for(
+            state="visible", timeout=5000
+        )
+        self.wait(200)
+        return self
+
+    def get_approval_menu_items(self) -> List[Locator]:
+        """Return the visible approval dropdown items (expected: 4)."""
+        return self.page.locator(self.APPROVAL_MENU_ITEM).all()
+
+    def select_approval_level(self, level: str) -> "ChatPage":
+        """Open the menu and pick a level by key (STRICT/SMART/AUTO/OFF)."""
+        en, zh = self.APPROVAL_LEVELS[level]
+        self.open_approval_menu()
+        item = self.page.locator(
+            f'{self.APPROVAL_MENU_ITEM}:has-text("{en}"), '
+            f'{self.APPROVAL_MENU_ITEM}:has-text("{zh}")'
+        ).first
+        item.click()
+        self.wait(500)
+        self.step_shot(f"approval_select_{level}")
+        return self
+
+    def get_approval_storage_entries(self) -> dict:
+        """Read all ``approval_level-*`` localStorage entries as {key: value}."""
+        return self.page.evaluate(
+            """() => {
+                const out = {};
+                for (let i = 0; i < localStorage.length; i++) {
+                    const k = localStorage.key(i);
+                    if (k && k.indexOf('approval_level-') === 0) {
+                        out[k] = localStorage.getItem(k);
+                    }
+                }
+                return out;
+            }"""
+        )
+
+    # ========== Sidebar date groups (upstream #5643) ==========
+
+    def get_sidebar_group_header(self, group: str) -> Locator:
+        """Locator for one sidebar date-bucket header.
+
+        Args:
+            group: bucket key — pinned / today / week / month / older.
+
+        Upstream re-architected the sidebar: date buckets now render as
+        non-collapsible ``SessionDateHeader`` rows carrying a
+        ``data-date-group`` attribute, nested inside collapsible user
+        groups.
+        """
+        en, zh = self.SIDEBAR_GROUP_TEXTS[group]
+        return self.page.locator(
+            f'{self.SIDEBAR_DATE_LABEL}[data-date-group="{group}"], '
+            f'{self.SIDEBAR_DATE_LABEL}:has-text("{en}"), '
+            f'{self.SIDEBAR_DATE_LABEL}:has-text("{zh}")'
+        ).first
+
+    def toggle_sidebar_user_group(self) -> "ChatPage":
+        """Click the first collapsible user-group header."""
+        logger.info("Toggling the first sidebar user group")
+        self.page.locator(self.SIDEBAR_GROUP_LABEL).first.click()
+        self.wait(300)
+        return self
+
+    def toggle_sidebar_group(self, group: str) -> "ChatPage":
+        """Click a sidebar group header to collapse / expand it."""
+        logger.info(f"Toggling sidebar group '{group}'")
+        self.get_sidebar_group_header(group).click()
+        self.wait(300)
+        return self
+
+    def get_sidebar_session_by_name(self, name: str) -> Locator:
+        """Sidebar session row matched by its display name.
+
+        Scoped away from the All-Chats drawer by requiring the row to sit
+        under the sidebar group list (sibling of ``groupLabel`` buttons).
+        """
+        return self.page.locator(
+            f'div[role="button"][class*="item"]:has-text("{name}")'
+        ).first
+
+    # ========== Non-owner tab banner (upstream #5664) ==========
+
+    def get_queue_banner(self) -> Locator:
+        """The queue-only info banner in the sender area (non-owner tab)."""
+        return self.page.locator(self.QUEUE_BANNER).filter(
+            has_text=self._QUEUE_BANNER_RE
+        ).first
 
     # ========== Model and Agent switching ==========
     
@@ -1215,7 +1676,14 @@ class ChatPage(BasePage):
 
             try:
                 self.delete_session(0)
-                deleted_count += 1
+                remaining_count = self.get_session_count()
+                if remaining_count >= session_count:
+                    logger.warning(
+                        "[cleanup] session count did not decrease "
+                        f"({session_count}); stop cleanup"
+                    )
+                    break
+                deleted_count += session_count - remaining_count
             except Exception as error:
                 logger.warning(f"Failed to delete session: {error}")
                 break

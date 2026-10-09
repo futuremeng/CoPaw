@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import io
 import json
 import logging
@@ -14,16 +15,20 @@ import time
 import zipfile
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
+from dataclasses import dataclass, replace
 from datetime import datetime, timezone
-from functools import lru_cache
 from pathlib import Path
 from typing import Any, TypeVar
 
 import frontmatter
+import yaml
 
 from ...exceptions import SkillsError
 from ...security.skill_scanner import scan_skill_directory
-from ..utils.file_handling import read_text_file_with_encoding_fallback
+from ..utils.file_handling import (
+    read_text_file_with_encoding_fallback,
+    single_line_log_value,
+)
 from .models import SkillInfo, SkillRequirements
 
 try:
@@ -46,6 +51,29 @@ logger = logging.getLogger(__name__)
 _RegistryResult = TypeVar("_RegistryResult")
 _MAX_ZIP_BYTES = 200 * 1024 * 1024
 _REQUIREMENTS_METADATA_NAMESPACES = ("openclaw", "qwenpaw", "clawdbot")
+_FRONTMATTER_ENCODINGS = (
+    "utf-8-sig",
+    "utf-8",
+    "gbk",
+    "cp936",
+    "cp1252",
+    "latin-1",
+)
+_MAX_FRONTMATTER_LINES = 4096
+_MAX_FRONTMATTER_BYTES = 256 * 1024
+_POOL_MANIFEST_SCHEMA = "skill-pool-manifest.v1"
+_LEGACY_POOL_AUTOMATION_KEYS = (
+    "auto_update",
+    "auto_update_targets",
+    "auto_update_synced_hash",
+)
+_FLAT_POOL_AUTOMATION_KEYS = (
+    *_LEGACY_POOL_AUTOMATION_KEYS,
+    "auto_sync",
+    "auto_sync_targets",
+    "auto_sync_synced_hash",
+)
+_PAWPORT_MARKER = ".qwenpaw-pawport.json"
 
 
 # ---------------------------------------------------------------------------
@@ -98,6 +126,65 @@ def get_workspace_identity(workspace_dir: Path) -> dict[str, str]:
 def get_pool_skill_manifest_path() -> Path:
     """Return the shared pool skill manifest path."""
     return get_skill_pool_dir() / "skill.json"
+
+
+def get_extra_skill_dirs() -> list[Path]:
+    """Return configured additional read-only skill roots that exist."""
+    try:
+        from ...config.utils import load_config
+
+        raw_paths = list(load_config().skill_paths or [])
+    except Exception as exc:  # pragma: no cover
+        logger.warning("Failed to load configured skill_paths: %s", exc)
+        return []
+
+    primary = get_skill_pool_dir().resolve()
+    dirs: list[Path] = []
+    seen: set[Path] = {primary}
+    for raw in raw_paths:
+        try:
+            path = Path(str(raw)).expanduser().resolve()
+        except Exception:
+            logger.warning("Skipping invalid skill path: %r", raw)
+            continue
+        if path in seen or not path.is_dir():
+            continue
+        seen.add(path)
+        dirs.append(path)
+    return dirs
+
+
+def get_skill_pool_dirs() -> list[Path]:
+    """Return ordered skill pool roots: primary pool first, then extras."""
+    return [get_skill_pool_dir(), *get_extra_skill_dirs()]
+
+
+def resolve_pool_skill_dir(skill_name: str) -> Path | None:
+    """Resolve a pool skill's directory across all roots, in order.
+
+    Returns the first ``<root>/<skill_name>`` containing ``SKILL.md`` (primary
+    pool wins), or ``None`` when the skill is not found in any root.
+    """
+    try:
+        normalized = normalize_skill_dir_name(skill_name)
+    except SkillsError:
+        return None
+    for root in get_skill_pool_dirs():
+        try:
+            candidate = safe_skill_dir(root, normalized)
+        except SkillsError:
+            continue
+        if (candidate / "SKILL.md").exists():
+            return candidate
+    return None
+
+
+def is_primary_pool_skill_dir(skill_dir: Path) -> bool:
+    """Return whether ``skill_dir`` lives under the primary pool."""
+    try:
+        return skill_dir.resolve().parent == get_skill_pool_dir().resolve()
+    except Exception:  # pragma: no cover
+        return False
 
 
 # ---------------------------------------------------------------------------
@@ -156,6 +243,77 @@ def _read_frontmatter_safe(
         return {"name": skill_name, "description": ""}
 
 
+def _read_bounded_frontmatter_bytes(skill_md: Path) -> bytes | None:
+    """Read one bounded ``---``-delimited YAML header as raw bytes."""
+    raw_frontmatter: bytes | None = None
+    with skill_md.open("rb") as handle:
+        first_line = handle.readline(_MAX_FRONTMATTER_BYTES + 1)
+        valid_header = (
+            len(first_line) <= _MAX_FRONTMATTER_BYTES
+            and first_line.removeprefix(b"\xef\xbb\xbf").strip() == b"---"
+        )
+        lines = [first_line]
+        bytes_read = len(first_line)
+        for _ in range(_MAX_FRONTMATTER_LINES - 1):
+            if not valid_header:
+                break
+            remaining = _MAX_FRONTMATTER_BYTES - bytes_read
+            if remaining <= 0:
+                break
+            line = handle.readline(remaining + 1)
+            if not line or len(line) > remaining:
+                break
+            lines.append(line)
+            bytes_read += len(line)
+            if line.strip() == b"---":
+                raw_frontmatter = b"".join(lines)
+                break
+    return raw_frontmatter
+
+
+def load_skill_frontmatter_from_dir(skill_dir: Path) -> dict[str, Any]:
+    """Read the bounded YAML header, preserving read and parse failures."""
+    skill_md = skill_dir / "SKILL.md"
+    raw_frontmatter = _read_bounded_frontmatter_bytes(skill_md)
+    if raw_frontmatter is None:
+        raise SkillsError(
+            "SKILL.md is missing a bounded YAML frontmatter header",
+        )
+
+    for encoding in _FRONTMATTER_ENCODINGS:
+        try:
+            text = raw_frontmatter.decode(encoding)
+            post = frontmatter.loads(text)
+            return dict(post.metadata)
+        except UnicodeDecodeError:
+            continue
+        except (LookupError, yaml.YAMLError, TypeError, ValueError) as exc:
+            raise SkillsError(
+                f"SKILL.md frontmatter is invalid: {exc}",
+            ) from exc
+    raise SkillsError("Failed to decode SKILL.md frontmatter")
+
+
+def read_skill_frontmatter_from_dir(
+    skill_dir: Path,
+    skill_name: str = "",
+) -> dict[str, Any]:
+    """Read the YAML header with fallback values for metadata display."""
+    if not skill_name:
+        skill_name = skill_dir.name
+    try:
+        return load_skill_frontmatter_from_dir(skill_dir)
+    except (OSError, SkillsError) as exc:
+        logger.warning(
+            "Failed to read SKILL frontmatter for '%s' at %s: %s. "
+            "Using fallback values.",
+            single_line_log_value(skill_name),
+            single_line_log_value(skill_dir / "SKILL.md"),
+            single_line_log_value(exc),
+        )
+        return {"name": skill_name, "description": ""}
+
+
 def get_skill_mtime(skill_dir: Path) -> str:
     """Return the latest mtime across the skill directory as ISO string.
 
@@ -176,6 +334,18 @@ def get_skill_mtime(skill_dir: Path) -> str:
         return ""
 
 
+def compute_skill_md_hash(skill_dir: Path) -> str:
+    """Return a SHA-256 hex digest of the skill's ``SKILL.md`` content."""
+    skill_md = skill_dir / "SKILL.md"
+    if not skill_md.exists():
+        return ""
+    try:
+        content = read_text_file_with_encoding_fallback(skill_md)
+    except OSError:
+        return ""
+    return hashlib.sha256(content.encode("utf-8")).hexdigest()
+
+
 def _directory_tree(directory: Path) -> dict[str, Any]:
     """Recursively describe a directory tree for UI display."""
     tree: dict[str, Any] = {}
@@ -192,7 +362,9 @@ def _directory_tree(directory: Path) -> dict[str, Any]:
 
 
 def extract_version(post: Any) -> str:
-    metadata = post.get("metadata") or {}
+    metadata = post.get("metadata")
+    if not isinstance(metadata, dict):
+        metadata = {}
     for value in (
         post.get("version"),
         metadata.get("version"),
@@ -334,7 +506,7 @@ def default_workspace_manifest() -> dict[str, Any]:
 
 def default_pool_manifest() -> dict[str, Any]:
     return {
-        "schema_version": "skill-pool-manifest.v1",
+        "schema_version": _POOL_MANIFEST_SCHEMA,
         "version": 0,
         "skills": {},
         "builtin_skill_names": [],
@@ -358,6 +530,176 @@ def is_pool_builtin_entry(entry: dict[str, Any] | None) -> bool:
         bool(normalized)
         and str(normalized.get("source", "") or "") == "builtin"
     )
+
+
+@dataclass(frozen=True)
+class PoolSkillAutomation:
+    """Canonical automation settings for one Skill Pool entry."""
+
+    auto_update: bool = False
+    auto_sync: bool = False
+    auto_sync_targets: tuple[str, ...] | None = None
+    auto_sync_synced_hash: str = ""
+
+
+def _automation_enabled(value: Any) -> bool:
+    if not isinstance(value, dict):
+        return False
+    return bool(value.get("enabled", False))
+
+
+def _automation_targets(value: Any) -> tuple[str, ...] | None:
+    if not isinstance(value, list):
+        return None
+    targets = tuple(
+        dict.fromkeys(
+            str(target).strip() for target in value if str(target).strip()
+        ),
+    )
+    return targets or None
+
+
+def read_pool_skill_automation(entry: Any) -> PoolSkillAutomation:
+    """Read canonical settings, accepting the released legacy sync fields."""
+    if not isinstance(entry, dict):
+        return PoolSkillAutomation()
+
+    if "automation" in entry:
+        automation = entry.get("automation")
+        if not isinstance(automation, dict):
+            logger.warning("Ignoring malformed Skill Pool automation config")
+            return PoolSkillAutomation()
+        auto_update = automation.get("auto_update")
+        auto_sync = automation.get("auto_sync")
+        sync_config = auto_sync if isinstance(auto_sync, dict) else {}
+        return PoolSkillAutomation(
+            auto_update=(
+                _automation_enabled(auto_update)
+                if is_pool_builtin_entry(entry)
+                else False
+            ),
+            auto_sync=_automation_enabled(auto_sync),
+            auto_sync_targets=_automation_targets(
+                sync_config.get("targets"),
+            ),
+            auto_sync_synced_hash=str(
+                sync_config.get("synced_hash", "") or "",
+            ),
+        )
+
+    return PoolSkillAutomation(
+        auto_update=False,
+        auto_sync=bool(entry.get("auto_update", False)),
+        auto_sync_targets=_automation_targets(
+            entry.get("auto_update_targets"),
+        ),
+        auto_sync_synced_hash=str(
+            entry.get("auto_update_synced_hash", "") or "",
+        ),
+    )
+
+
+def write_pool_skill_automation(
+    entry: dict[str, Any],
+    settings: PoolSkillAutomation,
+) -> bool:
+    """Write canonical automation and return whether the entry changed."""
+    existing = entry.get("automation")
+    automation = dict(existing) if isinstance(existing, dict) else {}
+
+    if is_pool_builtin_entry(entry):
+        update_value = automation.get("auto_update")
+        update_config = (
+            dict(update_value) if isinstance(update_value, dict) else {}
+        )
+        update_config["enabled"] = bool(settings.auto_update)
+        automation["auto_update"] = update_config
+    else:
+        automation.pop("auto_update", None)
+
+    sync_value = automation.get("auto_sync")
+    sync_config = dict(sync_value) if isinstance(sync_value, dict) else {}
+    sync_config["enabled"] = bool(settings.auto_sync)
+    if settings.auto_sync_targets:
+        sync_config["targets"] = list(settings.auto_sync_targets)
+    else:
+        sync_config.pop("targets", None)
+    if settings.auto_sync_synced_hash:
+        sync_config["synced_hash"] = settings.auto_sync_synced_hash
+    else:
+        sync_config.pop("synced_hash", None)
+    automation["auto_sync"] = sync_config
+
+    changed = existing != automation or any(
+        key in entry for key in _FLAT_POOL_AUTOMATION_KEYS
+    )
+    entry["automation"] = automation
+    for key in _FLAT_POOL_AUTOMATION_KEYS:
+        entry.pop(key, None)
+    return changed
+
+
+def copy_pool_skill_automation(
+    source: Any,
+    target: dict[str, Any],
+) -> None:
+    """Copy automation settings when rebuilding a Pool manifest entry."""
+    if not isinstance(source, dict) or not (
+        "automation" in source
+        or any(key in source for key in _LEGACY_POOL_AUTOMATION_KEYS)
+    ):
+        return
+    settings = read_pool_skill_automation(source)
+    if not is_pool_builtin_entry(target):
+        settings = replace(settings, auto_update=False)
+    write_pool_skill_automation(target, settings)
+
+
+def normalize_pool_manifest_payload(payload: dict[str, Any]) -> bool:
+    """Normalize released legacy automation fields into their namespace."""
+    schema_version = str(payload.get("schema_version", "") or "")
+    if schema_version not in {"", _POOL_MANIFEST_SCHEMA}:
+        return False
+
+    changed = False
+    if not schema_version:
+        payload["schema_version"] = _POOL_MANIFEST_SCHEMA
+        changed = True
+
+    skills = payload.get("skills", {})
+    if not isinstance(skills, dict):
+        return changed
+
+    for raw_entry in skills.values():
+        if not isinstance(raw_entry, dict):
+            continue
+        has_canonical = "automation" in raw_entry
+        has_legacy = any(
+            key in raw_entry for key in _LEGACY_POOL_AUTOMATION_KEYS
+        )
+        if has_canonical or has_legacy:
+            changed = (
+                write_pool_skill_automation(
+                    raw_entry,
+                    read_pool_skill_automation(raw_entry),
+                )
+                or changed
+            )
+    return changed
+
+
+def mutate_pool_manifest(
+    mutator: Callable[[dict[str, Any]], _RegistryResult],
+) -> _RegistryResult:
+    """Normalize and atomically mutate the primary Skill Pool manifest."""
+    path = get_pool_skill_manifest_path()
+    with _file_write_lock(_lock_path_for(path)):
+        payload = _read_json_unlocked(path, default_pool_manifest())
+        normalized = normalize_pool_manifest_payload(payload)
+        result = mutator(payload)
+        if result is not False or normalized:
+            write_json_atomic(path, payload)
+        return result
 
 
 def classify_pool_skill_source(
@@ -401,7 +743,7 @@ def is_ignored_skill_entry(name: str) -> bool:
     skill-dir enumeration (registry scanners, pool / workspace conflict
     checks, zip imports). Add new patterns here when they appear.
     """
-    return name in _IGNORED_SKILL_ARTIFACTS or name.startswith("~")
+    return name in _IGNORED_SKILL_ARTIFACTS or name.startswith((".", "~"))
 
 
 def _extract_and_validate_zip(data: bytes, tmp_dir: Path) -> None:
@@ -450,11 +792,17 @@ def _safe_child_path(base_dir: Path, relative_name: str) -> Path:
 
 def normalize_skill_dir_name(name: str) -> str:
     """Normalize and validate a skill directory name."""
-    normalized = str(name or "").strip()
+    raw_name = str(name or "")
+    if any(
+        ord(character) < 0x20 or 0x7F <= ord(character) <= 0x9F
+        for character in raw_name
+    ):
+        raise SkillsError(
+            message="Skill name cannot contain control characters",
+        )
+    normalized = raw_name.strip()
     if not normalized:
         raise SkillsError(message="Skill name cannot be empty")
-    if "\x00" in normalized:
-        raise SkillsError(message="Skill name cannot contain NUL bytes")
     if normalized in {".", ".."}:
         raise SkillsError(message=f"Invalid skill name: {normalized}")
     if "/" in normalized or "\\" in normalized:
@@ -467,9 +815,10 @@ def normalize_skill_dir_name(name: str) -> str:
 def safe_skill_dir(base_dir: Path, name: str) -> Path:
     """Normalize a skill name and resolve it inside ``base_dir``.
 
-    Layered defense: ``normalize_skill_dir_name`` already rejects empty,
-    NUL, ``.``, ``..``, ``/`` and ``\\``; the resolve + ``is_relative_to``
-    check guards against future relaxations and platform-specific quirks.
+    Layered defense: ``normalize_skill_dir_name`` already rejects empty names,
+    control characters, ``.``, ``..``, ``/`` and ``\\``; the resolve +
+    ``is_relative_to`` check guards against future relaxations and
+    platform-specific quirks.
     """
     normalized = normalize_skill_dir_name(name)
     candidate = (base_dir / normalized).resolve()
@@ -516,8 +865,10 @@ def _resolve_skill_name(skill_dir: Path) -> str:
     return skill_dir.name
 
 
-def _extract_requirements(post: dict[str, Any]) -> SkillRequirements:
-    """Extract requirements from a parsed frontmatter dict."""
+def parse_skill_requirements(
+    post: dict[str, Any],
+) -> tuple[SkillRequirements, list[str]]:
+    """Return valid requirement fields and all declaration errors."""
     metadata = post.get("metadata")
     if not isinstance(metadata, dict):
         metadata = {}
@@ -535,27 +886,37 @@ def _extract_requirements(post: dict[str, Any]) -> SkillRequirements:
             post.get("requires", {}),
         )
 
-    try:
-        if isinstance(requires, list):
-            return SkillRequirements(
-                require_bins=list(requires),
-                require_envs=[],
+    if isinstance(requires, list):
+        requires = {"bins": requires}
+
+    if not isinstance(requires, dict):
+        return SkillRequirements(), [
+            "requires must be a mapping or a list of binaries",
+        ]
+
+    normalized = {}
+    errors = []
+    for key in ("bins", "env", "mcp"):
+        values = requires.get(key, [])
+        if not isinstance(values, list) or any(
+            not isinstance(value, str) or not value.strip() for value in values
+        ):
+            errors.append(
+                f"requires.{key} must be a list of non-empty strings",
             )
-
-        if not isinstance(requires, dict):
-            return SkillRequirements()
-
-        return SkillRequirements(
-            require_bins=list(requires.get("bins", [])),
-            require_envs=list(requires.get("env", [])),
+            values = []
+        normalized[key] = list(
+            dict.fromkeys(value.strip() for value in values),
         )
-    except Exception as e:
-        logger.warning(
-            "Failed to parse skill requirements: %s. "
-            "Falling back to empty requirements.",
-            e,
-        )
-        return SkillRequirements()
+
+    return (
+        SkillRequirements(
+            require_bins=normalized["bins"],
+            require_envs=normalized["env"],
+            require_mcps=normalized["mcp"],
+        ),
+        errors,
+    )
 
 
 def build_skill_metadata(
@@ -571,18 +932,74 @@ def build_skill_metadata(
     reconcile. That keeps the manifest descriptive rather than authoritative
     for content details.
     """
-    post = _read_frontmatter_safe(skill_dir, skill_name)
-    requirements = _extract_requirements(post)
+    post = read_skill_frontmatter_from_dir(skill_dir, skill_name)
+    return _build_skill_metadata_from_post(
+        skill_name,
+        skill_dir,
+        post,
+        source=source,
+        protected=protected,
+    )
+
+
+def _build_skill_metadata_from_post(
+    skill_name: str,
+    skill_dir: Path,
+    post: dict[str, Any],
+    *,
+    source: str,
+    protected: bool = False,
+) -> dict[str, Any]:
+    requirements, errors = parse_skill_requirements(post)
+    for error in errors:
+        logger.warning(
+            "Ignoring invalid requirements in skill '%s': %s",
+            single_line_log_value(skill_name),
+            error,
+        )
     return {
         "name": skill_name,
         "description": str(post.get("description", "") or ""),
         "version_text": extract_version(post),
+        "emoji": _extract_emoji_from_metadata(post.get("metadata", {})),
         "commit_text": "",
         "source": source,
         "protected": protected,
         "requirements": requirements.model_dump(),
         "updated_at": get_skill_mtime(skill_dir),
     }
+
+
+def read_skill_content_and_metadata_from_dir(
+    skill_name: str,
+    skill_dir: Path,
+    *,
+    source: str,
+) -> tuple[str, dict[str, Any]] | None:
+    """Read and parse one SKILL.md once, without walking auxiliary files."""
+    skill_md = skill_dir / "SKILL.md"
+    if not skill_dir.is_dir() or not skill_md.is_file():
+        return None
+    try:
+        content = read_text_file_with_encoding_fallback(skill_md)
+        try:
+            post = dict(frontmatter.loads(content).metadata)
+        except Exception:
+            post = {"name": skill_name, "description": ""}
+        metadata = _build_skill_metadata_from_post(
+            skill_name,
+            skill_dir,
+            post,
+            source=source,
+        )
+        return content, metadata
+    except Exception as exc:
+        logger.error(
+            "Failed to read skill content from %s: %s",
+            single_line_log_value(skill_md),
+            single_line_log_value(exc),
+        )
+        return None
 
 
 # ---------------------------------------------------------------------------
@@ -673,26 +1090,18 @@ def build_import_conflict(
 # ---------------------------------------------------------------------------
 
 
-@lru_cache(maxsize=256)
-def _read_file_text_cached(  # pylint: disable=unused-argument
-    path_str: str,
-    mtime_ns: int,
-) -> str:
-    """Return file text cached by *path + mtime*."""
-    return Path(path_str).read_text(encoding="utf-8")
-
-
-def _read_json_mtime_cached(
+def _read_json_snapshot_cached(
     path: Path,
     default: dict[str, Any],
 ) -> dict[str, Any]:
-    """``_read_json_unlocked`` variant with mtime cache."""
+    """Read JSON from the shared strong-signature file snapshot cache."""
     if not path.exists():
         return json.loads(json.dumps(default))
     try:
-        mtime_ns = os.stat(path).st_mtime_ns
-        text = _read_file_text_cached(str(path), mtime_ns)
-        return json.loads(text)
+        from ...utils.file_snapshot_cache import get_file_snapshot_cache
+
+        snapshot = get_file_snapshot_cache().get_bytes(path)
+        return json.loads(snapshot.data.decode("utf-8"))
     except json.JSONDecodeError:
         logger.warning("Malformed JSON in %s, resetting to default", path)
         return json.loads(json.dumps(default))
@@ -703,15 +1112,17 @@ def _read_json_mtime_cached(
 def read_skill_manifest(
     workspace_dir: Path,
 ) -> dict[str, Any]:
-    """Return the workspace skill manifest, cached by file mtime."""
+    """Return the workspace skill manifest from a cached file snapshot."""
     path = get_workspace_skill_manifest_path(workspace_dir)
-    return _read_json_mtime_cached(path, default_workspace_manifest())
+    return _read_json_snapshot_cached(path, default_workspace_manifest())
 
 
 def read_skill_pool_manifest() -> dict[str, Any]:
-    """Return the pool skill manifest, cached by file mtime."""
+    """Return the pool skill manifest from a cached file snapshot."""
     path = get_pool_skill_manifest_path()
-    return _read_json_mtime_cached(path, default_pool_manifest())
+    payload = _read_json_snapshot_cached(path, default_pool_manifest())
+    normalize_pool_manifest_payload(payload)
+    return payload
 
 
 # ---------------------------------------------------------------------------
@@ -776,7 +1187,12 @@ def read_skill_from_dir(skill_dir: Path, source: str) -> SkillInfo | None:
 
 
 def validate_skill_content(content: str) -> tuple[str, str]:
-    post = frontmatter.loads(content)
+    try:
+        post = frontmatter.loads(content)
+    except yaml.YAMLError as exc:
+        raise SkillsError(
+            message=f"SKILL.md frontmatter is not valid YAML: {exc}",
+        ) from exc
     skill_name = str(post.get("name") or "").strip()
     skill_description = str(post.get("description") or "").strip()
     if not skill_name or not skill_description:
@@ -786,6 +1202,11 @@ def validate_skill_content(content: str) -> tuple[str, str]:
                 "name and description"
             ),
         )
+    metadata = post.get("metadata")
+    if metadata is not None and not isinstance(metadata, dict):
+        raise SkillsError(
+            message="SKILL.md frontmatter 'metadata' must be a dict",
+        )
     return skill_name, skill_description
 
 
@@ -793,6 +1214,7 @@ def import_skill_dir(
     src_dir: Path,
     target_root: Path,
     skill_name: str,
+    pawport_owner: dict[str, Any] | None = None,
 ) -> bool:
     """Import a skill directory to target location.
 
@@ -810,8 +1232,63 @@ def import_skill_dir(
     target_dir = target_root / skill_name
     if target_dir.exists():
         return False
-    copy_skill_dir(src_dir, target_dir)
+
+    # Do not turn the existence check above into a destructive replacement if
+    # another importer creates the target between the check and the copy.
+    def _ignore(_dir: str, names: list[str]) -> set[str]:
+        return {name for name in names if name in _IGNORED_SKILL_ARTIFACTS}
+
+    target_root.mkdir(parents=True, exist_ok=True)
+    stage_root = Path(
+        tempfile.mkdtemp(prefix=f".{skill_name}.import-", dir=target_root),
+    )
+    stage_dir = stage_root / skill_name
+    try:
+        shutil.copytree(src_dir, stage_dir, ignore=_ignore)
+        if pawport_owner is not None:
+            (stage_dir / _PAWPORT_MARKER).write_text(
+                json.dumps(
+                    {**pawport_owner, "state": "prepared"},
+                    sort_keys=True,
+                ),
+                encoding="utf-8",
+            )
+        with _file_write_lock(_lock_path_for(target_root / ".import")):
+            if target_dir.exists():
+                return False
+            os.rename(stage_dir, target_dir)
+        return True
+    finally:
+        shutil.rmtree(stage_root, ignore_errors=True)
+
+
+def discard_prepared_pawport_skill(
+    skill_dir: Path,
+    owner: dict[str, Any],
+) -> bool:
+    """Remove only a matching PawPort skill left before manifest commit."""
+    try:
+        marker = json.loads((skill_dir / _PAWPORT_MARKER).read_text())
+    except (OSError, ValueError, TypeError):
+        return False
+    if marker.get("state") != "prepared" or any(
+        marker.get(key) != value for key, value in owner.items()
+    ):
+        return False
+    shutil.rmtree(skill_dir)
     return True
+
+
+def commit_pawport_skill(skill_dir: Path, owner: dict[str, Any]) -> None:
+    """Drop the prepared marker after the workspace manifest is committed."""
+    try:
+        marker = json.loads((skill_dir / _PAWPORT_MARKER).read_text())
+    except (OSError, ValueError, TypeError):
+        return
+    if marker.get("state") == "prepared" and all(
+        marker.get(key) == value for key, value in owner.items()
+    ):
+        (skill_dir / _PAWPORT_MARKER).unlink(missing_ok=True)
 
 
 def write_skill_to_dir(

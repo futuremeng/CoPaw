@@ -1,210 +1,91 @@
-import { Suspense } from "react";
+import { Suspense, useMemo } from "react";
 import { Layout, Spin } from "antd";
-import { Routes, Route, useLocation, Navigate } from "react-router-dom";
+import { Routes, Route, useLocation } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import Sidebar from "../Sidebar";
+import AmbientLight from "../AmbientLight";
 import Header from "../Header";
 import ConsolePollService from "../../components/ConsolePollService";
+import { AgentStatusPollingController } from "../../components/AgentStatusPollingController";
 import { ChunkErrorBoundary } from "../../components/ChunkErrorBoundary";
-import { lazyImportWithRetry } from "../../utils/lazyWithRetry";
-import { usePlugins } from "../../plugins/PluginContext";
-import { useCodingMode } from "../../stores/codingModeStore";
 import { useSyncCodingMode } from "../../stores/useSyncCodingMode";
 import styles from "../index.module.less";
+import { useRoutes } from "../../plugins/registry/hooks";
+import { Slot } from "../../plugins/registry/Slot";
+import { pickSelectedKey } from "./routeSelection";
 
-// Chat is eagerly loaded (default landing page)
-import Chat from "../../pages/Chat";
-// Coding Mode IDE page
-import CodingPage from "../../pages/Coding";
-
-// All other pages are lazily loaded with automatic retry on chunk failure
-const ChannelsPage = lazyImportWithRetry("../../pages/Control/Channels");
-const SessionsPage = lazyImportWithRetry("../../pages/Control/Sessions");
-const InboxPage = lazyImportWithRetry("../../pages/Inbox");
-const CronJobsPage = lazyImportWithRetry("../../pages/Control/CronJobs");
-const HeartbeatPage = lazyImportWithRetry("../../pages/Control/Heartbeat");
-const AgentConfigPage = lazyImportWithRetry("../../pages/Agent/Config");
-const SkillsPage = lazyImportWithRetry("../../pages/Agent/Skills");
-const SkillPoolPage = lazyImportWithRetry("../../pages/Settings/SkillPool");
-const MarketPage = lazyImportWithRetry("../../pages/Settings/Market");
-const ToolsPage = lazyImportWithRetry("../../pages/Agent/Tools");
-const WorkspacePage = lazyImportWithRetry("../../pages/Agent/Workspace");
-const MCPPage = lazyImportWithRetry("../../pages/Agent/MCP");
-const ACPPage = lazyImportWithRetry("../../pages/Agent/ACP");
-const ModelsPage = lazyImportWithRetry("../../pages/Settings/Models");
-const EnvironmentsPage = lazyImportWithRetry(
-  "../../pages/Settings/Environments",
-);
-const SecurityPage = lazyImportWithRetry("../../pages/Settings/Security");
-const TokenUsagePage = lazyImportWithRetry("../../pages/Settings/TokenUsage");
-const AgentStatsPage = lazyImportWithRetry("../../pages/Settings/AgentStats");
-const VoiceTranscriptionPage = lazyImportWithRetry(
-  "../../pages/Settings/VoiceTranscription",
-);
-const NlpPage = lazyImportWithRetry("../../pages/Settings/Nlp");
-const AgentsPage = lazyImportWithRetry("../../pages/Settings/Agents");
-const KnowledgePage = lazyImportWithRetry("../../pages/Agent/Knowledge");
-const ProjectsListPage = lazyImportWithRetry(
-  "../../pages/Agent/Projects/ProjectsListPage",
-);
-const ProjectDetailPage = lazyImportWithRetry(
-  "../../pages/Agent/Projects/ProjectDetailPage",
-);
-const PipelinesPage = lazyImportWithRetry("../../pages/Agent/Pipelines");
-const DebugPage = lazyImportWithRetry("../../pages/Settings/Debug");
-const BackupsPage = lazyImportWithRetry("../../pages/Settings/Backups");
-const PluginManagerPage = lazyImportWithRetry(
-  "../../pages/Settings/PluginManager",
-);
+import { HubModeContext } from "../../contexts/HubModeContext";
 
 const { Content } = Layout;
 
-// Route "/" lands here. Waits for useSyncCodingMode to populate the store
-// from the backend before deciding where to send the user — otherwise we
-// would flash /chat first and the toggle button would desync with the
-// rendered page.
-function DefaultRedirect() {
-  const { t } = useTranslation();
-  const { codingMode, initialized } = useCodingMode();
-  if (!initialized) {
-    return (
-      <Spin
-        tip={t("common.loading")}
-        style={{ display: "block", margin: "20vh auto" }}
-      />
-    );
-  }
-  return <Navigate to={codingMode ? "/coding" : "/chat"} replace />;
-}
-
-const pathToKey: Record<string, string> = {
-  "/chat": "chat",
-  "/coding": "chat",
-  "/channels": "channels",
-  "/sessions": "sessions",
-  "/inbox": "inbox",
-  "/cron-jobs": "cron-jobs",
-  "/heartbeat": "heartbeat",
-  "/knowledge": "knowledge",
-  "/skills": "skills",
-  "/skill-pool": "skill-pool",
-  "/market": "market",
-  "/tools": "tools",
-  "/mcp": "mcp",
-  "/acp": "acp",
-  "/workspace": "workspace",
-  "/projects": "projects",
-  "/pipelines": "pipelines",
-  "/agents": "agents",
-  "/models": "models",
-  "/environments": "environments",
-  "/agent-config": "agent-config",
-  "/security": "security",
-  "/token-usage": "token-usage",
-  "/agent-stats": "agent-stats",
-  "/voice-transcription": "voice-transcription",
-  "/nlp": "nlp",
-  "/debug": "debug",
-  "/backups": "backups",
-  "/plugin-manager": "plugin-manager",
-};
-
-export default function MainLayout() {
+export default function MainLayout({ hubMode = false }: { hubMode?: boolean }) {
   const { t } = useTranslation();
   const location = useLocation();
   const currentPath = location.pathname;
-  const { pluginRoutes } = usePlugins();
+  const routes = useRoutes();
 
   // Backend is the source of truth for Coding Mode state — refill the
   // in-memory store every time the selected agent changes.
   useSyncCodingMode();
 
-  // Resolve selected key: check static routes first, then plugin routes
-  let selectedKey = pathToKey[currentPath] || "";
-  if (!selectedKey) {
-    if (currentPath.startsWith("/projects/")) {
-      selectedKey = "projects";
-    } else {
-      const matchedPlugin = pluginRoutes.find(
-        (route) => currentPath === route.path,
-      );
-      selectedKey = matchedPlugin
-        ? matchedPlugin.path.replace(/^\//, "")
-        : "chat";
-    }
-  }
+  const selectedKey = useMemo(
+    () => pickSelectedKey(currentPath, routes),
+    [currentPath, routes],
+  );
+  const settingsCenterActive = selectedKey === "core.settings-center";
+
+  // PawApp inline routes (`/apps/<id>`) are rendered *inside* the App Center
+  // page (with its "← App Center" bar), never as standalone full-page routes.
+  // They stay in the registry so the App Center can look up their component;
+  // we just skip them here. The App Center's own `/apps/:appId` route (with a
+  // colon) is kept, so a deep-link / refresh lands on the App Center wrapper.
+  const renderableRoutes = useMemo(
+    () => routes.filter((r) => !/^\/apps\/(?!:)/.test(r.path)),
+    [routes],
+  );
 
   return (
-    <Layout className={styles.mainLayout}>
-      <Header />
-      <Layout>
-        <Sidebar selectedKey={selectedKey} />
-        <Content className="page-container">
-          <ConsolePollService />
-          <div className="page-content">
-            <ChunkErrorBoundary resetKey={currentPath}>
-              <Suspense
-                fallback={
-                  <Spin tip={t("common.loading")}>
-                    <div style={{ minHeight: "40vh" }} />
-                  </Spin>
-                }
+    <HubModeContext.Provider value={hubMode}>
+      <Layout className={styles.mainLayout}>
+        <AmbientLight />
+        {!settingsCenterActive && (
+          <Sidebar selectedKey={selectedKey} hubMode={hubMode} />
+        )}
+        <Layout className={styles.mainContentLayout}>
+          <Header showBrand={settingsCenterActive} />
+          <Content className="page-container">
+            <ConsolePollService />
+            <AgentStatusPollingController />
+            <Slot name="content.statusBar" kind="fill" />
+            <div className="page-content">
+              <ChunkErrorBoundary
+                resetKey={currentPath}
+                canRestartRuntime={hubMode}
               >
-                <Routes>
-                  <Route path="/" element={<DefaultRedirect />} />
-                  <Route path="/chat/*" element={<Chat />} />
-                  <Route path="/coding" element={<CodingPage />} />
-                  <Route path="/channels" element={<ChannelsPage />} />
-                  <Route path="/sessions" element={<SessionsPage />} />
-                  <Route path="/inbox" element={<InboxPage />} />
-                  <Route path="/cron-jobs" element={<CronJobsPage />} />
-                  <Route path="/heartbeat" element={<HeartbeatPage />} />
-                  <Route path="/knowledge" element={<KnowledgePage />} />
-                  <Route path="/skills" element={<SkillsPage />} />
-                  <Route path="/skill-pool" element={<SkillPoolPage />} />
-                  <Route path="/market" element={<MarketPage />} />
-                  <Route path="/tools" element={<ToolsPage />} />
-                  <Route path="/mcp" element={<MCPPage />} />
-                  <Route path="/acp" element={<ACPPage />} />
-                  <Route path="/ACP" element={<Navigate to="/acp" replace />} />
-                  <Route path="/workspace" element={<WorkspacePage />} />
-                  <Route path="/projects" element={<ProjectsListPage />} />
-                  <Route path="/projects/:projectId" element={<ProjectDetailPage />} />
-                  <Route path="/projects/:projectId/chat/:chatId" element={<ProjectDetailPage />} />
-                  <Route path="/pipelines" element={<PipelinesPage />} />
-                  <Route path="/agents" element={<AgentsPage />} />
-                  <Route path="/models" element={<ModelsPage />} />
-                  <Route path="/environments" element={<EnvironmentsPage />} />
-                  <Route path="/agent-config" element={<AgentConfigPage />} />
-                  <Route path="/security" element={<SecurityPage />} />
-                  <Route path="/token-usage" element={<TokenUsagePage />} />
-                  <Route path="/agent-stats" element={<AgentStatsPage />} />
-                  <Route
-                    path="/voice-transcription"
-                    element={<VoiceTranscriptionPage />}
-                  />
-                  <Route path="/nlp" element={<NlpPage />} />
-                  <Route path="/debug" element={<DebugPage />} />
-                  <Route path="/backups" element={<BackupsPage />} />
-                  <Route
-                    path="/plugin-manager"
-                    element={<PluginManagerPage />}
-                  />
-
-                  {/* Plugin routes — dynamically injected at runtime */}
-                  {pluginRoutes.map((route) => (
-                    <Route
-                      key={route.path}
-                      path={route.path}
-                      element={<route.component />}
+                <Suspense
+                  fallback={
+                    <Spin
+                      tip={t("common.loading")}
+                      style={{ display: "block", margin: "20vh auto" }}
                     />
-                  ))}
-                </Routes>
-              </Suspense>
-            </ChunkErrorBoundary>
-          </div>
-        </Content>
+                  }
+                >
+                  <Routes>
+                    {renderableRoutes.map((r) => (
+                      <Route
+                        key={r.id}
+                        path={r.path}
+                        element={<r.Component />}
+                      />
+                    ))}
+                  </Routes>
+                </Suspense>
+              </ChunkErrorBoundary>
+            </div>
+          </Content>
+        </Layout>
+        <Slot name="overlay.global" kind="fill" />
       </Layout>
-    </Layout>
+    </HubModeContext.Provider>
   );
 }

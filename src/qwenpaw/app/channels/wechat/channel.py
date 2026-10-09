@@ -29,7 +29,7 @@ from typing import Any, Callable, Dict, List, Optional, Tuple
 
 import base64 as _b64
 
-from agentscope_runtime.engine.schemas.agent_schemas import (
+from qwenpaw.schemas import (
     AgentRequest,
     FileContent,
     ImageContent,
@@ -39,6 +39,7 @@ from agentscope_runtime.engine.schemas.agent_schemas import (
 
 from ....exceptions import ChannelError
 from ....constant import DEFAULT_MEDIA_DIR, WORKING_DIR
+from ..renderer import ChannelDisplayConfig
 from ..base import (
     BaseChannel,
     ContentType,
@@ -46,7 +47,11 @@ from ..base import (
     OutgoingContentPart,
     ProcessHandler,
 )
-from ..utils import file_url_to_local_path, split_text
+from ..utils import (
+    file_url_to_local_path,
+    materialize_data_url,
+    split_text,
+)
 from .client import ILinkClient, _DEFAULT_BASE_URL
 
 logger = logging.getLogger(__name__)
@@ -82,9 +87,8 @@ class WeChatChannel(BaseChannel):
         media_dir: str = "",
         workspace_dir: Path | None = None,
         on_reply_sent: OnReplySent = None,
-        show_tool_details: bool = True,
-        filter_tool_messages: bool = False,
-        filter_thinking: bool = False,
+        display_config: ChannelDisplayConfig | None = None,
+        no_text_debounce: bool = True,
         dm_policy: str = "open",
         group_policy: str = "open",
         allow_from: Optional[List[str]] = None,
@@ -97,9 +101,8 @@ class WeChatChannel(BaseChannel):
         super().__init__(
             process,
             on_reply_sent=on_reply_sent,
-            show_tool_details=show_tool_details,
-            filter_tool_messages=filter_tool_messages,
-            filter_thinking=filter_thinking,
+            display_config=display_config,
+            no_text_debounce=no_text_debounce,
             dm_policy=dm_policy,
             group_policy=group_policy,
             allow_from=allow_from,
@@ -249,9 +252,8 @@ class WeChatChannel(BaseChannel):
         process: ProcessHandler,
         config: Any,
         on_reply_sent: OnReplySent = None,
-        show_tool_details: bool = True,
-        filter_tool_messages: bool = False,
-        filter_thinking: bool = False,
+        display_config: ChannelDisplayConfig | None = None,
+        no_text_debounce: bool = True,
         workspace_dir: Path | None = None,
     ) -> "WeChatChannel":
         return cls(
@@ -264,9 +266,9 @@ class WeChatChannel(BaseChannel):
             media_dir=getattr(config, "media_dir", None) or "",
             workspace_dir=workspace_dir,
             on_reply_sent=on_reply_sent,
-            show_tool_details=show_tool_details,
-            filter_tool_messages=filter_tool_messages,
-            filter_thinking=filter_thinking,
+            display_config=display_config
+            or ChannelDisplayConfig.from_config(config),
+            no_text_debounce=no_text_debounce,
             dm_policy=getattr(config, "dm_policy", "open") or "open",
             group_policy=getattr(config, "group_policy", "open") or "open",
             allow_from=getattr(config, "allow_from", []) or [],
@@ -364,6 +366,7 @@ class WeChatChannel(BaseChannel):
         return {
             "channel_id": first.get("channel_id") or self.channel,
             "sender_id": last.get("sender_id", first.get("sender_id", "")),
+            "acl_sender_id": first.get("acl_sender_id") or "",
             "user_id": last.get("user_id", first.get("user_id", "")),
             "session_id": last.get("session_id", first.get("session_id", "")),
             "content_parts": merged_parts,
@@ -1139,6 +1142,7 @@ class WeChatChannel(BaseChannel):
         file_path: str,
         content_type: ContentType,
         send_meta: Optional[Dict[str, Any]] = None,
+        filename: Optional[str] = None,
     ) -> None:
         """Send a media file (image/file/video) to WeChat.
 
@@ -1156,46 +1160,54 @@ class WeChatChannel(BaseChannel):
             return
 
         try:
-            # Convert URL to local path if it's a file:// URL
-            file_path = file_url_to_local_path(file_path) or file_path
+            async with materialize_data_url(
+                file_path,
+                self._media_dir,
+                filename_hint=filename,
+            ) as materialized:
+                if materialized is None or not materialized.path:
+                    return
+                # Convert URL to local path if it's a file:// URL
+                local_path = file_url_to_local_path(materialized.path)
+                local_path = local_path or materialized.path
 
-            # Check if file exists
-            path_obj = Path(file_path)
-            if not path_obj.exists():
-                logger.warning(
-                    "wechat _send_media_file: file not found: %s",
-                    file_path,
-                )
-                return
+                # Check if file exists
+                path_obj = Path(local_path)
+                if not path_obj.exists():
+                    logger.warning(
+                        f"wechat _send_media_file: file not found: "
+                        f"{local_path}",
+                    )
+                    return
 
-            # Send based on content type
-            resp: Optional[Dict[str, Any]] = None
-            if content_type == ContentType.IMAGE:
-                resp = await self._client.send_image(
-                    to_user_id,
-                    str(path_obj),
-                    context_token,
-                )
-            elif content_type == ContentType.FILE:
-                filename = path_obj.name
-                resp = await self._client.send_file(
-                    to_user_id,
-                    str(path_obj),
-                    filename,
-                    context_token,
-                )
-            elif content_type == ContentType.VIDEO:
-                resp = await self._client.send_video(
-                    to_user_id,
-                    str(path_obj),
-                    context_token,
-                )
-            else:
-                logger.warning(
-                    "wechat _send_media_file: unsupported content type: %s",
-                    content_type,
-                )
-                return
+                # Send based on content type
+                resp: Optional[Dict[str, Any]] = None
+                if content_type == ContentType.IMAGE:
+                    resp = await self._client.send_image(
+                        to_user_id,
+                        str(path_obj),
+                        context_token,
+                    )
+                elif content_type == ContentType.FILE:
+                    filename = materialized.filename or path_obj.name
+                    resp = await self._client.send_file(
+                        to_user_id,
+                        str(path_obj),
+                        filename,
+                        context_token,
+                    )
+                elif content_type == ContentType.VIDEO:
+                    resp = await self._client.send_video(
+                        to_user_id,
+                        str(path_obj),
+                        context_token,
+                    )
+                else:
+                    logger.warning(
+                        f"wechat _send_media_file: unsupported type: "
+                        f"{content_type}",
+                    )
+                    return
 
             # Check response for errors (same logic as _send_text_direct)
             if isinstance(resp, dict):
@@ -1414,6 +1426,10 @@ class WeChatChannel(BaseChannel):
                         file_url,
                         ContentType.FILE,
                         send_meta=m,
+                        filename=getattr(p, "filename", None)
+                        or (
+                            p.get("filename") if isinstance(p, dict) else None
+                        ),
                     )
             elif t == ContentType.VIDEO:
                 # Send video

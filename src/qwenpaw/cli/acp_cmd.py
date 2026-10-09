@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import sys
 
 import click
 
@@ -26,10 +27,30 @@ import click
     default=False,
     help="Enable debug logging to stderr",
 )
+@click.option(
+    "--local-diagnostics",
+    is_flag=True,
+    default=False,
+    help=(
+        "Surface raw unexpected error text to the ACP client. Intended for "
+        "local clients that own this ACP subprocess, such as the TUI."
+    ),
+)
+@click.option(
+    "--runtime-provider",
+    type=click.Choice(["openai-env"], case_sensitive=False),
+    default=None,
+    help=(
+        "Use an ephemeral provider from OPENAI_BASE_URL, "
+        "OPENAI_API_KEY, and OPENAI_MODEL."
+    ),
+)
 def acp_cmd(
     agent: str | None,
     workspace: str | None,
     debug: bool,
+    local_diagnostics: bool,
+    runtime_provider: str | None,
 ) -> None:
     """Start QwenPaw as an ACP agent (stdio)."""
     from pathlib import Path
@@ -41,12 +62,38 @@ def acp_cmd(
     )
 
     workspace_dir = Path(workspace) if workspace else None
+    provider_config = None
+    if runtime_provider == "openai-env":
+        from ..agents.acp.runtime_provider import (
+            OpenAIRuntimeProviderConfig,
+        )
+
+        try:
+            provider_config = OpenAIRuntimeProviderConfig.from_env()
+        except ValueError as exc:
+            raise click.UsageError(str(exc)) from exc
 
     from ..agents.acp.server import run_qwenpaw_agent
+
+    # Warm-up heavy native imports before the event loop starts. In the full
+    # ACP runtime, the first `import numpy` (via agentscope.embedding inside
+    # workspace bootstrap) can block indefinitely on the Windows loader lock
+    # (all threads waiting, no concurrent import activity). Importing here,
+    # before asyncio.run, completes the DLL load while nothing else is
+    # contended and makes the workspace bootstrap pass through immediately.
+    # Best-effort and Windows-only: numpy is a transitive dependency, not a
+    # declared one, so environments without it must keep starting normally.
+    if sys.platform == "win32":
+        try:
+            import numpy  # noqa: E401,F402  pylint: disable=unused-import
+        except ModuleNotFoundError:
+            pass
 
     asyncio.run(
         run_qwenpaw_agent(
             agent_id=agent,
             workspace_dir=workspace_dir,
+            local_diagnostics=local_diagnostics,
+            runtime_provider=provider_config,
         ),
     )

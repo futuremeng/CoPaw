@@ -1,0 +1,40 @@
+/**
+ * Tool card types — self-contained within the plugin system.
+ * These mirror the ChatV2 types but live here so the plugin package
+ * has zero imports from outside ToolCards/.
+ */
+
+export type ToolCallStatus = "calling" | "done" | "error";
+
+export interface ToolInputProgress {
+  preview: string;
+  truncated: boolean;
+}
+
+export interface ToolCallContent {
+  type: "tool_call";
+  id: string;
+  name: string;
+  serverLabel?: string;
+  rawInput?: unknown;
+  params: Record<string, unknown>;
+  inputProgress?: ToolInputProgress;
+  /** True once the output message arrived, i.e. the backend started
+   * executing; /tool-calls queries 404 before this point. */
+  executionStarted?: boolean;
+  result?: unknown;
+  status: ToolCallStatus;
+  /** Error status caused by an interruption rather than a tool failure. */
+  interrupted?: boolean;
+}
+
+export interface ToolCardProps<T = Record<string, unknown>> {
+  data: T;
+  status: ToolCallStatus;
+  toolName: string;
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export type ToolCardComponent = React.FC<ToolCardProps<any>>;
+
+export type ToolCardRegistry = Record<string, ToolCardComponent>;

@@ -2829,7 +2829,7 @@ export default function AnywhereChat({
         allowSpeech: !whisperEnabled,
         prefix: whisperEnabled ? (
           <WhisperSpeechButton
-            buttonRef={whisperSpeechRef}
+            ref={whisperSpeechRef}
             onTranscription={handleWhisperTranscription}
           />
         ) : undefined,

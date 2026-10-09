@@ -10,9 +10,10 @@ import pytest
 import qwenpaw.providers.provider_manager as provider_manager_module
 from qwenpaw.providers.openai_provider import OpenAIProvider
 from qwenpaw.providers.provider_manager import (
-    KIMI_MODELS,
+    KIMI_CODINGPLAN_MODELS,
     PROVIDER_KIMI_CN,
     PROVIDER_KIMI_INTL,
+    PROVIDER_KIMI_CODINGPLAN,
     ProviderManager,
 )
 
@@ -34,18 +35,6 @@ def test_kimi_provider_configs() -> None:
     assert PROVIDER_KIMI_INTL.name == "Kimi (International)"
     assert PROVIDER_KIMI_INTL.base_url == "https://api.moonshot.ai/v1"
     assert PROVIDER_KIMI_INTL.freeze_url is True
-
-
-def test_kimi_models_list() -> None:
-    """Verify Kimi model definitions."""
-    model_ids = [m.id for m in KIMI_MODELS]
-    assert "kimi-k2.5" in model_ids
-    assert "kimi-k2-0905-preview" in model_ids
-    assert "kimi-k2-0711-preview" in model_ids
-    assert "kimi-k2-turbo-preview" in model_ids
-    assert "kimi-k2-thinking" in model_ids
-    assert "kimi-k2-thinking-turbo" in model_ids
-    assert len(KIMI_MODELS) == 6
 
 
 @pytest.fixture
@@ -92,27 +81,6 @@ async def test_kimi_check_connection_success(monkeypatch) -> None:
     assert msg == ""
 
 
-def test_kimi_has_expected_models(isolated_secret_dir) -> None:
-    """Provider manager Kimi providers should include all built-in models."""
-    manager = ProviderManager()
-    provider_cn = manager.get_provider("kimi-cn")
-    provider_intl = manager.get_provider("kimi-intl")
-
-    assert provider_cn is not None
-    assert provider_intl is not None
-
-    for model_id in [
-        "kimi-k2.5",
-        "kimi-k2-0905-preview",
-        "kimi-k2-0711-preview",
-        "kimi-k2-turbo-preview",
-        "kimi-k2-thinking",
-        "kimi-k2-thinking-turbo",
-    ]:
-        assert provider_cn.has_model(model_id)
-        assert provider_intl.has_model(model_id)
-
-
 async def test_kimi_activate_models(
     isolated_secret_dir,
     monkeypatch,
@@ -125,7 +93,53 @@ async def test_kimi_activate_models(
     assert manager.active_model.provider_id == "kimi-cn"
     assert manager.active_model.model == "kimi-k2.5"
 
-    await manager.activate_model("kimi-intl", "kimi-k2-thinking")
+    await manager.activate_model("kimi-intl", "kimi-k3")
     assert manager.active_model is not None
     assert manager.active_model.provider_id == "kimi-intl"
-    assert manager.active_model.model == "kimi-k2-thinking"
+    assert manager.active_model.model == "kimi-k3"
+
+
+def test_kimi_codingplan_provider_config() -> None:
+    """Verify Kimi Coding Plan provider configuration."""
+    assert isinstance(PROVIDER_KIMI_CODINGPLAN, OpenAIProvider)
+    assert PROVIDER_KIMI_CODINGPLAN.id == "kimi-codingplan"
+    assert PROVIDER_KIMI_CODINGPLAN.name == "Kimi Coding Plan"
+    assert (
+        PROVIDER_KIMI_CODINGPLAN.base_url == "https://api.kimi.com/coding/v1"
+    )
+    assert PROVIDER_KIMI_CODINGPLAN.api_key_prefix == "sk-kimi-"
+    assert PROVIDER_KIMI_CODINGPLAN.freeze_url is True
+    assert PROVIDER_KIMI_CODINGPLAN.support_connection_check is False
+
+
+def test_kimi_codingplan_models() -> None:
+    """Verify Kimi Coding Plan model list."""
+    model_ids = [m.id for m in KIMI_CODINGPLAN_MODELS]
+    assert "kimi-for-coding" in model_ids
+    assert len(KIMI_CODINGPLAN_MODELS) == 1
+    model = KIMI_CODINGPLAN_MODELS[0]
+    assert model.supports_image is False
+    assert model.supports_video is False
+
+
+def test_kimi_codingplan_registered(isolated_secret_dir) -> None:
+    """Kimi Coding Plan should be in ProviderManager builtins."""
+    manager = ProviderManager()
+    provider = manager.get_provider("kimi-codingplan")
+    assert provider is not None
+    assert provider.has_model("kimi-for-coding")
+
+
+def test_kimi_provider_group_meta() -> None:
+    """All Kimi providers share the same provider_group."""
+    for p in (
+        PROVIDER_KIMI_CN,
+        PROVIDER_KIMI_INTL,
+        PROVIDER_KIMI_CODINGPLAN,
+    ):
+        assert p.provider_group == "kimi"
+        assert p.provider_group_name == "Kimi"
+
+    assert PROVIDER_KIMI_CN.provider_variant == "open_platform_cn"
+    assert PROVIDER_KIMI_INTL.provider_variant == "open_platform_intl"
+    assert PROVIDER_KIMI_CODINGPLAN.provider_variant == "coding_plan"

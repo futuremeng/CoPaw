@@ -9,7 +9,6 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-import subprocess
 from pathlib import Path
 from typing import Optional
 from uuid import uuid4
@@ -18,7 +17,7 @@ from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 
 from ...config.config import load_agent_config
-from ..runner.session import sanitize_filename
+from ..chats.session import sanitize_filename
 
 logger = logging.getLogger(__name__)
 
@@ -56,7 +55,7 @@ def _get_project_dir(agent_id: str) -> Optional[Path]:
     """Resolve the project directory for fork operations.
 
     Priority:
-    1. coding_mode.project_dir (if coding mode is enabled)
+    1. Agent project_dir
     2. workspace_dir (fallback)
 
     Returns the directory as a Path if it is a git repository,
@@ -70,9 +69,8 @@ def _get_project_dir(agent_id: str) -> Optional[Path]:
             detail=f"Agent '{agent_id}' not found: {exc}",
         ) from exc
 
-    cm = config.coding_mode
-    if cm and cm.enabled and cm.project_dir:
-        candidate = Path(cm.project_dir).expanduser().resolve()
+    if config.project_dir:
+        candidate = Path(config.project_dir).expanduser().resolve()
     else:
         candidate = Path(config.workspace_dir).expanduser().resolve()
 
@@ -176,7 +174,7 @@ def _write_fork_session(
     )
 
 
-def _create_worktree(
+async def _create_worktree(
     project_dir: Path,
     worktree_id: str,
 ) -> tuple[Path, str]:
@@ -188,25 +186,34 @@ def _create_worktree(
     worktree_path = project_dir / _WORKTREE_BASE / worktree_id
     worktree_path.parent.mkdir(parents=True, exist_ok=True)
 
-    result = subprocess.run(
-        [
-            "git",
-            "worktree",
-            "add",
-            str(worktree_path),
-            "-b",
-            branch,
-        ],
+    proc = await asyncio.create_subprocess_exec(
+        "git",
+        "worktree",
+        "add",
+        str(worktree_path),
+        "-b",
+        branch,
         cwd=str(project_dir),
-        capture_output=True,
-        text=True,
-        timeout=60,
-        check=False,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
     )
-    if result.returncode != 0:
+    try:
+        _, stderr = await asyncio.wait_for(
+            proc.communicate(),
+            timeout=60,
+        )
+    except asyncio.TimeoutError as exc:
+        proc.kill()
+        await proc.wait()
         raise HTTPException(
             status_code=500,
-            detail=f"git worktree add failed: {result.stderr.strip()}",
+            detail="git worktree add timed out (60s)",
+        ) from exc
+    if proc.returncode != 0:
+        detail = stderr.decode("utf-8", errors="replace").strip()
+        raise HTTPException(
+            status_code=500,
+            detail=f"git worktree add failed: {detail}",
         )
 
     logger.info(
@@ -276,7 +283,7 @@ async def fork_agent(
     ``spawn_subagent(fork=True)`` in the tool layer.
 
     Steps:
-    1. Resolve project dir (coding_mode.project_dir or workspace).
+    1. Resolve project dir (Agent project_dir or workspace fallback).
     2. Read parent session state.
     3. Write fork session file with inherited state.
     4. If project_dir is a git repo, create worktree.
@@ -310,8 +317,7 @@ async def fork_agent(
     worktree_branch = ""
 
     if project_dir is not None:
-        wt_path, wt_branch = await asyncio.to_thread(
-            _create_worktree,
+        wt_path, wt_branch = await _create_worktree(
             project_dir,
             fork_id,
         )

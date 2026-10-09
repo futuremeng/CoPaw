@@ -4,6 +4,8 @@ import type {
   MCPClientCreateRequest,
   MCPClientUpdateRequest,
   MCPToolInfo,
+  MCPAccessPrincipalOption,
+  MCPAccessPolicy,
   MCPOAuthStartRequest,
   MCPOAuthStartResponse,
   MCPOAuthStatusResponse,
@@ -71,6 +73,36 @@ export const mcpApi = {
    */
   listMCPTools: (clientKey: string) =>
     request<MCPToolInfo[]>(`/mcp/tools/${encodeURIComponent(clientKey)}`),
+
+  /**
+   * List recent source-scoped principals for MCP access rules.
+   */
+  listMCPAccessPrincipals: () =>
+    request<MCPAccessPrincipalOption[]>("/mcp/access-principals"),
+
+  /**
+   * Get saved MCP access policy. Does not require the MCP server to be online.
+   */
+  getMCPPolicy: (clientKey: string) =>
+    request<MCPAccessPolicy>(`/mcp/policy/${encodeURIComponent(clientKey)}`),
+
+  /**
+   * Update saved MCP access policy. Does not require the MCP server to be online.
+   */
+  updateMCPPolicy: (clientKey: string, body: MCPAccessPolicy) =>
+    request<MCPAccessPolicy>(`/mcp/policy/${encodeURIComponent(clientKey)}`, {
+      method: "PUT",
+      body: JSON.stringify(body),
+    }),
+
+  /**
+   * Update tool whitelist for an MCP client
+   */
+  updateMCPToolWhitelist: (clientKey: string, tools: string[] | null) =>
+    request<MCPToolInfo[]>(`/mcp/tools/${encodeURIComponent(clientKey)}`, {
+      method: "PUT",
+      body: JSON.stringify({ tools }),
+    }),
 
   /**
    * Start an OAuth 2.1 PKCE flow for a remote MCP client.

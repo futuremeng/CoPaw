@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import api from "../../../api";
 import { invalidateSkillCache } from "../../../api/modules/skill";
 import type { MarketResult } from "../../../api/modules/market";
+import { notifySkillChange } from "../../../utils/skillChangeEvents";
 
 export type InstallTarget = "pool" | "workspace";
 
@@ -91,6 +92,7 @@ export function useMarketInstall(opts: UseMarketInstallOptions) {
               installedName,
               message: installedName,
             });
+            notifySkillChange(agentId);
             opts.onSuccess?.({ ...item, status: "completed" });
             return;
           }
@@ -228,11 +230,15 @@ export function useMarketInstall(opts: UseMarketInstallOptions) {
     [runQueue, updateItem],
   );
 
-  // Only drop the green "completed" rows; keep failed/cancelled so the user
-  // can see what went wrong and decide whether to retry.
-  const clearCompleted = useCallback(() => {
-    setQueue(queueRef.current.filter((it) => it.status !== "completed"));
+  const clearFinished = useCallback(() => {
+    setQueue(
+      queueRef.current.filter(
+        (it) => it.status === "queued" || it.status === "installing",
+      ),
+    );
   }, [setQueue]);
 
-  return { queue, enqueue, cancel, retry, clearCompleted };
+  return { queue, enqueue, cancel, retry, clearFinished };
 }
+
+export type MarketInstallController = ReturnType<typeof useMarketInstall>;

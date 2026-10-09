@@ -4,6 +4,7 @@ from __future__ import annotations
 import sys
 import json
 from pathlib import Path
+from functools import partial
 
 import httpx
 import pytest
@@ -14,6 +15,7 @@ from qwenpaw.cli.main import cli
 from qwenpaw.cli.update_cmd import (
     InstallInfo,
     RunningServiceInfo,
+    _build_upgrade_command,
     _detect_running_service,
     _detect_installation,
     _is_newer_version,
@@ -21,6 +23,7 @@ from qwenpaw.cli.update_cmd import (
     _detect_source_type,
     _run_update_worker_detached,
     _run_update_worker_foreground,
+    _select_latest_version,
     run_update_worker,
 )
 
@@ -60,6 +63,44 @@ def test_is_newer_version(
     expected: bool | None,
 ) -> None:
     assert _is_newer_version(latest, current) is expected
+
+
+def test_select_latest_version_prefers_stable_by_default() -> None:
+    data = {
+        "info": {"version": "2.0.0b1"},
+        "releases": {
+            "1.9.0": [{"url": "https://example.com/qwenpaw-1.9.0.tar.gz"}],
+            "2.0.0b1": [{"url": "https://example.com/qwenpaw-2.0.0b1.tar.gz"}],
+        },
+    }
+
+    assert _select_latest_version(data, include_prerelease=False) == "1.9.0"
+    assert _select_latest_version(data, include_prerelease=True) == "2.0.0b1"
+
+
+def test_build_upgrade_command_adds_prerelease_flag_for_uv_only_when_requested(
+    monkeypatch,
+) -> None:
+    monkeypatch.setattr(
+        "qwenpaw.cli.update_cmd.shutil.which",
+        lambda name: "/usr/local/bin/uv" if name == "uv" else None,
+    )
+    info = _install_info(installer="uv")
+
+    stable_command, label = _build_upgrade_command(
+        info,
+        "1.9.0",
+        include_prerelease=False,
+    )
+    prerelease_command, _ = _build_upgrade_command(
+        info,
+        "2.0.0b1",
+        include_prerelease=True,
+    )
+
+    assert label == "uv pip"
+    assert "--prerelease=allow" not in stable_command
+    assert prerelease_command[-1] == "--prerelease=allow"
 
 
 @pytest.mark.parametrize(
@@ -177,7 +218,7 @@ def test_update_reports_up_to_date(monkeypatch) -> None:
     def _detect_installation() -> InstallInfo:
         return install_info
 
-    def _fetch_latest_version() -> str:
+    def _fetch_latest_version(**_: object) -> str:
         return __version__
 
     monkeypatch.setattr(
@@ -197,39 +238,42 @@ def test_update_reports_up_to_date(monkeypatch) -> None:
     assert "QwenPaw is already up to date." in result.output
 
 
-def test_probe_service_ignores_proxy_env(monkeypatch) -> None:
-    captured: dict[str, object] = {}
+@pytest.mark.parametrize(
+    "base_url",
+    ["http://127.0.0.1:8088", "http://example.com:8088"],
+)
+def test_probe_service_ignores_proxy_env(monkeypatch, base_url) -> None:
+    captured = {}
+    real_client = httpx.Client
 
-    class _Response:
-        def raise_for_status(self) -> None:
-            return None
-
-        def json(self) -> dict[str, str]:
-            return {"version": "1.2.3"}
-
-    def _fake_get(url: str, **kwargs):
-        captured["url"] = url
+    def create_client(**kwargs):
         captured.update(kwargs)
-        return _Response()
+        return real_client(
+            **kwargs,
+            transport=httpx.MockTransport(
+                lambda _: httpx.Response(200, json={"version": "1.2.3"}),
+            ),
+        )
 
-    monkeypatch.setattr("qwenpaw.cli.update_cmd.httpx.get", _fake_get)
-
-    result = _probe_service("http://127.0.0.1:8088")
+    monkeypatch.setattr(httpx, "Client", create_client)
+    result = _probe_service(base_url)
 
     assert result.is_running is True
-    assert result.base_url == "http://127.0.0.1:8088"
+    assert result.base_url == base_url
     assert result.version == "1.2.3"
     assert captured["trust_env"] is False
 
 
 def test_probe_service_returns_not_running_on_http_error(monkeypatch) -> None:
-    def _fake_get(_url: str, **_kwargs):
+    def respond(_request):
         raise httpx.HTTPError("bad gateway")
 
-    monkeypatch.setattr("qwenpaw.cli.update_cmd.httpx.get", _fake_get)
-
+    monkeypatch.setattr(
+        httpx,
+        "Client",
+        partial(httpx.Client, transport=httpx.MockTransport(respond)),
+    )
     result = _probe_service("http://127.0.0.1:8088")
-
     assert result.is_running is False
 
 
@@ -291,7 +335,7 @@ def test_update_blocks_running_service(monkeypatch) -> None:
     def _detect_installation() -> InstallInfo:
         return install_info
 
-    def _fetch_latest_version() -> str:
+    def _fetch_latest_version(**_: object) -> str:
         return "9.9.9"
 
     monkeypatch.setattr(
@@ -337,7 +381,7 @@ def test_update_can_cancel_forced_shutdown(monkeypatch) -> None:
     monkeypatch.setattr(
         update_cmd_module,
         "_fetch_latest_version",
-        lambda: "9.9.9",
+        lambda **_: "9.9.9",
     )
     monkeypatch.setattr(
         update_cmd_module,
@@ -392,7 +436,7 @@ def test_update_can_force_shutdown_running_service(
     monkeypatch.setattr(
         update_cmd_module,
         "_fetch_latest_version",
-        lambda: "9.9.9",
+        lambda **_: "9.9.9",
     )
     monkeypatch.setattr(
         update_cmd_module,
@@ -454,7 +498,7 @@ def test_update_can_cancel_non_pypi_override(monkeypatch) -> None:
     def _detect_installation() -> InstallInfo:
         return install_info
 
-    def _fetch_latest_version() -> str:
+    def _fetch_latest_version(**_: object) -> str:
         return "9.9.9"
 
     monkeypatch.setattr(
@@ -488,7 +532,7 @@ def test_update_can_override_non_pypi_install_with_yes(
     def _detect_installation() -> InstallInfo:
         return install_info
 
-    def _fetch_latest_version() -> str:
+    def _fetch_latest_version(**_: object) -> str:
         return "9.9.9"
 
     def _detect_running_service(
@@ -544,7 +588,7 @@ def test_update_spawns_worker(monkeypatch, tmp_path: Path) -> None:
     def _detect_installation() -> InstallInfo:
         return install_info
 
-    def _fetch_latest_version() -> str:
+    def _fetch_latest_version(**_: object) -> str:
         return "9.9.9"
 
     def _detect_running_service(
@@ -610,7 +654,7 @@ def test_update_prompts_when_version_is_not_comparable(
     def _detect_installation() -> InstallInfo:
         return install_info
 
-    def _fetch_latest_version() -> str:
+    def _fetch_latest_version(**_: object) -> str:
         return "main"
 
     monkeypatch.setattr(
@@ -643,7 +687,7 @@ def test_update_can_continue_when_version_is_not_comparable(
     def _detect_installation() -> InstallInfo:
         return install_info
 
-    def _fetch_latest_version() -> str:
+    def _fetch_latest_version(**_: object) -> str:
         return "main"
 
     def _detect_running_service(
@@ -704,7 +748,7 @@ def test_update_returns_worker_exit_code(monkeypatch, tmp_path: Path) -> None:
     monkeypatch.setattr(
         update_cmd_module,
         "_fetch_latest_version",
-        lambda: "9.9.9",
+        lambda **_: "9.9.9",
     )
     monkeypatch.setattr(
         update_cmd_module,
@@ -742,7 +786,7 @@ def test_update_detaches_worker_on_windows(
     monkeypatch.setattr(
         update_cmd_module,
         "_fetch_latest_version",
-        lambda: "9.9.9",
+        lambda **_: "9.9.9",
     )
     monkeypatch.setattr(
         update_cmd_module,

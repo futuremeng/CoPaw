@@ -26,6 +26,7 @@ Run:
 # pylint: disable=broad-exception-raised,using-constant-test
 from __future__ import annotations
 
+
 import json
 import threading
 from pathlib import Path
@@ -34,7 +35,42 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from qwenpaw.app.channels.renderer import ChannelDisplayConfig
+from qwenpaw.schemas import FileContent
+
 from tests.fixtures.channels.mock_http import MockAiohttpSession
+
+
+@pytest.mark.parametrize("source_type", ["data", "path", "file_url"])
+async def test_file_display_name_survives_send_pipeline(
+    wechat_channel,
+    mock_ilink_client,
+    tmp_path,
+    source_type,
+):
+    """Data URLs use supplied names; local sources keep their basenames."""
+    local_file = tmp_path / "local.pdf"
+    local_file.write_bytes(b"pdf-data")
+    sources = {
+        "data": "data:application/pdf;base64,cGRmLWRhdGE=",
+        "path": str(local_file),
+        "file_url": local_file.as_uri(),
+    }
+    wechat_channel._client = mock_ilink_client
+    await wechat_channel._send_content_parts_immediate(
+        "recipient",
+        [FileContent(file_url=sources[source_type], filename="report.pdf")],
+        {
+            "wechat_from_user_id": "recipient",
+            "wechat_context_token": "context",
+        },
+    )
+
+    args = mock_ilink_client.send_file.call_args.args
+    expected = "report.pdf" if source_type == "data" else "local.pdf"
+    assert args[2] == expected
+    assert local_file.read_bytes() == b"pdf-data"
+    assert not list(wechat_channel._media_dir.iterdir())
 
 
 # =============================================================================
@@ -86,8 +122,10 @@ def wechat_channel(
         bot_token="test_token_123",
         bot_prefix="[TestBot] ",
         media_dir=str(temp_media_dir),
-        show_tool_details=False,
-        filter_tool_messages=True,
+        display_config=ChannelDisplayConfig(
+            show_tool_calls=False,
+            show_tool_results=False,
+        ),
         dm_policy="open",
         group_policy="open",
     )
@@ -182,18 +220,21 @@ class TestWeChatChannelInit:
             base_url="https://custom.api.com",
             bot_prefix="",
             media_dir=str(temp_media_dir),
-            show_tool_details=True,
-            filter_tool_messages=True,
-            filter_thinking=True,
+            display_config=ChannelDisplayConfig(
+                show_thinking=False,
+                show_tool_calls=False,
+                show_tool_results=False,
+            ),
             allow_from=["user1", "user2"],
             deny_message="Access denied",
         )
 
         assert channel.enabled is False
         assert channel._base_url == "https://custom.api.com"
-        assert channel._show_tool_details is True
-        assert channel._filter_tool_messages is True
-        assert channel._filter_thinking is True
+        assert channel._display_config.show_tool_details is True
+        assert channel._display_config.show_tool_calls is False
+        assert channel._display_config.show_tool_results is False
+        assert not channel._display_config.show_thinking
         assert channel.allow_from == {"user1", "user2"}
         assert channel.deny_message == "Access denied"
 

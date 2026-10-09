@@ -1,13 +1,14 @@
 import React, {
   useCallback,
-  useImperativeHandle,
   useRef,
   useState,
+  forwardRef,
+  useImperativeHandle,
 } from "react";
-import { LoadingOutlined } from "@ant-design/icons";
 import { IconButton } from "@agentscope-ai/design";
-import { SparkMicLine } from "@agentscope-ai/icons";
+import { Mic as SparkMicLine } from "lucide-react";
 import { Tooltip, message } from "antd";
+import { LoaderCircle as LoadingOutlined } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { agentApi, TranscriptionError } from "@/api/modules/agent";
 import { useUploadLimitStore } from "@/stores/uploadLimitStore";
@@ -23,7 +24,6 @@ export interface WhisperSpeechButtonRef {
 interface WhisperSpeechButtonProps {
   disabled?: boolean;
   onTranscription: (text: string) => void;
-  buttonRef?: React.Ref<WhisperSpeechButtonRef>;
 }
 
 // Original recording icon animation from @agentscope-ai/chat
@@ -41,7 +41,7 @@ const RecordingIcon: React.FC<{ className?: string }> = ({ className }) => (
     xmlns="http://www.w3.org/2000/svg"
     className={className}
     style={{
-      color: "#1890ff",
+      color: "var(--app-accent-text)",
       height: "1.2em",
       width: "1.2em",
       verticalAlign: "top",
@@ -87,11 +87,10 @@ const RecordingIcon: React.FC<{ className?: string }> = ({ className }) => (
   </svg>
 );
 
-function WhisperSpeechButton({
-  disabled,
-  onTranscription,
-  buttonRef,
-}: WhisperSpeechButtonProps) {
+const WhisperSpeechButton = forwardRef<
+  WhisperSpeechButtonRef,
+  WhisperSpeechButtonProps
+>(({ disabled, onTranscription }, ref) => {
   const { t } = useTranslation();
   const [recording, setRecording] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -132,6 +131,7 @@ function WhisperSpeechButton({
         }
         const blob = new Blob(chunksRef.current, { type: mimeType });
 
+        // File size validation
         const sizeMb = blob.size / 1024 / 1024;
         const uploadLimit = useUploadLimitStore.getState().uploadMaxSizeMb;
         if (uploadLimit !== null && sizeMb > uploadLimit) {
@@ -181,6 +181,7 @@ function WhisperSpeechButton({
       internalRecordingRef.current = true;
       setRecording(true);
 
+      // Auto-stop after max duration
       recordingTimerRef.current = setTimeout(() => {
         if (internalRecordingRef.current) {
           message.warning(
@@ -206,8 +207,9 @@ function WhisperSpeechButton({
     }
   }, [loading, startRecording, stopRecording]);
 
+  // Expose methods via ref
   useImperativeHandle(
-    buttonRef,
+    ref,
     () => ({
       toggleRecording,
       isRecording: () => internalRecordingRef.current,
@@ -233,21 +235,23 @@ function WhisperSpeechButton({
         bordered={false}
         icon={
           loading ? (
-            <LoadingOutlined style={{ fontSize: "1.2em" }} />
+            <LoadingOutlined size="1em" style={{ fontSize: "1.2em" }} />
           ) : recording ? (
             <RecordingIcon />
           ) : (
-            <SparkMicLine />
+            <SparkMicLine size="1em" />
           )
         }
         onClick={toggleRecording}
         disabled={isDisabled}
         style={{
-          color: recording || loading ? "#1890ff" : undefined,
+          color: recording || loading ? "var(--app-accent-text)" : undefined,
         }}
       />
     </Tooltip>
   );
-}
+});
+
+WhisperSpeechButton.displayName = "WhisperSpeechButton";
 
 export default WhisperSpeechButton;

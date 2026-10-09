@@ -1,11 +1,17 @@
 /// <reference types="vitest" />
-import { defineConfig, loadEnv } from "vite";
+import { defineConfig, loadEnv, type Plugin } from "vite";
 import react from "@vitejs/plugin-react";
 import path from "path";
 
-// Vitest plugin: transforms .css imports inside node_modules to empty stubs.
-// This prevents errors from packages like @agentscope-ai/icons that import CSS.
-const cssStubPlugin = {
+// Vitest-only plugin: transforms .css imports inside node_modules to empty
+// stubs. This prevents errors from packages like @agentscope-ai/icons that
+// import CSS.
+//
+// It must never run for real builds: stubbing node_modules CSS also strips
+// monaco-editor's stylesheet, which makes the hidden `.monaco-editor
+// .inputarea` textarea render with browser default styles (a big white box
+// over the code) and breaks cursor positioning in Coding Mode (issue #6547).
+const cssStubPlugin: Plugin = {
   name: "css-stub",
   transform(_code: string, id: string) {
     if (id.includes("node_modules") && id.endsWith(".css")) {
@@ -14,7 +20,10 @@ const cssStubPlugin = {
   },
 };
 
-export default defineConfig(({ mode }) => {
+export default defineConfig(({ command, mode }) => {
+  // Vitest resolves the config as a dev server (`serve`) with mode "test",
+  // while `vite build --mode test` is a real build that needs real CSS.
+  const isVitest = command === "serve" && mode === "test";
   const env = loadEnv(mode, process.cwd(), "");
   // In dev, default to same-origin and let Vite proxy /api to backend.
   // This avoids browser CORS preflight failures with custom headers.
@@ -26,7 +35,7 @@ export default defineConfig(({ mode }) => {
       TOKEN: JSON.stringify(env.TOKEN || ""),
       MOBILE: false,
     },
-    plugins: [react(), cssStubPlugin],
+    plugins: [react(), ...(isVitest ? [cssStubPlugin] : [])],
     css: {
       modules: {
         localsConvention: "camelCase",
@@ -48,56 +57,74 @@ export default defineConfig(({ mode }) => {
       port: 5173,
       proxy: {
         "/api": {
-          target: "http://127.0.0.1:8088",
-          changeOrigin: true,
-          rewrite: (path) => path.replace(/^\/api/, "/api"),
+          target: "http://localhost:8088",
+          changeOrigin: false,
         },
       },
     },
     test: {
       globals: true,
       environment: "jsdom",
+      testTimeout: 15_000,
       setupFiles: ["./src/test/setup.ts"],
       css: true,
-      // all @agentscope-ai/* packages excluded from inline — they are large / have CSS imports
-      // aliases below redirect each to a stub or compiled entry
+      // Keep large vendor packages external to the unit-test transform.
+      // Chat resolves to the installed SDK; real integration is verified in
+      // the browser against the configured backend and model.
       deps: {
         inline: [/@agentscope-ai\/(?!icons|chat|design)/],
       },
-      alias: {
-        // chat is aliased to a tiny stub to avoid OOM from the 2.3MB real package
-        // Tests that need specific behavior override with vi.mock('@agentscope-ai/chat', factory)
-        "@agentscope-ai/chat": path.resolve(__dirname, "src/test/chat-mock.ts"),
-        // design is aliased to a stub to avoid hanging from its 3MB lib
-        "@agentscope-ai/design": path.resolve(
-          __dirname,
-          "src/test/design-mock.ts",
-        ),
-        "@agentscope-ai/icons": path.resolve(
-          __dirname,
-          "src/test/icons-mock.ts",
-        ),
-      },
+      alias: [
+        // Resolve the beta's real ESM entry for Vitest, without masking SDK subpaths.
+        {
+          find: /^@agentscope-ai\/chat$/,
+          replacement: path.resolve(
+            __dirname,
+            "node_modules/@agentscope-ai/chat/lib/index.js",
+          ),
+        },
+        {
+          find: /^@agentscope-ai\/design$/,
+          replacement: path.resolve(__dirname, "src/test/design-mock.ts"),
+        },
+        {
+          find: "@agentscope-ai/icons",
+          replacement: path.resolve(__dirname, "src/test/icons-mock.ts"),
+        },
+        {
+          find: "@tauri-apps/api/core",
+          replacement: path.resolve(__dirname, "src/test/tauri-mock.ts"),
+        },
+        {
+          find: "@tauri-apps/plugin-dialog",
+          replacement: path.resolve(__dirname, "src/test/tauri-mock.ts"),
+        },
+      ],
       exclude: [
         "**/node_modules/**",
         "**/dist/**",
-        // 旧测试用 node:test，与 vitest 不兼容，待迁移
+        // legacy tests use node:test, which is incompatible with vitest (pending migration)
         "**/testConnectionMessage.test.ts",
-        // ChatPage test causes worker crash - pre-existing issue, needs more mock setup
-        "**/pages/Chat/ChatPage.test.tsx",
+        // Tauri modules require @tauri-apps/api which only exists in desktop builds
+        "**/src/tauri/**",
       ],
       coverage: {
         provider: "v8",
-        reporter: ["text", "html", "json", "lcov"],
+        reporter: ["text", "html", "json", "json-summary", "lcov", "cobertura"],
         include: ["src/**/*.{ts,tsx}"],
         exclude: [
           "src/test/**",
+          "src/tauri/**",
           "src/**/*.d.ts",
           "src/main.tsx",
           "src/vite-env.d.ts",
         ],
-        // 第一阶段：记录基线，不强制卡点
-        // 后续稳定后可开启：thresholds: { statements: 60, functions: 60 }
+        thresholds: {
+          statements: 5,
+          branches: 4,
+          functions: 3,
+          lines: 5,
+        },
       },
     },
     optimizeDeps: {
@@ -114,21 +141,14 @@ export default defineConfig(({ mode }) => {
       rollupOptions: {
         output: {
           manualChunks(id) {
-            // Heavy graph/rendering engines should be isolated from UI vendor bundle.
+            // Charts and the UI's Markdown renderer share D3 and preload helpers.
+            // Keep those in the UI chunk so lazy trends cannot create a cycle.
             if (
-              id.includes("node_modules/@antv/g6/") ||
-              id.includes("node_modules/@antv/g6-pc/") ||
-              id.includes("node_modules/@antv/layout/") ||
-              id.includes("node_modules/@antv/graphlib/")
+              id.includes("node_modules/d3-") ||
+              id.includes("node_modules/d3/") ||
+              id.includes("vite/preload-helper")
             ) {
-              return "graph-vendor";
-            }
-            // Math rendering stack can be split independently.
-            if (
-              id.includes("node_modules/katex/") ||
-              id.includes("node_modules/hast-util-to-html/")
-            ) {
-              return "katex-vendor";
+              return "ui-vendor";
             }
             // React core
             if (
@@ -139,12 +159,46 @@ export default defineConfig(({ mode }) => {
             ) {
               return "react-vendor";
             }
+            if (
+              id.includes("node_modules/@ant-design/plots/") ||
+              id.includes("node_modules/@antv/")
+            ) {
+              return "charts-vendor";
+            }
+            if (
+              id.includes("node_modules/monaco-editor/") ||
+              id.includes("node_modules/@monaco-editor/")
+            ) {
+              return "editor-vendor";
+            }
+            // Keep the chat package's internally circular modules together,
+            // but leave its third-party dependencies in the lazy import graph.
+            const chatPackageRoot = "node_modules/@agentscope-ai/chat/";
+            const chatPackageIndex = id.indexOf(chatPackageRoot);
+            if (chatPackageIndex >= 0) {
+              const chatRelativePath = id.slice(
+                chatPackageIndex + chatPackageRoot.length,
+              );
+              if (!chatRelativePath.includes("node_modules/")) {
+                return "chat-vendor";
+              }
+            }
+            // XMarkdown is also lazy-only. Do not let the broad @ant-design
+            // rule below merge it into the initial UI vendor chunk.
+            if (id.includes("node_modules/@ant-design/x-markdown/")) {
+              return;
+            }
             // Ant Design + AgentScope design system (merged to avoid circular deps)
             if (
               id.includes("node_modules/antd/") ||
               id.includes("node_modules/antd-style/") ||
               id.includes("node_modules/@ant-design/") ||
-              id.includes("node_modules/@agentscope-ai/")
+              id.includes("node_modules/@babel/runtime/") ||
+              id.includes("node_modules/clsx/") ||
+              id.includes("node_modules/dompurify/") ||
+              id.includes("node_modules/lucide-react/") ||
+              (id.includes("node_modules/@agentscope-ai/") &&
+                !id.includes(chatPackageRoot))
             ) {
               return "ui-vendor";
             }
@@ -171,15 +225,6 @@ export default defineConfig(({ mode }) => {
             // Drag and drop
             if (id.includes("node_modules/@dnd-kit/")) {
               return "dnd-vendor";
-            }
-            // Utilities (dayjs, zustand, ahooks, etc.)
-            if (
-              id.includes("node_modules/dayjs/") ||
-              id.includes("node_modules/zustand/") ||
-              id.includes("node_modules/ahooks/") ||
-              id.includes("node_modules/@vvo/tzdb/")
-            ) {
-              return "utils-vendor";
             }
           },
         },

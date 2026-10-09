@@ -165,6 +165,7 @@ def _string_query(body: dict[str, Any]) -> dict[str, str]:
 class AliyunProvider:
     key = "aliyun"
     label = "Aliyun"
+    supports_browse = True
 
     def available(self) -> tuple[bool, str | None]:
         missing = [k for k in _CRED_ENV_KEYS if not os.environ.get(k)]
@@ -219,7 +220,7 @@ class AliyunProvider:
                 )
             except ImportError as exc:
                 raise RuntimeError(str(exc)) from exc
-            except Exception as exc:  # noqa: BLE001
+            except Exception as exc:
                 msg = getattr(exc, "message", None) or str(exc) or repr(exc)
                 raise RuntimeError(
                     f"Aliyun SearchSkills failed: {msg}",

@@ -1,263 +1,116 @@
 ---
 name: make-skill
-description: "Use this skill when sedimenting a session into a reusable workspace skill. Triggers when the user wants to turn the current conversation, workflow, or troubleshooting path into a SKILL.md. Phrases like 'turn this into a skill', 'remember how I did X', 'save this workflow', 'make a skill from this', and any /make-skill <focus> invocation should fire this skill."
+description: "Create a focused workspace Skill from reusable decisions, knowledge, templates, or workflows in the current conversation. Use for /make-skill with a focus argument and requests such as save this workflow or turn this into a skill; do not use for one-off summaries or ordinary file creation."
 metadata:
-  builtin_skill_version: "1.0"
+  builtin_skill_version: "2.1"
   qwenpaw:
     emoji: "✍️"
     requires: {}
 ---
 
-<!--
-  Inspired by Anthropic's `skill-creator` skill (the "creating a skill"
-  portion in particular). Rewritten for QwenPaw.
-  Credit: https://github.com/anthropics/skills/blob/main/skill-creator/SKILL.md
--->
-
 # Make Skill
 
-Turn the current session into a reusable workspace skill.
+Create one new workspace Skill from the current conversation through planning, user approval, draft authoring, validation, and publication.
 
-You orchestrate a two-phase flow:
+Resolve `<workspace>` from the runtime directory context: use the current agent's absolute workspace path (also the working directory when no separate project is configured). Pass that same value throughout the lifecycle, independently of the task's project directory and the script `cwd`. Lifecycle artifacts belong under `<workspace>/.qwenpaw/make-skill/`; published Skills belong under `<workspace>/skills/`.
 
-* **Phase A.** Propose a compact plan, yield the turn for user approval.
-* **Phase B.** On approval, write the full SKILL.md body based on THIS
-  conversation, then persist via `materialize_skill`.
+## Script interface
 
-Do **not** call `write_file` to save the SKILL.md directly. Always go through
-`materialize_skill`, which runs the security scanner and writes the manifest
-atomically.
+Run `python scripts/<script>` through `execute_shell_command`, setting `cwd` to this Skill's `<dir>` from the available-skills entry. Each script reads one JSON object from stdin (or `--input <file>`) and returns one JSON object. Every input includes `workspace`; the table lists the other top-level fields.
 
-## Step 0. Determine the focus and derive a skill name
+| Operation | Script | Other input fields | Successful result |
+|---|---|---|---|
+| Create a plan | `create_plan.py` | `plan` | `plan_id`, normalized `plan` |
+| Revise that plan | `create_plan.py` | `plan_id`, complete new `plan` | Same `plan_id`, normalized `plan` |
+| Initialize after approval | `init_draft.py` | `plan_id` | `draft_id`, `skill_dir` |
+| Validate a draft | `validate_skill.py` | `draft_id` | `digest` |
+| Publish a validated draft | `publish_skill.py` | `draft_id`, `expected_digest` from validation | Publication result |
 
-Two invocation paths:
+`plan_id` identifies one editable plan; keep it across revisions, including renames. `draft_id` identifies the initialized draft for validation, testing, and publication; `skill_dir` is where its package files belong. Use the returned values unchanged, not IDs inferred from names or paths.
 
-* `/make-skill <focus>`. The focus follows the command verbatim.
-* Natural language ("turn this into a skill", "save this workflow",
-  "把刚才的 X 流程变成 skill"). Derive a short focus phrase from the
-  conversation topic the user wants to capture. If ambiguous, ask a
-  one-line clarification first.
+## Plan
 
-Derive the skill name from focus with **this exact rule**:
+The focus in `/make-skill <focus>` is required. For a natural-language request, infer it from the request and current conversation. Later user corrections replace conflicting earlier rules. Preserve stable guidance, contracts, templates, and workflows that should change future behavior; exclude one-off data, temporary paths, secrets, and retry chatter.
 
-```
-skill_name = "-".join(focus.split())
-```
+Read [primary type and package](references/type-and-package.md), then choose one primary type and only the files it needs. When the proposed test mode is not `off`, read [behavior testing](references/behavior-testing.md) before defining its target.
 
-Internal whitespace (space, tab, full-width space, multiple spaces) collapses
-to a single `-`. Other characters stay as is.
+### Batch workflows
 
-Examples:
+A stored batch is a parameterized `run_tool_batch` program bundled with a workflow Skill. Use `batch: true` when a reusable region's actions, branches, and success condition can be stated before execution and one stored entrypoint saves meaningful agent-tool round trips. The region may be the whole workflow, one substantial helper, or one semantic tool-native action; action count is not the criterion. Runtime data, observations, and a final agent review do not prevent batching when the rule for handling them is already known.
 
-* `cooking` → `cooking`
-* `view image debug` → `view-image-debug`
-* `烹饪 食谱` → `烹饪-食谱`
-* `Stock Price` → `Stock-Price` (case preserved)
+Use `batch: false` only when execution must invent the next action or success condition at runtime, or a shared entrypoint has no practical reuse value. If the user explicitly requests Batch, apply that choice to the plan without reopening eligibility.
 
-Use this `skill_name` consistently as `plan.name` in Step 1 and as the
-`name=` argument to `materialize_skill` in Step 3.
+Only after selecting `batch: true`, read [run batch](references/run-batch.md) before finalizing the workflow and file tree. When `batch: false`, do not read it.
 
-## Step 1. Propose the plan and yield for approval
+### Save and review the plan
 
-Call `create_plan` with **all four required arguments**
-(`name`, `description`, `expected_outcome`, `subtasks`):
+Planning is read-only except for saving the plan through `create_plan.py`: use conversation evidence and existing artifacts, but do not execute or probe the proposed workflow, create package files, or initialize a draft. For first creation, omit `plan_id` and pass a complete candidate:
 
-* **`name`**: the normalised `skill_name` from Step 0.
-* **`description`**: a COMPACT preview the user reviews. Two parts:
-  * **Part 1: Trigger preview.** 2 to 4 sentences, plain language. Cover
-    all three of:
-    * **Goal.** The end result this skill produces.
-    * **Trigger.** User phrasings and contexts that should invoke it. Be
-      a bit pushy on synonyms.
-    * **I/O.** What inputs it expects, what outputs it produces.
-    Not yet SKILL.md frontmatter format; that gets distilled later.
-  * **Part 2: Step outline.** Numbered list, one short verb phrase per
-    line. No per-step detail, no parameters, no error handling, no
-    sub-bullets, no `##` sub-headings. Just the shape, so the user can
-    judge ordering and scope and refine. Example layout (do NOT copy
-    this content):
-    ```
-    1. <verb phrase, ~5-10 words>
-    2. <verb phrase, ~5-10 words>
-    3. <…>
-    ```
-    Draw step names from what actually happened in THIS conversation.
-    Don't fabricate; omit anything not grounded in the conversation.
-* **`expected_outcome`** (plan-level, REQUIRED — distinct from the
-  subtask's `expected_outcome`): one concrete sentence about what
-  success looks like for the whole skill creation. Use the literal
-  string `"A new workspace skill <skill_name> is created, enabled, and
-  invocable via /<skill_name>."` with `<skill_name>` substituted.
-* **`subtasks`**: a list with a single subtask:
-  * `name`: `"Write and materialize skill"`
-  * `description`: `"Write the SKILL.md body and call materialize_skill."`
-  * `expected_outcome`: `"Skill created and visible via /skills."`
-
-Write `plan.name` and `plan.description` in the same language as the user's
-recent messages. `expected_outcome` can stay in English.
-
-After `create_plan` returns, **yield the turn**. The user will reply approve,
-refine, or cancel. The `/plan` mode's standard machinery handles the rest:
-
-* Refine: call `revise_current_plan` with feedback baked into name,
-  description, or step outline.
-* Cancel: call `finish_plan` with `state="abandoned"`.
-
-When presenting the plan, render the standard plan card. Do NOT add ad-hoc
-fields like `Subtask: …` or `Focus: …` in the chat message. Use the
-normalised `plan.name`, not the raw focus.
-
-### Plan-tools-unavailable fallback
-
-If `create_plan` is not in your toolkit (plan mode disabled in this
-workspace), fall back to a text-based plan:
-
-1. Write the same compact preview (Part 1 trigger + Part 2 step outline)
-   as a plain chat message to the user.
-2. End the message asking the user to reply approve, refine, or cancel.
-3. **Yield the turn.** On approve, jump to Step 2 (write the body) using
-   the outline you proposed. On refine, revise the text plan and yield
-   again. On cancel, stop here.
-4. Skip the `finish_subtask` / `finish_plan` calls in Step 5; they don't
-   apply when there's no plan.
-
-## Step 2. On approval, write the SKILL.md body
-
-Once the user approves the plan and the single subtask is in-progress,
-write a complete, detailed SKILL.md body grounded in THIS conversation.
-Length is fine when content is load-bearing.
-
-Writing style:
-
-* Use the imperative form.
-* Explain WHY non-obvious instructions matter (theory of mind for the next
-  agent). Avoid heavy-handed `MUST`s.
-* Target body length under ~500 lines. If approaching that, split into
-  sub-sections with clear pointers.
-
-### 2a. Align with the approved step outline
-
-Body sections align 1-to-1 with `plan.description` Part 2: same order, same
-scope. Use the step's verb phrase as the section heading. If the user
-refined Part 2 during approval, follow the **refined** version.
-
-### 2b. Fill each step from THIS conversation
-
-For every step, answer four concrete questions grounded in what actually
-happened in the session, not in common knowledge:
-
-* **Which tool, API, file, or command actually worked?** Cite the real
-  name. If multiple were tried, cite **only** the one that worked.
-* **What concrete parameters did it take?** Use real argument values from
-  the session, not placeholders. The next agent should be able to copy
-  and run without guessing.
-* **What errors hit this path, and how to avoid them?** Phrase as
-  preventive guidance. Example: *"Note: the endpoint returns 429 if
-  called more than once per second. Pass `delay=2` from the start to
-  avoid the retry loop we saw earlier."*
-* **What dead-ends should be skipped?** If three paths were tried and
-  one worked, document the winning path in full. Mention failed paths
-  **only** as terse `avoid X` reminders, not as full sub-procedures.
-
-If the conversation doesn't contain a real answer for a question, **omit**
-it instead of inventing one. Inventing parameters or error notes is the
-most common failure mode of this skill.
-
-### 2c. Optional sections
-
-Add these only when they help a future agent. No fixed schema:
-
-* **Prerequisites.** Env vars, auth credentials, expected input files,
-  tool versions.
-* **Worked example.** One realistic invocation, input through output.
-* **Failure modes and recovery.** Known failure patterns and how to
-  handle them.
-* **Edge cases.** Anything surprising the next agent would otherwise
-  stumble into.
-
-Skip anything that doesn't apply. Empty sections are worse than omitted
-ones.
-
-### 2d. Output format (only if stable)
-
-If the session settled on a stable output shape (table, JSON schema,
-markdown template), document it **once** at the top of the producing step
-with an `ALWAYS use this template:` block. Example:
-
-```markdown
-ALWAYS use this exact template:
-
-| Ticker | Last close | Currency | Source |
-|--------|-----------|----------|--------|
-| <symbol> | <price> | <iso-4217> | <api-name> |
+```json
+{
+  "workspace": "<workspace>",
+  "plan": {
+    "revision": 1,
+    "focus": "One-sentence extraction scope",
+    "name": "lowercase-hyphen-name",
+    "goal": "Outcome for a future agent",
+    "type": "workflow",
+    "batch": true,
+    "steps": ["A user-reviewable workflow step"],
+    "package": ["SKILL.md", "scripts/run.batch.json"],
+    "execution": "foreground",
+    "test": {"mode": "off", "target": ""},
+    "warnings": []
+  }
+}
 ```
 
-Skip this for skills whose output is genuinely free-form.
+To revise, add the returned `plan_id` to the top-level input above and replace `plan` with the complete revised candidate, not a partial patch. This updates the existing plan without creating a copy. If an update reports `missing-plan`, return to planning and approval instead of building. A saved plan is not evidence of user approval.
 
-### 2e. Self-check before persisting
+Render the normalized plan in English and show the selected value together with every available choice so the user can revise it without knowing the schema. The user-visible plan must contain this compact options table; do not replace it with prose or an approval hint. Omit the `Batch` row for a non-workflow:
 
-Re-read the body once and verify ALL THREE. Single pass, no second round:
+| Option | Selected | Available |
+|---|---|---|
+| Type | current English label | instruction / template / workflow |
+| Batch (workflow only) | enabled or disabled | enabled / disabled |
+| Execution | foreground or background | foreground / background |
+| Behavior test | current English label | off / smoke / eval (full behavioral evaluation) |
 
-* **Concise.** No redundancy; don't restate what's already obvious.
-* **Covers focus end-to-end.** Every step from `plan.description` Part 2
-  is present in the body and substantiated by session facts.
-* **Correct.** Every tool name, API name, parameter value, and error note
-  accurately reflects what actually happened. **No invented facts.**
+Also show the name, goal, workflow, complete file tree, test target when applicable, and warnings. Pass the internal values `instruction/template/workflow`, `true/false`, `foreground/background`, and `off/smoke/eval` to the script. Do not invent a `full` enum or any choice outside the script schema. Do not show a Batch closing reason, schema, revision, or internal enum. Ask the user to approve, modify, or cancel, then end the response without further tool calls.
 
-If any check fails, revise the body.
+Only a new user message explicitly approving the latest displayed `create_plan.py` result permits Build. Invoking `/make-skill` starts planning; earlier task discussion or a hand-written outline does not replace this plan and approval step.
 
-## Step 3. Persist via `materialize_skill`
+- After a modification, merge the feedback, increment `revision`, and update the same plan. Revise serially within the current conversation, then show the complete returned plan for approval; earlier approval does not carry over.
+- Stop on cancellation, retaining the plan without creating a draft. Distinguish acknowledgment from approval; if the user's intent is unclear, ask one brief confirmation and wait.
+- Do not ask separately about execution or testing.
 
-Call `materialize_skill` with:
+This version creates new Skills only. Resolve a name conflict through a newly approved revision; never overwrite an existing Skill.
 
-* **`name`**: the same normalised `skill_name` you used for `plan.name`.
-* **`description`**: a tight `Use this skill when …` string distilled from
-  `plan.description` Part 1. ≤ 200 characters. Preserve synonyms and
-  adjacent phrasings from the preview (LLMs tend to under-trigger skills,
-  so a slightly pushy description is better than a narrow one).
-* **`body`**: the reviewed SKILL.md body. No frontmatter; the tool renders
-  it.
+## Build
 
-Do **not** call `write_file` to save SKILL.md directly.
+After approval, run `init_draft.py` with the saved `plan_id`. Initialization snapshots the current plan into a new draft; later plan edits do not update that draft. It does not accept an inline replacement. If the plan is missing or invalid, return to planning instead of proceeding to Build.
 
-## Step 4. Handle errors from `materialize_skill`
+`execution` selects whether the current agent or a background subagent completes Skill creation. After initialization, for `background`, use `spawn_subagent` with `background: true` and give the generic subagent the complete approved plan, latest corrections, `workspace`, `draft_id`, and `skill_dir` to author the files, validate, run the approved behavior test, and publish without requesting approval again. Report the creation result when finished; running the generated Skill outside the approved behavior test requires a separate user request.
 
-### Conflict (skill name already taken)
+Create only approved files under the returned `skill_dir`. Start the generated `SKILL.md` with valid frontmatter:
 
-The tool returns the conflicting name and a suggested rename. **Recover
-automatically; don't gate this on a user question.**
+```yaml
+---
+name: lowercase-hyphen-name
+description: Briefly state the capability and when to use it.
+---
+```
 
-1. Pick a fresh name. The tool's suggestion (e.g. timestamped) is fine,
-   but anything that avoids the conflict works. Examples for an existing
-   `cooking`: `cooking-v2`, `cooking-2`, `cooking-new`.
-2. Call `revise_current_plan` to set `plan.name` to the chosen name. (In
-   the text-plan fallback, just update your working name in memory.)
-3. Call `materialize_skill` again with the new name.
-4. When reporting success in Step 5, mention the rename so the user knows
-   the original was taken. Example: *"Saved as `cooking-v2` because
-   `cooking` was already in your workspace. Delete the old one and re-run
-   if you want the original name back."*
+Keep the body to essential procedure and constraints without repeating the description. Type metadata is unnecessary.
 
-### Format error
+Before validation, read the package from the perspective of a future agent that cannot see the source conversation. Remove references to source task directories, prior outputs, temporary IDs, current-case examples, or make-skill draft/publish language unless that resource is deliberately packaged and reusable. When adapting an existing helper, generalize its paths, docstrings, and reporting, and check that its implementation still matches the final reusable rules. Keep this as one authoring pass; do not add case-specific lifecycle checks.
 
-Fix the SKILL.md content (frontmatter fields, body sections, etc.) and
-call `materialize_skill` again. Do NOT call `finish_subtask` until it
-returns success.
+## Validate, test, and publish
 
-### Security-scan rejection
+Before executing any draft script or batch, run `validate_skill.py` for the initialized draft.
 
-Remove the flagged patterns from the body and retry.
+Fix reported static or security errors in the draft and validate again. Testing is independent of Batch: run exactly the approved behavior test according to [behavior testing](references/behavior-testing.md), and let `off` perform no draft execution. When a test or Batch run fails, retain the draft, report the concrete error, revise the Skill if the correction is clear, then validate again; do not hide the failure behind a fallback.
 
-### Other errors
+Publish the unchanged validated draft with `publish_skill.py`, using the validation result's `digest` as `expected_digest`.
 
-Adjust inputs and retry, or abandon the plan if the failure is not
-recoverable.
-
-## Step 5. Finish
-
-Once `materialize_skill` returns success:
-
-1. Call `finish_subtask` for the single subtask.
-2. Call `finish_plan` with `state="completed"`.
-3. Tell the user the new skill is created and enabled, and they can
-   invoke it via `/<skill_name>`.
+On success, report the package tree, validation summary, test result when one ran, and invocation `/<name>`. On conflict or failure, retain the draft and report the error. Publishing a Skill is already persistent; do not also write it to `MEMORY.md` or daily memory unless the user separately asks.

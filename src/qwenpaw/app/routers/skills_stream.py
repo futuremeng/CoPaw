@@ -10,24 +10,24 @@ from fastapi import APIRouter
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
-from agentscope_runtime.engine.schemas.exception import (
+from qwenpaw.exceptions import (
     AppBaseException,
 )
 
-from ...agents.model_factory import create_model_and_formatter
+from ...agents.model_factory import create_model_and_formatter_async
 
 
 logger = logging.getLogger(__name__)
 
 
-def get_model():
+async def get_model():
     """Get the active chat model instance.
 
     Returns:
         Chat model instance or None if not configured
     """
     try:
-        model, _ = create_model_and_formatter()
+        model, _ = await create_model_and_formatter_async()
         return model
     except (ValueError, AppBaseException) as e:
         logger.warning("Failed to get model: %s", e)
@@ -180,7 +180,7 @@ async def ai_optimize_skill_stream(request: AIOptimizeSkillRequest):
 
     async def generate():
         try:
-            model = get_model()
+            model = await get_model()
             if not model:
                 error_msg = json.dumps(
                     {
@@ -198,9 +198,19 @@ async def ai_optimize_skill_stream(request: AIOptimizeSkillRequest):
                 SYSTEM_PROMPTS["en"],
             )
 
+            from agentscope.message import Msg, TextBlock
+
             messages = [
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": request.content},
+                Msg(
+                    name="system",
+                    role="system",
+                    content=[TextBlock(type="text", text=system_prompt)],
+                ),
+                Msg(
+                    name="user",
+                    role="user",
+                    content=[TextBlock(type="text", text=request.content)],
+                ),
             ]
 
             response = await model(messages)

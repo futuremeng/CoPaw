@@ -3,6 +3,9 @@
 """Tests for the encrypted secret store layer."""
 from __future__ import annotations
 
+import logging
+import os
+import stat
 from pathlib import Path
 from unittest.mock import patch
 
@@ -173,3 +176,165 @@ class TestMasterKeyGeneration:
             key = mod._get_master_key()
 
         assert key == bytes.fromhex(key_hex)
+
+
+@pytest.mark.skipif(
+    os.name == "nt",
+    reason="POSIX permission bits are not enforced on Windows",
+)
+class TestMasterKeyFilePermissions:
+    @pytest.mark.parametrize("insecure_mode", [0o644, 0o666])
+    def test_read_corrects_insecure_permissions(
+        self,
+        tmp_path: Path,
+        caplog: pytest.LogCaptureFixture,
+        insecure_mode: int,
+    ):
+        import qwenpaw.security.secret_store as mod
+
+        key_hex = "aa" * 32
+        key_file = tmp_path / ".master_key"
+        key_file.write_text(key_hex, encoding="utf-8")
+        os.chmod(key_file, insecure_mode)
+
+        with caplog.at_level(logging.WARNING, logger=mod.__name__):
+            assert mod._read_key_file() == key_hex
+
+        assert stat.S_IMODE(key_file.stat().st_mode) == 0o600
+        assert "had insecure permissions" in caplog.text
+
+    def test_read_does_not_loosen_stricter_owner_permissions(
+        self,
+        tmp_path: Path,
+        caplog: pytest.LogCaptureFixture,
+    ):
+        import qwenpaw.security.secret_store as mod
+
+        key_hex = "aa" * 32
+        key_file = tmp_path / ".master_key"
+        key_file.write_text(key_hex, encoding="utf-8")
+        os.chmod(key_file, 0o400)
+
+        with caplog.at_level(logging.WARNING, logger=mod.__name__):
+            assert mod._read_key_file() == key_hex
+
+        assert stat.S_IMODE(key_file.stat().st_mode) == 0o400
+        assert "permissions" not in caplog.text
+
+    def test_chmod_failure_warns_but_keeps_existing_key(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        caplog: pytest.LogCaptureFixture,
+    ):
+        import qwenpaw.security.secret_store as mod
+
+        key_hex = "aa" * 32
+        key_file = tmp_path / ".master_key"
+        key_file.write_text(key_hex, encoding="utf-8")
+        os.chmod(key_file, 0o644)
+
+        def fail_chmod(_path: Path, _mode: int) -> None:
+            raise PermissionError("chmod denied")
+
+        monkeypatch.setattr(mod.os, "chmod", fail_chmod)
+        with caplog.at_level(logging.WARNING, logger=mod.__name__):
+            assert mod._read_key_file() == key_hex
+
+        assert "Could not verify or correct" in caplog.text
+
+    def test_reload_corrects_permissions(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        caplog: pytest.LogCaptureFixture,
+    ):
+        import qwenpaw.security.secret_store as mod
+
+        key_hex = "aa" * 32
+        key_file = tmp_path / ".master_key"
+        key_file.write_text(key_hex, encoding="utf-8")
+        os.chmod(key_file, 0o644)
+        monkeypatch.setattr(mod, "_try_keyring_set", lambda _key: True)
+
+        with caplog.at_level(logging.WARNING, logger=mod.__name__):
+            mod.reload_master_key_from_disk()
+
+        assert stat.S_IMODE(key_file.stat().st_mode) == 0o600
+        assert "had insecure permissions" in caplog.text
+
+
+class TestKeyringAccountIsolation:
+    """The keychain account must isolate relocated (dev) installs from the
+    default install so they cannot overwrite each other's master key."""
+
+    @pytest.fixture(autouse=True)
+    def _clear_relocation_env(self, monkeypatch):
+        for var in (
+            "QWENPAW_KEYRING_ACCOUNT",
+            "COPAW_KEYRING_ACCOUNT",
+            "QWENPAW_WORKING_DIR",
+            "COPAW_WORKING_DIR",
+            "QWENPAW_SECRET_DIR",
+            "COPAW_SECRET_DIR",
+        ):
+            monkeypatch.delenv(var, raising=False)
+
+    def test_default_install_uses_legacy_account(self, monkeypatch):
+        import qwenpaw.security.secret_store as mod
+
+        # No relocation env vars → historical account preserved verbatim so
+        # existing installs are untouched.
+        monkeypatch.setattr(
+            mod,
+            "_get_secret_dir",
+            lambda: Path("~/.qwenpaw.secret").expanduser(),
+        )
+        assert mod._keyring_account() == "master_key"
+
+    def test_explicit_override_wins(self, monkeypatch):
+        import qwenpaw.security.secret_store as mod
+
+        monkeypatch.setenv("QWENPAW_KEYRING_ACCOUNT", "dev-profile")
+        monkeypatch.setenv("QWENPAW_WORKING_DIR", "/tmp/whatever")
+        assert mod._keyring_account() == "dev-profile"
+
+    def test_relocated_install_is_namespaced(self, monkeypatch, tmp_path):
+        import qwenpaw.security.secret_store as mod
+
+        monkeypatch.setenv("QWENPAW_WORKING_DIR", str(tmp_path / ".devdata"))
+        monkeypatch.setattr(
+            mod,
+            "_get_secret_dir",
+            lambda: tmp_path / ".devdata.secret",
+        )
+        account = mod._keyring_account()
+        assert account != "master_key"
+        assert account.startswith("master_key:")
+
+    def test_distinct_secret_dirs_get_distinct_accounts(
+        self,
+        monkeypatch,
+        tmp_path,
+    ):
+        import qwenpaw.security.secret_store as mod
+
+        monkeypatch.setenv("QWENPAW_SECRET_DIR", "set-to-mark-relocated")
+
+        monkeypatch.setattr(mod, "_get_secret_dir", lambda: tmp_path / "a")
+        account_a = mod._keyring_account()
+        monkeypatch.setattr(mod, "_get_secret_dir", lambda: tmp_path / "b")
+        account_b = mod._keyring_account()
+
+        assert account_a != account_b
+
+    def test_account_is_stable_for_same_secret_dir(
+        self,
+        monkeypatch,
+        tmp_path,
+    ):
+        import qwenpaw.security.secret_store as mod
+
+        monkeypatch.setenv("QWENPAW_SECRET_DIR", "set-to-mark-relocated")
+        monkeypatch.setattr(mod, "_get_secret_dir", lambda: tmp_path / "x")
+        assert mod._keyring_account() == mod._keyring_account()

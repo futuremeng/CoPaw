@@ -9,7 +9,7 @@
 <p align="center">
   <a href="https://github.com/agentscope-ai/CloudPaw/blob/main/LICENSE"><img src="https://img.shields.io/badge/License-Apache%202.0-blue.svg" alt="License" /></a>
   <a href="https://www.python.org/downloads/"><img src="https://img.shields.io/badge/Python-3.10%2B-blue.svg" alt="Python" /></a>
-  <a href="#"><img src="https://img.shields.io/badge/version-0.0.2-green.svg" alt="Version" /></a>
+  <a href="#"><img src="https://img.shields.io/badge/version-0.0.4-green.svg" alt="Version" /></a>
 </p>
 
 <p align="center">
@@ -46,17 +46,13 @@ CloudPaw はお客様自身の環境で完全に動作し、データの安全�
 
 1. QwenPaw を起動（`qwenpaw app`）し、http://127.0.0.1:8088/ を開く
 2. 左サイドバーの「プラグインマネージャー」（設定グループ内）をクリックし、「プラグインをインストール」をクリック
-3. 以下のいずれかの方法でインストール：
-   - プラグインダウンロード URL を入力：`https://qwenpaw-download.oss-ap-southeast-1.aliyuncs.com/files/plugins/cloudpaw/cloudpaw-0.0.2.zip`
-   - `cloudpaw/` フォルダをインストールダイアログにドラッグするか、ZIP ファイルを選択（CloudPaw は QwenPaw v1.1.7+ の `plugins/bundle/cloudpaw/` にバンドル済み）
+3. `cloudpaw/` フォルダをインストールダイアログにドラッグするか、ZIP ファイルを選択（CloudPaw は QwenPaw v1.1.7+ の `plugins/bundle/cloudpaw/` にバンドル済み）
 4. インストール完了を待つ
 
 **CLI 経由：**
 
 ```bash
 qwenpaw plugin install /path/to/cloudpaw
-# または URL 経由でインストール
-qwenpaw plugin install https://qwenpaw-download.oss-ap-southeast-1.aliyuncs.com/files/plugins/cloudpaw/cloudpaw-0.0.2.zip
 ```
 
 > **⚠️ 重要：インストール後、ブラウザを強制リフレッシュする必要があります**（`Ctrl+Shift+R` / `Cmd+Shift+R`）。CloudPaw のカスタム UI コンポーネント（提案選択、PRD 管理など）はページをリフレッシュするまで表示されません。インストール後に機能が不足している場合は、まずリフレッシュをお試しください。

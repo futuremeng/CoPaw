@@ -2,6 +2,8 @@ import type { TFunction } from "i18next";
 
 const defaultConfig = {
   theme: {
+    // The upstream chat theme generator parses this value as a HEX color.
+    // Runtime theme colors are normalized before they are passed to it.
     colorPrimary: "#FF7F16",
     darkMode: false,
     prefix: "qwenpaw",
@@ -9,10 +11,16 @@ const defaultConfig = {
       logo: "",
       title: "Work with CoPaw",
     },
+    bubbleList: {
+      userMessageAnchors: {
+        variant: "navigator",
+      },
+    },
   },
   sender: {
     attachments: true,
-    maxLength: 10000,
+    // The host handles long pastes without replacing or truncating drafts.
+    longTextUpload: false,
     disclaimer: "Works for you, grows with you",
   },
   welcome: {

@@ -1,29 +1,70 @@
 # -*- coding: utf-8 -*-
 """Console APIs: push messages, chat, and file upload for chat."""
+
 from __future__ import annotations
 
 import asyncio
 import json
 import logging
 import re
+import time
 import uuid
+from dataclasses import dataclass
 from pathlib import Path
-from typing import AsyncGenerator, Union
+from typing import Any, AsyncGenerator, Dict, Optional, Union
 
-from fastapi import APIRouter, File, HTTPException, Query, Request, UploadFile
+from fastapi import (
+    APIRouter,
+    File,
+    HTTPException,
+    Query,
+    Request,
+    UploadFile,
+)
 from pydantic import BaseModel
 from starlette.responses import StreamingResponse
 
-from agentscope_runtime.engine.schemas.agent_schemas import AgentRequest
-from ...utils.logging import LOG_FILE_PATH
+from qwenpaw.schemas import (
+    AgentRequest,
+    _coerce_content_item,
+)
+from qwenpaw.tool_calls import CancelReason
+from qwenpaw.utils.timeout import resolve_stream_task_timeout
+from ...providers.thinking import ThinkingPreference
+from ...services.session_thinking import (
+    session_model,
+    session_preference,
+    thinking_view,
+)
+from ...config.config import ModelSlotConfig
+from ...utils.logging import LOG_FILE_PATH, sanitize_log_value
 from ..agent_context import get_agent_for_request
-from ..runner.title_generator import generate_and_update_title
+from ..approvals.display import approval_display_fields
+from ..chats.models import ChatUpdate
+from ..chats.title_generator import generate_and_update_title
 from ..utils import check_upload_size
-
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/console", tags=["console"])
+
+
+# ── Background task store ──
+
+
+@dataclass
+class _BackgroundTask:
+    """In-memory state for a background chat task."""
+
+    status: str = "submitted"
+    started_at: Optional[float] = None
+    finished_at: Optional[float] = None
+    result: Optional[Dict[str, Any]] = None
+    asyncio_task: Optional[asyncio.Task] = None
+
+
+_bg_tasks: Dict[str, _BackgroundTask] = {}
+_bg_lock = asyncio.Lock()
 
 
 class MarkInboxReadRequest(BaseModel):
@@ -32,6 +73,31 @@ class MarkInboxReadRequest(BaseModel):
 
 
 MAX_DEBUG_LOG_LINES = 1000
+
+
+def _resolve_effective_stream_task_timeout(
+    raw_timeout: Any,
+) -> int:
+    """Resolve background chat-task timeout in seconds.
+
+    Thin wrapper over :func:`qwenpaw.utils.timeout.resolve_stream_task_timeout`
+    so console routes share one parse/default contract with tools.
+    """
+    return resolve_stream_task_timeout(raw_timeout, field_name="timeout")
+
+
+def _background_task_cancel_error(
+    *,
+    timed_out: bool,
+    timeout_seconds: int,
+) -> Dict[str, Any]:
+    """Build the error payload for a cancelled background chat task."""
+    if timed_out:
+        return {
+            "message": f"Task timed out after {timeout_seconds}s",
+            "code": "timeout",
+        }
+    return {"message": "Task cancelled"}
 
 
 def _safe_filename(name: str) -> str:
@@ -66,7 +132,143 @@ def _extract_placeholder_name(content_parts: list) -> tuple[str, str]:
         first_text = ""
     if not first_text:
         return "Media Message", ""
-    return first_text[:10], first_text
+    return first_text, first_text
+
+
+async def _persist_pending_model_settings(workspace, chat, request_context):
+    """Bind first-turn model and reasoning before building the runtime."""
+    pending_model = request_context.pop(f"session_model", None)
+    if pending_model is not None and session_model(chat.meta) is None:
+        try:
+            selected = ModelSlotConfig.model_validate(pending_model)
+        except ValueError as exc:
+            raise HTTPException(422, f"Invalid session model") from exc
+        view = await thinking_view(workspace, model_override=selected)
+        if view[f"model"] is None:
+            raise HTTPException(422, f"Model provider is unavailable")
+        chat = await workspace.chat_manager.set_session_model(
+            chat.id,
+            selected.model_dump(),
+        )
+        if chat is None:
+            raise HTTPException(409, f"Session disappeared before saving")
+
+    pending_thinking = request_context.pop(f"session_thinking", None)
+    if pending_thinking is not None:
+        try:
+            preference = ThinkingPreference.model_validate(pending_thinking)
+        except ValueError as exc:
+            raise HTTPException(422, f"Invalid thinking preference") from exc
+        view = await thinking_view(
+            workspace,
+            preference,
+            session_model(chat.meta),
+        )
+        if preference.level != f"inherit" and view[f"reason"] is not None:
+            raise HTTPException(422, f"Invalid session thinking setting")
+        if session_preference(chat.meta, view[f"model_key"]) is None:
+            updated = await workspace.chat_manager.set_session_thinking(
+                chat.id,
+                preference,
+                view[f"model_key"],
+            )
+            if updated is None:
+                raise HTTPException(409, f"Session disappeared before saving")
+            chat = updated
+
+    return chat
+
+
+async def _persist_pending_project_dirs(
+    workspace,
+    chat,
+    native_payload: dict[str, Any],
+):
+    """Bind pending project dirs sent with a new chat's first message.
+
+    The console can only offer a directory picker *before* a chat
+    exists, so the choice arrives in ``request_context`` as
+    ``session_project_dirs`` (ordered list, primary first; the legacy
+    singular ``session_project_dir`` is still honoured). Entries are
+    validated here rather than trusted: they come from a client, and a
+    bad value would otherwise be written into the chat and silently
+    steer every later turn.
+
+    Never overwrites an existing session override — a chat that already
+    has one is not a new chat, and clobbering it would lose the user's
+    setting.
+
+    The keys are popped once they have been **consumed** — persisted onto
+    the chat, where every later turn reads them from. If persistence does
+    not happen (the chat vanished), they are put back so that
+    ``ContextVarsSetupHook`` can still honour the user's pick for this
+    first turn instead of silently falling back to the agent default.
+    """
+    request_context = native_payload["meta"].get("request_context")
+    if not isinstance(request_context, dict):
+        return chat
+
+    chat = await _persist_pending_model_settings(
+        workspace,
+        chat,
+        request_context,
+    )
+
+    raw_list = request_context.pop("session_project_dirs", None)
+    raw_single = request_context.pop("session_project_dir", None)
+
+    def _leave_for_hook() -> None:
+        """Restore the unconsumed keys for ContextVarsSetupHook."""
+        if raw_list is not None:
+            request_context["session_project_dirs"] = raw_list
+        if raw_single is not None:
+            request_context["session_project_dir"] = raw_single
+
+    pending: list | None = None
+    if isinstance(raw_list, list) and raw_list:
+        pending = raw_list
+    elif isinstance(raw_single, str) and raw_single.strip():
+        pending = [raw_single]
+    if pending is None:
+        return chat
+
+    from ...services.project_directory import (
+        normalize_project_dir_list,
+        session_project_dirs_raw_from_meta,
+    )
+
+    if session_project_dirs_raw_from_meta(getattr(chat, "meta", None)):
+        return chat
+
+    def _validate() -> list[dict]:
+        entries = []
+        for path, label in normalize_project_dir_list(pending):
+            if not path.is_dir():
+                logger.warning(
+                    "Ignoring pending project dir that is not a "
+                    "directory: %s",
+                    path,
+                )
+                continue
+            entries.append({"path": str(path), "label": label})
+        return entries
+
+    entries = await asyncio.to_thread(_validate)
+    if not entries:
+        return chat
+
+    updated = await workspace.chat_manager.set_session_project_dirs(
+        chat.id,
+        entries,
+    )
+    if updated is None:
+        # The chat could not be updated, so nothing persisted the pick.
+        # Hand it to the hook rather than dropping it: this turn would
+        # otherwise run in the agent default while the console shows the
+        # directory the user chose.
+        _leave_for_hook()
+        return chat
+    return updated
 
 
 def _extract_session_and_payload(request_data: Union[AgentRequest, dict]):
@@ -81,28 +283,114 @@ def _extract_session_and_payload(request_data: Union[AgentRequest, dict]):
         content_parts = (
             list(request_data.input[0].content) if request_data.input else []
         )
+        message_metadata = (
+            request_data.input[0].metadata if request_data.input else None
+        )
     else:
         channel_id = request_data.get("channel", "console")
         sender_id = request_data.get("user_id", "default")
         session_id = request_data.get("session_id", "default")
         input_data = request_data.get("input", [])
         content_parts = []
+        message_metadata = None
         for content_part in input_data:
             if hasattr(content_part, "content"):
                 content_parts.extend(list(content_part.content or []))
+                message_metadata = getattr(
+                    content_part,
+                    "metadata",
+                    message_metadata,
+                )
             elif isinstance(content_part, dict) and "content" in content_part:
-                content_parts.extend(content_part["content"] or [])
+                # Coerce raw dicts to typed Content models so downstream
+                # getattr checks (e.g. _content_has_text) see real attrs.
+                content_parts.extend(
+                    _coerce_content_item(c)
+                    for c in (content_part["content"] or [])
+                )
+                if isinstance(content_part.get("metadata"), dict):
+                    message_metadata = content_part["metadata"]
+
+    meta: dict = {
+        "session_id": session_id,
+        "user_id": sender_id,
+    }
+
+    # Preserve request_context (e.g. session-level approval_level)
+    if isinstance(request_data, AgentRequest):
+        rc = getattr(request_data, "request_context", None)
+    else:
+        rc = request_data.get("request_context")
+    if isinstance(rc, dict) and rc:
+        meta["request_context"] = rc
 
     native_payload = {
         "channel_id": channel_id,
         "sender_id": sender_id,
         "content_parts": content_parts,
-        "meta": {
-            "session_id": session_id,
-            "user_id": sender_id,
-        },
+        "message_metadata": message_metadata,
+        "meta": meta,
     }
+
+    if isinstance(request_data, AgentRequest):
+        mso = getattr(request_data, "model_slot_override", None)
+    else:
+        mso = request_data.get("model_slot_override")
+    if mso is not None:
+        native_payload["model_slot_override"] = mso
+
     return native_payload
+
+
+def _is_reconnect_request(request_data: Union[AgentRequest, dict]) -> bool:
+    """Return whether the chat request asks to attach to a running stream.
+
+    ``AgentRequest`` uses ``extra="allow"`` and has no required fields,
+    so FastAPI parses ``{"reconnect": true, ...}`` bodies into an
+    ``AgentRequest`` instance — a dict-only check silently classified
+    every reconnect as a fresh send and restarted a run with an empty
+    input. Check both shapes.
+    """
+    if isinstance(request_data, dict):
+        return request_data.get("reconnect") is True
+    return getattr(request_data, "reconnect", None) is True
+
+
+def _chat_registration_fields(native_payload: dict[str, Any]) -> dict:
+    """Return first-class subagent fields from an internal request."""
+    request_context = native_payload["meta"].get("request_context")
+    if not isinstance(request_context, dict):
+        return {}
+    if request_context.get("_spawn_subagent") is not True:
+        return {}
+    return {
+        "source": "subagent",
+        "parent_session_id": str(
+            request_context.get("parent_session_id") or "",
+        )
+        or None,
+        "root_session_id": str(
+            request_context.get("root_session_id") or "",
+        )
+        or None,
+    }
+
+
+def _empty_sse_response() -> StreamingResponse:
+    """An SSE response that terminates immediately."""
+
+    async def _empty() -> AsyncGenerator[str, None]:
+        return
+        yield  # pragma: no cover — makes this an async generator
+
+    return StreamingResponse(
+        _empty(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+        },
+    )
 
 
 def _tail_text_file(
@@ -169,36 +457,71 @@ async def post_console_chat(
         native_payload["sender_id"],
         native_payload["channel_id"],
         name=name,
+        **_chat_registration_fields(native_payload),
     )
     tracker = workspace.task_tracker
-
-    # Kick off an LLM-backed title generation in the background when the chat
-    # was just created with the truncated placeholder. This runs detached so
-    # the streaming response is never blocked by title generation latency.
-    if first_text and chat.name == name:
-        asyncio.create_task(
-            generate_and_update_title(
-                workspace=workspace,
-                chat_id=chat.id,
-                user_message=first_text,
-                placeholder_name=name,
-            ),
-        )
-
-    is_reconnect = False
-    if isinstance(request_data, dict):
-        is_reconnect = request_data.get("reconnect") is True
+    is_reconnect = _is_reconnect_request(request_data)
 
     if is_reconnect:
         queue = await tracker.attach(chat.id)
         if queue is None:
-            return
+            # The run finished (or never existed): reply with an
+            # immediately-terminated SSE stream so the client's reader
+            # completes normally and falls back to the persisted
+            # history. Returning a JSON null here left the chat blank.
+            return _empty_sse_response()
     else:
-        queue, _ = await tracker.attach_or_start(
+        # The web UI allocates a Chat UUID before its first message. Give
+        # that explicit placeholder the same first-turn naming behavior as
+        # get_or_create_chat, without overwriting a user's renamed Chat.
+        if (
+            first_text
+            and not chat.last_finished_at
+            and chat.meta.get("console_placeholder_name") == chat.name
+        ):
+            renamed = await workspace.chat_manager.patch_chat_if_name_matches(
+                chat.id,
+                chat.name,
+                ChatUpdate(name=name),
+            )
+            if renamed is not None:
+                chat = renamed
+        chat = await _persist_pending_project_dirs(
+            workspace,
+            chat,
+            native_payload,
+        )
+        # Project directories are resolved exactly once, inside
+        # ContextVarsSetupHook (from the chat meta persisted above);
+        # the router no longer pre-resolves or injects them.
+
+        queue, is_new_run = await tracker.attach_or_start(
             chat.id,
             native_payload,
             console_channel.stream_one,
+            owner=workspace,
+            on_finished=workspace.chat_manager.mark_chat_finished,
         )
+        if not is_new_run:
+            await tracker.detach_subscriber(chat.id, queue)
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    "A task is already running for this chat. Wait for it "
+                    "to finish or use a different session_id."
+                ),
+            )
+
+        # Title generation is only needed when starting a new run.
+        if first_text and chat.name == name:
+            asyncio.create_task(
+                generate_and_update_title(
+                    workspace=workspace,
+                    chat_id=chat.id,
+                    user_message=first_text,
+                    placeholder_name=name,
+                ),
+            )
 
     async def event_generator() -> AsyncGenerator[str, None]:
         # Hold iterator so finally can aclose(); guarantees stream_from_queue's
@@ -233,42 +556,60 @@ async def post_console_chat_stop(
     request: Request,
     chat_id: str = Query(..., description="Chat id (ChatSpec.id) to stop"),
 ) -> dict:
-    """Stop the running chat. Only stops when called."""
+    """Stop the running chat and its foreground tool calls."""
     logger.debug("[STOP API] Received stop request for chat_id=%s", chat_id)
     workspace = await get_agent_for_request(request)
 
-    # Try to stop with the provided chat_id first
-    logger.debug(
-        "[STOP API] Got workspace, calling task_tracker.request_stop...",
-    )
-    stopped = await workspace.task_tracker.request_stop(chat_id)
-
-    # If not found, the chat_id might be a session_id (timestamp)
-    # Try to resolve it to the actual chat UUID
-    if not stopped:
-        logger.debug(
-            "[STOP API] chat_id not found in tracker, trying to resolve "
-            "from session_id...",
-        )
-        chat_manager = getattr(workspace.runner, "_chat_manager", None)
-        if chat_manager:
-            resolved_chat_id = await chat_manager.get_chat_id_by_session(
+    resolved_chat_id = chat_id
+    runtime_session_id: str | None = None
+    chat_manager = workspace.chat_manager
+    if chat_manager:
+        chat = await chat_manager.get_chat(chat_id)
+        if chat is None:
+            candidate = await chat_manager.get_chat_id_by_session(
                 session_id=chat_id,
                 channel="console",
             )
-            if resolved_chat_id:
+            if candidate:
+                resolved_chat_id = candidate
+                chat = await chat_manager.get_chat(candidate)
                 logger.debug(
                     "[STOP API] Resolved session_id=%s to chat_id=%s",
                     chat_id[:12] if len(chat_id) >= 12 else chat_id,
-                    resolved_chat_id,
+                    candidate,
                 )
-                stopped = await workspace.task_tracker.request_stop(
-                    resolved_chat_id,
-                )
+        if chat is not None:
+            runtime_session_id = chat.session_id
+
+    tool_cancelled = 0
+    app_services = getattr(request.app.state, "app_services", None)
+    coordinator = getattr(app_services, "tool_coordinator", None)
+    cancel_session = getattr(
+        coordinator,
+        "cancel_running_for_session",
+        None,
+    )
+    if runtime_session_id and callable(cancel_session):
+        # Tool calls have their own task owner. Cancel them before cancelling
+        # the producer so subprocess bridges can observe cancel_event and tear
+        # down the process tree deterministically.
+        tool_cancelled = await cancel_session(
+            runtime_session_id,
+            agent_id=workspace.agent_id,
+            reason=CancelReason.USER,
+        )
 
     logger.debug(
-        "[STOP API] task_tracker.request_stop returned: stopped=%s",
+        "[STOP API] Got workspace, calling task_tracker.request_stop...",
+    )
+    run_stopped = await workspace.task_tracker.request_stop(resolved_chat_id)
+    stopped = run_stopped or tool_cancelled > 0
+
+    logger.debug(
+        "[STOP API] stop completed: stopped=%s run_stopped=%s tools=%s",
         stopped,
+        run_stopped,
+        tool_cancelled,
     )
     return {"stopped": stopped}
 
@@ -292,6 +633,38 @@ async def post_console_upload(
     data = await file.read()
     check_upload_size(data)
     safe_name = _safe_filename(file.filename or "file")
+    if file.content_type in {
+        "image/png",
+        "image/jpeg",
+        "image/gif",
+        "image/webp",
+        "image/bmp",
+        "image/tiff",
+    } or Path(
+        safe_name,
+    ).suffix.lower() in {
+        ".png",
+        ".jpg",
+        ".jpeg",
+        ".gif",
+        ".webp",
+        ".bmp",
+        ".tiff",
+    }:
+        from io import BytesIO
+        from PIL import Image
+
+        try:
+            with Image.open(BytesIO(data)) as image:
+                image.verify()
+        except (OSError, SyntaxError, ValueError) as exc:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "The image is damaged or unsupported. "
+                    "Please upload it again."
+                ),
+            ) from exc
     stored_name = f"{uuid.uuid4().hex}_{safe_name}"
 
     path = (media_dir / stored_name).resolve()
@@ -379,10 +752,14 @@ async def get_push_messages(
             "owner_agent_id": p.owner_agent_id,
             "agent_id": p.agent_id,
             "tool_name": p.tool_name,
+            **approval_display_fields(p),
             "severity": p.severity,
             "findings_count": p.findings_count,
             "findings_summary": p.result_summary,
             "tool_params": p.extra.get("tool_call", {}).get("input", {}),
+            "source_type": p.extra.get("source_type", "tool_guard"),
+            "driver": p.extra.get("driver"),
+            "reasoning": p.extra.get("reasoning", ""),
             "created_at": p.created_at,
             "timeout_seconds": p.timeout_seconds,
         }
@@ -397,21 +774,29 @@ async def get_inbox_events(
     limit: int = Query(50, ge=1, le=500),
     offset: int = Query(0, ge=0),
     source_type: str | None = Query(None),
+    source_types: list[str] | None = Query(None),
     status: str | None = Query(None),
     agent_id: str | None = Query(None),
     unread_only: bool = Query(False),
 ):
-    from ..inbox_store import list_events
+    from ..inbox_store import query_events
 
-    events = await list_events(
+    selected_sources = set(source_types or [])
+    if source_type:
+        selected_sources.add(source_type)
+    events, total, unread_count = await query_events(
         limit=limit,
         offset=offset,
-        source_type=source_type,
+        source_types=selected_sources or None,
         status=status,
         agent_id=agent_id,
         unread_only=unread_only,
     )
-    return {"events": events}
+    return {
+        "events": events,
+        "total": total,
+        "unread_count": unread_count,
+    }
 
 
 @router.post("/inbox/read")
@@ -449,5 +834,368 @@ async def get_inbox_trace(run_id: str):
 
     trace = await get_trace(run_id)
     if trace is None:
-        raise HTTPException(status_code=404, detail="trace not found")
+        raise HTTPException(
+            status_code=404,
+            detail="trace not found",
+        )
     return trace
+
+
+# ── Background chat task endpoints ──
+
+
+def _parse_sse_payload(line: str) -> Optional[Dict[str, Any]]:
+    """Parse a single SSE data line into a dict."""
+    stripped = line.strip()
+    if stripped.startswith("data: "):
+        try:
+            return json.loads(stripped[6:])
+        except (json.JSONDecodeError, ValueError):
+            return None
+    return None
+
+
+async def _finalize_background_fork(
+    project_dir: str,
+    branch: str,
+    *,
+    scope_id: str,
+) -> bool:
+    """Finish an in-flight fork commit before publishing a *success* result.
+
+    Cancelling ``asyncio.to_thread`` cannot stop the Git worker. If the
+    parent task is cancelled (timeout or manual cancel), re-raise immediately
+    so the task API can publish a terminal failure. The Git worker keeps
+    running as detached bookkeeping and must not rewrite that failure into
+    ``completed``.
+    """
+    from qwenpaw.agents.fork_project import finalize_fork_worktree_or_fail
+
+    finalizer = asyncio.create_task(
+        asyncio.to_thread(
+            finalize_fork_worktree_or_fail,
+            project_dir,
+            branch,
+            message=f"fork worker {branch}",
+            expected_scope=scope_id or None,
+        ),
+    )
+
+    def _log_detached(task: asyncio.Task) -> None:
+        try:
+            task.result()
+        except Exception:
+            logger.warning(
+                "Detached fork finalize failed for %s",
+                sanitize_log_value(branch),
+                exc_info=True,
+            )
+
+    try:
+        return await asyncio.shield(finalizer)
+    except asyncio.CancelledError:
+        if not finalizer.done():
+            finalizer.add_done_callback(_log_detached)
+        raise
+
+
+async def _mark_background_fork_failed(
+    project_dir: str,
+    branch: str,
+    *,
+    scope_id: str,
+    reason: str,
+    context: str,
+) -> None:
+    """Best-effort fork failure bookkeeping for background tasks."""
+    if not project_dir or not branch:
+        return
+    try:
+        from qwenpaw.agents.fork_project import mark_fork_failed
+
+        await asyncio.to_thread(
+            mark_fork_failed,
+            project_dir,
+            branch,
+            reason=reason,
+            expected_scope=scope_id or None,
+        )
+    except Exception:
+        logger.warning(
+            "mark_fork_failed after %s failed for %s",
+            context,
+            sanitize_log_value(branch),
+            exc_info=True,
+        )
+
+
+@router.post(
+    "/chat/task",
+    status_code=200,
+    summary="Submit a background chat task",
+)
+# pylint: disable-next=too-many-statements
+async def post_console_chat_task(
+    request_data: dict,
+    request: Request,
+) -> dict:
+    """Run an agent chat as a background task.
+
+    Accepts a raw JSON object (not the shared ``AgentRequest`` model) so
+    task-only fields such as ``timeout`` are not validated on the common
+    chat envelope. ``timeout`` is resolved in-handler: omitted/null uses
+    the server default; invalid values raise HTTP 400.
+
+    Returns a ``task_id`` immediately. Poll status via
+    ``GET /console/chat/task/{task_id}``.
+    """
+    workspace = await get_agent_for_request(request)
+    console_channel = await workspace.channel_manager.get_channel("console")
+    if console_channel is None:
+        raise HTTPException(
+            status_code=503,
+            detail="Channel Console not found",
+        )
+
+    # Single validation path for task timeout — always HTTP 400 on error.
+    try:
+        effective_timeout = _resolve_effective_stream_task_timeout(
+            request_data.get("timeout"),
+        )
+    except (ValueError, OverflowError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    task_id = f"task-{uuid.uuid4().hex[:12]}"
+    native_payload = _extract_session_and_payload(request_data)
+    session_id = console_channel.resolve_session_id(
+        sender_id=native_payload["sender_id"],
+        channel_meta=native_payload["meta"],
+    )
+    name, _ = _extract_placeholder_name(native_payload["content_parts"])
+    chat = await workspace.chat_manager.get_or_create_chat(
+        session_id,
+        native_payload["sender_id"],
+        native_payload["channel_id"],
+        name=name,
+        **_chat_registration_fields(native_payload),
+    )
+    chat = await _persist_pending_project_dirs(
+        workspace,
+        chat,
+        native_payload,
+    )
+
+    fork_project_dir = ""
+    fork_worktree_branch = ""
+    fork_scope_id = ""
+    rc = request_data.get("request_context")
+    if isinstance(rc, dict):
+        fork_project_dir = str(rc.get("fork_project_dir") or "")
+        fork_worktree_branch = str(
+            rc.get("fork_worktree_branch") or "",
+        )
+        fork_scope_id = str(rc.get("fork_scope_id") or "")
+
+    # Project directories are resolved exactly once, inside
+    # ContextVarsSetupHook (fork override included); the router no
+    # longer pre-resolves or injects them.
+
+    bg = _BackgroundTask(
+        status="running",
+        started_at=time.time(),
+    )
+    timed_out = False
+    producer_error: Exception | None = None
+    producer_cancelled = False
+    tracker = workspace.task_tracker
+
+    async def _tracked_stream(payload: dict) -> AsyncGenerator[str, None]:
+        """Expose the background run to TaskTracker without hiding failures."""
+        nonlocal producer_cancelled, producer_error
+        try:
+            async for sse_line in console_channel.stream_one(payload):
+                yield sse_line
+        except asyncio.CancelledError:
+            producer_cancelled = True
+            raise
+        except Exception as exc:
+            producer_error = exc
+            raise
+
+    queue, is_new_run = await tracker.attach_or_start(
+        chat.id,
+        native_payload,
+        _tracked_stream,
+        owner=workspace,
+        on_finished=workspace.chat_manager.mark_chat_finished,
+    )
+    if not is_new_run:
+        await tracker.detach_subscriber(chat.id, queue)
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "A task is already running for this chat. Wait for it to "
+                "finish or use a different session_id."
+            ),
+        )
+
+    # pylint: disable-next=too-many-branches
+    async def _run() -> None:
+        last_response: Optional[Dict[str, Any]] = None
+        finalize_started = False
+        try:
+            async for sse_line in tracker.stream_from_queue(queue, chat.id):
+                parsed = _parse_sse_payload(sse_line)
+                if parsed and parsed.get("type") != "turn_usage":
+                    last_response = parsed
+
+            # ``stream_from_queue`` intentionally consumes cancellation so an
+            # aborted SSE client does not leak it.  This background consumer,
+            # however, owns the tracked run and must preserve task
+            # cancellation.
+            current_task = asyncio.current_task()
+            if current_task is not None and current_task.cancelling():
+                raise asyncio.CancelledError
+
+            if producer_cancelled:
+                raise asyncio.CancelledError
+            if producer_error is not None:
+                raise producer_error
+
+            # Fork subagents: commit dirty worktree so branch tips are
+            # mergeable before exposing a completed task result.
+            if fork_project_dir and fork_worktree_branch:
+                finalize_started = True
+                try:
+                    finalized = await _finalize_background_fork(
+                        fork_project_dir,
+                        fork_worktree_branch,
+                        scope_id=fork_scope_id,
+                    )
+                except Exception:
+                    logger.warning(
+                        "Background fork finalize failed for %s (%s)",
+                        sanitize_log_value(fork_worktree_branch),
+                        sanitize_log_value(fork_project_dir),
+                        exc_info=True,
+                    )
+                    await _mark_background_fork_failed(
+                        fork_project_dir,
+                        fork_worktree_branch,
+                        scope_id=fork_scope_id,
+                        reason="Fork finalization raised an exception",
+                        context="finalize error",
+                    )
+                    finalized = False
+                if not finalized:
+                    bg.status = "finished"
+                    bg.finished_at = time.time()
+                    bg.result = {
+                        "status": "failed",
+                        "error": {
+                            "message": "Failed to finalize fork worktree",
+                        },
+                    }
+                    return
+        except asyncio.CancelledError:
+            if is_new_run:
+                await tracker.request_stop(chat.id)
+            cancel_error = _background_task_cancel_error(
+                timed_out=timed_out,
+                timeout_seconds=effective_timeout,
+            )
+            bg.status = "finished"
+            bg.finished_at = time.time()
+            bg.result = {
+                "status": "failed",
+                "error": cancel_error,
+            }
+            # In-flight Git finalize is detached bookkeeping; do not race
+            # it with mark_fork_failed or let it flip this result later.
+            if not finalize_started:
+                await _mark_background_fork_failed(
+                    fork_project_dir,
+                    fork_worktree_branch,
+                    scope_id=fork_scope_id,
+                    reason=str(cancel_error["message"]),
+                    context="cancel",
+                )
+            return
+        except Exception as exc:
+            bg.status = "finished"
+            bg.finished_at = time.time()
+            bg.result = {
+                "status": "failed",
+                "error": {"message": str(exc)},
+            }
+            await _mark_background_fork_failed(
+                fork_project_dir,
+                fork_worktree_branch,
+                scope_id=fork_scope_id,
+                reason=str(exc),
+                context="task error",
+            )
+            return
+
+        bg.status = "finished"
+        bg.finished_at = time.time()
+        if last_response is not None:
+            bg.result = {
+                "status": "completed",
+                "session_id": session_id,
+                **last_response,
+            }
+        else:
+            bg.result = {
+                "status": "completed",
+                "session_id": session_id,
+                "output": [],
+            }
+
+    atask = asyncio.create_task(_run())
+    bg.asyncio_task = atask
+
+    async def _timeout_guard() -> None:
+        nonlocal timed_out
+        try:
+            await asyncio.sleep(effective_timeout)
+        except asyncio.CancelledError:
+            return
+        if not atask.done():
+            timed_out = True
+            atask.cancel()
+
+    guard_task = asyncio.create_task(_timeout_guard())
+
+    def _stop_timeout_guard(_task: asyncio.Task) -> None:
+        if not guard_task.done():
+            guard_task.cancel()
+
+    atask.add_done_callback(_stop_timeout_guard)
+
+    async with _bg_lock:
+        _bg_tasks[task_id] = bg
+
+    return {"task_id": task_id, "timeout": effective_timeout}
+
+
+@router.get(
+    "/chat/task/{task_id}",
+    status_code=200,
+    summary="Check background chat task status",
+)
+async def get_console_chat_task(task_id: str) -> dict:
+    """Return the current status of a background chat task."""
+    async with _bg_lock:
+        bg = _bg_tasks.get(task_id)
+    if bg is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Task not found: {task_id}",
+        )
+    response: Dict[str, Any] = {"status": bg.status}
+    if bg.started_at is not None:
+        response["started_at"] = bg.started_at
+    if bg.status == "finished" and bg.result is not None:
+        response["result"] = bg.result
+    return response

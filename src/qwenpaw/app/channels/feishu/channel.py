@@ -28,7 +28,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple
 
 import httpx
-from agentscope_runtime.engine.schemas.agent_schemas import (
+from qwenpaw.schemas import (
     AudioContent,
     FileContent,
     ImageContent,
@@ -39,6 +39,7 @@ from ....exceptions import ChannelError
 from ....config.config import FeishuConfig as FeishuChannelConfig
 from ....config.utils import get_config_path
 from ....constant import DEFAULT_MEDIA_DIR
+from ..renderer import ChannelDisplayConfig
 from ..base import (
     BaseChannel,
     ContentType,
@@ -51,6 +52,9 @@ from .constants import (
     FEISHU_FILE_MAX_BYTES,
     FEISHU_NICKNAME_CACHE_MAX,
     FEISHU_PROCESSED_IDS_MAX,
+    FEISHU_REASONING_PANEL_ELEMENT_ID,
+    FEISHU_REASONING_PANEL_ICON_TOKEN,
+    FEISHU_REASONING_PANEL_TITLE,
     FEISHU_STALE_MSG_THRESHOLD_MS,
     FEISHU_STREAM_ELEMENT_ID,
     FEISHU_STREAM_MIN_INTERVAL_S,
@@ -65,12 +69,12 @@ from .utils import (
     extract_json_key,
     extract_post_image_keys,
     extract_post_media_file_keys,
+    extract_interactive_text,
     extract_post_text,
     normalize_feishu_md,
     sender_display_string,
     short_session_id_from_full_id,
 )
-from .cards import FeishuCardHandler
 
 
 # Compatibility for setuptools>=82 where pkg_resources may be absent.
@@ -118,6 +122,7 @@ class _EventLoopProxy:
 
 
 try:
+    from .cards import FeishuCardHandler
     import lark_oapi as lark
     from lark_oapi.api.contact.v3 import GetUserRequest
     from lark_oapi.api.im.v1 import (
@@ -173,9 +178,71 @@ finally:
             delattr(_pkg_resources_module, "declare_namespace")
 
 if TYPE_CHECKING:
-    from agentscope_runtime.engine.schemas.agent_schemas import AgentRequest
+    from qwenpaw.schemas import AgentRequest
 
 logger = logging.getLogger(__name__)
+
+# Mapping from msg_type to human-readable label, used in error hints
+# (e.g. "[video: download failed]") and quoted-message prefixes
+# (e.g. "[quoted message: ...]").  Single source of truth — do NOT
+# duplicate this mapping elsewhere.
+_MSG_TYPE_LABEL: Dict[str, str] = {
+    "text": "message",
+    "post": "message",
+    "image": "image",
+    "file": "file",
+    "media": "video",
+    "audio": "audio",
+    "interactive": "interactive card",
+}
+
+
+def build_streaming_card_json(
+    initial_text: str,
+    collapsible: bool = False,
+) -> Dict[str, Any]:
+    """Build the Card JSON 2.0 payload of a streaming card.
+
+    With ``collapsible`` the streaming markdown is wrapped in a
+    ``collapsible_panel`` that starts expanded, so reasoning can be folded
+    away once it is finished. The inner markdown keeps
+    ``FEISHU_STREAM_ELEMENT_ID``, so streaming content updates are unaffected.
+    """
+    markdown_element = {
+        "tag": "markdown",
+        "content": initial_text,
+        "element_id": FEISHU_STREAM_ELEMENT_ID,
+    }
+    top_element: Dict[str, Any] = markdown_element
+    if collapsible:
+        top_element = {
+            "tag": "collapsible_panel",
+            "element_id": FEISHU_REASONING_PANEL_ELEMENT_ID,
+            "expanded": True,
+            "header": {
+                "title": {
+                    "tag": "plain_text",
+                    "content": FEISHU_REASONING_PANEL_TITLE,
+                },
+                "icon": {
+                    "tag": "standard_icon",
+                    "token": FEISHU_REASONING_PANEL_ICON_TOKEN,
+                    "size": "16px 16px",
+                },
+                "icon_position": "follow_text",
+                "icon_expanded_angle": 180,
+            },
+            "border": {
+                "color": "grey",
+                "corner_radius": "5px",
+            },
+            "elements": [markdown_element],
+        }
+    return {
+        "schema": "2.0",
+        "config": {"streaming_mode": True},
+        "body": {"elements": [top_element]},
+    }
 
 
 class FeishuChannel(BaseChannel):
@@ -188,6 +255,7 @@ class FeishuChannel(BaseChannel):
     """
 
     channel = "feishu"
+    _STREAM_DELTA_MIN_INTERVAL_S = FEISHU_STREAM_MIN_INTERVAL_S
 
     def __init__(
         self,
@@ -201,9 +269,8 @@ class FeishuChannel(BaseChannel):
         media_dir: str = "",
         workspace_dir: Path | None = None,
         on_reply_sent: OnReplySent = None,
-        show_tool_details: bool = True,
-        filter_tool_messages: bool = False,
-        filter_thinking: bool = False,
+        display_config: ChannelDisplayConfig | None = None,
+        no_text_debounce: bool = True,
         dm_policy: str = "open",
         group_policy: str = "open",
         allow_from: Optional[List[str]] = None,
@@ -211,15 +278,16 @@ class FeishuChannel(BaseChannel):
         require_mention: bool = False,
         domain: str = "feishu",
         streaming_enabled: bool = False,
+        share_session_in_group: bool = False,
+        auto_collapse_thinking: bool = False,
         access_control_dm: bool = False,
         access_control_group: bool = False,
     ):
         super().__init__(
             process,
             on_reply_sent=on_reply_sent,
-            show_tool_details=show_tool_details,
-            filter_tool_messages=filter_tool_messages,
-            filter_thinking=filter_thinking,
+            display_config=display_config,
+            no_text_debounce=no_text_debounce,
             dm_policy=dm_policy,
             group_policy=group_policy,
             allow_from=allow_from,
@@ -235,7 +303,16 @@ class FeishuChannel(BaseChannel):
         self.bot_prefix = bot_prefix
         self.encrypt_key = encrypt_key or ""
         self.verification_token = verification_token or ""
-        self.domain = domain if domain in ("feishu", "lark") else "feishu"
+        # "feishu" / "lark", or a full http(s) base URL for custom /
+        # private gateways (e.g. a local mock in tests).
+        if domain in ("feishu", "lark") or str(domain).startswith("http"):
+            self.domain = domain
+        else:
+            self.domain = "feishu"
+        self.share_session_in_group = share_session_in_group
+        # Collapse the reasoning panel automatically when the stream ends.
+        # The panel itself is always rendered collapsible.
+        self.auto_collapse_thinking = auto_collapse_thinking
         self._workspace_dir = (
             Path(workspace_dir).expanduser() if workspace_dir else None
         )
@@ -277,6 +354,14 @@ class FeishuChannel(BaseChannel):
         # card.action.trigger dispatch) lives in the card handler.
         self._card_handler = FeishuCardHandler(self)
 
+    def _sdk_domain(self) -> str:
+        """SDK base URL: custom http(s) gateway, or the lark/feishu enum."""
+        if str(self.domain).startswith("http"):
+            return str(self.domain)
+        return (
+            lark.LARK_DOMAIN if self.domain == "lark" else lark.FEISHU_DOMAIN
+        )
+
     @classmethod
     def from_env(
         cls,
@@ -310,6 +395,9 @@ class FeishuChannel(BaseChannel):
             streaming_enabled=(
                 os.getenv("FEISHU_STREAMING_ENABLED", "0") == "1"
             ),
+            share_session_in_group=(
+                os.getenv("FEISHU_SHARE_SESSION_IN_GROUP", "0") == "1"
+            ),
         )
 
     @classmethod
@@ -318,9 +406,8 @@ class FeishuChannel(BaseChannel):
         process: ProcessHandler,
         config: FeishuChannelConfig,
         on_reply_sent: OnReplySent = None,
-        show_tool_details: bool = True,
-        filter_tool_messages: bool = False,
-        filter_thinking: bool = False,
+        display_config: ChannelDisplayConfig | None = None,
+        no_text_debounce: bool = True,
         workspace_dir: Path | None = None,
     ) -> "FeishuChannel":
         return cls(
@@ -334,9 +421,9 @@ class FeishuChannel(BaseChannel):
             media_dir=config.media_dir or "",
             workspace_dir=workspace_dir,
             on_reply_sent=on_reply_sent,
-            show_tool_details=show_tool_details,
-            filter_tool_messages=filter_tool_messages,
-            filter_thinking=filter_thinking,
+            display_config=display_config
+            or ChannelDisplayConfig.from_config(config),
+            no_text_debounce=no_text_debounce,
             dm_policy=config.dm_policy or "open",
             group_policy=config.group_policy or "open",
             allow_from=config.allow_from or [],
@@ -345,6 +432,12 @@ class FeishuChannel(BaseChannel):
             domain=config.domain or "feishu",
             streaming_enabled=bool(
                 getattr(config, "streaming_enabled", False),
+            ),
+            share_session_in_group=bool(
+                getattr(config, "share_session_in_group", False),
+            ),
+            auto_collapse_thinking=bool(
+                getattr(config, "auto_collapse_thinking", False),
             ),
             access_control_dm=bool(
                 getattr(config, "access_control_dm", False),
@@ -380,7 +473,7 @@ class FeishuChannel(BaseChannel):
         native_payload: Any,
     ) -> "AgentRequest":
         """Build AgentRequest from Feishu native dict (content_parts)."""
-        from agentscope_runtime.engine.schemas.agent_schemas import (
+        from qwenpaw.schemas import (
             AgentRequest,
         )
 
@@ -428,6 +521,7 @@ class FeishuChannel(BaseChannel):
         return {
             "channel_id": first.get("channel_id") or self.channel,
             "sender_id": last.get("sender_id", first.get("sender_id", "")),
+            "acl_sender_id": first.get("acl_sender_id") or "",
             "user_id": last.get("user_id", first.get("user_id", "")),
             "session_id": last.get("session_id", first.get("session_id", "")),
             "content_parts": merged_parts,
@@ -479,11 +573,7 @@ class FeishuChannel(BaseChannel):
             if not token:
                 logger.warning("feishu: failed to get access token")
                 return None
-            base_url = (
-                "https://open.larksuite.com"
-                if self.domain == "lark"
-                else "https://open.feishu.cn"
-            )
+            base_url = self._sdk_domain()
             url = f"{base_url}/open-apis/bot/v3/info"
             response = await self._http_client.get(
                 url,
@@ -656,16 +746,16 @@ class FeishuChannel(BaseChannel):
             while len(self._processed_message_ids) > FEISHU_PROCESSED_IDS_MAX:
                 self._processed_message_ids.popitem(last=False)
 
-            sender_type = getattr(sender, "sender_type", "") or ""
-            if sender_type == "bot":
-                return
-
             sender_id_obj = getattr(sender, "sender_id", None)
             sender_id = ""
             if sender_id_obj and getattr(sender_id_obj, "open_id", None):
                 sender_id = str(getattr(sender_id_obj, "open_id", "")).strip()
             if not sender_id:
                 sender_id = f"unknown_{message_id[:8]}"
+
+            sender_type = getattr(sender, "sender_type", "") or ""
+            if sender_type == "bot" and sender_id == self._bot_open_id:
+                return
 
             nickname = (
                 getattr(sender, "name", None)
@@ -706,153 +796,29 @@ class FeishuChannel(BaseChannel):
             content_parts: List[Any] = []
             text_parts: List[str] = []
 
-            if msg_type == "text":
-                text = extract_json_key(content_raw, "text")
-                if text:
-                    for key in bot_mention_keys:
-                        text = text.replace(key, "")
-                    text = text.strip()
-                if text:
-                    text_parts.append(text)
-            elif msg_type == "post":
-                text = extract_post_text(content_raw)
-                if text:
-                    text_parts.append(text)
-                # Download images in post message
-                for img_key in extract_post_image_keys(content_raw):
-                    url_or_path = await self._download_image_resource(
-                        message_id,
-                        img_key,
-                    )
-                    if url_or_path:
-                        content_parts.append(
-                            ImageContent(
-                                type=ContentType.IMAGE,
-                                image_url=url_or_path,
-                            ),
-                        )
-                    else:
-                        text_parts.append("[image: download failed]")
-                # Download media files in post message
-                for file_key in extract_post_media_file_keys(content_raw):
-                    url_or_path = await self._download_file_resource(
-                        message_id,
-                        file_key,
-                    )
-                    if url_or_path:
-                        content_parts.append(
-                            FileContent(
-                                type=ContentType.FILE,
-                                file_url=url_or_path,
-                            ),
-                        )
-                    else:
-                        text_parts.append("[media: download failed]")
-            elif msg_type == "image":
-                image_key = extract_json_key(
-                    content_raw,
-                    "image_key",
-                    "file_key",
-                    "imageKey",
-                    "fileKey",
-                )
-                if image_key:
-                    url_or_path = await self._download_image_resource(
-                        message_id,
-                        image_key,
-                    )
-                    if url_or_path:
-                        content_parts.append(
-                            ImageContent(
-                                type=ContentType.IMAGE,
-                                image_url=url_or_path,
-                            ),
-                        )
-                    else:
-                        text_parts.append("[image: download failed]")
-                else:
-                    text_parts.append("[image: missing key]")
-            elif msg_type == "file":
-                file_key = extract_json_key(
-                    content_raw,
-                    "file_key",
-                    "fileKey",
-                )
-                file_name = extract_json_key(
-                    content_raw,
-                    "file_name",
-                    "fileName",
-                )
-                if file_key:
-                    url_or_path = await self._download_file_resource(
-                        message_id,
-                        file_key,
-                        filename_hint=file_name or "file.bin",
-                    )
-                    if url_or_path:
-                        content_parts.append(
-                            FileContent(
-                                type=ContentType.FILE,
-                                file_url=url_or_path,
-                            ),
-                        )
-                    else:
-                        text_parts.append("[file: download failed]")
-                else:
-                    text_parts.append("[file: missing key]")
-            elif msg_type == "media":
-                # Video message type
-                file_key = extract_json_key(
-                    content_raw,
-                    "file_key",
-                    "fileKey",
-                )
-                file_name = extract_json_key(
-                    content_raw,
-                    "file_name",
-                    "fileName",
-                )
-                if file_key:
-                    url_or_path = await self._download_file_resource(
-                        message_id,
-                        file_key,
-                        filename_hint=file_name or "video.mp4",
-                    )
-                    if url_or_path:
-                        content_parts.append(
-                            FileContent(
-                                type=ContentType.FILE,
-                                file_url=url_or_path,
-                            ),
-                        )
-                    else:
-                        text_parts.append("[video: download failed]")
-                else:
-                    text_parts.append("[video: missing key]")
-            elif msg_type == "audio":
-                file_key = extract_json_key(
-                    content_raw,
-                    "file_key",
-                    "fileKey",
-                )
-                if file_key:
-                    url_or_path = await self._download_file_resource(
-                        message_id,
-                        file_key,
-                        filename_hint="audio.opus",
-                    )
-                    if url_or_path:
-                        content_parts.append(
-                            AudioContent(
-                                type=ContentType.AUDIO,
-                                data=url_or_path,
-                            ),
-                        )
-                    else:
-                        text_parts.append("[audio: download failed]")
-                else:
-                    text_parts.append("[audio: missing key]")
-            else:
+            # ---- shared message content parsing ----
+            (
+                main_text,
+                error_hints,
+                parsed_content,
+            ) = await self._parse_message_content(
+                msg_type,
+                content_raw,
+                message_id,
+            )
+            # Strip bot mention keys from main text (text type only).
+            if msg_type == "text" and bot_mention_keys and main_text:
+                for key in bot_mention_keys:
+                    main_text = main_text.replace(key, "")
+                main_text = main_text.strip() or None
+
+            if main_text:
+                text_parts.append(main_text)
+            text_parts.extend(error_hints)
+            content_parts.extend(parsed_content)
+            # Fallback: if nothing was extracted, add a type-label
+            # placeholder so the message is not silently dropped.
+            if not main_text and not error_hints and not parsed_content:
                 text_parts.append(f"[{msg_type}]")
 
             # Handle quoted (replied-to) message if present.
@@ -861,8 +827,7 @@ class FeishuChannel(BaseChannel):
             #   - root_id:   the root of the entire reply tree
             # We use parent_id because the user's intent is to reference
             # the message they directly replied to, not the root of the
-            # thread.  Both IDs are identical when replying to the root
-            # message.  The logic is the same for group and p2p chats.
+            # thread.  Both IDs are identical when replying to the root.
             parent_id = str(
                 getattr(message, "parent_id", "") or "",
             ).strip()
@@ -921,14 +886,18 @@ class FeishuChannel(BaseChannel):
                 "meta": meta,
             }
             # When message is in a topic thread, override user_id to the
-            # thread_id so all members in the same topic share one session
-            # (analogous to shared mode using group_id).
+            # thread_id so all members in the same topic share one session.
             if thread_id:
                 thread_uid = (
                     f"thread:{short_session_id_from_full_id(thread_id)}"
                 )
                 native["user_id"] = thread_uid
                 meta["feishu_sender_id"] = thread_uid
+            # When share_session_in_group is enabled (and no thread), set
+            # feishu_sender_id to "group" so all members share the same
+            # context (session_id already distinguishes different groups).
+            elif is_group and self.share_session_in_group:
+                meta["feishu_sender_id"] = "group"
             logger.info(
                 "feishu recv from=%s chat=%s msg_id=%s type=%s text_len=%s",
                 sender_display[:40],
@@ -1054,6 +1023,155 @@ class FeishuChannel(BaseChannel):
             logger.exception("feishu _download_file_resource failed")
             return None
 
+    async def _parse_message_content(
+        self,
+        msg_type: str,
+        content_raw: str,
+        message_id: str,
+    ) -> Tuple[Optional[str], List[str], List[Any]]:
+        """Parse message content into structured components.
+
+        Shared parsing engine used by both ``_on_message`` (inbound) and
+        ``_process_quoted_message`` (quoted reply).  Unifies the
+        previously duplicated type-dispatch branches for text / post /
+        image / file / media / audio / interactive, including media
+        download via SDK.
+
+        Args:
+            msg_type: Message type -- text, post, image, file, media,
+                      audio, interactive.
+            content_raw: Raw JSON content string from the message body.
+            message_id: Message ID used for media resource downloads.
+
+        Returns:
+            A 3-tuple ``(main_text, error_hints, content_parts)``:
+
+            * **main_text** -- Extracted human-readable text from the
+              message body, or *None* when the message carries no text
+              (e.g. a bare image).
+            * **error_hints** -- Bracket-wrapped diagnostic strings
+              produced when a media download or key extraction fails,
+              e.g. ``"[image: download failed]"``.
+            * **content_parts** -- Rich content objects
+              (``ImageContent`` / ``FileContent`` / ``AudioContent``).
+        """
+        main_text: Optional[str] = None
+        error_hints: List[str] = []
+        content_parts: List[Any] = []
+        label = _MSG_TYPE_LABEL.get(msg_type, msg_type)
+
+        if msg_type == "text":
+            text = extract_json_key(content_raw, "text")
+            if text and text.strip():
+                main_text = text.strip()
+
+        elif msg_type == "post":
+            main_text = extract_post_text(content_raw) or None
+            for img_key in extract_post_image_keys(content_raw):
+                url_or_path = await self._download_image_resource(
+                    message_id,
+                    img_key,
+                )
+                if url_or_path:
+                    content_parts.append(
+                        ImageContent(
+                            type=ContentType.IMAGE,
+                            image_url=url_or_path,
+                        ),
+                    )
+                else:
+                    error_hints.append("[image: download failed]")
+            for file_key in extract_post_media_file_keys(content_raw):
+                url_or_path = await self._download_file_resource(
+                    message_id,
+                    file_key,
+                )
+                if url_or_path:
+                    content_parts.append(
+                        FileContent(
+                            type=ContentType.FILE,
+                            file_url=url_or_path,
+                        ),
+                    )
+                else:
+                    error_hints.append("[media: download failed]")
+
+        elif msg_type == "image":
+            image_key = extract_json_key(
+                content_raw,
+                "image_key",
+                "file_key",
+                "imageKey",
+                "fileKey",
+            )
+            if image_key:
+                url_or_path = await self._download_image_resource(
+                    message_id,
+                    image_key,
+                )
+                if url_or_path:
+                    content_parts.append(
+                        ImageContent(
+                            type=ContentType.IMAGE,
+                            image_url=url_or_path,
+                        ),
+                    )
+                else:
+                    error_hints.append("[image: download failed]")
+            else:
+                error_hints.append("[image: missing key]")
+
+        elif msg_type in ("file", "media", "audio"):
+            file_key = extract_json_key(
+                content_raw,
+                "file_key",
+                "fileKey",
+            )
+            file_name = extract_json_key(
+                content_raw,
+                "file_name",
+                "fileName",
+            )
+            hint_map = {
+                "file": "file.bin",
+                "media": "video.mp4",
+                "audio": "audio.opus",
+            }
+            hint = file_name or hint_map.get(msg_type, "file.bin")
+            if file_key:
+                url_or_path = await self._download_file_resource(
+                    message_id,
+                    file_key,
+                    filename_hint=hint,
+                )
+                if url_or_path:
+                    if msg_type == "audio":
+                        content_parts.append(
+                            AudioContent(
+                                type=ContentType.AUDIO,
+                                data=url_or_path,
+                            ),
+                        )
+                    else:
+                        content_parts.append(
+                            FileContent(
+                                type=ContentType.FILE,
+                                file_url=url_or_path,
+                            ),
+                        )
+                else:
+                    error_hints.append(f"[{label}: download failed]")
+            else:
+                error_hints.append(f"[{label}: missing key]")
+
+        elif msg_type == "interactive":
+            main_text = extract_interactive_text(content_raw) or None
+
+        # Unknown type — no main_text, no content_parts; callers will
+        # see all-empty and can decide how to surface it.
+
+        return main_text, error_hints, content_parts
+
     async def _fetch_quoted_message_content(
         self,
         parent_id: str,
@@ -1072,6 +1190,7 @@ class FeishuChannel(BaseChannel):
             return None
         try:
             req = GetMessageRequest.builder().message_id(parent_id).build()
+            req.add_query("card_msg_content_type", "user_card_content")
             resp = await self._client.im.v1.message.aget(req)
             if not resp.success():
                 logger.info(
@@ -1128,120 +1247,37 @@ class FeishuChannel(BaseChannel):
             quoted_msg_type,
         )
 
-        if quoted_msg_type == "text":
-            quoted_text = extract_json_key(quoted_content, "text")
-            if quoted_text:
-                text_parts.insert(0, f"[quoted message: {quoted_text}]")
+        # Delegate to shared parsing engine.
+        (
+            main_text,
+            error_hints,
+            parsed_content,
+        ) = await self._parse_message_content(
+            quoted_msg_type,
+            quoted_content,
+            parent_id,
+        )
 
-        elif quoted_msg_type == "post":
-            quoted_text = extract_post_text(quoted_content)
-            if quoted_text:
-                text_parts.insert(0, f"[quoted message: {quoted_text}]")
-            for img_key in extract_post_image_keys(quoted_content):
-                url_or_path = await self._download_image_resource(
-                    parent_id,
-                    img_key,
-                )
-                if url_or_path:
-                    content_parts.append(
-                        ImageContent(
-                            type=ContentType.IMAGE,
-                            image_url=url_or_path,
-                        ),
-                    )
-                else:
-                    text_parts.insert(0, "[quoted image: download failed]")
-            for file_key in extract_post_media_file_keys(quoted_content):
-                url_or_path = await self._download_file_resource(
-                    parent_id,
-                    file_key,
-                )
-                if url_or_path:
-                    content_parts.append(
-                        FileContent(
-                            type=ContentType.FILE,
-                            file_url=url_or_path,
-                        ),
-                    )
-                else:
-                    text_parts.insert(0, "[quoted media: download failed]")
+        label = _MSG_TYPE_LABEL.get(quoted_msg_type, quoted_msg_type)
 
-        elif quoted_msg_type == "image":
-            image_key = extract_json_key(
-                quoted_content,
-                "image_key",
-                "file_key",
-                "imageKey",
-                "fileKey",
-            )
-            if image_key:
-                url_or_path = await self._download_image_resource(
-                    parent_id,
-                    image_key,
-                )
-                if url_or_path:
-                    content_parts.append(
-                        ImageContent(
-                            type=ContentType.IMAGE,
-                            image_url=url_or_path,
-                        ),
-                    )
-                else:
-                    text_parts.insert(0, "[quoted image: download failed]")
-            else:
-                text_parts.insert(0, "[quoted image: missing key]")
-
-        elif quoted_msg_type in ("file", "media", "audio"):
-            file_key = extract_json_key(
-                quoted_content,
-                "file_key",
-                "fileKey",
-            )
-            file_name = extract_json_key(
-                quoted_content,
-                "file_name",
-                "fileName",
-            )
-            hint_map = {
-                "file": "file.bin",
-                "media": "video.mp4",
-                "audio": "audio.opus",
-            }
-            hint = file_name or hint_map.get(quoted_msg_type, "file.bin")
-            if file_key:
-                url_or_path = await self._download_file_resource(
-                    parent_id,
-                    file_key,
-                    filename_hint=hint,
-                )
-                if url_or_path:
-                    if quoted_msg_type == "audio":
-                        content_parts.append(
-                            AudioContent(
-                                type=ContentType.AUDIO,
-                                data=url_or_path,
-                            ),
-                        )
-                    else:
-                        content_parts.append(
-                            FileContent(
-                                type=ContentType.FILE,
-                                file_url=url_or_path,
-                            ),
-                        )
-                else:
-                    text_parts.insert(
-                        0,
-                        f"[quoted {quoted_msg_type}: download failed]",
-                    )
-            else:
-                text_parts.insert(
-                    0,
-                    f"[quoted {quoted_msg_type}: missing key]",
-                )
-
+        # Build quoted prefix lines in order, then prepend as a block.
+        quoted_lines: List[str] = []
+        if main_text:
+            quoted_lines.append(f"[quoted {label}: {main_text}]")
         else:
-            text_parts.insert(0, f"[quoted {quoted_msg_type} message]")
+            quoted_lines.append(f"[quoted {label}]")
+        for hint in error_hints:
+            quoted_lines.append(
+                (
+                    f"[quoted {hint[1:]}"
+                    if hint.startswith("[")
+                    else f"[quoted {hint}]"
+                ),
+            )
+        # Prepend all quoted lines before existing text_parts.
+        text_parts[:0] = quoted_lines
+
+        content_parts.extend(parsed_content)
 
     def _receive_id_store_path(self) -> Path:
         """
@@ -2064,8 +2100,12 @@ class FeishuChannel(BaseChannel):
         receive_id_type: str,
         receive_id: str,
         initial_text: str = "...",
+        collapsible: bool = False,
     ) -> Optional[Dict[str, str]]:
         """Create a CardKit streaming card and send it as a message.
+
+        ``collapsible`` is forwarded to :func:`build_streaming_card_json` and
+        selects the reasoning variant of the card.
 
         Returns ``{"card_id": ..., "message_id": ...}`` or ``None``.
         """
@@ -2077,20 +2117,7 @@ class FeishuChannel(BaseChannel):
             CreateCardRequestBody,
         )
 
-        element_id = FEISHU_STREAM_ELEMENT_ID
-        card_json = {
-            "schema": "2.0",
-            "config": {"streaming_mode": True},
-            "body": {
-                "elements": [
-                    {
-                        "tag": "markdown",
-                        "content": initial_text,
-                        "element_id": element_id,
-                    },
-                ],
-            },
-        }
+        card_json = build_streaming_card_json(initial_text, collapsible)
 
         try:
             create_req = (
@@ -2260,15 +2287,57 @@ class FeishuChannel(BaseChannel):
             )
             return False
 
-    def _is_card_event(self, event: Any) -> bool:
-        """Check if the event matches a registered interactive card kind."""
-        from .cards.context import extract_meta
+    async def _collapse_reasoning_panel(
+        self,
+        card_id: str,
+        sequence: int,
+    ) -> bool:
+        """Collapse the reasoning panel via the CardKit element PATCH API.
 
-        meta = extract_meta(event)
-        if meta is None:
+        The element content API (PUT) returns 404 for this endpoint, so the
+        update goes through a PATCH whose ``partial_element`` is a JSON
+        string. ``sequence`` must exceed the finalize sequence. A failure is
+        logged only: a panel left expanded must never fail the answer.
+        """
+        if not self._client or not card_id:
             return False
-        message_type = str(meta.get("message_type") or "")
-        return message_type in self._card_handler._by_message_type
+
+        from lark_oapi.api.cardkit.v1 import (
+            PatchCardElementRequest,
+            PatchCardElementRequestBody,
+        )
+
+        partial_element = json.dumps({"expanded": False}, ensure_ascii=False)
+
+        try:
+            req = (
+                PatchCardElementRequest.builder()
+                .card_id(card_id)
+                .element_id(FEISHU_REASONING_PANEL_ELEMENT_ID)
+                .request_body(
+                    PatchCardElementRequestBody.builder()
+                    .partial_element(partial_element)
+                    .sequence(sequence)
+                    .uuid(str(_uuid.uuid4()))
+                    .build(),
+                )
+                .build()
+            )
+            resp = await self._client.cardkit.v1.card_element.apatch(req)
+            if not resp.success():
+                logger.warning(
+                    "feishu collapse reasoning panel failed: code=%s msg=%s",
+                    resp.code,
+                    resp.msg,
+                )
+                return False
+            return True
+        except Exception:
+            logger.warning(
+                "feishu collapse reasoning panel exception",
+                exc_info=True,
+            )
+            return False
 
     # ------------------------------------------------------------------
     # Streaming hooks (CardKit card mode)
@@ -2312,28 +2381,28 @@ class FeishuChannel(BaseChannel):
         receive_id_type, receive_id = recv
         state = self._get_feishu_stream_state(send_meta)
 
-        # Reuse pre-created card for the first arriving segment.
-        card_info = getattr(request, "_precreated_card", None)
-        if card_info:
-            setattr(request, "_precreated_card", None)
-        else:
-            initial = self._build_stream_display_text(
-                stream_type,
-                "...",
-                send_meta,
-            )
-            card_info = await self._create_streaming_card(
-                receive_id_type,
-                receive_id,
-                initial_text=initial,
-            )
+        # Cards are created lazily in arrival order, so the visible order
+        # matches the order segments were produced: reasoning gets its own
+        # collapsible card, and any answer card is created after it, below it.
+        is_reasoning = stream_type == "reasoning"
+        initial = self._build_stream_display_text(
+            stream_type,
+            "...",
+            send_meta,
+        )
+        card_info = await self._create_streaming_card(
+            receive_id_type,
+            receive_id,
+            initial_text=initial,
+            collapsible=is_reasoning,
+        )
 
         if card_info:
             state["cards"][stream_type] = {
                 "card_id": card_info["card_id"],
                 "message_id": card_info["message_id"],
-                "last_update_ts": time.monotonic(),
                 "sequence": 0,
+                "collapsible": is_reasoning,
             }
 
     async def on_streaming_delta(
@@ -2345,16 +2414,12 @@ class FeishuChannel(BaseChannel):
         stream_type: str,
         accumulated_text: str = "",
     ) -> None:
-        """Stream-update the card with incremental text (throttled)."""
+        """Stream-update the card with incremental text."""
         state = send_meta.get("_fs_stream")
         if not state:
             return
         card_state = state["cards"].get(stream_type)
         if not card_state:
-            return
-
-        now = time.monotonic()
-        if now - card_state["last_update_ts"] < FEISHU_STREAM_MIN_INTERVAL_S:
             return
 
         display_text = self._build_stream_display_text(
@@ -2364,13 +2429,11 @@ class FeishuChannel(BaseChannel):
         )
 
         card_state["sequence"] += 1
-        success = await self._update_streaming_text(
+        await self._update_streaming_text(
             card_state["card_id"],
             display_text,
             sequence=card_state["sequence"],
         )
-        if success:
-            card_state["last_update_ts"] = now
 
     async def on_streaming_end(
         self,
@@ -2422,20 +2485,21 @@ class FeishuChannel(BaseChannel):
             sequence=card_state["sequence"],
         )
 
+        # Fold the reasoning away once generation is done, so a long thinking
+        # trace no longer pushes the answer out of view. Opt-in: the panel is
+        # always collapsible by hand, and this only decides the automatic
+        # fold. Best-effort, consuming the next sequence after settings.
+        if card_state.get("collapsible") and self.auto_collapse_thinking:
+            card_state["sequence"] += 1
+            await self._collapse_reasoning_panel(
+                card_id,
+                sequence=card_state["sequence"],
+            )
+
         # Track last sent message_id for DONE reaction
         message_id = card_state.get("message_id")
         if message_id:
             send_meta["_last_sent_message_id"] = message_id
-
-        # Card events (e.g. tool_guard) consumed by streaming need a
-        # compact interactive card sent after the streaming card.
-        if stream_type == "message" and self._is_card_event(event):
-            await self._card_handler.try_send_card_for_event(
-                to_handle,
-                event,
-                send_meta,
-                compact=True,
-            )
 
     # ------------------------------------------------------------------
     # Process lifecycle hooks
@@ -2523,39 +2587,20 @@ class FeishuChannel(BaseChannel):
         )
 
     async def _before_consume_process(self, request: Any) -> None:
-        """Save receive_id and pre-create streaming card if enabled."""
+        """Persist the session's receive_id before the agent runs.
+
+        Streaming cards are created lazily by ``on_streaming_start``, on the
+        first segment of each stream type, so card order matches segment order.
+        """
         meta = getattr(request, "channel_meta", None) or {}
         receive_id = meta.get("feishu_receive_id")
-        receive_id_type = meta.get("feishu_receive_id_type", "open_id")
-        if receive_id and getattr(request, "session_id", None):
-            await self._save_receive_id(
-                request.session_id,
-                receive_id,
-                receive_id_type,
-            )
-
-        # Pre-create streaming card for immediate feedback.
-        # Skip card-action requests (e.g. /approval from buttons).
-        # Skip thread replies (streaming not supported in threads).
-        if (
-            self.streaming_enabled
-            and receive_id
-            and not meta.get("from_card_action")
-            and not meta.get("feishu_thread_id")
-        ):
-            try:
-                card_info = await self._create_streaming_card(
-                    receive_id_type,
-                    receive_id,
-                    initial_text="...",
-                )
-                if card_info:
-                    setattr(request, "_precreated_card", card_info)
-            except Exception:
-                logger.debug(
-                    "feishu streaming card pre-creation failed",
-                    exc_info=True,
-                )
+        if not receive_id or not getattr(request, "session_id", None):
+            return
+        await self._save_receive_id(
+            request.session_id,
+            receive_id,
+            meta.get("feishu_receive_id_type", "open_id"),
+        )
 
     def _run_ws_forever(self) -> None:
         """Run WebSocket with exponential-backoff reconnection."""
@@ -2590,11 +2635,7 @@ class FeishuChannel(BaseChannel):
                     self.app_secret,
                     event_handler=event_handler,
                     log_level=lark.LogLevel.INFO,
-                    domain=(
-                        lark.LARK_DOMAIN
-                        if self.domain == "lark"
-                        else lark.FEISHU_DOMAIN
-                    ),
+                    domain=self._sdk_domain(),
                 )
 
                 # Patch SDK to track last-received timestamp for
@@ -2815,9 +2856,7 @@ class FeishuChannel(BaseChannel):
         self._http_client = httpx.AsyncClient(
             timeout=30.0,
         )
-        sdk_domain = (
-            lark.LARK_DOMAIN if self.domain == "lark" else lark.FEISHU_DOMAIN
-        )
+        sdk_domain = self._sdk_domain()
         self._client = (
             lark.Client.builder()
             .app_id(self.app_id)

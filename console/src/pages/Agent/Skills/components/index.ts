@@ -1,12 +1,12 @@
 export { SkillCard } from "./SkillCard";
 export {
   SkillDrawer,
-  parseFrontmatter,
   MAX_TAGS,
   MAX_TAG_LENGTH,
   type SkillDrawerFormValues,
 } from "./SkillDrawer";
-export { getFileIcon, getSkillVisual } from "./SkillCard";
+export { parseFrontmatter } from "./skillFrontmatter";
+export { getFileIcon } from "@/components/SkillVisual";
 export {
   getSkillDisplaySource,
   getPoolBuiltinStatusLabel,
@@ -16,10 +16,12 @@ export { useConflictRenameModal } from "./useConflictRenameModal";
 export { ImportHubModal } from "./ImportHubModal";
 export { PoolTransferModal } from "./PoolTransferModal";
 export { MarketplaceDrawer } from "./MarketplaceDrawer";
-export { SkillFilterDropdown, TAG_PREFIX } from "./SkillFilterDropdown";
+export { SkillFilterDropdown } from "./SkillFilterDropdown";
 export { HeaderActions } from "./HeaderActions";
+export { AddSkillDropdown } from "./AddSkillDropdown";
 export { SkillsToolbar } from "./SkillsToolbar";
 export { SkillListItem } from "./SkillListItem";
+export { ProviderSkillDrawer } from "./ProviderSkillDrawer";
 
 export {
   SUPPORTED_SKILL_URL_PREFIXES,
@@ -35,6 +37,18 @@ export interface SkillMarket {
 }
 
 export const skillMarkets: SkillMarket[] = [
+  {
+    key: "qwenpaw",
+    name: "QwenPaw",
+    homepage: "https://platform.agentscope.io/skills",
+    urlPrefix: "https://platform.agentscope.io/skills/",
+    examples: [
+      {
+        label: "qwenpaw-docs-zh",
+        url: "https://platform.agentscope.io/skills/@user/qwenpaw-docs-zh",
+      },
+    ],
+  },
   {
     key: "skills.sh",
     name: "Skills.sh",
@@ -53,8 +67,14 @@ export const skillMarkets: SkillMarket[] = [
     homepage: "https://clawhub.ai",
     urlPrefix: "https://clawhub.ai/",
     examples: [
-      { label: "word-docx", url: "https://clawhub.ai/ivangdavila/word-docx" },
-      { label: "excel-xlsx", url: "https://clawhub.ai/ivangdavila/excel-xlsx" },
+      {
+        label: "word-docx",
+        url: "https://clawhub.ai/ivangdavila/skills/word-docx",
+      },
+      {
+        label: "excel-xlsx",
+        url: "https://clawhub.ai/ivangdavila/skills/excel-xlsx",
+      },
     ],
   },
   {

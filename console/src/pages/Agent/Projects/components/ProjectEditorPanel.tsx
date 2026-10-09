@@ -19,10 +19,11 @@ import { useTranslation } from "react-i18next";
 import TabbedEditor from "../../../Coding/TabbedEditor";
 import ProjectDocumentKnowledgeVisualization from "./ProjectDocumentKnowledgeVisualization";
 import {
-  useCurrentTabs,
-  useCurrentActiveTabPath,
   useCodingTabsStore,
+  useTabsForScope,
+  useActiveTabPathForScope,
 } from "../../../../stores/codingTabsStore";
+import { agentFilesScopeKey } from "../../../../features/files-workspace/filesWorkspaceScope";
 import { useAgentStore } from "../../../../stores/agentStore";
 import type { ProjectWorkspaceFacade } from "../hooks/useProjectWorkspaceFacade";
 import type { ProjectKnowledgeState } from "../hooks/useProjectKnowledgeState";
@@ -62,13 +63,12 @@ export default function ProjectEditorPanel({
 }: ProjectEditorPanelProps) {
   const { t } = useTranslation();
 
-  // Use the existing per-agent coding tabs store for tab state management.
-  // This is safe because codingTabsStore is already keyed by agentId and
-  // persists to localStorage. Project pages that switch agents will
-  // automatically get the correct tab set.
+  // Use the shared coding tabs store, keyed by the upstream files-workspace
+  // scope key so project tabs persist under the agent bucket.
   const { selectedAgent } = useAgentStore();
-  const tabs = useCurrentTabs();
-  const activeTabPath = useCurrentActiveTabPath();
+  const scopeKey = agentFilesScopeKey({ kind: "agent", agentId: selectedAgent });
+  const tabs = useTabsForScope(scopeKey);
+  const activeTabPath = useActiveTabPathForScope(scopeKey);
   const {
     openTab,
     closeTab,
@@ -87,7 +87,7 @@ export default function ProjectEditorPanel({
     }
     if (openedFilesRef.current.has(selectedFilePath)) {
       // File already opened — just switch to its tab
-      setActiveTab(selectedAgent, selectedFilePath);
+      setActiveTab(scopeKey, selectedFilePath);
       return;
     }
 
@@ -99,63 +99,73 @@ export default function ProjectEditorPanel({
     }
 
     openedFilesRef.current.add(selectedFilePath);
-    openTab(selectedAgent, { path: selectedFilePath, content, dirty: false });
-    setActiveTab(selectedAgent, selectedFilePath);
-  }, [selectedFilePath, selectedAgent, projectWorkspaceFacade, loadFileContent, openTab, setActiveTab]);
+    openTab(scopeKey, { path: selectedFilePath, content, dirty: false });
+    setActiveTab(scopeKey, selectedFilePath);
+  }, [selectedFilePath, selectedAgent, scopeKey, projectWorkspaceFacade, loadFileContent, openTab, setActiveTab]);
 
   // When fileContent updates for the active tab, sync it
   useEffect(() => {
     if (!activeTabPath || !fileContent || !selectedAgent) return;
     const currentTab = tabs.find((t) => t.path === activeTabPath);
     if (currentTab && currentTab.content !== fileContent && !currentTab.dirty) {
-      setTabContent(selectedAgent, activeTabPath, fileContent);
+      setTabContent(scopeKey, activeTabPath, fileContent);
     }
-  }, [fileContent, activeTabPath, selectedAgent, tabs, setTabContent]);
+  }, [fileContent, activeTabPath, selectedAgent, scopeKey, tabs, setTabContent]);
 
   // Build project-scoped file operations for the TabbedEditor
   const projectLoadFile = useCallback(async (path: string) => {
-    if (!projectWorkspaceFacade) return { content: "" };
+    if (!projectWorkspaceFacade) return "";
     try {
-      return await projectWorkspaceFacade.readText(path);
+      return (await projectWorkspaceFacade.readText(path)).content ?? "";
     } catch {
-      return { content: "" };
+      return "";
     }
   }, [projectWorkspaceFacade]);
 
   const projectSaveFile = useCallback(async (path: string, content: string) => {
-    if (!projectWorkspaceFacade) return {};
+    if (!projectWorkspaceFacade) return;
     try {
-      return await projectWorkspaceFacade.writeText(path, content);
+      await projectWorkspaceFacade.writeText(path, content);
     } catch {
-      return {};
+      // TabbedEditor keeps the tab dirty and surfaces the failure
     }
   }, [projectWorkspaceFacade]);
 
   const handleTabSelect = useCallback(
-    (path: string) => setActiveTab(selectedAgent, path),
-    [selectedAgent, setActiveTab],
+    (path: string) => setActiveTab(scopeKey, path),
+    [scopeKey, setActiveTab],
   );
 
   const handleTabClose = useCallback(
     (path: string) => {
       const idx = tabs.findIndex((t) => t.path === path);
-      closeTab(selectedAgent, path);
+      closeTab(scopeKey, path);
       if (activeTabPath === path) {
         const fallback = tabs[idx + 1]?.path ?? tabs[idx - 1]?.path ?? "";
-        setActiveTab(selectedAgent, fallback);
+        setActiveTab(scopeKey, fallback);
       }
     },
-    [tabs, activeTabPath, selectedAgent, closeTab, setActiveTab],
+    [tabs, activeTabPath, scopeKey, closeTab, setActiveTab],
+  );
+
+  const handleTabCloseOthers = useCallback(
+    (path: string) => {
+      tabs.forEach((tab) => {
+        if (tab.path !== path) closeTab(scopeKey, tab.path);
+      });
+      setActiveTab(scopeKey, path);
+    },
+    [tabs, scopeKey, closeTab, setActiveTab],
   );
 
   const handleTabDirtyChange = useCallback(
-    (path: string, dirty: boolean) => setTabDirty(selectedAgent, path, dirty),
-    [selectedAgent, setTabDirty],
+    (path: string, dirty: boolean) => setTabDirty(scopeKey, path, dirty),
+    [scopeKey, setTabDirty],
   );
 
   const handleTabContentChange = useCallback(
-    (path: string, content: string) => setTabContent(selectedAgent, path, content),
-    [selectedAgent, setTabContent],
+    (path: string, content: string) => setTabContent(scopeKey, path, content),
+    [scopeKey, setTabContent],
   );
 
   const showKnowledgeVisualization = Boolean(
@@ -175,12 +185,14 @@ export default function ProjectEditorPanel({
               <TabbedEditor
                 tabs={tabs}
                 activeTabPath={activeTabPath}
+                scopeKey={scopeKey}
                 onTabSelect={handleTabSelect}
                 onTabClose={handleTabClose}
+                onCloseOtherTabs={handleTabCloseOthers}
                 onTabDirtyChange={handleTabDirtyChange}
                 onTabContentChange={handleTabContentChange}
-                loadFile={projectLoadFile}
-                saveFile={projectSaveFile}
+                onLoadFile={projectLoadFile}
+                onSaveFile={projectSaveFile}
               />
             </Splitter.Panel>
             <Splitter.Panel min="28%" style={{ overflow: "hidden" }}>
@@ -206,12 +218,14 @@ export default function ProjectEditorPanel({
           <TabbedEditor
             tabs={tabs}
             activeTabPath={activeTabPath}
+            scopeKey={scopeKey}
             onTabSelect={handleTabSelect}
             onTabClose={handleTabClose}
+            onCloseOtherTabs={handleTabCloseOthers}
             onTabDirtyChange={handleTabDirtyChange}
             onTabContentChange={handleTabContentChange}
-            loadFile={projectLoadFile}
-            saveFile={projectSaveFile}
+            onLoadFile={projectLoadFile}
+            onSaveFile={projectSaveFile}
           />
         )}
       </div>

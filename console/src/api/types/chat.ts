@@ -1,4 +1,15 @@
 export type ChatStatus = "idle" | "running";
+export type ChatSource = "chat" | "cron" | "subagent";
+export type ChatGroupKind = "default" | "cron" | "subagents" | "custom";
+
+export interface ChatGroup {
+  id: string;
+  name: string;
+  order: number;
+  kind: ChatGroupKind;
+  source?: ChatSource | null;
+  pinned: boolean;
+}
 
 export interface ChatSpec {
   id: string; // Chat UUID identifier
@@ -8,9 +19,16 @@ export interface ChatSpec {
   channel: string; // Channel name, default: "default"
   created_at: string | null; // Chat creation timestamp (ISO 8601)
   updated_at: string | null; // Chat last update timestamp (ISO 8601)
+  last_finished_at?: string | null; // Most recent task completion timestamp
   meta?: Record<string, unknown>; // Additional metadata
   status?: ChatStatus; // Conversation status: idle or running
   pinned?: boolean; // Whether the chat is pinned to the top
+  archived_at?: string | null; // When the chat was archived (ISO 8601), null = active
+  archived?: boolean; // Computed: whether the chat is archived
+  source?: ChatSource;
+  group_id?: string | null;
+  parent_session_id?: string | null;
+  root_session_id?: string | null;
 }
 
 export interface Message {
@@ -33,6 +51,7 @@ export interface ChatUpdateRequest {
   channel?: string;
   meta?: Record<string, unknown>;
   pinned?: boolean;
+  group_id?: string;
 }
 
 export interface ChatDeleteResponse {
@@ -48,6 +67,15 @@ export interface ChatTailUserDeleteResponse {
 
 export interface ChatTailUserDeleteRequest {
   message_id?: string;
+}
+
+export interface BatchArchiveResult {
+  succeeded: string[];
+  failed: Array<{
+    chat_id: string;
+    reason: "not_found" | "in_progress";
+    message: string;
+  }>;
 }
 
 // Legacy Session type alias for backward compatibility

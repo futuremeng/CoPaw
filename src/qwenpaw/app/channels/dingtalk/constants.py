@@ -4,11 +4,11 @@
 # Token cache TTL (1 hour)
 DINGTALK_TOKEN_TTL_SECONDS = 3600
 
-# Minimum interval between non-final AI Card updates.
-AI_CARD_STREAM_MIN_INTERVAL_SECONDS = 0.6
-
 # Short suffix length for session_id from conversation_id
 DINGTALK_SESSION_ID_SUFFIX_LEN = 8
+
+# Shared-group session IDs use 64 bits from SHA-256.
+DINGTALK_SHARED_SESSION_HASH_LEN = 16
 
 # DingTalk message type to runtime content type
 DINGTALK_TYPE_MAPPING = {

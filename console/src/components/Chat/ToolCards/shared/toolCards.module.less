@@ -1,0 +1,405 @@
+// Tool card styles — self-contained within the plugin system.
+// Extracted from ChatV2 MessageList.module.less so plugin cards
+// have zero dependencies on files outside ToolCards/.
+
+.toolCallContainer {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.toolCallMetadata {
+  display: grid;
+  gap: 6px;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  margin: 4px 0;
+  box-sizing: border-box;
+}
+
+.toolCallMetadata > .defaultBlock {
+  margin: 0;
+}
+
+// Tool call — compact single-line (click to expand)
+.toolCallCompact {
+  margin: 2px 0;
+  display: block;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+
+  &.toolCallCompactLoading {
+    .toolCallLabel {
+      color: var(--app-accent);
+    }
+  }
+
+  &.toolCallCompactError {
+    .toolCallLabel {
+      color: var(--app-error);
+    }
+  }
+}
+
+.toolCallCompactSummary {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--app-font-secondary);
+  cursor: pointer;
+  user-select: none;
+  list-style: none;
+  padding: 2px 0;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+
+  &::-webkit-details-marker {
+    display: none;
+  }
+
+  &::marker {
+    content: none;
+  }
+}
+
+.toolCallIcon {
+  font-size: 13px;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+}
+
+.toolCallIconSuccess {
+  color: var(--app-text-secondary);
+}
+
+.toolCallIconError {
+  color: var(--app-error);
+}
+
+.toolCallSpinner {
+  width: 14px;
+  height: 14px;
+  border: 2px solid var(--app-border);
+  border-top-color: var(--app-accent);
+  border-radius: 50%;
+  flex-shrink: 0;
+  animation: toolSpin 0.8s linear infinite;
+}
+
+@keyframes toolSpin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.toolCallLabel {
+  color: var(--app-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 100%;
+
+  &:hover {
+    color: var(--app-accent);
+    text-decoration: underline;
+  }
+}
+
+// Badges — use explicit colors that work on both light and dark backgrounds.
+// The chat-anywhere dark-mode stylesheet applies a blanket
+// `color: rgba(255,255,255,0.85) !important` to all descendant spans
+// with high specificity. We double the class selector to win the
+// specificity battle while keeping !important.
+.diffAddBadge.diffAddBadge {
+  font-size: var(--app-font-caption);
+  color: var(--app-success) !important;
+  font-weight: 500;
+}
+
+.diffDelBadge.diffDelBadge {
+  font-size: var(--app-font-caption);
+  color: var(--app-error) !important;
+  font-weight: 500;
+}
+
+.lineReadBadge.lineReadBadge {
+  font-size: var(--app-font-caption);
+  color: var(--app-info-text) !important;
+  font-weight: 500;
+}
+
+.lineSearchBadge.lineSearchBadge {
+  font-size: var(--app-font-caption);
+  color: var(--app-warning) !important;
+  font-weight: 500;
+}
+
+// Diff block
+.toolCallDiff {
+  margin: 4px 0 2px 18px;
+  font-size: var(--app-font-caption);
+  line-height: 1.6;
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+  overflow-x: auto;
+  max-height: 360px;
+  overflow-y: auto;
+  border-radius: 8px;
+  box-shadow: 0 1px 4px var(--app-border-subtle);
+}
+
+.diffLineDel {
+  background: var(--app-error-bg);
+  color: var(--app-error) !important;
+  white-space: pre-wrap;
+  word-break: break-all;
+  padding: 0 6px;
+}
+
+.diffLineAdd {
+  background: var(--app-success-bg);
+  color: var(--app-success) !important;
+  white-space: pre-wrap;
+  word-break: break-all;
+  padding: 0 6px;
+}
+
+// Media preview
+.toolCallMediaPreview {
+  margin: 6px 0 4px 18px;
+}
+
+.toolCallImage {
+  max-width: 256px;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid var(--app-border);
+}
+
+// Bubble media (reused by MediaPreview)
+.bubbleVideo {
+  width: 256px;
+  height: 144px;
+  border-radius: 8px;
+  border: 1px solid var(--app-border);
+  overflow: hidden;
+}
+
+.bubbleAudio {
+  background-color: var(--app-surface-raised);
+  border: 1px solid var(--app-border);
+  padding-right: 4px;
+  border-radius: 20px;
+  width: fit-content;
+  margin: 4px 0;
+
+  :global([class*="-media-progress-container"]) {
+    display: none;
+  }
+}
+
+.bubbleFile {
+  position: relative;
+  display: inline-block;
+}
+
+.filePreviewLink {
+  flex: 0 0 auto;
+  padding: 0;
+  color: var(--app-info-text);
+  font: inherit;
+  font-size: var(--app-font-caption);
+  line-height: 1;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+
+  &:hover {
+    color: var(--app-info-text);
+    text-decoration: underline;
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--app-accent-border);
+    outline-offset: 2px;
+    border-radius: 2px;
+  }
+}
+
+// Default block (input/output sections)
+.defaultBlock {
+  margin: 4px 0 4px 0;
+  border: 1px solid var(--app-border);
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 1px 3px var(--app-border);
+  background: var(--app-surface);
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+.defaultBlockHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  background: var(--app-fill-faint);
+  border-bottom: 1px solid var(--app-border);
+}
+
+.defaultBlockTitle {
+  font-size: var(--app-font-secondary);
+  font-weight: 500;
+  color: inherit !important;
+}
+
+.defaultBlockCopy {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--app-text-quaternary);
+  cursor: pointer;
+  font-size: 13px;
+  padding: 0;
+  transition:
+    background-color 0.15s,
+    color 0.15s,
+    border-color 0.15s,
+    box-shadow 0.15s,
+    opacity 0.15s,
+    transform 0.15s;
+
+  &:hover {
+    background: var(--app-fill);
+    color: var(--app-text-secondary);
+  }
+}
+
+.defaultBlockContent {
+  margin: 0;
+  padding: 10px 12px;
+  font-size: var(--app-font-caption);
+  line-height: 1.6;
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+  white-space: pre-wrap;
+  word-break: break-all;
+  max-height: 300px;
+  overflow-y: auto;
+  color: var(--app-text) !important;
+}
+
+.defaultBlockContentMd {
+  padding: 10px 12px;
+  font-size: var(--app-font-secondary);
+  line-height: 1.6;
+  max-height: 360px;
+  overflow-y: auto;
+  color: var(--app-text) !important;
+
+  :global(p),
+  :global(ul),
+  :global(ol),
+  :global(pre) {
+    margin: 4px 0;
+  }
+  :global(table) {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: var(--app-font-caption);
+  }
+  :global(th),
+  :global(td) {
+    border: 1px solid var(--app-border);
+    padding: 6px 10px;
+    text-align: left;
+  }
+  :global(th) {
+    background: var(--app-fill-faint);
+    font-weight: 500;
+  }
+}
+
+// Inline result (next to tool label)
+.toolCallInlineResult {
+  font-size: var(--app-font-caption);
+  color: var(--app-text-tertiary);
+  margin-left: 6px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+  flex: 1;
+}
+
+// JSON syntax highlighting.
+// Double class selector + !important to beat the blanket
+// `color: rgba(255,255,255,0.85) !important` from chat-anywhere dark-mode.
+.jsonKey.jsonKey {
+  color: var(--app-error-text) !important;
+}
+.jsonStr.jsonStr {
+  color: var(--app-success-text) !important;
+}
+.jsonNum.jsonNum {
+  color: var(--app-info-text) !important;
+}
+.jsonNull.jsonNull {
+  color: var(--app-warning-text) !important;
+}
+
+// Markdown result block
+.toolCallResultMd {
+  font-size: var(--app-font-secondary);
+  line-height: 1.6;
+  margin: 4px 0 2px 18px;
+  padding: 8px 12px;
+  background: var(--app-fill-faint);
+  border-radius: 8px;
+  overflow-x: auto;
+  max-height: 360px;
+  color: var(--app-text) !important;
+  box-shadow: 0 1px 4px var(--app-border-subtle);
+
+  :global(p),
+  :global(ul),
+  :global(ol),
+  :global(pre) {
+    margin: 4px 0;
+  }
+  :global(pre) {
+    padding: 6px 10px;
+    background: var(--app-fill);
+    border-radius: 4px;
+    overflow-x: auto;
+  }
+  :global(code) {
+    font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+  }
+  :global(table) {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: var(--app-font-caption);
+    margin: 4px 0;
+  }
+  :global(th),
+  :global(td) {
+    border: 1px solid var(--app-border);
+    padding: 6px 10px;
+    text-align: left;
+  }
+  :global(th) {
+    background: var(--app-fill-faint);
+    font-weight: 500;
+  }
+}

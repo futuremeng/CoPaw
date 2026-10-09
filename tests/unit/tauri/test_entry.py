@@ -15,6 +15,7 @@ from qwenpaw.tauri.env import DESKTOP_CORS_ORIGINS_ENV, DESKTOP_READY_PREFIX
 
 
 def test_install_desktop_runtime_preserves_existing_cors_values(monkeypatch):
+    monkeypatch.delitem(sys.modules, "qwenpaw.app._app", raising=False)
     monkeypatch.setenv(
         DESKTOP_CORS_ORIGINS_ENV,
         "https://example.test,tauri://localhost",
@@ -46,6 +47,9 @@ def test_sync_loaded_qwenpaw_constant_cors_origins(monkeypatch):
 
 
 def test_install_certifi_env_sets_bundle_paths(monkeypatch, tmp_path):
+    # The helper writes directly to os.environ. Isolate the mapping so absent
+    # keys are restored too; delenv alone cannot undo keys added by the helper.
+    monkeypatch.setattr(os, "environ", os.environ.copy())
     cert_file = tmp_path / "cacert.pem"
     cert_file.write_text("test cert", encoding="utf-8")
     monkeypatch.delenv("SSL_CERT_FILE", raising=False)
@@ -135,3 +139,73 @@ def test_socket_port_returns_bound_port():
         sock.bind(("127.0.0.1", 0))
 
         assert entry._socket_port(sock) == sock.getsockname()[1]
+
+
+def test_main_aborts_unhandled_frozen_multiprocessing_child(
+    monkeypatch,
+    capsys,
+):
+    calls = []
+    monkeypatch.setattr(sys, "frozen", True, raising=False)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "qwenpaw-backend",
+            "--multiprocessing-fork",
+            "tracker_fd=6",
+            "pipe_handle=8",
+        ],
+    )
+    monkeypatch.setattr(
+        entry.mp,
+        "freeze_support",
+        lambda: calls.append("freeze-support"),
+    )
+    monkeypatch.setattr(
+        entry,
+        "_install_desktop_runtime",
+        lambda: calls.append("desktop-runtime"),
+    )
+
+    with pytest.raises(SystemExit) as exc_info:
+        entry.main()
+
+    assert exc_info.value.code == 2
+    assert calls == ["freeze-support"]
+    assert "multiprocessing runtime hook" in capsys.readouterr().err
+
+
+def test_main_supports_frozen_entry_without_package_context(
+    monkeypatch,
+    tmp_path,
+):
+    config_path = tmp_path / "config.json"
+    config_path.write_text("{}", encoding="utf-8")
+    calls = []
+
+    monkeypatch.setattr(entry, "__package__", None)
+    monkeypatch.setattr(entry, "__spec__", None)
+    monkeypatch.setattr(entry, "__name__", "__main__")
+    monkeypatch.setattr(entry, "_is_frozen_desktop", lambda: False)
+    monkeypatch.setattr(
+        entry.mp,
+        "freeze_support",
+        lambda: calls.append("freeze-support"),
+    )
+    monkeypatch.setattr(entry, "_ensure_utf8_stdio", lambda: None)
+    monkeypatch.setattr(entry, "_install_subprocess_guard", lambda: None)
+    monkeypatch.setattr(entry, "_install_desktop_runtime", lambda: None)
+    monkeypatch.setattr(entry, "install_sidecar_logging", lambda path: None)
+    monkeypatch.setattr(entry, "_install_certifi_env", lambda: None)
+    monkeypatch.setattr(entry, "_run_backend_server", calls.append)
+    monkeypatch.setattr("qwenpaw.constant.WORKING_DIR", tmp_path)
+    monkeypatch.setattr(
+        "qwenpaw.utils.platform.warn_unelevated_sandbox",
+        lambda: calls.append("sandbox-check"),
+    )
+    monkeypatch.delenv("QWENPAW_LOG_LEVEL", raising=False)
+
+    entry.main()
+
+    assert calls == ["freeze-support", "sandbox-check", "info"]

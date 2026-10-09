@@ -7,20 +7,9 @@ export interface AgentRequest {
 }
 
 export interface ContextCompactConfig {
-  token_count_model: string;
-  token_count_use_mirror: boolean;
-  token_count_estimate_divisor: number;
-  context_compact_enabled: boolean;
-  memory_compact_ratio: number;
-  memory_reserve_ratio: number;
-  compact_with_thinking_block: boolean;
-}
-
-export interface LightContextCompactConfig {
   enabled: boolean;
   compact_threshold_ratio: number;
   reserve_threshold_ratio: number;
-  compact_with_thinking_block: boolean;
 }
 
 export interface ToolResultPruningConfig {
@@ -32,21 +21,43 @@ export interface ToolResultPruningConfig {
   tool_results_cache?: string;
 }
 
+export type ContextStrategy = "native" | "scroll";
+
+export interface ScrollConfig {
+  db_filename: string;
+  repl_timeout_s: number;
+  history_retention_days: number;
+  allow_unsandboxed: boolean;
+  offload_dialog: boolean;
+}
+
+export interface VisualCompactConfig {
+  enabled: boolean;
+  effort: "low" | "medium" | "high";
+}
+
 export interface LightContextConfig {
+  strategy: ContextStrategy;
   dialog_path: string;
   token_count_estimate_divisor: number;
-  context_compact_config: LightContextCompactConfig;
+  context_compact_config: ContextCompactConfig;
+  scroll_config: ScrollConfig;
   tool_result_pruning_config: ToolResultPruningConfig;
+  visual_compact_config: VisualCompactConfig;
 }
 
 export interface AutoMemorySearchConfig {
   enabled: boolean;
   max_results: number;
-  min_score: number;
 }
 
 export interface EmbeddingModelConfig {
-  backend: string;
+  backend:
+    | "openai"
+    | "dashscope"
+    | "dashscope_multimodal"
+    | "gemini"
+    | "ollama";
   api_key: string;
   base_url: string;
   model_name: string;
@@ -56,16 +67,39 @@ export interface EmbeddingModelConfig {
   max_cache_size: number;
   max_input_length: number;
   max_batch_size: number;
+  health_check_timeout: number;
 }
 
 export interface ReMeLightMemoryConfig {
-  summarize_when_compact: boolean;
-  auto_memory_interval: number | null;
+  needs_reindex: boolean;
+  auto_memory_inbox_push_enabled: boolean;
+  auto_dream_inbox_push_enabled: boolean;
+  daily_paper_inbox_push_enabled: boolean;
+  auto_fin_inbox_push_enabled: boolean;
+  auto_memory_interval: number;
+  dream_cron_enabled: boolean;
   dream_cron: string;
+  daily_paper_cron_enabled: boolean;
+  daily_paper_cron: string;
+  daily_paper_use_hf_mirror: boolean;
+  daily_paper_topics: string;
+  auto_fin_cron_enabled: boolean;
+  auto_fin_cron: string;
+  auto_fin_topics: string;
+  auto_fin_window_hours: number;
+  memory_search_enabled: boolean;
   auto_memory_search_config: AutoMemorySearchConfig;
   embedding_model_config: EmbeddingModelConfig;
-  rebuild_memory_index_on_start: boolean;
-  recursive_file_watcher: boolean;
+  reranker_config: RerankerConfig;
+}
+
+export interface RerankerConfig {
+  enabled: boolean;
+  api_key: string;
+  base_url: string;
+  model_name: string;
+  candidate_multiplier: number;
+  timeout: number;
 }
 
 export interface AutoTitleConfig {
@@ -73,32 +107,82 @@ export interface AutoTitleConfig {
   timeout_seconds: number;
 }
 
-export interface ADBPGMemoryConfig {
-  host: string;
-  port: number;
-  user: string;
-  password: string;
-  dbname: string;
-  llm_model: string;
-  llm_api_key: string;
-  llm_base_url: string;
-  embedding_model: string;
-  embedding_api_key: string;
-  embedding_base_url: string;
-  embedding_dims: number;
-  api_mode: string;
-  rest_api_key: string;
-  rest_base_url: string;
-  memory_isolation: boolean;
-  search_timeout: number;
-  pool_minconn: number;
-  pool_maxconn: number;
+export interface DoomLoopStageConfig {
+  after: number;
+  action: string;
+  prompt: string;
+}
+
+export interface DoomLoopConfig {
+  enabled: boolean;
+  window_size: number;
+  similarity_threshold: number;
+  stages: DoomLoopStageConfig[];
+}
+
+export interface IterationGateConfig {
+  enabled: boolean;
+  max_iterations?: number | null;
+}
+
+export interface RubricGateConfig {
+  enabled: boolean;
+  prompt: string;
+  max_interventions: number;
+  in_loop_modes: boolean;
+}
+
+export type CustomGateType =
+  | "iteration"
+  | "doom_loop"
+  | "token_budget"
+  | "timeout"
+  | "tool_call_budget"
+  | "qualitative_rubric"
+  | "completion_rubric";
+
+export interface GateInstanceConfig {
+  id: string;
+  type: CustomGateType;
+  enabled: boolean;
+  params: Record<string, unknown>;
+}
+
+export interface CustomLoopModeConfig {
+  id: string;
+  name: string;
+  description: string;
+  slash_command: string;
+  enabled: boolean;
+  gates: GateInstanceConfig[];
+}
+
+export interface GoalLoopModeConfig {
+  max_iterations: number;
+  max_tokens: number;
+}
+
+export interface MissionLoopModeConfig {
+  max_iterations: number;
+  max_retries_per_story: number;
+  default_verification_instructions: string;
+  default_verify_command: string;
+}
+
+export interface LoopConfig {
+  iteration?: IterationGateConfig;
+  doom_loop: DoomLoopConfig;
+  rubric?: RubricGateConfig;
+  goal?: GoalLoopModeConfig;
+  mission?: MissionLoopModeConfig;
+  custom_modes?: CustomLoopModeConfig[];
 }
 
 export interface AgentsRunningConfig {
   max_iters: number;
   auto_continue_on_text_only?: boolean;
-  shell_command_timeout?: number;
+  loop: LoopConfig;
+  shell_command_timeout: number;
   shell_command_executable: string;
   max_input_length?: number;
   auto_continue_enabled?: boolean;
@@ -112,21 +196,20 @@ export interface AgentsRunningConfig {
   llm_rate_limit_jitter: number;
   llm_acquire_timeout: number;
   history_max_length: number;
-  context_manager_backend?: string;
-  light_context_config?: LightContextConfig;
-  token_count_model?: string;
-  token_count_estimate_divisor?: number;
-  token_count_use_mirror?: boolean;
-  compact_with_thinking_block?: boolean;
-  knowledge_enabled: boolean;
-  knowledge_auto_collect_chat_files: boolean;
-  knowledge_auto_collect_chat_urls: boolean;
-  knowledge_auto_collect_long_text: boolean;
-  knowledge_long_text_min_chars: number;
-  knowledge_chunk_size: number;
-  context_compact: ContextCompactConfig;
-  memory_manager_backend: "remelight" | string;
-  reme_light_memory_config?: ReMeLightMemoryConfig;
+  context_manager_backend: string;
+  light_context_config: LightContextConfig;
+  memory_manager_backend: string;
+  memory_backend_configs?: Record<string, Record<string, unknown>>;
+  reme_light_memory_config: ReMeLightMemoryConfig;
+  /* Fork-owned dynamic running-config fields: written back by
+     app/routers/agent.py and read via getattr(...) with defaults, so they are
+     not always present in the serialized config. */
+  knowledge_enabled?: boolean;
+  knowledge_auto_collect_chat_files?: boolean;
+  knowledge_auto_collect_chat_urls?: boolean;
+  knowledge_auto_collect_long_text?: boolean;
+  knowledge_long_text_min_chars?: number;
+  knowledge_chunk_size?: number;
   approval_level?: string;
   auto_title_config: AutoTitleConfig;
 }

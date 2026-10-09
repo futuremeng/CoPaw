@@ -1,14 +1,15 @@
 # -*- coding: utf-8 -*-
 """Tauri sidecar entry point for starting the Python backend."""
+
 from __future__ import annotations
 
-from collections.abc import Sequence
 import json
 import logging
 import multiprocessing as mp
 import os
 import socket
 import sys
+from collections.abc import Sequence
 
 import click
 
@@ -21,6 +22,173 @@ from qwenpaw.tauri.env import (
 from qwenpaw.tauri.sidecar_logging import install_sidecar_logging
 
 logger = logging.getLogger(__name__)
+
+
+def _is_frozen_desktop() -> bool:
+    return bool(getattr(sys, "frozen", False)) or (
+        os.environ.get(DESKTOP_APP_ENV) == "1"
+    )
+
+
+def _looks_like_python_invocation(args: Sequence[str]) -> bool:
+    """True if *args* look like a Python interpreter command line.
+
+    The packaged backend is launched with no positional arguments, so any
+    Python-style argv means a plugin spawned ``sys.executable <args>`` treating
+    this binary as an interpreter (e.g. ``-m pkg``, ``script.py``, ``-c ...``).
+    """
+    if not args:
+        return False
+    first = args[0]
+    if first in ("-m", "-c", "-"):
+        return True
+    if first.endswith(".py"):
+        return True
+    # Single-dash interpreter flags (-u, -E, -X ...), but not --options.
+    return len(first) >= 2 and first[0] == "-" and first[1] != "-"
+
+
+def _abort_unhandled_multiprocessing_child(args: Sequence[str]) -> None:
+    """Stop a frozen multiprocessing child that escaped its runtime hook.
+
+    PyInstaller's multiprocessing runtime hook consumes this private flag and
+    dispatches ``spawn_main()`` before the application entry point runs.  If
+    the flag reaches this function, the packaged executable is missing or did
+    not execute that hook.  Never let such a child continue into backend
+    singleton reconciliation, where it could terminate its parent backend.
+    """
+    if not bool(getattr(sys, "frozen", False)):
+        return
+    if "--multiprocessing-fork" not in args:
+        return
+    if sys.stderr is not None:
+        print(
+            "qwenpaw-backend multiprocessing runtime hook did not handle "
+            "the child process",
+            file=sys.stderr,
+        )
+    raise SystemExit(2)
+
+
+def _bundled_python() -> str:
+    """Path to the bundled standalone CPython, or ``""`` if missing."""
+    python = (os.environ.get("QWENPAW_DESKTOP_PY_RUNTIME") or "").strip()
+    if python and os.path.isfile(python):
+        return python
+    return ""
+
+
+def _child_env_with_plugin_site(env: "dict | None") -> "dict | None":
+    """Return *env* (or a copy of ``os.environ``) with the plugin site dir
+    prepended to ``PYTHONPATH`` so the bundled CPython can import plugin deps.
+    """
+    site_dir = (os.environ.get("QWENPAW_PLUGIN_SITE") or "").strip()
+    if not site_dir:
+        return env
+    base = dict(os.environ if env is None else env)
+    existing = base.get("PYTHONPATH", "")
+    base["PYTHONPATH"] = (
+        site_dir + os.pathsep + existing if existing else site_dir
+    )
+    return base
+
+
+def _redirect_backend_python_cmd(cmd: object) -> "list | None":
+    """If *cmd* runs this backend binary as a Python interpreter, return a
+    rewritten command targeting the bundled CPython; otherwise ``None``.
+
+    Plugins commonly spawn ``[sys.executable, "-m", pkg]`` to launch helper
+    processes. In the frozen desktop build ``sys.executable`` is the backend
+    binary, so that would start another backend and crash-loop the app
+    (issue #5209). Redirecting at spawn time keeps the caller's ``Popen.pid``
+    pointing at the real interpreter on every platform.
+    """
+    if not isinstance(cmd, (list, tuple)) or not cmd:
+        return None
+    exe = cmd[0]
+    if not isinstance(exe, str):
+        return None
+    if os.path.normcase(exe) != os.path.normcase(sys.executable):
+        return None
+    if not _looks_like_python_invocation([str(a) for a in cmd[1:]]):
+        return None
+    python = _bundled_python()
+    if not python:
+        return None
+    return [python, *cmd[1:]]
+
+
+def _reexec_as_bundled_python(args: Sequence[str]) -> None:
+    """Re-run a mis-routed interpreter invocation via the bundled CPython.
+
+    Deep fallback for spawn paths that bypass ``subprocess`` (``os.execv``,
+    shell strings, etc.) and reach this binary's ``main()`` with Python-style
+    argv. Re-exec the bundled standalone CPython with the same arguments, with
+    plugin-installed deps (``QWENPAW_PLUGIN_SITE``) importable.
+    """
+    python = _bundled_python()
+    if not python:
+        print(
+            "qwenpaw-backend is the desktop backend, not a Python "
+            "interpreter, and no bundled runtime is available to run: "
+            f"{list(args)}",
+            file=sys.stderr,
+        )
+        raise SystemExit(2)
+    site_dir = (os.environ.get("QWENPAW_PLUGIN_SITE") or "").strip()
+    if site_dir:
+        existing = os.environ.get("PYTHONPATH", "")
+        os.environ["PYTHONPATH"] = (
+            site_dir + os.pathsep + existing if existing else site_dir
+        )
+    os.execv(python, [python, *args])
+
+
+def _install_subprocess_guard() -> None:
+    """Harden child-process spawning in the frozen desktop build.
+
+    Two transparent fixes, applied without plugins having to cooperate:
+
+    * Redirect ``subprocess`` calls that run this backend binary as a Python
+      interpreter (``[sys.executable, "-m", ...]`` etc.) to the bundled
+      CPython. The spawned process *is* the real interpreter, so the caller's
+      ``Popen.pid`` stays accurate on every platform (issue #5209).
+      ``multiprocessing`` is unaffected: it spawns via ``_winapi`` /
+      ``posix_spawn`` rather than ``subprocess.Popen``.
+    * On Windows, suppress console windows for child processes that don't pass
+      ``CREATE_NO_WINDOW`` themselves (e.g. plugins shelling out to
+      ``tasklist``).
+    """
+    if not _is_frozen_desktop():
+        return
+    import subprocess
+
+    if getattr(subprocess.Popen, "_qwenpaw_guarded", False):
+        return
+
+    is_windows = os.name == "nt"
+    create_no_window = 0x08000000
+    create_new_console = 0x00000010
+    original_init = subprocess.Popen.__init__
+
+    def _init(self, args=None, *rest, **kwargs):  # type: ignore
+        redirected = _redirect_backend_python_cmd(args)
+        if redirected is not None:
+            args = redirected
+            kwargs["env"] = _child_env_with_plugin_site(kwargs.get("env"))
+        if is_windows:
+            flags = kwargs.get("creationflags", 0) or 0
+            # Respect callers that explicitly want a visible new console.
+            if not flags & create_new_console:
+                kwargs["creationflags"] = flags | create_no_window
+            startupinfo = kwargs.get("startupinfo") or subprocess.STARTUPINFO()
+            startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+            startupinfo.wShowWindow = 0  # SW_HIDE
+            kwargs["startupinfo"] = startupinfo
+        return original_init(self, args, *rest, **kwargs)
+
+    subprocess.Popen.__init__ = _init  # type: ignore[method-assign]
+    setattr(subprocess.Popen, "_qwenpaw_guarded", True)
 
 
 def _ensure_qwenpaw_app_not_loaded() -> None:
@@ -82,6 +250,11 @@ def _install_desktop_runtime() -> None:
     _ensure_qwenpaw_app_not_loaded()
     ensure_desktop_cors_origins()
     _sync_loaded_qwenpaw_constant_cors_origins()
+    from qwenpaw.browser.runtime.managed_playwright import (
+        configure_desktop_playwright_cache,
+    )
+
+    configure_desktop_playwright_cache()
 
 
 def _run_click_command(
@@ -115,12 +288,16 @@ def _emit_backend_ready(port: int) -> None:
 def _run_backend_server(log_level: str) -> None:
     import uvicorn
 
+    from qwenpaw.browser.control_link.chrome.protocol import (
+        NM_MAX_INBOUND_BYTES,
+    )
     from qwenpaw.config.utils import write_last_api
-    from qwenpaw.constant import LOG_LEVEL_ENV
+    from qwenpaw.constant import LOG_LEVEL_ENV, WORKING_DIR
     from qwenpaw.utils.logging import (
         SuppressPathAccessLogFilter,
         setup_logger,
     )
+    from qwenpaw.utils.port import get_stable_port, write_port_file
 
     host = "127.0.0.1"
     normalized_log_level = log_level.lower()
@@ -137,6 +314,12 @@ def _run_backend_server(log_level: str) -> None:
     os.environ[LOG_LEVEL_ENV] = normalized_log_level
     os.environ.pop("QWENPAW_RELOAD_MODE", None)
     setup_logger(normalized_log_level)
+
+    # Ensure only one desktop backend runs: terminate any orphan left by a
+    # crashed/force-quit previous launch before we bind a new port (#5550).
+    from qwenpaw.tauri.backend_guard import reconcile_singleton_backend
+
+    reconcile_singleton_backend(WORKING_DIR)
     if normalized_log_level in ("debug", "trace"):
         from qwenpaw.cli.main import log_init_timings
 
@@ -146,20 +329,44 @@ def _run_backend_server(log_level: str) -> None:
         SuppressPathAccessLogFilter(["/console/push-messages"]),
     )
 
+    # Reuse the previous port so localStorage origin stays stable across
+    # restarts, preserving user preferences (selected agent, etc.).
+    port_file = str(WORKING_DIR / "desktop_port")
+    port, reused_socket = get_stable_port(port_file, host)
+
+    # Import the app instance (instead of the import string) so the desktop
+    # shutdown endpoint can reach the uvicorn server via app.state.
+    from qwenpaw.app._app import app as fastapi_app
+
     config = uvicorn.Config(
-        "qwenpaw.app._app:app",
+        fastapi_app,
         host=host,
         port=0,
         reload=False,
         workers=1,
         log_level=normalized_log_level,
+        # Bound graceful shutdown so long-lived SSE connections (e.g.
+        # /console/push-messages) cannot stall the lifespan shutdown that
+        # flushes memory/index on exit.
+        timeout_graceful_shutdown=5,
+        # Chrome Native Messaging inbound limit; this applies server-wide.
+        ws_max_size=NM_MAX_INBOUND_BYTES,
     )
-    backend_socket = config.bind_socket()
+
+    if reused_socket:
+        backend_socket = reused_socket
+    else:
+        backend_socket = config.bind_socket()
+
     try:
         port = _socket_port(backend_socket)
+        write_port_file(port_file, port)
         write_last_api(host, port)
+        server = uvicorn.Server(config)
+        # Exposed so /api/desktop/shutdown can trigger a graceful exit.
+        fastapi_app.state.uvicorn_server = server
         _emit_backend_ready(port)
-        uvicorn.Server(config).run(sockets=[backend_socket])
+        server.run(sockets=[backend_socket])
     except Exception:
         backend_socket.close()
         raise
@@ -173,7 +380,16 @@ def _socket_port(sock: socket.socket) -> int:
 
 
 def main() -> None:
+    # PyInstaller replaces this function on every platform. It must run before
+    # application initialization so multiprocessing workers and resource
+    # trackers do not re-enter the backend entry point.
+    mp.freeze_support()
+    _abort_unhandled_multiprocessing_child(sys.argv[1:])
+    if _is_frozen_desktop() and _looks_like_python_invocation(sys.argv[1:]):
+        _reexec_as_bundled_python(sys.argv[1:])
+        return
     _ensure_utf8_stdio()
+    _install_subprocess_guard()
     _install_desktop_runtime()
 
     from qwenpaw.constant import LOG_LEVEL_ENV, WORKING_DIR
@@ -192,9 +408,14 @@ def main() -> None:
             label="initialization",
         )
 
+    # On Windows without admin, warn that sandbox runs in unelevated mode
+    # with limited isolation (mirrors the same guard in cli/app_cmd.py).
+    from qwenpaw.utils.platform import warn_unelevated_sandbox
+
+    warn_unelevated_sandbox()
+
     _run_backend_server(os.environ.get(LOG_LEVEL_ENV, "info"))
 
 
 if __name__ == "__main__":
-    mp.freeze_support()
     main()
