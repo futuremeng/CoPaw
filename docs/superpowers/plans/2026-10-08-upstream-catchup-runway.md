@@ -880,6 +880,8 @@ flake8 对四枚被改文件 **零新增**：7 条与 HEAD 逐条同名（`E501`
 `Failed to start agent instance`。所以代价不是"少一台后台 watcher"，是**整个 agent 实例起不来**。CI 选择集日志实测：
 `TypeError: create_project_knowledge_watcher() takes 2 positional arguments but 3 were given` **17 → 0**、
 `Failed to start service 'project_knowledge_watcher'` **4 → 0**、`Failed to start agent instance` **4 → 0**。
+（那个 17 是**行数**不是失败数：现数 17 = 4 行 `service_manager.py:331` 的记录 + 4 行 `workspace.py:751` 的记录 +
+9 行 traceback/`E` 行 ⇒ 同一次失败在日志里印三遍，去重到失败事件是 **4** 次，与另两个 4 对得上。）
 
 **为什么合并没报冲突（判据 143）**：上游把 `post_init` 这个**槽位**的合同从两参加宽到三参，改的是调用方
 （`service_manager.py:436`，上游自有），而我们那枚是被调方且是 fork 自有 ⇒ 合并永远不会碰它 ⇒ 断在树里而不是断在
@@ -906,6 +908,7 @@ flake8 对四枚被改文件 **零新增**：7 条与 HEAD 逐条同名（`E501`
 
 **结清 8.14 欠的那半句（判据 134）**：那 40 枚 —— 含 6 枚 migration、4 枚 `test_multi_agent_manager_startup.py`、
 2 枚 `test_provider_startup_offload.py` —— 在 TypeError 归零后**照旧红** ⇒ 直接证成它们与这枚缺陷无关。
+（这 2 枚已由刀 98 结清，见 8.18；余下 40 − 2 = 38 枚在册，其中 1 枚 pty flake 时红时绿。）
 
 **账**：P1 **111 文件 / +10,863 −530**，行为 **110 文件 / +10,828 invasive / −495 deleted**，命名 1·7·35 与
 mechanical 1 零动；`--check` 绿（无增长）。只有一枚条目位移（`service_factories.py` 14 → 16）。
@@ -921,8 +924,10 @@ brand 7 文件 / 35 行）。合集回归 `tests/unit/app/workspace/` + `tests/u
 L1 五目录 **1,382 passed / 1 skipped / 16.57 s**。flake8 对本笔两枚文件 **rc=0、零读数**（不是"零新增"，是本来就干净）。
 
 **没做到的一半**：本笔的用例是按管理器合同喂 `SimpleNamespace` 假 workspace，不是真起一台 workspace；
-现网侧证据只有那 4 次真启动的日志从 4 变 0。**待办**：① `_app.ensure_qa_agent_exists` 符号搬家 2 枚（判据 111 型，
-仍在册）；② 那枚 pty flake 的等待预算（与刀 86 的 M1/M2/M3 同族，未结）；③ 发布渠道 `pending` 14 枚仍等阶段 2。
+现网侧证据只有那 4 次真启动的日志从 4 变 0。**待办**：① ~~`_app.ensure_qa_agent_exists` 符号搬家 2 枚（判据 111 型，
+仍在册）~~ **已由刀 98 结清（见 8.18），且这里原来的措辞"符号搬家"低估了它 —— 生产侧没搬家，是上游用例的桩名
+撞不上我们的接替名**；② 那枚 pty flake 的等待预算（与刀 86 的 M1/M2/M3 同族，未结）；③ 发布渠道 `pending` 14 枚仍等阶段 2；
+④ 8.18 末登记的那 6 枚 migration 红（`load_agent_config` 在替身不全时抛错、错误路径仍写顶层配置）待单独一刀。
 
 ### 8.17 本笔新增判据 142–143
 
@@ -933,9 +938,77 @@ L1 五目录 **1,382 passed / 1 skipped / 16.57 s**。flake8 对本笔两枚文�
   断点静默进树，代价是每次启动整台实例起不来。修法的验收单位是"这个槽位的全部实现"（这里从模块
   `vars()` 枚举 `create_*` 协程），否则下一把刀新加的工厂会重演同一笔。
 
-相关账目：本节 = 已闭环 **97**（刀 94 = 8.9 那笔，裁决 (b) 的落地；刀 95 = 8.11 那笔，8.10 里唯一一枚生产侧；
-刀 96 = 8.14 那笔，8.10 里其余 14 枚测试侧；刀 97 = 8.16 那笔，8.14 待办 ① 那枚生产侧签名）；
-判据 113–128 原文在本节 8.7、129–136 在 8.12、137–141 在 8.15、142–143 在 8.17（§1–§6 引用的 84–86、101–112 仍是
+### 8.18 刀 98：那两枚启动用例红是改名桥，不是能力丢失（开刀前那句措辞是错的）
+
+**先更正开刀前的措辞**。§8.14 待办 ① 与 8.16 末句都写作"`_app.ensure_qa_agent_exists` 符号搬家 2 枚"，
+批准开刀时我把它复述成"启动时不建 QA agent，产品侧可见"。实跑取证否掉了这半句：
+`git diff ddd8408eb HEAD -- src/qwenpaw/app/_app.py` 只说明上游那两行（`:55` import、`:263` 调用）不在我们树里，
+而同位置我们写的是 `ensure_builtin_agents_exist`（现数 `:54` / `:263`），它出自 fork 提交 `f9cf47a41`
+（2026-04-14 "feat: add builtin understand agents"，`git log --first-parent -S` 唯一命中）⇒ **一次改名替换，
+不是吞掉**。覆盖关系有两条字节证据：`migration.py:812 _do_ensure_qa_agent` 今天就只剩一行薄壳
+`ensure_builtin_agents_exist(spec_ids=[BUILTIN_QA_AGENT_ID])`，而 `builtin_agents.py:60 BUILTIN_AGENT_SPECS`
+第 0 枚规格的 `id=BUILTIN_QA_AGENT_ID`（另 6 枚是 understand agent）⇒ 启动照建 QA agent，只是连那 6 枚一起建。
+生产侧一枚未改。
+
+**2 枚红的唯一成因**：上游自有 `tests/unit/app/test_provider_startup_offload.py:73,155` 用
+`monkeypatch.setattr(app_module, "ensure_qa_agent_exists", lambda: None)` 按名字打桩，撞不上我们换掉的名字 ⇒
+`AttributeError: <module 'qwenpaw.app._app' ...> has no attribute 'ensure_qa_agent_exists'`（实测 2 failed / 1 passed）。
+修法照刀 96 的桥：两行改钉 `_app` 上真存在的接替名（按定义符号找，裁决 ③），另加一枚 fork 自有守卫
+`tests/unit/app/test_startup_builtin_agent_coverage.py` 钉住我据以下结论的两条不变量。
+
+**守卫的两条断言各自证过红**（改生产字节 → 跑 → 用 Edit 改回，`git diff --stat -- src/` 读空自证撤销干净）：
+① 把 `_app.py:263` 的调用改名 ⇒ `test_lifespan_runs_the_builtin_agents_startup_step` 红（正向钉调用点，判据 88，
+没有用否定式禁止串）；② 把 `BUILTIN_AGENT_SPECS[0].id` 加后缀 ⇒ `test_builtin_agent_specs_cover_the_qa_agent` 红。
+
+**顺手把同类断点扫尽**：全仓 `ensure_qa_agent_exists` 现剩 9 处命中 = 生产 3（定义 `migration.py:784` +
+`cli/init_cmd.py:224,280`）+ 用例 5（`test_migration.py:341` 注释、`:352` 与
+`test_migration_skills_and_qa_agent.py:812` 都按 `migration.` 前缀调、`test_init_cmd.py:68,223` 按
+`qwenpaw.app.migration` 模块打桩）+ 本笔守卫的文档串 1。那 5 处指向的模块都真有这枚符号 ⇒
+**没有第二枚用例按 `_app` 的属性名打它**。另确认 4 枚 `test_multi_agent_manager_startup.py` 不在这类里
+（该文件零处引用 `ensure_*`，红在 `:449` 的 `subprocess.run(timeout=10)`）。
+
+**账**：新宿主 1 枚 `tests/unit/app/test_provider_startup_offload.py`（上游自有、改前与分叉点逐字节相同）
++10/−2 ⇒ 册 111 → **112 files / +10,873−532 / 行为 111 files / +10,838−497 / 命名 1·7·35 / mechanical 1**。
+那 +10 全是"为守 79 列把一行 `setattr` 拆成五行"的格式代价，语义只是换一个名字（判据 147）。
+
+**CI 选择集两态对照（判据 107，同旗标 `--ignore=tests/unit/channels -p no:randomly`）**：BEFORE 取刀 97 的
+AFTER 日志 **41 failed / 15,671 passed / 27 skipped / 4 xfailed / 1,057.55 s**；本笔 **38 failed / 15,676 passed /
+27 skipped / 4 xfailed / 1,087.14 s**，收集总数 15,712 → 15,714 恰为本笔新加的 2 枚守卫。FAILED node-id 差集
+= 那 2 枚 offload + 1 枚 `test_real_pty_cwd_unicode_resize_interrupt_and_cleanup`（刀 97 登记的负载敏感 flake，
+这一轮没复现）⇒ **在册测试侧红 40 → 38**：14 发布渠道 `pending`（等阶段 2）+ 6 migration + 4 startup subprocess
++ 14 散枚。⚠ 这一轮收集读的是拆行之前的字节（拆行发生在跑之后，语义相同），跑完后该文件单跑 **3 passed**。
+
+**其余验收读数**：五道离线门禁 + 品牌账册 + P1 `--check` 全 rc=0，输出串与刀 94–97 逐字相同（本笔没碰
+文案/品牌/渠道面）；L1 must-pass 五目录 **1,336 passed / 1 skipped / 7.81 s**；flake8 rc=0 两枚被改文件；
+两枚文件合跑 **5 passed**。
+
+**没做到的一半（新登记，不在刀序里）**：那 6 枚 migration 红里 5 枚也带 QA agent 字样，容易被当成本笔同一
+根因 —— 不是。实测落点在 `migration.py:890 load_agent_config(spec.id)`，抛
+`ConfigurationException: Agent 'QwenPaw_QA_Agent_0.2' not found in config`（用例只 monkeypatch 了
+`migration.load_config`，`load_agent_config` 走真实配置），异常被 `:906` 的 `except Exception` 吞成 WARNING，
+随后 `:913-916` 仍然 `save_config(config)` ⇒ 用例的 `assert saved_configs == []` 读到一枚 Config。
+这枚要么是真缺陷（每次启动多写一次顶层配置），要么是替身不够，我跑的证据不足以判，留给单独一刀。
+
+### 8.19 本笔新增判据 144–147
+
+- **144（改名替换是判据 111/143 的镜像方向）**：上游保留它自己的符号、我们把我们那一步换了名字，于是断点
+  不出在生产调用方也不出在冲突表上，而是出在**上游用例按名字打的那根 monkeypatch 桩**上。报错形式是
+  `AttributeError: module X has no attribute Y`，不是行为差异 ⇒ 见到这类红先查 `Y` 在本树有没有改名后的接替者，
+  别先怀疑生产逻辑。
+- **145（"某能力在启动路径上丢了"要用接替符号 + 规格表两级取证）**：`git diff <base> HEAD` 只给你"上游两行
+  没了"，判它是吞掉还是改名要看同位置我们那行写的是什么、以及新名字是否覆盖旧语义（这里是
+  `BUILTIN_AGENT_SPECS` 第 0 枚就是 QA agent）。开刀前那句"启动不建 QA agent"是一笔没跑过的推论，
+  它当时还挂在 §8.14 的待办里被引用。
+- **146（一次日志行计数不是失败次数）**：17 行含同一句 `TypeError` = 4 次失败 × 3 处印（`service_manager.py:331`
+  记录 4 + `workspace.py:751` 记录 4 + traceback/`E` 行 9）。成对出现的读数必须写明各自数的是行还是事件，
+  否则下一个读者会像我一样去"更正"一个本来正确的数。
+- **147（桥的账按行交，即使语义零变化）**：为守 79 列把一行 `setattr` 拆成五行，册上就是 +10/−2，而改动内容
+  只是换一个名字。记账口径按行不按义，与判据 91 同族：格式改动和减法刀受同一把尺。
+
+相关账目：本节 = 已闭环 **98**（刀 94 = 8.9 那笔，裁决 (b) 的落地；刀 95 = 8.11 那笔，8.10 里唯一一枚生产侧；
+刀 96 = 8.14 那笔，8.10 里其余 14 枚测试侧；刀 97 = 8.16 那笔，8.14 待办 ① 那枚生产侧签名；
+刀 98 = 8.18 那笔，8.14 待办 ① 剩下的 2 枚测试侧红）；
+判据 113–128 原文在本节 8.7、129–136 在 8.12、137–141 在 8.15、142–143 在 8.17、144–147 在 8.19（§1–§6 引用的 84–86、101–112 仍是
 `2026-10-07-trial-merge-conflict-table.md` 与本文前七节的口径）。
 
 
