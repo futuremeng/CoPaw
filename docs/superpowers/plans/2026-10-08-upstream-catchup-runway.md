@@ -556,7 +556,7 @@ vitest 32 条红分：7 条超时（6×20,000 ms + 1×15,000 ms，用例耗时 1
 判据 108 那一型）、`i18n.test.ts`（上游自有）报我们的 **overlay 命名空间漏进了上游对资源表的精确断言**、
 `/copaw-icon.svg` vs `/online.svg` 是品牌覆盖撞上游用例。
 
-### 8.6 三簇合并砍掉的宿主：两簇已清，一簇待裁
+### 8.6 三簇合并砍掉的宿主：三簇都已裁并落地
 
 `src/qwenpaw/app/runner/`（23 枚文件）与 `src/qwenpaw/app/mcp/{manager,stateful_client}.py` 整族被上游删除，
 我们对它们的在册改动**没有**重放到接替宿主（实测 `AgentRunner`、`MCPClientManager`、
@@ -575,6 +575,10 @@ vitest 32 条红分：7 条超时（6×20,000 ms + 1×15,000 ms，用例耗时 1
 **价签**：这笔在册 +96/−54 的侵入 = 27 条上游用例。
 两条路：(a) 把 helper 收回上游的 `get_agent_for_request` 合同（减侵入，代价是要重放我们靠它做的事）；
 (b) 改上游那枚用例（冲突面 +1 枚文件，性质是"为绿而改上游测试"）。
+**已裁 = (b)**，已落地 = 刀 94（见 8.9）。(a) 的代价在开刀前量过：`get_agent_for_request` 会
+`await manager.get_agent(...)` ⇒ 强制拉起 workspace，而 fork 的解耦（`d3c8508b9` 2026-05-12、
+`553f592ec` 2026-05-18）正是为了避免它；现树 29 个生产调用点分布在 6 枚上游自有路由
+（workspace 13 / config 6 / knowledge 6 / agent 2 / providers 1 / flows 1），收回合同等于撤掉这项解耦。
 
 ### 8.7 本笔新增判据 113–128
 
@@ -620,7 +624,64 @@ vitest 32 条红分：7 条超时（6×20,000 ms + 1×15,000 ms，用例耗时 1
   `tb["text"]` → `TypeError`、`tb.get()` → `AttributeError`，正解 `tb.text`；现树 36 枚测试文件已在用
   `content[0].text`，所以改的是跟随多数。判"双替身过期"要能一句话说清"哪一侧的字节变了"。
 
-### 8.8 没量什么
+### 8.9 刀 94：那 27 条按裁决 (b) 落地（`565452cd1` + 账 `0f8f5706f`）
+
+**改了什么**：`tests/unit/app/routers/test_workspace_router_agent_surface.py` 加一枚模块内 autouse 夹具
+（+23/−1），把 fork 多出来的那次查找接回用例自己装的替身 —— `get_loaded_agent_for_request` 返回
+`ws.get_agent_for_request.return_value`，即"这条用例准备给上游那枚入口的对象"。断言零改动，
+33 个 `patch.object(ws, "get_agent_for_request", …)` 用点零改动，12 个仍走上游入口的调用点零改动。
+另两处是 fork 自身合同要求：`_validate_and_extract_zip` 的替身要返回变更路径列表（fork 的
+`upload_workspace` 把它转交 `record_project_realtime_paths`，上游不用返回值），以及
+`put_agent_language` 不再 `str(workspace_dir)` —— `copy_workspace_md_files` 收 `Path | str` 且第一行就
+`Path(...)` 包回来，而上游用例钉的是 Path。
+
+**实测（同机同负载两态对照，判据 107）**：把两枚文件临时退回 HEAD 字节跑一遍、再换回来跑一遍，
+同一选择集 `tests/unit/app/routers/ + tests/unit/app/test_agents_workspace_initialization.py`：
+
+| 态 | 红 |
+| --- | --- |
+| 改前 | **42 failed / 1,333 passed / 121.75 s**（其中本文件 27 枚、其余 15 枚） |
+| 改后 | **15 failed / 1,360 passed / 110.31 s** |
+| 本文件单独 | 27 failed → **60 passed** |
+
+⇒ 净 −27 = 恰好这笔簇，15 枚非本簇红逐枚同名 ⇒ 零连带。那 15 枚已按机制分派，见 8.10。
+
+**账**：P1 从 108 文件变 **109 文件 / +10,794 −520 / 行为 108 文件（invasive +10,759、deleted −485）/
+命名 1·7·35 / mechanical 1**。`--check` 先红（`NEW upstream-owned file touched` + 四项 grew）、
+`--write-baseline` 后绿。冲突面自此 **+1 枚文件** = 裁决 (b) 认下的价。
+其余四道离线的门禁逐字未动：locale split（4,658 gated / 59 模板族 / 7 豁免 / 1,459 overlay 叶 /
+23 上游键豁免）· release channel R1–R5（6 文件）· CI command targets（16 命令 / 3 目录）·
+brand verify（7 文件 / 35 行）。flake8 对两枚被改文件只剩一枚预红 E203（`workspace.py:388`，不在改动行）。
+
+**申报一处削弱**：两条 `resolver.assert_not_awaited()`（"拒绝发生在任何 workspace 查找之前"）在本夹具
+落地后只钉得住上游那枚入口 —— fork 侧的查找不再被断言。它们仍绿，但守卫力变窄，这是把桥放在用例侧
+而非生产侧的固有代价。
+
+### 8.10 剩下的 15 枚红按机制分派（同一选择集内）
+
+| 机制 | 枚数 | 归属 |
+| --- | --- | --- |
+| config 路由写进 MagicMock workspace（`discord.enabled`、`ws_host`、`access_token` 落不回替身） | 4 | `test_config_router.py`，非解析层 |
+| `get_active_models` / `set_active_model` 的 agent-scope 替身（`MagicMock can't be used in 'await'` 一族） | 9 | `test_providers_active_openrouter.py` 8 + `test_providers_router.py` 1 |
+| 与 8.6 同型但落在别的宿主：`test_agents_router.py` 的 404 断言拿到 MagicMock 的 `state.agent_id`、`test_workspace_router.py::test_language_change_schedules_agent_reload` | 2 | 这两枚可以复用 8.9 那座桥的形状，但要逐枚确认替身对象 |
+
+⇒ 下一把刀的料，不是本笔的连带。CI 选择集总量读数（104 → 理论 77）仍未取，见 8.12。
+
+### 8.11 本节新增判据 129–132
+
+- **129（给上游用例加 fork 桥，落点按"未来冲突面"计价，不是按可读性直觉）**：同一需求可以写成 33 个
+  `patch.object` 兄弟项，也可以写成 1 枚模块内 autouse 夹具 +23 行；后者把未来合并的冲突集中在**一枚
+  hunk**，且 33 个用点与 12 个仍走上游入口的调用点一处不动。
+- **130（"同簇同根因"要等桥修完再数一遍才算）**：27 枚红的根因是解析层，但桥落地后仍剩 5 枚 ——
+  两类完全不同的分歧（fork 开始消费 helper 的返回值 / fork 多做了一次 `str()` 转型）。把簇当成一笔债
+  会漏掉这两笔，也会把 `assert_not_awaited` 那两条的削弱算错。
+- **131（桥的取值来自测试自己装的替身 ⇒ 相关否定式断言的守卫力变窄，要申报不要掩盖）**：见 8.9 末段。
+- **132（`git reset --soft HEAD~1` 是相对当时 HEAD 的，跨命令重复执行会逐笔往回吞提交）**：撤销自己刚造的
+  提交之后，下一条命令必须重新确认 HEAD。本笔实测踩中：连吃两次把已推送的 `be5f3ba7c` 并进了新提交，
+  于是本地不再能 fast-forward 到 `origin/sync/upstream-20261009`。复原 = `git diff <被吞提交> <新提交> > 补丁`
+  → `git reset --hard <与 origin 逐位相等的那枚>` → `git apply` → 重新提交；内容零丢。
+
+### 8.12 没量什么
 
 - **CI 选择集复跑（104 → 理论约 83）未取**：取数时本机有另一棵树的 pytest 已跑 1h27m，负载依赖型红
   无法归因（判据 107）。
@@ -629,5 +690,6 @@ vitest 32 条红分：7 条超时（6×20,000 ms + 1×15,000 ms，用例耗时 1
 - `pip install "mcp<1.28"`（`unit-tests.yml:78`）能不能去掉未判：pin-free venv 用 mcp 1.30.0
   收集 15,725 / 0 error。
 
-相关账目：本节 = 已闭环 **91**；判据 113–128 原文在本节 8.7（§1–§6 引用的 84–86、101–112 仍是
+相关账目：本节 = 已闭环 **94**（刀 94 = 8.9 那笔，裁决 (b) 的落地）；判据 113–128 原文在本节 8.7、
+129–132 在 8.11（§1–§6 引用的 84–86、101–112 仍是
 `2026-10-07-trial-merge-conflict-table.md` 与本文前七节的口径）。
