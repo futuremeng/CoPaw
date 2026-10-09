@@ -16,9 +16,14 @@ from qwenpaw.config import utils as config_utils
 pytestmark = pytest.mark.unit
 
 
-def test_config_path_is_redirected_away_from_live_file(tmp_path: Path) -> None:
+def test_config_path_is_redirected_away_from_live_file(
+    tmp_path_factory: pytest.TempPathFactory,
+) -> None:
     path = config_utils.get_config_path()
-    assert path.is_relative_to(tmp_path), path
+    # The fixture deliberately keeps the config dir out of the test's own
+    # tmp_path (workspace-listing tests would see it), so the guard is the
+    # session-wide throwaway root rather than one test's subdirectory.
+    assert path.is_relative_to(tmp_path_factory.getbasetemp()), path
     assert path != Path.home() / ".copaw" / "config.json"
 
 
