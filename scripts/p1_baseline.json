@@ -25,6 +25,14 @@
       "naming": 0,
       "removed": 1
     },
+    "console/package-lock.json": {
+      "added": 54,
+      "behavior_added": 54,
+      "behavior_removed": 12,
+      "mechanical": true,
+      "naming": 0,
+      "removed": 12
+    },
     "console/package.json": {
       "added": 13,
       "behavior_added": 13,
@@ -872,7 +880,7 @@
     "behavior_files": 107,
     "behavior_removed": 484,
     "files": 108,
-    "mechanical_files": 0,
+    "mechanical_files": 1,
     "naming_files": 1,
     "naming_lines": 35,
     "naming_touched_files": 7,
