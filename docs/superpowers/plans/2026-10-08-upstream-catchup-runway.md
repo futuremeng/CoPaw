@@ -809,8 +809,11 @@ mechanical 1 全部零动）。冲突面 **+0 枚**：`agents.py` 本就在册�
 已是新合同；我们那枚 `create_project_knowledge_watcher(ws, _)`（`service_factories.py:341`）仍收两参、
 且自己往 `ws._service_manager.services` 里写 ⇒ 每次 workspace 启动抛
 `TypeError: create_project_knowledge_watcher() takes 2 positional arguments but 3 were given`（这次 CI 集日志里
-现数 4 次启动、每次两种渲染各一行）。**现网后果是那台 project-knowledge watcher 从不运行**。它**不是**上面
-那 10 枚 startup/migration 红（6 + 4）的已证根因 —— 那 10 枚的断言各不相同，未逐枚取栈（判据 134 仍欠着）。
+现数 4 次启动、每次两种渲染各一行）。~~**现网后果是那台 project-knowledge watcher 从不运行**~~ —— **这句写轻了，
+刀 97 取栈后更正**：那枚描述符没有 `optional=True`（`workspace.py:655-668`），`_run_service` 因此重抛
+（`service_manager.py:331` 记 `Failed to start service`、`:336` 抛）⇒ 代价是**整个 agent 实例启动失败**
+（`workspace.py:751` 记 `Failed to start agent instance`），CI 集日志里 4 次真启动 4 次全灭。同一笔取栈也结清了
+下半句：那 10 枚 startup/migration 红（6 + 4）**不是**这枚 TypeError 造成的 —— 本笔修好后它们照旧红（见 8.16）。
 ② `test_provider_startup_offload.py` 那 2 枚的签名是
 `AttributeError: qwenpaw.app._app has no attribute 'ensure_qa_agent_exists'` —— 用例钉的名字在合并后的 `_app.py`
 里已不存在，是判据 111 那一型（上游搬家、我们用点幸存）。
@@ -849,20 +852,90 @@ flake8 对四枚被改文件 **零新增**：7 条与 HEAD 逐条同名（`E501`
   差额不可归因（8.5 那次 104 的簇表把后来被别的刀顺手结清的红也计在内，而结清时没往回扣）。
   真正的问题不是数字不准，是那句推导**被写成了一句看起来像结论的话**并被账目引用。
 - **140（一集红按落点分组，不等于按根因分组）**：本笔先按"文件枚数"报了 40，再取两枚的报错签名才发现
-  其中 2 枚是 `_app` 符号搬家、另有 4 次启动日志是同一枚 TypeError —— 若停在枚数层，那台从不运行的 watcher
+  其中 2 枚是 `_app` 符号搬家、另有 4 次启动日志是同一枚 TypeError —— 若停在枚数层，那台把整实例启动拖掉的 watcher
   就藏在"startup/migration 10 枚"这一行里。判据 134 说按枚取栈，这条补它的另一半：**取了栈也别反过来把
-  同宿主的枚并成一个根因**，那 10 枚的断言各不相同，未证。
+  同宿主的枚并成一个根因**，那 10 枚的断言各不相同，未证（刀 97 已结清：修好后那 10 枚照旧红）。
 - **141（`git checkout <ref> -- 路径` 在"内容已提交"前提下才是安全的探针撤销）**：那条禁用 checkout 的规则
   成因是未提交工作会被吞；本笔先把内容提交、再退回 HEAD~1 字节取"改前"读数，工作树与 HEAD 逐字节相等，
   于是 checkout 是最短且可验证（`git status` 空）的撤法。写清前提，否则下笔要么误用、要么该用时绕远路。
 
-**待办（本笔新登记，不在刀序里）**：① 上面那枚两参工厂 `create_project_knowledge_watcher`（生产侧，
-一行签名 + 改 `publish(watcher)`，配一枚真起 workspace 的用例）；② `_app.ensure_qa_agent_exists` 的
+**待办（本笔新登记，不在刀序里）**：① ~~上面那枚两参工厂 `create_project_knowledge_watcher`（生产侧，
+一行签名 + 改 `publish(watcher)`，配一枚真起 workspace 的用例）~~ **已由刀 97 结清（见 8.16）**；② `_app.ensure_qa_agent_exists` 的
 符号搬家 2 枚；③ 发布渠道 `pending` 那 14 枚要等阶段 2 的 PyPI/Docker 真上线才结，不是测试侧的账。
 
-相关账目：本节 = 已闭环 **96**（刀 94 = 8.9 那笔，裁决 (b) 的落地；刀 95 = 8.11 那笔，8.10 里唯一一枚生产侧；
-刀 96 = 8.14 那笔，8.10 里其余 14 枚测试侧）；
-判据 113–128 原文在本节 8.7、129–136 在 8.12、137–141 在 8.15（§1–§6 引用的 84–86、101–112 仍是
+### 8.16 刀 97：那枚两参工厂结清，并顺手把 8.14 的严重度写错的一句更正
+
+**改了什么**：生产侧一枚 `src/qwenpaw/app/workspace/service_factories.py:341`（+6/−4，入册 14 → **16**）
++ 一枚 fork 自有新文件 `tests/unit/app/workspace/test_service_factory_contract.py`（84 行 / 8 枚用例）。
+提交 `18c60af66`（修）+ `432409b16`（账）。
+
+签名从 `create_project_knowledge_watcher(ws, _)` 换成 `(ws, _, publish)`，并把原先那句
+`ws._service_manager.services["project_knowledge_watcher"] = watcher` 换成 `publish(watcher)`。**等价性不是我说的**：
+`service_manager.py:433-434` 的 `publish_service` 就是 `self.services[name] = instance`，`name` 即描述符名
+`project_knowledge_watcher`（`workspace.py:660`），另有 `:448` 的兜底按返回值补登记 ⇒ 同一枚键、同一条写路径，
+只是不再伸手进管理器。
+
+**严重度更正（对 8.14 那句"watcher 从不运行"）**：那枚描述符**没有** `optional=True`，`_run_service` 因此走重抛分支
+（`service_manager.py:331` 记 `Failed to start service` → `:336` 抛），冒到 `workspace.py:751` 记
+`Failed to start agent instance`。所以代价不是"少一台后台 watcher"，是**整个 agent 实例起不来**。CI 选择集日志实测：
+`TypeError: create_project_knowledge_watcher() takes 2 positional arguments but 3 were given` **17 → 0**、
+`Failed to start service 'project_knowledge_watcher'` **4 → 0**、`Failed to start agent instance` **4 → 0**。
+
+**为什么合并没报冲突（判据 143）**：上游把 `post_init` 这个**槽位**的合同从两参加宽到三参，改的是调用方
+（`service_manager.py:436`，上游自有），而我们那枚是被调方且是 fork 自有 ⇒ 合并永远不会碰它 ⇒ 断在树里而不是断在
+冲突表上。旧分叉点 `e111ec6fb` 时代这枚工厂还不存在、合同也还是两参；新分叉点 `ddd8408eb` 起调用方已是三参 ⇒
+这笔是**重立基线那一刻就埋下的**，与合并解冲突的动作无关。守卫因此按槽位枚举而不是点名：
+`vars(service_factories)` 里所有 `create_*` 协程（现数 **7** 枚）都必须收得到三个位置参数，这样以后 fork 新加的
+工厂留旧元数会当场红。
+
+**TDD**：新文件对着 HEAD 字节 **2 failed / 6 passed**（用点枚抛 `TypeError`；参数化守卫红的臂正是
+`test_every_factory_accepts_the_three_argument_contract[create_project_knowledge_watcher]`，其余 6 枚工厂当场绿），
+同目录 **2 failed / 32 passed**；改签名后 **34 passed**。
+
+**CI 选择集两态对照（判据 107，同旗标 `-p no:randomly`）**：BEFORE（工厂退回 HEAD 字节 + 新用例留着）
+**43 failed / 15,669 passed / 27 skipped / 4 xfailed / 988.47 s**；AFTER（本笔字节）
+**41 failed / 15,671 passed / 27 skipped / 4 xfailed / 1,057.55 s**。两态收集总数逐位相同
+（43+15,669+27+4 = 41+15,671+27+4 = **15,743**），失败 node-id 差集 = **恰好那 2 枚契约用例**。
+
+⚠ **41 ≠ 8.14 那 40 的算术**：我这两次跑都比刀 96 那次多一枚红 ——
+`tests/unit/services/test_terminal.py::test_real_pty_cwd_unicode_resize_interrupt_and_cleanup`。它在两态里**都在**，
+所以不是本笔造成的；单取该文件 **10 passed / 8.01 s**，失败签名是 `collect()` 循环等真 pty 输出、
+踩 `src/qwenpaw/services/terminal.py:151` 那句 `asyncio.wait_for(self.changed.wait(), timeout=20)` ⇒ 判据 107
+那一类负载相关计时红。刀 96 的 15,735 + 本笔 8 枚新用例 = 15,743 对得上，所以差额在"跑法"不在"树"。
+**诚实的剩余口径 = 刀 96 那 40 枚 + 这枚 pty flake**。
+
+**结清 8.14 欠的那半句（判据 134）**：那 40 枚 —— 含 6 枚 migration、4 枚 `test_multi_agent_manager_startup.py`、
+2 枚 `test_provider_startup_offload.py` —— 在 TypeError 归零后**照旧红** ⇒ 直接证成它们与这枚缺陷无关。
+
+**账**：P1 **111 文件 / +10,863 −530**，行为 **110 文件 / +10,828 invasive / −495 deleted**，命名 1·7·35 与
+mechanical 1 零动；`--check` 绿（无增长）。只有一枚条目位移（`service_factories.py` 14 → 16）。
+**顺带把两处一直看不明白的账读通了（判据 142）**：`scripts/check_p1_invariants.py:179` 只统计
+**在基线 ref 就存在**的路径（`if path not in owned ... continue`），`:199` 的 `totals.files` 又把 mechanical 剔掉 ⇒
+① 本笔那枚全新 fork 自有测试文件**结构上进不了册**（不是漏记），② 基线里 `files` 字典 112 枚键 vs `totals.files` 111
+从来不是漂移（多出的那枚是 `console/package-lock.json`）。推论：deliverable 是"新建 fork 自有文件"的那把刀，
+册上唯一信号是被改的上游宿主文件，**文件数不动是设计使然，不能读成"什么都没变"**。
+
+**其余读数**：五道离线门禁绿，串与刀 96 逐字相同（locale split 4,658 gated / 59 模板族 / 7 豁免 / 1,459 overlay 叶 /
+23 上游键豁免 · namespace 35/6/0/0/0 · release channel R1–R5 over 6 files · CI targets 16 命令 / 3 目录 ·
+brand 7 文件 / 35 行）。合集回归 `tests/unit/app/workspace/` + `tests/unit/app/test_project_knowledge_watcher.py` +
+L1 五目录 **1,382 passed / 1 skipped / 16.57 s**。flake8 对本笔两枚文件 **rc=0、零读数**（不是"零新增"，是本来就干净）。
+
+**没做到的一半**：本笔的用例是按管理器合同喂 `SimpleNamespace` 假 workspace，不是真起一台 workspace；
+现网侧证据只有那 4 次真启动的日志从 4 变 0。**待办**：① `_app.ensure_qa_agent_exists` 符号搬家 2 枚（判据 111 型，
+仍在册）；② 那枚 pty flake 的等待预算（与刀 86 的 M1/M2/M3 同族，未结）；③ 发布渠道 `pending` 14 枚仍等阶段 2。
+
+### 8.17 本笔新增判据 142–143
+
+- **142（先读门禁脚本的选取规则，再解释它的读数）**：P1 脚本按"基线 ref 在册"筛路径、按 `mechanical` 剔分母。
+  不知道这两条就会把"新建 fork 自有文件后文件数不动"读成漏记、把"112 键 / 111 files"读成基线漂移 ——
+  两处都是我自己先前挂着的问号，一次脚本读源码就结清。
+- **143（合同加宽要按槽位枚举被调方，不能只改报错那枚）**：上游改调用方、我们提供被调方时，合并零冲突、
+  断点静默进树，代价是每次启动整台实例起不来。修法的验收单位是"这个槽位的全部实现"（这里从模块
+  `vars()` 枚举 `create_*` 协程），否则下一把刀新加的工厂会重演同一笔。
+
+相关账目：本节 = 已闭环 **97**（刀 94 = 8.9 那笔，裁决 (b) 的落地；刀 95 = 8.11 那笔，8.10 里唯一一枚生产侧；
+刀 96 = 8.14 那笔，8.10 里其余 14 枚测试侧；刀 97 = 8.16 那笔，8.14 待办 ① 那枚生产侧签名）；
+判据 113–128 原文在本节 8.7、129–136 在 8.12、137–141 在 8.15、142–143 在 8.17（§1–§6 引用的 84–86、101–112 仍是
 `2026-10-07-trial-merge-conflict-table.md` 与本文前七节的口径）。
 
 
