@@ -70,7 +70,11 @@ async def test_lifespan_initializes_provider_manager_in_worker_thread(
             AsyncMock(),
         ),
     )
-    monkeypatch.setattr(app_module, "ensure_qa_agent_exists", lambda: None)
+    monkeypatch.setattr(
+        app_module,
+        "ensure_builtin_agents_exist",
+        lambda: None,
+    )
 
     try:
         with pytest.raises(RuntimeError, match="provider initialized"):
@@ -152,7 +156,11 @@ async def test_lifespan_initializes_local_model_manager_in_worker_thread(
         "_sync_scroll_history_on_startup",
         AsyncMock(),
     )
-    monkeypatch.setattr(app_module, "ensure_qa_agent_exists", lambda: None)
+    monkeypatch.setattr(
+        app_module,
+        "ensure_builtin_agents_exist",
+        lambda: None,
+    )
 
     try:
         with pytest.raises(RuntimeError, match="local model initialized"):
