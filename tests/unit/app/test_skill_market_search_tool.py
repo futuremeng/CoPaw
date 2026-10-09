@@ -66,7 +66,7 @@ async def test_skill_market_search_filters_by_query_and_tags(monkeypatch) -> Non
         refresh=True,
     )
 
-    text = result.content[0]["text"]
+    text = result.content[0].text
     assert "Skill marketplace search candidates: 1 (matched=1)" in text
     assert "query=proof" in text
     assert "tags=editor" in text
@@ -103,7 +103,7 @@ async def test_skill_market_search_returns_no_matches_message(monkeypatch) -> No
     )
 
     result = await module.skill_market_search(query="", tags=None, limit=10)
-    text = result.content[0]["text"]
+    text = result.content[0].text
     assert "No matching skills found in enabled markets." in text
     assert "JSON_RESULT_START" in text
     assert '"returned_count": 0' in text
@@ -124,7 +124,7 @@ async def test_skill_market_search_returns_error_message_on_exception(monkeypatc
     monkeypatch.setattr(module, "_aggregate_marketplace", _raise)
 
     result = await module.skill_market_search(query="proofread")
-    text = result.content[0]["text"]
+    text = result.content[0].text
     assert "skill market search failed" in text
     assert "market backend unavailable" in text
     assert "JSON_RESULT_START" in text

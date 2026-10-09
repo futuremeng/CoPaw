@@ -6,7 +6,10 @@ import pytest
 
 from qwenpaw.agents.tools import file_io
 from qwenpaw.app.project_realtime_events import collect_project_realtime_changes
-from copaw.config.context import set_current_focus_dir, set_current_workspace_dir
+from qwenpaw.config.context import (
+    set_current_project_dir,
+    set_current_workspace_dir,
+)
 
 
 @pytest.mark.asyncio
@@ -17,14 +20,16 @@ async def test_write_file_records_project_realtime_event(tmp_path: Path):
     (project_dir / "original").mkdir(parents=True, exist_ok=True)
 
     set_current_workspace_dir(workspace_dir)
-    set_current_focus_dir(project_dir)
+    # `write_file` resolves relative paths from the effective project dir, not
+    # from the focus dir; this mirrors what the request-setup hook pins.
+    set_current_project_dir(project_dir)
     try:
         response = await file_io.write_file("original/note.md", "hello")
     finally:
-        set_current_focus_dir(None)
+        set_current_project_dir(None)
         set_current_workspace_dir(None)
 
-    text = response.content[0].get("text", "") if response.content else ""
+    text = response.content[0].text if response.content else ""
     latest_event_id, changed_paths = collect_project_realtime_changes(
         project_dir,
         "project-a",

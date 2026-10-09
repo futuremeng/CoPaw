@@ -9,7 +9,7 @@ from qwenpaw.agents.tools.knowledge_search import knowledge_search
 
 async def test_knowledge_search_rejects_empty_query() -> None:
     result = await knowledge_search("   ")
-    text = result.content[0]["text"]
+    text = result.content[0].text
     assert "query cannot be empty" in text
 
 
@@ -28,7 +28,7 @@ async def test_knowledge_search_returns_disabled_message(monkeypatch) -> None:
     )
 
     result = await module.knowledge_search("how to index docs")
-    text = result.content[0]["text"]
+    text = result.content[0].text
     assert "Knowledge is disabled" in text
 
 
@@ -49,7 +49,7 @@ async def test_knowledge_search_returns_runtime_disabled_message(
     )
 
     result = await module.knowledge_search("how to index docs")
-    text = result.content[0]["text"]
+    text = result.content[0].text
     assert "Knowledge retrieval is disabled" in text
 
 
@@ -112,7 +112,7 @@ async def test_knowledge_search_formats_hits(monkeypatch) -> None:
         min_score=1.0,
         source_types=["file"],
     )
-    text = result.content[0]["text"]
+    text = result.content[0].text
     assert "Knowledge search results for: knowledge index" in text
     assert "[1] Project Docs (file) score=2.50" in text
     assert "title: Index Guide" in text

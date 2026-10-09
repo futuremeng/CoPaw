@@ -18,7 +18,7 @@ async def _await_terminal_memify_status(module, job_id: str) -> dict:
     last: object = None
     while time.monotonic() < deadline:
         result = await module.memify_status(job_id)
-        text = result.content[0]["text"]
+        text = result.content[0].text
         try:
             last = json.loads(text)
         except json.JSONDecodeError:
@@ -42,7 +42,7 @@ async def test_graph_query_requires_graph_enabled(monkeypatch) -> None:
     )
 
     result = await module.graph_query("find relation")
-    text = result.content[0]["text"]
+    text = result.content[0].text
     assert "graph query is disabled" in text
 
 
@@ -81,7 +81,7 @@ async def test_graph_query_formats_payload(monkeypatch) -> None:
         query_mode="template",
         output_mode="nlp",
     )
-    payload = json.loads(result.content[0]["text"])
+    payload = json.loads(result.content[0].text)
     assert payload["summary"] == "ok"
     assert payload["records"][0]["subject"] == "A"
     assert captured["preferred_output_mode"] == "nlp"
@@ -103,7 +103,7 @@ async def test_graph_query_rejects_invalid_output_mode(monkeypatch) -> None:
     )
 
     result = await module.graph_query("find relation", output_mode="bad-mode")
-    text = result.content[0]["text"]
+    text = result.content[0].text
     assert "output_mode must be 'fast', 'nlp', or 'agentic'" in text
 
 
@@ -118,7 +118,7 @@ async def test_memify_run_requires_memify_enabled(monkeypatch) -> None:
         ),
     )
     result = await module.memify_run()
-    text = result.content[0]["text"]
+    text = result.content[0].text
     assert "memify is disabled" in text
 
 
@@ -148,7 +148,7 @@ async def test_memify_run_returns_job_payload(monkeypatch) -> None:
     monkeypatch.setattr(module, "GraphOpsManager", _FakeGraphOpsManager)
 
     result = await module.memify_run(pipeline_type="default")
-    payload = json.loads(result.content[0]["text"])
+    payload = json.loads(result.content[0].text)
     assert payload["accepted"] is True
     assert payload["job_id"] == "job123"
 
@@ -174,7 +174,7 @@ async def test_memify_status_handles_not_found(monkeypatch) -> None:
     monkeypatch.setattr(module, "GraphOpsManager", _FakeGraphOpsManager)
 
     result = await module.memify_status("missing-job")
-    text = result.content[0]["text"]
+    text = result.content[0].text
     assert "memify job not found" in text
 
 
@@ -190,7 +190,7 @@ async def test_triplet_focus_search_requires_enabled(monkeypatch) -> None:
     )
 
     result = await module.triplet_focus_search(query_text="entity relation")
-    text = result.content[0]["text"]
+    text = result.content[0].text
     assert "triplet-focused search is disabled" in text
 
 
@@ -229,7 +229,7 @@ async def test_triplet_focus_search_formats_payload(monkeypatch) -> None:
     monkeypatch.setattr(module, "GraphOpsManager", _FakeGraphOpsManager)
 
     result = await module.triplet_focus_search(query_text="Agent uses Tool")
-    payload = json.loads(result.content[0]["text"])
+    payload = json.loads(result.content[0].text)
     assert payload["triplets"][0]["subject"] == "Agent"
     assert payload["triplets"][0]["predicate"] == "uses"
     assert payload["triplets"][0]["object"] == "Tool"
@@ -282,7 +282,7 @@ async def test_graph_tool_chain_smoke_local_engine(
         pipeline_type="default",
         idempotency_key="graph-tool-chain-smoke",
     )
-    memify_payload = json.loads(memify_result.content[0]["text"])
+    memify_payload = json.loads(memify_result.content[0].text)
     assert memify_payload["accepted"] is True
 
     status_payload = await _await_terminal_memify_status(
@@ -296,11 +296,11 @@ async def test_graph_tool_chain_smoke_local_engine(
         query_text="Agent uses tool",
         query_mode="template",
     )
-    graph_payload = json.loads(graph_result.content[0]["text"])
+    graph_payload = json.loads(graph_result.content[0].text)
     assert len(graph_payload["records"]) >= 1
 
     triplet_result = await triplet_module.triplet_focus_search(
         query_text="Agent uses tool",
     )
-    triplet_payload = json.loads(triplet_result.content[0]["text"])
+    triplet_payload = json.loads(triplet_result.content[0].text)
     assert isinstance(triplet_payload["triplets"], list)
