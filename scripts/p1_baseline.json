@@ -833,6 +833,22 @@
       "naming": 0,
       "removed": 0
     },
+    "tests/unit/app/routers/test_config_router.py": {
+      "added": 50,
+      "behavior_added": 50,
+      "behavior_removed": 8,
+      "mechanical": false,
+      "naming": 0,
+      "removed": 8
+    },
+    "tests/unit/app/routers/test_providers_active_openrouter.py": {
+      "added": 15,
+      "behavior_added": 15,
+      "behavior_removed": 0,
+      "mechanical": false,
+      "naming": 0,
+      "removed": 0
+    },
     "tests/unit/app/routers/test_tools_router.py": {
       "added": 198,
       "behavior_added": 198,
@@ -842,12 +858,12 @@
       "removed": 1
     },
     "tests/unit/app/routers/test_workspace_router.py": {
-      "added": 99,
-      "behavior_added": 99,
-      "behavior_removed": 1,
+      "added": 104,
+      "behavior_added": 104,
+      "behavior_removed": 3,
       "mechanical": false,
       "naming": 0,
-      "removed": 1
+      "removed": 3
     },
     "tests/unit/app/routers/test_workspace_router_agent_surface.py": {
       "added": 23,
@@ -883,15 +899,15 @@
     }
   },
   "totals": {
-    "added": 10791,
-    "behavior_added": 10756,
-    "behavior_files": 108,
-    "behavior_removed": 485,
-    "files": 109,
+    "added": 10861,
+    "behavior_added": 10826,
+    "behavior_files": 110,
+    "behavior_removed": 495,
+    "files": 111,
     "mechanical_files": 1,
     "naming_files": 1,
     "naming_lines": 35,
     "naming_touched_files": 7,
-    "removed": 520
+    "removed": 530
   }
 }
