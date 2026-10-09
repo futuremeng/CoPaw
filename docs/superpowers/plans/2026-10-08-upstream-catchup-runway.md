@@ -11,6 +11,10 @@
 本身会把"领先上游"那一行往上推 1–2 枚 —— 那是口径随提交自然漂移，不是新事实，比较时以
 "取数基线"为准。
 
+**§2 的例外**：那一节在刀 87/88/89 之后（`HEAD = 358f0e7ba`）按 import specifier 重算并改写过一次，
+其余各节仍是 `1b946c05d` 的读数 ⇒ §1 的冲突总量与 §3 的权重没有随 87/88/89 重算（这三笔全落在
+fork 自建文件上，一枚上游宿主都没碰，重算只会把"落后/领先"两行往上推）。
+
 ---
 
 ## 1. 刷新后的总量（对照 2026-10-07）
@@ -61,29 +65,64 @@
 
 ---
 
-## 2. 静默删除：这次量到了后果，而不只是数量
+## 2. 静默删除：这一节被推翻了重写过一次
 
 上游在分叉点之后删除 115 枚路径，我们树里还留着 115 枚，其中 **96 枚我们从没改过 ⇒ 合并不报任何冲突、直接删**。
-数量与 10-07 相同（96 / 19）。本次新增的是**引用实测**：拿合并产物树 `8374294c6` 与 `upstream/main` 两棵树
-各跑一次 `git grep -l -F <模块名/基名>`，排除文档命中，得到
+数量与 10-07 相同（96 / 19）。
 
-- **65 枚**：全树无人引用 ⇒ 上游删对了，跟着删即可。
-- **24 枚**：上游自己的树里也仍有引用 ⇒ 是上游的存量悬挂，不是我们造成的。
-- **7 枚**：**只有我们的树还在引用** ⇒ 这 7 枚是合并后真正的静默断裂点。
+**先更正方法。** 10-08 那一版拿合并产物树 `8374294c6` 与 `upstream/main` 各跑一次
+`git grep -l -F <模块名/基名>`、排除文档命中，得 65 / 24 / 7 三档，并把那 7 枚报成"合并后真正的静默断裂点"。
+那次读数错在两处，两处都是**判据 102**（按名字/路径 token 匹配会造出假消费方）的实例：
 
-7 枚逐条（`<-` 读它的是谁）：
+- **按基名匹配**：`FileTree.module.less` 命中 `ProjectFileTree.tsx` —— 后者只 import 自己那份
+  （`ProjectFileTree.tsx:54 import styles from "./ProjectFileTree.module.less"`），子串包含而已。
+- **只匹配带引号的 specifier**：Python 的 `from .mod import x` 整形式没进扫描集。
 
-| 被上游删掉的路径 | 谁还在引用 | 性质 |
+重算改成**逐文件解析 import specifier、把每个说明符解析成仓库里的具体路径**再比对
+（`/tmp/closure7.py` ⇒ 权威读数 `/tmp/closure10.out`）。结果：**96 枚里 43 枚全树零引用者，53 枚有引用者，
+而"只有我们在引用、且引用者能活到合并之后"的 = 0 枚。** 旧的"24 枚上游自己也引用"这一档直接归零，全是子串造的假阳性。
+
+按引用者的归属分四档（**对数**是划分互斥的口径：83 对引用关系每对只进一档；**目标数**按档内去重，跨档可重叠）。
+⚠ 口径：这一版**没有读合并产物**，三棵树分别是分叉点 `e111ec6fb`（2,028 路径）、tip `7147731d5`（5,981）、
+本树 `HEAD = 358f0e7ba`（2,586），"合并会怎样"是按**引用者归属**推出来的（在不在 tip、我们有没有改过它）
+⇒ "免做"与"整簇同删"两档是推论，合并态里要各验一枚；"断裂 = 0"这一档不依赖推论，它只要求
+引用者在 tip 存在且我们改过它，那正是"手删"档。
+
+| 档 | 引用对数 | 目标数 | 合并时会怎样 |
+|---|---|---|---|
+| **断裂**（fork 独有引用者，且引用者幸存） | **0** | **0** | — |
+| **手删**（引用者是我们改过的上游自有文件） | 5 | 5 | 取上游字节 ⇒ 我们在册那几行无处落，逐行手删 |
+| **免做**（引用者是上游自有、我们没改过） | 20 | 17 | 取上游字节即自动清 ⇒ **不排刀**（判据 103 的正面） |
+| **整簇同删**（引用者本身也在上游删除集里） | 58 | 40 | 上游删对了，跟着删 |
+
+5 对手删逐条（`<-` 读它的是谁）：
+
+| 被上游删掉的路径 | 引用它的宿主 | 宿主在册行为行 |
 |---|---|---|
-| `console/src/pages/Coding/FileTree.module.less` | `console/src/pages/Agent/Projects/components/ProjectFileTree.tsx` | **真断**（fork 自有组件 import 上游已删的样式文件） |
-| `console/src/pages/Settings/Agents/components/SortableAgentRow.tsx` | `console/src/pages/Settings/Agents/components/AgentTable.tsx` | **真断** |
-| `console/src/test/chat-mock.ts` | `console/vitest.config.ts` 的 alias | **真断**（前端测试配置直接指向不存在的文件） |
-| `src/qwenpaw/agents/memory/adbpg_memory_manager.py` | `tests/unit/app/test_workspace_memory_backend.py` | **真断**（刀 79-A 系的工作集后端用例） |
-| `console/src/pages/Chat/ChatPage.test.tsx` | `console/vitest.config.ts` 的 `exclude` | 惰性断（exclude 一个不存在的文件不会报错） |
-| `console/src/pages/Agent/Skills/components/skillMetadata.ts` | 只有 docs | 非代码 |
-| `console/src/pages/Settings/SkillPool/components/SkillPoolListItem.tsx` | 只有 docs | 非代码 |
+| `console/src/pages/Agent/Config/components/ADBPGConfigCard.tsx` | `console/src/pages/Agent/Config/components/index.ts` | +1/−0 |
+| `console/src/test/chat-mock.ts` | `console/vite.config.ts` | +25/−2 |
+| `src/qwenpaw/agents/coding_mode_mixin.py` | `src/qwenpaw/agents/react_agent.py` | +76/−40 |
+| `src/qwenpaw/agents/tool_guard_mixin.py` | `src/qwenpaw/agents/react_agent.py` | 同上（一枚宿主两行 import） |
+| `src/qwenpaw/app/routers/coding_project.py` | `src/qwenpaw/app/routers/__init__.py` | +16/−0 |
 
-⇒ **代码级 4 枚 + 惰性 1 枚**，需要逐枚裁决（补上游替代 / 把文件留在 fork 侧 / 删掉引用点）。
+原来那 7 枚"断裂点"的下落（两枚是假的，两枚真断已由刀补掉）：
+
+- `Coding/FileTree.module.less` ← `ProjectFileTree.tsx`：**假阳性**（子串命中）。而且
+  `ProjectFileTree.tsx` 自身也在上游删除集 ⇒ 归"整簇同删"。
+- `Settings/Agents/components/SortableAgentRow.tsx` ← `AgentTable.tsx`：**分类错**，引用者
+  `AgentTable.tsx` 自身也在上游删除集 ⇒ 整簇同删，不是断裂。
+- `console/src/test/chat-mock.ts` ← 前端测试 alias：**真断**，已由**刀 88 `ae732975e`** 结清
+  （`console/vitest.config.ts` 的 alias 改为解析已安装的 SDK，与上游自己的 `vite.config.ts` 同形）。
+- `agents/memory/adbpg_memory_manager.py` ← `tests/unit/app/test_workspace_memory_backend.py`：**真断**，
+  已由**刀 89 `358f0e7ba`** 结清（用例改成枚举 `memory_registry.list_registered()`，不再按名字 import 具体后端）。
+- `console/src/pages/Chat/ChatPage.test.tsx` ← `vitest.config.ts` 的 `exclude`：**仍在**，但 `exclude`
+  是一条 glob 字符串、不是 import specifier ⇒ 任何 specifier 扫描都看不见它；exclude 一个不存在的文件不报错 ⇒ 无害，
+  合并时顺手删掉那一行。
+- `Agent/Skills/components/skillMetadata.ts`、`Settings/SkillPool/components/SkillPoolListItem.tsx`：只有 docs 引用 ⇒ 非代码。
+
+⇒ 旧结论"**代码级 4 枚 + 惰性 1 枚，需要逐枚裁决**"作废。**合并前需要为静默删除开的刀 = 0 把**
+（88、89 已闭，剩下的 5 对手删全部落在**上游自有文件**上 ⇒ 按判据 105，它们属于"取上游字节 + 删我们那几行"
+那一型，是合并时的逐行工作，不是独立刀）。
 
 ---
 
@@ -293,9 +332,22 @@ lock 走"取上游 + 重新生成"，剩下真正要逐块判的是这 12 枚（
    ⚠ `AnywhereChat/index.tsx` 改前即 prettier 红（把 HEAD 字节复制进 `console/` 树内单测也 rc=1），
    本刀一个 `--write` 都没跑（判据 63）。
    ⚠ 判据 91 说"删上游一项能力"要记 `behavior_removed` 上涨 —— 本刀落在**册外文件**上，实测五表零响应。
-2. **§2 的 4 枚真断引用**（合并只会扩大它们，不会修）：
-   `Coding/FileTree.module.less`、`Settings/Agents/components/SortableAgentRow.tsx`、
-   `console/src/test/chat-mock.ts`、`agents/memory/adbpg_memory_manager.py`。
+2. **§2 的静默删除引用 = 合并前刀已全部闭完（88 `ae732975e`、89 `358f0e7ba`），剩下 5 对手删只能在合并态里做**。
+   §2 重算后"只有我们在引用、且引用者幸存"的枚数是 **0**（旧文的 4 枚真断：两枚是子串假阳性
+   `FileTree.module.less` / `SortableAgentRow.tsx`，两枚真断已由 88/89 补掉）。
+   5 对落点全部是**上游自有、且我们改过行**的文件 ⇒ 按判据 105 归"取上游字节 + 手删我们那几行"，**不排合并前的刀**：
+   `Agent/Config/components/index.ts`(+1) · `console/vite.config.ts`(+25/−2) ·
+   `agents/react_agent.py`(+76/−40，两行 mixin import) · `app/routers/__init__.py`(+16)。
+   刀 88 读数（落在 fork 自建 `console/vitest.config.ts`，册外）：前端全量 78 文件 / 491 用例 rc=0（负载 8.32，57.80 s）、
+   `tsc -b --force` rc=0、五表逐键与刀 87 相同、四道门禁绿且 locale 串逐字不变。
+   刀 89 读数（落在 fork 自建 `tests/unit/app/test_workspace_memory_backend.py`，册外）：本文件 3 条通过、
+   证红 = 把配对翻转后 1 条失败（非空转），`pytest tests/unit` 3,432 passed / 1 failed，那 1 条
+   （`test_knowledge.py::test_project_scoped_memify_jobs_are_isolated`，404≠200）单跑 1.41 s 绿、整文件 81 条绿
+   ⇒ 属刀 86 / 条目 83 ⑪ 的负载敏感那一族，不能归到本刀。
+   ⚠ 归因教训（新判据 107，见 §7 末）：全量计时类的红**必须两态同负载各测一次**才能归因 —— 第一次 2 红 / 1 绿
+   的对比是在负载 26 与 8.32 之间做的，把 stub→SDK 这一改动误判成超时元凶；
+   第二次 stub 全量在负载 26 同样红（该条用例在安静时 12,724 ms、负载下 21,831–22,317 ms，
+   上限是 `testTimeout: 20000`）⇒ 那次 2×1 作废。
 3. **五表里已被标为待重放的两笔**（已闭环 40 OAuth 注入、已闭环 46 py3.10 `BaseExceptionGroup`）
    在 `app/mcp/*` → `drivers/` 搬迁时必须有回归用例 —— 现在能先把用例写红。
 
@@ -320,8 +372,9 @@ lock 走"取上游 + 重新生成"，剩下真正要逐块判的是这 12 枚（
 没量：**没有真跑一次 merge**（`merge-tree` 只产树，不产工作区冲突态，所以"hunk 级实际文本长度"
 与"逐枚裁决的真实耗时"仍是估计）；没跑合并后的测试；没读上游 v2.2.1 → tip 这 133 枚提交的内容摘要
 （不知道上游自己在这 133 枚里是否已经把我们的某些能力做掉了）；`console/package-lock.json` 取上游后
-`npm install` 会产生什么差异没验；§2 的引用实测按"模块名/基名的字面出现"计数，
-动态 import 与字符串拼路径不在其中；**§4(a) 符号表只证明"上游有同名符号的宿主"，没证明
+`npm install` 会产生什么差异没验；§2 已换成**逐 import specifier 解析**（不再是字面计数），但它仍只看
+代码里的说明符：**模板串拼出来的路径、`importlib` / 运行时动态加载、以及测试配置里的字符串（alias 值与
+`exclude` glob）都不在它的作用域里**（判据 108）；**§4(a) 符号表只证明"上游有同名符号的宿主"，没证明
 它的行为合同与我们那份等价**（`query_error_resilience` 那一枚最需要这一步：上游有
 `call_with_overflow_recovery`，但它覆盖不覆盖已闭环 57 的全部情形，要在合并后用用例验）；
 **`check_namespace_boundaries.py` 在本 worktree 里 `result: PASSED` 但同时打
@@ -347,6 +400,21 @@ lock 走"取上游 + 重新生成"，剩下真正要逐块判的是这 12 枚（
   判"我们是否往上游宿主加过这项能力"用分叉点与 HEAD 的命中数对比 —— Plan 组七个上游宿主里六个相等
   （40/40、65/65、2/2、2/2、11/11、21/21），只有 `command_dispatch.py` 是我们删的（14→11），
   所以那一组一行都不用手工摘。
+- **判据 106（判"无人引用"要同时覆盖 Python 的无引号 import 形式）**：第一版闭包脚本只匹配
+  引号里的 specifier（`from "x" import` / `import("x")` / `require("x")`），于是
+  `from .adbpg_memory_manager import …` 这类**模块名不在引号里**的 Python 形式整类漏检。
+  同一族错在 §2 旧读数的另一侧（按基名匹配又造出假阳性）⇒ 一次"静默删除 0 断裂"的结论要求
+  **两种匹配各错过一次之后**才成立，别把第一版脚本的读数当结论。
+- **判据 107（全量计时类的红必须同负载两态对照才能归因）**：本机 VS Code renderer 在 292%/100% CPU、
+  load average 26 时跑全量，与 load 8.32 时跑同一份代码不是同一个实验。第一次的"2 红 vs 1 绿"
+  把改动（stub→SDK）认成超时元凶；第二次 stub 在负载 26 同样红 ⇒ 该对比作废。
+  这条尤其适用于**靠 `testTimeout` 兜住的粗用例**：实测同一条在安静时 12,724 ms、负载下 21,831–22,317 ms
+  ⇒ 20,000 ms 的上限**在负载下不成立**，"全量绿"这个验收口径本身是负载依赖的。
+- **判据 108（合并时 fork 自有的配置文件是静默删除的落点，不是豁免区）**：合并只会动上游自有文件；
+  一份**fork 自建、上游看不见**的配置（本例 `console/vitest.config.ts`）在合并后原样留着，
+  它指向的上游文件却可能被删 ⇒ 断点恰好长在这类文件里，而它既不在冲突表里、也不在任何"取上游字节"的动作里。
+  反向同样成立：改这类文件**不减少任何冲突**，所以它的价值只能用"合并后是否仍指向存在的路径"来评。
 
 相关账目：已闭环 84–86（判据 84/85/86 原文在 `2026-10-07-trial-merge-conflict-table.md`）、
-已闭环 40、46、56、57、75、79–81、83–86。
+已闭环 40、46、56、57、75、79–81、83–86、**87（`54bb86bc8` AnywhereChat 摘 plan 用点）、
+88（`ae732975e` 测试 alias → 已安装 SDK）、89（`358f0e7ba` 后端注册表用例改枚举）**。
