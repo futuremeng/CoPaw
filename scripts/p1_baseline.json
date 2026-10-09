@@ -849,6 +849,14 @@
       "naming": 0,
       "removed": 1
     },
+    "tests/unit/app/routers/test_workspace_router_agent_surface.py": {
+      "added": 23,
+      "behavior_added": 23,
+      "behavior_removed": 1,
+      "mechanical": false,
+      "naming": 0,
+      "removed": 1
+    },
     "tests/unit/app/test_agent_config_watcher.py": {
       "added": 152,
       "behavior_added": 152,
@@ -875,15 +883,15 @@
     }
   },
   "totals": {
-    "added": 10771,
-    "behavior_added": 10736,
-    "behavior_files": 107,
-    "behavior_removed": 484,
-    "files": 108,
+    "added": 10794,
+    "behavior_added": 10759,
+    "behavior_files": 108,
+    "behavior_removed": 485,
+    "files": 109,
     "mechanical_files": 1,
     "naming_files": 1,
     "naming_lines": 35,
     "naming_touched_files": 7,
-    "removed": 519
+    "removed": 520
   }
 }
