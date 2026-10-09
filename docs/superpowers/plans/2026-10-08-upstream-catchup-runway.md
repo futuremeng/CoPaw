@@ -180,19 +180,34 @@ lock 走"取上游 + 重新生成"，剩下真正要逐块判的是这 12 枚（
 | Workspace | `pages/Agent/Workspace/` 全部 8 枚文件 | +12 / +9 / +8 / +58（其余 4 枚在册外） | **`pages/Files/index.tsx`**（路由 `core.workspace` = `/workspace`）挂 **`features/files-workspace/FilesWorkspace.tsx`**（该 feature 目录 30 枚文件，含 `FilesDrawer.tsx`、`FilesNavigator.tsx`、`MemoryGraphView.tsx`、`ResponseArtifactList.tsx`） | 唯一入口是 `layouts/MainLayout/index.tsx:31` 的字符串路由 `lazyImportWithRetry("../../pages/Agent/Workspace")`；上游的 MainLayout 已换成注册表驱动的 `useRoutes()`（`console/src/plugins/registry`），文件里已无 `lazyImportWithRetry` |
 | 会话抽屉 | `pages/Chat/components/ChatSessionDrawer/` 全部 3 枚 | +5 −5 | **`layouts/SidebarSessionList.tsx`** + `useSidebarSessionListData.ts` + `components/SessionItem/`、`SessionGroupDnd/`、`SessionGroupHeader/`、`SessionDateHeader/` ⇒ 会话列表从抽屉挪进侧栏 | `Chat/components/ChatActionGroup/index.tsx:11` 一处 + 组内自带 `ChatSessionDrawer.test.tsx`。上游的 ChatActionGroup 只剩 `Files`、`Terminal` 两个 IconButton |
 | Agent 表 | `pages/Settings/Agents/components/AgentTable.tsx` | +98 −60 | **`Settings/Agents/components/AgentGallery.tsx`**（`index.tsx:1` import、`:356` 渲染；上游该目录留 18 枚文件，其 `components/index.ts` 只出 `AgentModal`/`AgentBackendFields`/`CopyAgentModal`） | barrel 一行 `components/index.ts:1`，经 barrel 被 `Settings/Agents/index.tsx:10` import、`:206` 渲染 |
-| Plan | `app/routers/plan.py` + `api/modules/plan.ts` + `components/PlanPanel/{index.tsx, index.module.less}` + `src/qwenpaw/plan/{__init__,broadcast,hints,schemas}.py` | +2 / +16 / +13（后 4 枚在册外、静默删） | **无** —— 上游 tip 上 `src/qwenpaw/plan` 空、无 `plan_router`、console 里零 `plan` 命中；只保留 agent 侧的 `agents/skills/make_plan-{en,zh}/SKILL.md`（提示词，不是 HTTP 面） | py：`routers/__init__.py:36`、`routers/agent_scoped.py:95` 两处登记（上游两份都在、都不引用 plan）。ts：`api/modules/plan` 被 `PlanPanel`、`Chat/index.tsx:35`、`ReactAgentCard.tsx:5`、`components/AnywhereChat/index.tsx:23` 四处 import；`PlanPanel` 被 `AnywhereChat:60` 与 `ChatActionGroup:13` 两处 import |
+| Plan | `app/routers/plan.py` + `api/modules/plan.ts` + `components/PlanPanel/{index.tsx, index.module.less}` + `src/qwenpaw/plan/{__init__,broadcast,hints,schemas}.py` | +2 / +16 / +13（后 4 枚在册外、静默删） | **无实现，但留三处壳**（刀 87 后现数）：`agents/command_handler.py:1579 _process_plan` 是桩，正文写"plan mode is being migrated to the new task system"，同文件 tip 上仍有 16 枚 plan 命中（含 `clear_plan` metadata 与 `:138-153` 的"`/plan <描述>` 透传给 runner"注释）；`config/config.py:2069 class PlanConfig` 仍在，唯一写者 `pawapp/agent.py:144`，全树无读者；`chat.commands.plan.description` 仍在 `locales/en.json`，上游自己 console 侧零读者。`src/qwenpaw/plan/`、`app/routers/plan.py`、`api/modules/plan.ts`、`PlanPanel/` 确实不在 tip 上 | py（按 import specifier 现数 5 枚宿主）：`app/runner/runner.py`(4)、`agents/react_agent.py`(2)、`app/runner/command_dispatch.py`(1)、`app/routers/agent_scoped.py`(1)、`app/routers/__init__.py`(1)。ts：`api/modules/plan` 被 `PlanPanel`、`Chat/index.tsx:35`、`ReactAgentCard.tsx:5` import（`AnywhereChat:23/:60` 已由刀 87 摘除）；`PlanPanel` 被 `ChatActionGroup:13` import |
 
-两处要点：
+要点（刀 87 后已全部现数复核）：
 
-- **"跟着上游删"的真实动作不是删文件**：上表所有消费方（除 `AnywhereChat`）都是上游自有文件，
-  且上游那份里对这些被删符号**零引用** ⇒ 每一处的实际动作是"取上游字节 + 手删我们加的那几行"，
-  然后删我们的文件。`src/qwenpaw/plan/` 那 4 枚静默删里，合并后唯一还活着的引用是
-  `agents/react_agent.py:817` 和 `:927`（`from ..plan.hints import ...`，两处都是我们加的行，
-  上游那份 react_agent 里没有）。
-- **`components/AnywhereChat/index.tsx`（3,318 行）是 fork 自建**（`git cat-file -e e111ec6fb:` 失败）
-  ⇒ 它不在上游删除清单里、合并不会动它，但它是 plan 组唯一"跟着删就要改自己产品面"的宿主
-  （`:23` `planApi`、`:60` `PlanPanel`、`:867/:2469/:3151/:3309` 五处开关与渲染）。
-  **这一处是子裁决，不在"跟着上游删"的默认里。**
+- **Plan 组不需要"手删我们加的那几行"**：plan 命中数在分叉点与 HEAD 逐宿主相等 ——
+  `agents/react_agent.py` 40/40、`app/runner/runner.py` 65/65、`app/routers/__init__.py` 2/2、
+  `app/routers/agent_scoped.py` 2/2、`pages/Chat/index.tsx` 11/11、`ChatActionGroup/index.tsx` 11/11、
+  `ReactAgentCard.tsx` 21/21 —— 只有 `app/runner/command_dispatch.py` 是我们把 14 删到 11。
+  ⇒ 整组是 v1 继承（上游 `20f62efe6 feat(plan): add plan mode (#3686)`），fork 侧没往任何上游宿主加过
+  plan 行为 ⇒ 取上游字节即清空，判据 103 里"我们加的那几行"这一项在 Plan 组是**空集**。
+  ⚠ 本节第一版写的"`agents/react_agent.py:817` 与 `:927` 是我们加的行、是合并后唯一还活着的引用"**已作废**，
+  上面那行逐宿主计数是它的反证。
+- **`components/AnywhereChat/index.tsx`（fork 自建，`git cat-file -e e111ec6fb:` 失败 ⇒ 合并不会动它）已处理 = 刀 87**
+  （`54bb86bc8`，用户裁"跟着删，与裁决 2 一致"，代价 = 产品里不再有 Plan Mode）：摘掉 9 处用点、
+  净 −81 行（两枚 import、`PlanIcon`、`planEnabled` 与 `planPanelOpen` 两枚 state、`getPlanConfig` effect、
+  `/plan` 拦截、斜杠命令建议项、两枚依赖数组里的 `planEnabled`、工具栏按钮、`PlanPanel` 渲染）。
+  3,318 → 3,237 行，残留 `plan` 命中 0；簇文件一枚未动，留给合并删。
+  ⇒ 买掉的是合并后必然的编译断裂：`import { planApi }` 与 `import PlanPanel` 会指向上游静默删除的文件。
+- ⚠ 刀 87 **不减冲突数**：16 枚 modify/delete 里 plan 簇占 3 枚（`api/modules/plan.ts` +16/−7、
+  `components/PlanPanel/index.tsx` +13/−5、`app/routers/plan.py` +2 —— 也正是册里仅有的 3 枚 plan 文件），
+  它们照旧报 modify/delete，只是解法固定为"接受删除"、零手工。另 5 枚（`src/qwenpaw/plan/` 4 枚 +
+  `tests/integration/test_plan.py`）与分叉点逐字节相同 ⇒ delete/delete，不报冲突、静默消失。
+  `ReactAgentCard.tsx` 是 content 冲突（上游那份 plan 归零、我们那份 21 枚），解法同样是取上游字节。
+- ⚠ 闭包数口径更正：本节开头那句"真消费方只有 7 个"与刀 87 的复测不一致。按 import specifier 现数是
+  **8 枚**（py 5：`app/runner/runner.py`、`agents/react_agent.py`、`app/runner/command_dispatch.py`、
+  `app/routers/agent_scoped.py`、`app/routers/__init__.py`；ts 3：`pages/Chat/index.tsx`、
+  `pages/Agent/Config/components/ReactAgentCard.tsx`、`Chat/components/ChatActionGroup/index.tsx`），
+  外加 fork 自建的 `AnywhereChat`（本刀已摘净）⇒ **上表那行是现数，7 是旧口径读数**。
 
 16 枚 modify/delete 的在册行为行合计 **2,244 行**（占 15,990 的 14%），其中 `stateful_client.py`
 一枚占 1,086 ⇒ 后端两族（runner→chats、mcp→drivers）是重新安家，前端四组才是裁决面。
@@ -246,14 +261,16 @@ lock 走"取上游 + 重新生成"，剩下真正要逐块判的是这 12 枚（
 
 1. **合并形态 = 一次合到 `upstream/main` tip（`7147731d5`）**。不追 `v2.2.1`（它不是 `main` 的祖先，追它多一次合并）。
 2. **§4(c) 四组被上游整体删除的能力 = 跟着上游删**。
-   实测动作不是"删四个文件"：这些组的消费方**全是上游自有文件，且上游那份零引用**
-   ⇒ 每一处的动作 = 取上游字节 + 手删我们加的那几行，然后删我们的文件。
-   唯一例外是 fork 自建的 `components/AnywhereChat/index.tsx`（3,318 行，`planApi` + `PlanPanel` 五处用点）
-   ⇒ **这是裁决 2 没覆盖的一个子问题，要单独定**：给它换宿主（上游 `features/files-workspace` + `features/project-directory` 里有对应能力）还是把那五处用点摘掉。
+   实测动作不是"删四个文件"：这些组的消费方**绝大多数是上游自有文件，且上游那份对这些符号零引用**
+   ⇒ 每一处的动作 = 取上游字节，其中我们加过行的宿主再手删那几行，然后删我们的文件。
+   Plan 组的子裁决也已由用户裁下：**"跟着删（裁决 2 一致）"，代价 = 产品里不再有 Plan Mode**
+   ⇒ 落点 = 刀 87（`54bb86bc8`），只改 fork 自建的 `components/AnywhereChat/index.tsx`（9 处用点 / 净 −81 行），
+   簇文件与上游自有宿主一枚未动，全部留给合并。详见 §4(c)。
    三组有明确接替者（`pages/Files` + `features/files-workspace/FilesWorkspace.tsx`、
    `layouts/SidebarSessionList.tsx` + `components/SessionItem`、`Settings/Agents/components/AgentGallery.tsx`），
-   Plan 组**无任何接替者**（上游 tip 上 `src/qwenpaw/plan` 为空、无 `plan_router`、console 零 `plan` 命中，
-   只留 agent 侧的 `make_plan-{en,zh}/SKILL.md` 提示词）。
+   Plan 组**无接替者、但有三处壳**（`command_handler.py:1579 _process_plan` 桩 + `config/config.py:2069 PlanConfig`
+   无读者 + `chat.commands.plan.description` 零读者；实现路径 `src/qwenpaw/plan/`、`app/routers/plan.py`、
+   `api/modules/plan.ts`、`PlanPanel/` 在 tip 上都不存在，agent 侧只留 `make_plan-{en,zh}/SKILL.md` 提示词）。
 3. **`app/runner/` 上游不再保留的 12 枚 = 逐枚找上游新架构的接替者**（不做"整族留 fork 路径"）。
    结果见 §4(a) 的符号级接替表：12 枚全有下落，4 组同符号/同族搬家、4 枚上游重写需要把 fork 行为映射到新机制。
 4. **P1 账本 = 换新分叉点重立基线**：合并落地后 `DEFAULT_BASE_REF` 与
@@ -261,13 +278,21 @@ lock 走"取上游 + 重新生成"，剩下真正要逐块判的是这 12 枚（
 
 ### 刀序（合并前能做的，与只能在合并后做的）
 
-合并前（每做一枚就少一枚冲突，且都是 fork 侧独立可验的刀）：
+合并前（fork 侧独立可验的刀。⚠ 判据 105：**"少一枚冲突"不是这类刀的评价标准** —— 落在上游自有文件上的
+预防性改动不会减冲突，只会把合并的免费工作量重做一遍；合并前真正该手工摘的只有 fork 自建文件那一型）：
 
-1. **裁决 2 的前置刀：把四组能力的消费方引用清干净**（Plan、Workspace、ChatSessionDrawer、AgentTable）
-   —— 先从 AnywhereChat 那五处用点开始（它是唯一不是"取上游字节就能解决"的）。
-   落点：`api/modules/plan.ts`、`components/PlanPanel/`、`pages/Agent/Workspace/`、
-   `Chat/components/ChatSessionDrawer/`、`Settings/Agents/components/AgentTable.tsx` 五处的 import 与渲染点。
-   ⚠ 判据 91：这是"删上游一项能力"，在册记 `behavior_removed` 上涨，不等于减债。
+1. **裁决 2 的前置刀：合并前只需要手工摘 fork 自建那一枚消费方 —— 已完成（刀 87，`54bb86bc8`）**。
+   落点只有 `components/AnywhereChat/index.tsx`（fork 自建 ⇒ 合并不会动它，9 处用点 / 净 −81 行）。
+   其余候选落点（`api/modules/plan.ts`、`components/PlanPanel/`、`pages/Agent/Workspace/`、
+   `Chat/components/ChatSessionDrawer/`、`Settings/Agents/components/AgentTable.tsx`）**都是上游自有文件**
+   ⇒ 合并取上游字节就清空，开刀前先去改它们等于把合并的免费工作量做两遍（判据 105）。
+   刀 87 读数：前端 78 文件 / 491 用例全绿 rc=0、`pytest tests/unit` 3,433 passed / 5 skipped / 8 xfailed、
+   `tsc -b --force` 改前改后同 rc=0、五表现算逐键相同（146 keys / `totals.files` 145 / +13,742 −2,322 /
+   行为 144 / mechanical 1，判据 101 同口径）、CI 四道门禁全绿且 locale 串与刀 80/81 逐字相同
+   （2,977 gated / 11 模板族 / 2 豁免 / 1,459 overlay en+zh / 5 上游键豁免）。
+   ⚠ `AnywhereChat/index.tsx` 改前即 prettier 红（把 HEAD 字节复制进 `console/` 树内单测也 rc=1），
+   本刀一个 `--write` 都没跑（判据 63）。
+   ⚠ 判据 91 说"删上游一项能力"要记 `behavior_removed` 上涨 —— 本刀落在**册外文件**上，实测五表零响应。
 2. **§2 的 4 枚真断引用**（合并只会扩大它们，不会修）：
    `Coding/FileTree.module.less`、`Settings/Agents/components/SortableAgentRow.tsx`、
    `console/src/test/chat-mock.ts`、`agents/memory/adbpg_memory_manager.py`。
@@ -298,7 +323,11 @@ lock 走"取上游 + 重新生成"，剩下真正要逐块判的是这 12 枚（
 `npm install` 会产生什么差异没验；§2 的引用实测按"模块名/基名的字面出现"计数，
 动态 import 与字符串拼路径不在其中；**§4(a) 符号表只证明"上游有同名符号的宿主"，没证明
 它的行为合同与我们那份等价**（`query_error_resilience` 那一枚最需要这一步：上游有
-`call_with_overflow_recovery`，但它覆盖不覆盖已闭环 57 的全部情形，要在合并后用用例验）。
+`call_with_overflow_recovery`，但它覆盖不覆盖已闭环 57 的全部情形，要在合并后用用例验）；
+**`check_namespace_boundaries.py` 在本 worktree 里 `result: PASSED` 但同时打
+`warning: failed to read baseline ref 'qwenpaw_upstream_main'`** ⇒ 它这里没有基线可比，"绿"不等于
+命名边界成立（判据 92 那一型的又一次：一条读不到输入的门禁会静默存违规）。要它真跑需要上游远端 ref，
+也就是需要一次 `git fetch` 的授权。
 
 新判据：
 
@@ -311,6 +340,13 @@ lock 走"取上游 + 重新生成"，剩下真正要逐块判的是这 12 枚（
 - **判据 104（找接替者要用定义符号，文件名会误导）**：`app/runner/*` 的 12 枚里，
   `task_tracker.py` 的同名类在 `app/task_tracker.py`、`control_commands/*` 的同族在 `runtime/commands/control/`，
   而 `runner.py` 的 `class AgentRunner` 在上游 tip **零命中** —— 只看目录改名会漏掉"整枚被拆"这种形态。
+- **判据 105（"跟着上游删"要先按文件所有权分派，否则会重做合并的免费工作量）**：一组被上游删掉的能力，
+  它的消费方绝大多数和它同属上游 ⇒ 合并取上游字节就把它一起带走了，把这些落点列成"合并前的刀"
+  等于同一件事做两遍，还额外给册添噪声。真正需要合并前手工处理的只有一型：**fork 自建、上游看不见、
+  因而合并绝不会动的文件**。判归属用 `git cat-file -e <分叉点>:<path>`（失败 = fork 自建），
+  判"我们是否往上游宿主加过这项能力"用分叉点与 HEAD 的命中数对比 —— Plan 组七个上游宿主里六个相等
+  （40/40、65/65、2/2、2/2、11/11、21/21），只有 `command_dispatch.py` 是我们删的（14→11），
+  所以那一组一行都不用手工摘。
 
 相关账目：已闭环 84–86（判据 84/85/86 原文在 `2026-10-07-trial-merge-conflict-table.md`）、
 已闭环 40、46、56、57、75、79–81、83–86。
