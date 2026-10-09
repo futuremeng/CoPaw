@@ -35,11 +35,22 @@ def workspace():
         yield ws
 
 
-def test_registered_adbpg_backend_resolves(workspace):
-    from qwenpaw.agents.memory.adbpg_memory_manager import ADBPGMemoryManager
+def test_every_registered_backend_resolves(workspace):
+    """Registry contract: each registered name resolves to its own class.
 
-    workspace._config = _Config("adbpg")  # pylint: disable=W0212
-    assert _memory_descriptor(workspace).service_class(workspace) is ADBPGMemoryManager
+    Enumerated rather than hardcoded to one backend name, so the guard survives
+    the set of registered backends changing underneath it.
+    """
+    from qwenpaw.agents.memory.base_memory_manager import memory_registry
+
+    names = memory_registry.list_registered()
+    assert names
+    for name in names:
+        workspace._config = _Config(name)  # pylint: disable=W0212
+        assert (
+            _memory_descriptor(workspace).service_class(workspace)
+            is memory_registry.get(name)
+        )
 
 
 def test_remelight_backend_resolves(workspace):
