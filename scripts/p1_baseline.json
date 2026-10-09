@@ -881,6 +881,14 @@
       "naming": 0,
       "removed": 0
     },
+    "tests/unit/app/test_provider_startup_offload.py": {
+      "added": 10,
+      "behavior_added": 10,
+      "behavior_removed": 2,
+      "mechanical": false,
+      "naming": 0,
+      "removed": 2
+    },
     "tests/unit/config/test_config_utils.py": {
       "added": 60,
       "behavior_added": 60,
@@ -899,15 +907,15 @@
     }
   },
   "totals": {
-    "added": 10863,
-    "behavior_added": 10828,
-    "behavior_files": 110,
-    "behavior_removed": 495,
-    "files": 111,
+    "added": 10873,
+    "behavior_added": 10838,
+    "behavior_files": 111,
+    "behavior_removed": 497,
+    "files": 112,
     "mechanical_files": 1,
     "naming_files": 1,
     "naming_lines": 35,
     "naming_touched_files": 7,
-    "removed": 530
+    "removed": 532
   }
 }
