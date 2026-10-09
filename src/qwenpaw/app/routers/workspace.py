@@ -1292,7 +1292,7 @@ async def put_agent_language(
     if old_language != language:
         copied_files = copy_workspace_md_files(
             language,
-            str(workspace_dir),
+            workspace_dir,
             md_template_id=get_workspace_md_template_id(
                 agent_config.template_id
                 or ("qa" if agent_id == BUILTIN_QA_AGENT_ID else None),

@@ -16,6 +16,7 @@ slash-command menu — plus the pure secret-redaction helper.
 from __future__ import annotations
 
 import json
+from collections.abc import Iterator
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
@@ -45,6 +46,26 @@ def _agent(tmp_path: Path, **extra) -> SimpleNamespace:
 def _agent_resolver(agent) -> AsyncMock:
     """``get_agent_for_request`` stand-in returning *agent*."""
     return AsyncMock(return_value=agent)
+
+
+@pytest.fixture(autouse=True)
+def _fork_agent_resolution() -> Iterator[None]:
+    """Keep the fork's extra agent lookup on each test's own stand-in.
+
+    Upstream resolves an agent-surface request through one entry point,
+    ``get_agent_for_request``, which every test below patches. The fork
+    resolves through ``_resolve_workspace_target``, which first asks
+    ``get_loaded_agent_for_request`` whether a workspace is already loaded
+    (so a read never forces workspace startup) and only falls back to config
+    when nothing is. Handing back the same stand-in keeps both entry points
+    driven by the one object the test installed.
+    """
+
+    def loaded_agent(_request, **_kwargs):
+        return getattr(ws.get_agent_for_request, "return_value", None)
+
+    with patch.object(ws, "get_loaded_agent_for_request", loaded_agent):
+        yield
 
 
 def _md_entry(name: str, *, size: int = 3) -> dict:
@@ -1031,8 +1052,9 @@ async def test_upload_workspace_accepts_zip_content_types(
 ) -> None:
     extracted: list = []
 
-    def fake_extract(data: bytes, workspace_dir: Path) -> None:
+    def fake_extract(data: bytes, workspace_dir: Path) -> list[Path]:
         extracted.append((data, workspace_dir))
+        return []
 
     async def read_body() -> bytes:
         return b"ZIPBYTES"
