@@ -32,7 +32,13 @@ export default defineConfig({
       inline: [/@agentscope-ai\/(?!icons|chat|design)/],
     },
     alias: {
-      "@agentscope-ai/chat": path.resolve(__dirname, "src/test/chat-mock.ts"),
+      // Resolve the installed SDK, the way upstream's own vite.config does: the
+      // stand-in this line used to point at is retired upstream, so a merge
+      // deletes it while this file (fork-owned) survives.
+      "@agentscope-ai/chat": path.resolve(
+        __dirname,
+        "node_modules/@agentscope-ai/chat/lib/index.js",
+      ),
       "@agentscope-ai/chat/lib/AgentScopeRuntimeWebUI/core/AgentScopeRuntime/types.js": path.resolve(
         __dirname,
         "src/test/chat-runtime-types-mock.ts",
