@@ -673,9 +673,9 @@ brand verify（7 文件 / 35 行）。flake8 对两枚被改文件只剩一枚�
 | 1 | `test_agents_router.py::test_get_agent_returns_404_for_app_base_exception` | **生产侧**，不是解析层：合并后的 `agents.py` 把 `AppBaseException` 绑了两次（上游 `qwenpaw.exceptions` 在 `:19`、我们那行 `agentscope_runtime` 在 `:88`），**后写的赢** ⇒ 文件里 5 处 `except (ValueError, AppBaseException)` 抓的是第三方那枚类，上游的 404 合同在现网答 500 | 生产侧，刀 95 已修（见 8.11） |
 | 1 | `test_workspace_router.py::test_language_change_schedules_agent_reload`（上游自有、已在册 +99/−1） | 与 8.6 同型：`put_agent_language` 走 `_resolve_workspace_target`，替身 `MagicMock()` 的 `state.agent_id` 不在 `config.agents.profiles` 里 ⇒ 生产侧抛 404 | 测试侧桥，复用 8.9 那座夹具的形状 |
 
-⇒ 只有那 1 枚是生产侧、已由刀 95 结清；其余 14 枚是测试侧，代价 = **再动 2 枚上游自有用例文件**
-（`test_config_router.py`、`test_providers_active_openrouter.py`）+ 1 枚我们自己的文件。
-CI 选择集总量读数（104 → 理论 76，见 8.13 的推导）仍未在这棵树上重跑。
+⇒ 只有那 1 枚是生产侧、已由刀 95 结清；其余 14 枚是测试侧、已由刀 96 结清（见 8.14；代价 = 再动
+2 枚上游自有用例文件（`test_config_router.py`、`test_providers_active_openrouter.py`）+ 1 枚我们自己的文件）。
+CI 选择集总量读数也已在这棵树上重跑完（8.14），本节原先那句"仍未重跑"作废。
 
 ### 8.11 刀 95：自动合并造出的导入影子（8.10 里那唯一一枚生产侧）
 
@@ -762,17 +762,109 @@ mechanical 1 全部零动）。冲突面 **+0 枚**：`agents.py` 本就在册�
 
 ### 8.13 没量什么
 
-- **CI 选择集复跑未取**：刀 94 前该选择集 104 枚红，刀 94 结清 27、刀 95 结清 1 ⇒ 理论 **76**，但这是从两笔
-  局部读数推的，没有在这棵树上重跑过那条命令（判据 107：本机曾有另一棵树的 pytest 跑了 1h27m，负载依赖型红
-  无法归因）。原先本节写的"理论约 83"是更早一次估算的残留，已按 8.10 的实测枚数改到这里。
+- ~~**CI 选择集复跑未取**~~ —— 已由刀 96 结清：现数 **40 failed / 15,664 passed**，见 8.14。
+  原先这里写的"理论 76"（以及按 8.10 再减 14 得到的 62）都是推导值，与实测差 22 枚（判据 139）。
 - **真浏览器 `copaw app` 一笔仍欠**（混淆项：`QwenPew Desktop.app` 会写 `~/.copaw/config.json`）。
 - **144 枚 prettier 脏一个 `--write` 都没跑**（判据 63：预红文件不在本轮顺手格式化）。
 - `pip install "mcp<1.28"`（`unit-tests.yml:78`）能不能去掉未判：pin-free venv 用 mcp 1.30.0
   收集 15,725 / 0 error。
 
-相关账目：本节 = 已闭环 **95**（刀 94 = 8.9 那笔，裁决 (b) 的落地；刀 95 = 8.11 那笔，8.10 里唯一一枚生产侧）；
-判据 113–128 原文在本节 8.7、129–136 在 8.12（§1–§6 引用的 84–86、101–112 仍是
+### 8.14 刀 96：8.10 那 14 枚测试侧红全部结清（`c4db29af5` + 账 `c24891ac1`）
+
+**改了什么**：四枚用例文件、+122/−17 行，生产侧一枚未动。
+
+| 文件 | 落点 | 形状 |
+| --- | --- | --- |
+| `test_config_router.py`（上游逐字节相同 → 新增册宿主） | 4 枚 | 一枚模块 autouse 夹具把 fork 那两次查找（读盘的 `load_agent_config`、写侧镜像 `get_loaded_agent_for_request`）交回用例自己的替身；别的 agent id 一律落到真实现，桥因此越不过用例装的那枚 agent。404 那枚不装替身 |
+| `test_workspace_router.py`（已在册） | 1 枚 | 一枚 hunk：`get_agent_for_request` 换成 fork 真正 consult 的 `get_loaded_agent_for_request`，因此去掉 `AsyncMock` |
+| `test_providers_active_openrouter.py`（上游逐字节相同 → 新增册宿主） | 8 枚 | `_manager()` 的 provider 替身显式声明 `support_connection_check = False`（7 枚，钩子据此早退）；`test_effective_scope_prefers_agent_model` 桥一枚 `resolve_agent_id_for_request` |
+| `test_providers_router.py`（fork 自有，零冲突代价） | 1 枚 + 1 枚新增 | 那笔已经不存在的 `save_agent_config` monkeypatch 换成 `update_agent_config_async` 的 mutator 替身；新增一枚钉 `_preflight_model_slot` 的**拒绝**分支 |
+
+新增那枚不是顺手：`_preflight_model_slot` 是 fork 造的钩子，上游没有，全仓此前 **0 处**测它那条"provider 声明支持连接检查、且答模型已不在"的分支（上游用例的替身全部走早退）。它现在是这条钩子唯一的用点级守卫。
+
+**两态对照（判据 107，本机低负载时段）**：同一选择集 `tests/unit/app/routers/` + `tests/unit/app/test_agents_workspace_initialization.py` ——
+四枚文件退回 HEAD~1 字节 **14 failed / 1,361 passed / 53.75 s**；本笔字节 **0 failed / 1,376 passed / 98.37 s**。
++15 = 14 枚转绿 + 那枚新增用例，两态总数逐位对得上。⚠ 取数顺序按判据 136 记清：后者是在**尚未提交**的工作树上取的，
+提交后把字节退回 HEAD~1 再换回 HEAD（`git status` 现为空 ⇒ 与取读数时逐字节相同），并复跑 `tests/unit/app/routers/`
+单目录佐证 **1,374 passed / 88.29 s**。撤销那一步的前提与代价见判据 141。
+
+**证红（判据 67）**：把那枚 autouse 夹具临时改成 `autouse=False` ⇒ `3 failed / 65 passed`，红的正是
+`test_put_channels_saves_and_triggers_reload`、`test_get_onebot_channel_keeps_reverse_ws_fields`、
+`test_put_onebot_channel_stores_a_validated_model`；第 4 枚（404）不依赖夹具 ⇒ 它钉的是生产规则而不是替身。
+
+**CI 选择集第一次在这棵树上重跑**：`pytest tests/unit --ignore=tests/unit/channels` ⇒
+**40 failed / 15,664 passed / 27 skipped / 4 xfailed / 0 收集错误 / 1,120.83 s**。
+按落点（不是按根因）分组：`cli/test_cli_update.py` 11 + `cli/test_cli_update_overlay.py` 3 = 发布渠道 `pending`
+那簇；两枚 migration 文件 6；`test_multi_agent_manager_startup.py` 4；`test_provider_startup_offload.py` 2；
+其余 14 枚散在 10 枚文件：`test_acp_available_commands.py` 2、`test_desktop_cmd_exit_code.py` 2、
+`app/crons/test_manager.py` 2、`test_openai_stream_malformed_tool_use_compat.py` 2，
+`agents/test_fork_project.py`、`app/chats/test_query_error_dump.py`、`app/crons/test_heartbeat.py`、
+`test_shutdown_lifecycle.py`、`test_shutdown_deadline_integration.py`、`test_retry_chat_model.py` 各 1。
+**这 40 枚与本笔无关的直接证据**：把 16 枚落点文件单取一集（不含本笔任何被改文件）跑，
+仍 **40 failed / 333 passed** ⇒ 不是夹具泄漏，也不是顺序污染。
+
+**顺带量到两笔新的生产侧断点（都未在本笔修，见本节末）**：
+① `service_manager._run_post_init` 现以三参调用 `post_init(workspace, service, publish_service)`
+（`src/qwenpaw/app/workspace/service_manager.py:436`），同宿主文件里的姊妹工厂 `create_driver_config_watcher`
+已是新合同；我们那枚 `create_project_knowledge_watcher(ws, _)`（`service_factories.py:341`）仍收两参、
+且自己往 `ws._service_manager.services` 里写 ⇒ 每次 workspace 启动抛
+`TypeError: create_project_knowledge_watcher() takes 2 positional arguments but 3 were given`（这次 CI 集日志里
+现数 4 次启动、每次两种渲染各一行）。**现网后果是那台 project-knowledge watcher 从不运行**。它**不是**上面
+那 10 枚 startup/migration 红（6 + 4）的已证根因 —— 那 10 枚的断言各不相同，未逐枚取栈（判据 134 仍欠着）。
+② `test_provider_startup_offload.py` 那 2 枚的签名是
+`AttributeError: qwenpaw.app._app has no attribute 'ensure_qa_agent_exists'` —— 用例钉的名字在合并后的 `_app.py`
+里已不存在，是判据 111 那一型（上游搬家、我们用点幸存）。
+
+**账**：P1 109 → **111 文件 / +10,861 −530**，行为 **110 文件 / +10,826 invasive / −495 deleted**，
+命名 1·7·35 与 mechanical 1 零动。新增两枚宿主 = `test_config_router.py`（+50/−8）、
+`test_providers_active_openrouter.py`（+15/−0）；`test_workspace_router.py` 从 +99/−1 涨到 **+104/−3**；
+`test_providers_router.py` 是 fork 自有、不入册。**冲突面 +2 枚** —— 裁决 (b) 的第二次付费，
+两枚都是纯测试侧冲突（未来合并不涉及行为语义争抢）。
+L1 硬门禁五目录 **1,336 passed / 1 skipped / 0 failed**。导入影子守卫（刀 95 那枚）**4 passed**。
+flake8 对四枚被改文件 **零新增**：7 条与 HEAD 逐条同名（`E501`×6 + `W292`×1），只是行号位移。
+其余四道离线门禁读数与刀 94/95 逐字相同（locale split 4,658 gated / 59 模板族 / 7 豁免 / 1,459 overlay 叶 /
+23 上游键豁免 · release channel R1–R5 over 6 files · CI targets 16 命令 / 3 目录 · brand 7 文件 / 35 行）。
+全量 `tests/unit`（含 CI 一直 ignore 的 channels）在这棵树上另取一次：**40 failed / 17,683 passed /
+28 skipped / 4 xfailed** ⇒ channels 那 2,019 枚仍 0 红，40 枚与 CI 集逐枚同名。
+
+**申报一处削弱（判据 131 第二次适用）**：那 3 枚依赖夹具的用例从此只证明"路由把配置交给它问的那两次查找"，
+不再证明"读盘 + 写盘的往返"。补这个缺口的不是我新加的用例，而是上游自有的集成测试
+`tests/integration/test_channels_config.py`、`tests/integration/test_config_router.py`、
+`tests/integration/test_onebot_reverse_ws.py`（三枚都在分叉点在册）—— 它们打真服务器走这些端点，
+本轮没跑（要联网环境，见 8.4 那一类）。
+
+### 8.15 本笔新增判据 137–141
+
+- **137（桥与被桥用例打同名属性时必须共用一套撤销栈）**：本笔实测踩中 —— autouse 夹具用 `mock.patch`
+  上下文管理器打 `qwenpaw.config.config.load_agent_config`，而同文件那枚 heartbeat 用例用
+  `monkeypatch.setattr` 打同一名字。两套撤销栈互相看不见，装与卸的顺序不由"谁后装"决定；结果是夹具那套
+  活过自己的模块，把 404 漏给隔壁 `test_tools_router_web_search_config.py` 的 6 枚不相干用例
+  （`HTTPException: 404: Tool 'web_search' not found`，且 `agent_config` 是那枚 `MagicMock name='AgentConfig'`）。
+  诊断两步就够：先 `-k "not <嫌疑用例>"` 二分投毒者（80 passed / 3 deselected），再拿一枚临时插件打印
+  `repr(模块.属性)` 坐实"泄漏的是绑定不是缓存"。修法是把桥整个交给 `monkeypatch`（同一条 `_setattr` LIFO）。
+- **138（能给生产规则就别给桥）**：同一簇 4 枚红只有 3 枚需要桥；第 4 枚改成什么都不 patch、
+  用不在 `config.agents.profiles` 里的 agent id 打端点 ⇒ 它从"替身被调用"升级为"fork 的解析规则本身"。
+  桥的枚数是上界不是下界，逐枚问一遍"这条能不能不靠替身钉住"。
+- **139（红数只能跑出来，不能减出来）**：8.13 的"理论 76"、按 8.10 再减 14 的 62、以及本笔实跑的 40 三者对不上。
+  差额不可归因（8.5 那次 104 的簇表把后来被别的刀顺手结清的红也计在内，而结清时没往回扣）。
+  真正的问题不是数字不准，是那句推导**被写成了一句看起来像结论的话**并被账目引用。
+- **140（一集红按落点分组，不等于按根因分组）**：本笔先按"文件枚数"报了 40，再取两枚的报错签名才发现
+  其中 2 枚是 `_app` 符号搬家、另有 4 次启动日志是同一枚 TypeError —— 若停在枚数层，那台从不运行的 watcher
+  就藏在"startup/migration 10 枚"这一行里。判据 134 说按枚取栈，这条补它的另一半：**取了栈也别反过来把
+  同宿主的枚并成一个根因**，那 10 枚的断言各不相同，未证。
+- **141（`git checkout <ref> -- 路径` 在"内容已提交"前提下才是安全的探针撤销）**：那条禁用 checkout 的规则
+  成因是未提交工作会被吞；本笔先把内容提交、再退回 HEAD~1 字节取"改前"读数，工作树与 HEAD 逐字节相等，
+  于是 checkout 是最短且可验证（`git status` 空）的撤法。写清前提，否则下笔要么误用、要么该用时绕远路。
+
+**待办（本笔新登记，不在刀序里）**：① 上面那枚两参工厂 `create_project_knowledge_watcher`（生产侧，
+一行签名 + 改 `publish(watcher)`，配一枚真起 workspace 的用例）；② `_app.ensure_qa_agent_exists` 的
+符号搬家 2 枚；③ 发布渠道 `pending` 那 14 枚要等阶段 2 的 PyPI/Docker 真上线才结，不是测试侧的账。
+
+相关账目：本节 = 已闭环 **96**（刀 94 = 8.9 那笔，裁决 (b) 的落地；刀 95 = 8.11 那笔，8.10 里唯一一枚生产侧；
+刀 96 = 8.14 那笔，8.10 里其余 14 枚测试侧）；
+判据 113–128 原文在本节 8.7、129–136 在 8.12、137–141 在 8.15（§1–§6 引用的 84–86、101–112 仍是
 `2026-10-07-trial-merge-conflict-table.md` 与本文前七节的口径）。
+
 
 **待裁（本笔新登记，不在刀序里）**：`SkillPoolService` / `get_workspace_skills_dir` 那对影子 —— 现网跑的是我们
 保留的 `agents/skills_manager.py` 那份（14/15 方法体与上游 `agents/skill_system/` 不同，上游另多 4 枚自动化/改名
