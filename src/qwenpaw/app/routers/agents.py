@@ -85,9 +85,6 @@ from fastapi import (
 )
 from pydantic import BaseModel, Field, field_validator
 from starlette.responses import FileResponse
-from agentscope_runtime.engine.schemas.exception import (
-    AppBaseException,
-)
 from ...agents.skill_system.hub import install_skill_from_hub
 from ...agents.skills_manager import SkillConflictError
 from ..utils import schedule_agent_reload
