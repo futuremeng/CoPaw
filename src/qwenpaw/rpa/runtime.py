@@ -53,7 +53,12 @@ def _run_async(coro: Any) -> Any:
 
 def invoke_browser_use(action: str, **kwargs: Any) -> dict[str, Any]:
     """Invoke browser_use and return parsed JSON response."""
-    from ..agents.tools.browser_control import browser_use
+    # Upstream moved the action-based tool under ``deprecated_browser/`` and
+    # ``agents.tools`` now re-exports whichever track its experimental flag
+    # selects, so import the stable module directly to keep this signature.
+    from ..agents.tools.deprecated_browser.browser_control import (
+        browser as browser_use,
+    )
 
     response = _run_async(browser_use(action=action, **kwargs))
     raw = _extract_text_from_tool_response(response).strip()
