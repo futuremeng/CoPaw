@@ -52,7 +52,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.10", "3.13"]
+        python-version: ["3.11", "3.13"]
 
     steps:
       - uses: actions/checkout@v4
@@ -78,19 +78,19 @@ jobs:
           pip install "mcp<1.28"
 
       - name: Check namespace boundaries (gate)
-        if: matrix.python-version == '3.10'
+        if: matrix.python-version == '3.11'
         run: |
-          git fetch --depth=1 https://github.com/agentscope-ai/QwenPaw.git main:qwenpaw_upstream_main || true
+          git fetch --depth=1 https://github.com/agentscope-ai/CoPaw.git main:qwenpaw_upstream_main || true
           python scripts/check_namespace_boundaries.py --upstream-ref qwenpaw_upstream_main
 
       - name: Check P1 invariants (gate)
-        if: matrix.python-version == '3.10'
+        if: matrix.python-version == '3.11'
         run: |
           python scripts/check_p1_invariants.py --check
           python scripts/copaw_brand.py verify
 
       - name: Release channel consistency (gate)
-        if: matrix.python-version == '3.10'
+        if: matrix.python-version == '3.11'
         run: python scripts/check_release_channel_consistency.py
 
       - name: Run all unit tests (informational — pre-existing failures tolerated)

@@ -1,27 +1,9 @@
 {
-  "base_ref": "e111ec6fb",
+  "base_ref": "ddd8408eb",
   "source_ref": "working",
-  "files": 9,
-  "lines": 37,
+  "files": 7,
+  "lines": 35,
   "entries": [
-    {
-      "path": "console/index.html",
-      "pairs": [
-        {
-          "old": "    <title>QwenPaw Console</title>",
-          "new": "    <title>CoPaw Console</title>"
-        }
-      ]
-    },
-    {
-      "path": "console/src/layouts/Header.tsx",
-      "pairs": [
-        {
-          "old": "            alt=\"QwenPaw\"",
-          "new": "            alt=\"CoPaw\""
-        }
-      ]
-    },
     {
       "path": "console/src/layouts/constants.ts",
       "pairs": [
