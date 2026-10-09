@@ -78,9 +78,12 @@ async def test_language_change_schedules_agent_reload(tmp_path):
     )
 
     with (
+        # The fork resolves the target through a lookup that never forces
+        # workspace startup, so this is the entry the route consults;
+        # upstream's ``get_agent_for_request`` is no longer on the path.
         patch(
-            "qwenpaw.app.routers.workspace.get_agent_for_request",
-            AsyncMock(return_value=workspace),
+            "qwenpaw.app.routers.workspace.get_loaded_agent_for_request",
+            return_value=workspace,
         ),
         patch(
             "qwenpaw.app.routers.workspace.load_agent_config",

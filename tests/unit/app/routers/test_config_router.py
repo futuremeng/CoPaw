@@ -13,7 +13,7 @@ errors.  Covers:
 - ``GET /config/security/tool-guard`` — happy path
 - ``PUT /config/security/tool-guard`` — happy path + engine reload
 - 422 on a malformed PUT body
-- 404 propagated from ``get_agent_for_request``
+- 404 propagated from the agent lookup the endpoint starts with
 """
 
 # pylint: disable=protected-access,redefined-outer-name,unused-argument
@@ -38,6 +38,7 @@ from qwenpaw.config.config import (
     TelegramConfig,
     ThemeConfig,
     ToolGuardConfig,
+    load_agent_config,
 )
 from qwenpaw.constant import (
     HEARTBEAT_FILE,
@@ -104,6 +105,43 @@ def patch_get_agent(fake_agent_workspace):
         yield patched
 
 
+@pytest.fixture(autouse=True)
+def patch_fork_agent_config(fake_agent_workspace, monkeypatch):
+    """Keep the fork's disk-based channel lookup on each test's stand-in.
+
+    Upstream reads and writes channel configs through
+    ``get_agent_for_request``, which every channel test below patches. The
+    fork resolved the four channel endpoints through
+    ``resolve_agent_id_for_request`` + ``load_agent_config`` instead, so a
+    config read never waits for workspace startup, and it mirrors a write
+    into a workspace that happens to be loaded already. Handing both
+    fork-side lookups the same stand-in keeps one object per test and moves
+    no call site. Any other agent id falls through to the real
+    implementation, so the bridge cannot reach past the agent the test
+    installed.
+
+    ``monkeypatch`` rather than ``mock.patch`` because one test below
+    replaces the same ``load_agent_config`` name through its own
+    ``monkeypatch``; sharing the undo stack keeps the two restorations in
+    order instead of leaving this one installed for the rest of the session.
+    """
+    real_load_agent_config = load_agent_config
+
+    def _load(agent_id, *args, **kwargs):
+        if agent_id == fake_agent_workspace.agent_id:
+            return fake_agent_workspace.config
+        return real_load_agent_config(agent_id, *args, **kwargs)
+
+    monkeypatch.setattr(
+        "qwenpaw.config.config.load_agent_config",
+        _load,
+    )
+    monkeypatch.setattr(
+        "qwenpaw.app.agent_context.get_loaded_agent_for_request",
+        lambda _request, **_kwargs: fake_agent_workspace,
+    )
+
+
 # ---------------------------------------------------------------------------
 # /config/channels/types — pure list, no deps
 # ---------------------------------------------------------------------------
@@ -139,13 +177,17 @@ def test_list_channels_returns_dict_with_isBuiltin_flag(
 
 
 def test_list_channels_404_when_agent_lookup_fails(client):
-    with patch(
-        "qwenpaw.app.agent_context.get_agent_for_request",
-        new=AsyncMock(
-            side_effect=HTTPException(status_code=404, detail="nope"),
-        ),
-    ):
-        response = client.get("/api/config/channels")
+    """An unknown agent still answers 404.
+
+    Upstream raised from ``get_agent_for_request``; the fork raises the
+    same 404 one step earlier, while resolving the agent id, which is what
+    keeps a config read from waiting on workspace startup. Nothing is
+    patched here, so the fork's real resolution rule is what is pinned.
+    """
+    response = client.get(
+        "/api/config/channels",
+        headers={"X-Agent-Id": "agent-absent-from-config"},
+    )
 
     assert response.status_code == 404
 

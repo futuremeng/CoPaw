@@ -1,9 +1,10 @@
 # -*- coding: utf-8 -*-
 
 from types import SimpleNamespace
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock
 
-from fastapi import FastAPI
+import pytest
+from fastapi import FastAPI, HTTPException
 from fastapi.testclient import TestClient
 
 from qwenpaw.app.routers import providers as providers_router_module
@@ -76,14 +77,19 @@ def test_set_active_model_agent_scope_uses_agent_context(monkeypatch):
 
     saved = {}
 
-    def _fake_save_agent_config(agent_id, config):
+    async def _fake_update_agent_config(agent_id, mutator):
+        agent_config = SimpleNamespace(
+            agent_id=agent_id,
+            active_model=None,
+        )
+        mutator(agent_config)
         saved["agent_id"] = agent_id
-        saved["config"] = config
+        saved["config"] = agent_config
 
     monkeypatch.setattr(
         providers_router_module,
-        "save_agent_config",
-        _fake_save_agent_config,
+        "update_agent_config_async",
+        _fake_update_agent_config,
     )
 
     scheduled = {}
@@ -101,6 +107,8 @@ def test_set_active_model_agent_scope_uses_agent_context(monkeypatch):
     manager = MagicMock()
     manager.get_provider.return_value = SimpleNamespace(
         has_model=lambda model_id: True,
+        get_model_info=lambda model_id: None,
+        get_context_size=lambda model_id: None,
         support_connection_check=False,
     )
     manager.maybe_probe_multimodal.return_value = None
@@ -131,3 +139,40 @@ def test_set_active_model_agent_scope_uses_agent_context(monkeypatch):
         "dashscope",
         "qwen-plus",
     )
+
+
+async def test_set_active_model_probes_checkable_provider_before_activating():
+    """The fork probes before saving, so an unreachable model never lands.
+
+    Upstream-owned activation cases declare the provider uncheckable, which
+    makes the hook return early; this pins the other branch -- a provider that
+    does advertise the connection check and answers that the model is gone.
+    """
+    manager = MagicMock()
+    provider = MagicMock()
+    provider.has_model.return_value = True
+    provider.get_model_info.return_value = None
+    provider.support_connection_check = True
+    provider.check_model_connection = AsyncMock(
+        return_value=(False, "model is gone"),
+    )
+    manager.get_provider.return_value = provider
+    manager.activate_model = AsyncMock()
+
+    with pytest.raises(HTTPException) as exc_info:
+        await providers_router_module.set_active_model(
+            request=MagicMock(),
+            manager=manager,
+            body=providers_router_module.ModelSlotRequest(
+                provider_id="dashscope",
+                model="qwen-plus",
+                scope="global",
+            ),
+        )
+
+    assert exc_info.value.status_code == 400
+    assert "model is gone" in exc_info.value.detail
+    provider.check_model_connection.assert_awaited_once_with(
+        model_id="qwen-plus",
+    )
+    manager.activate_model.assert_not_called()

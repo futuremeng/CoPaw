@@ -552,6 +552,15 @@ class TestGetActiveModels:
             "get_agent_for_request",
             AsyncMock(return_value=workspace),
         )
+        # The fork reads the effective scope's agent from
+        # resolve_agent_id_for_request(request) instead of from the resolved
+        # workspace, so the bridge hands it the agent id of the workspace this
+        # case already installed.
+        monkeypatch.setattr(
+            providers_mod,
+            "resolve_agent_id_for_request",
+            lambda request: workspace.agent_id,
+        )
         monkeypatch.setattr(
             providers_mod,
             "load_agent_config",
@@ -627,6 +636,12 @@ class TestSetActiveModel:
         provider = MagicMock()
         provider.has_model.return_value = True
         provider.get_model_info.return_value = None
+        # The fork's activation path runs _preflight_model_slot before
+        # activate_model, which awaits provider.check_model_connection only for
+        # providers that advertise the capability. These cases are about the
+        # slot contract, not about probing, so the double declares the provider
+        # uncheckable and the hook returns early.
+        provider.support_connection_check = False
         manager.get_provider.return_value = provider
         manager.get_active_model.return_value = ModelSlotConfig(
             provider_id="p",
