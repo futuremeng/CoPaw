@@ -722,8 +722,8 @@
       "removed": 54
     },
     "src/qwenpaw/app/workspace/service_factories.py": {
-      "added": 14,
-      "behavior_added": 14,
+      "added": 16,
+      "behavior_added": 16,
       "behavior_removed": 0,
       "mechanical": false,
       "naming": 0,
@@ -899,8 +899,8 @@
     }
   },
   "totals": {
-    "added": 10861,
-    "behavior_added": 10826,
+    "added": 10863,
+    "behavior_added": 10828,
     "behavior_files": 110,
     "behavior_removed": 495,
     "files": 111,
