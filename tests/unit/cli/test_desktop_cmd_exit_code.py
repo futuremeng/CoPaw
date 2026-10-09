@@ -70,7 +70,11 @@ def _patch_desktop(
         lambda: [],
     )
     monkeypatch.setattr(
-        desktop_cmd_module, "_find_free_port", lambda *_a: 5599
+        desktop_cmd_module,
+        # Upstream replaced the free-port probe with a helper that also hands
+        # back the socket it keeps open until the backend spawns.
+        "get_stable_port",
+        lambda *_a: (5599, None),
     )
     monkeypatch.setattr(
         desktop_cmd_module, "_wait_for_http", lambda *_a, **_k: ready
