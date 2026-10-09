@@ -1,4 +1,4 @@
-# 追上游实施跑道（2026-10-08 刷新）
+# 追上游实施跑道（2026-10-08 刷新；§8 = 2026-10-09 合并落地后的账）
 
 **目的**：把"合并 upstream 最新进展"这条路的最短走法量化到可以直接开工的粒度。
 本文全部为 2026-10-08 现算，不是引用 2026-10-07 那张表的读数（对照处会写明旧值）。
@@ -14,6 +14,10 @@
 **§2 的例外**：那一节在刀 87/88/89 之后（`HEAD = 358f0e7ba`）按 import specifier 重算并改写过一次，
 其余各节仍是 `1b946c05d` 的读数 ⇒ §1 的冲突总量与 §3 的权重没有随 87/88/89 重算（这三笔全落在
 fork 自建文件上，一枚上游宿主都没碰，重算只会把"落后/领先"两行往上推）。
+
+**§8 的例外**：那一节是**合并之后**的账（`HEAD = 2f85a4e06`，2026-10-09），分叉点已从 `e111ec6fb`
+换轨到 `ddd8408eb` ⇒ §1 的 117 枚冲突、§3 的权重分布与 §8 的新基线读数**不在同一口径下可比**，
+不是"数字变了"而是"量的东西换了"（判据 125）。§1–§7 保留原状，作为合并前的决策依据。
 
 ---
 
@@ -461,3 +465,169 @@ lock 走"取上游 + 重新生成"，剩下真正要逐块判的是这 12 枚（
 已闭环 40、46、56、57、75、79–81、83–86、**87（`54bb86bc8` AnywhereChat 摘 plan 用点）、
 88（`ae732975e` 测试 alias → 已安装 SDK）、89（`358f0e7ba` 后端注册表用例改枚举）、
 90（本节 §6 第 3 项结清：MCP 两笔的接替者与合同分歧，判据 111/112）**。
+
+---
+
+## 8. 合并已落地（2026-10-09）：分叉点换轨、12 笔修复、五类读数
+
+**取数基线**：`HEAD = 2f85a4e06`，分支 `sync/upstream-20261009`（基点 `wp/integration`），
+worktree `/Users/futuremeng/github/futuremeng/CoPaw-sync-upstream`。
+**已推 `origin/sync/upstream-20261009`**（本地与远端逐位相等），**未开 PR**，**`main` 未动**。
+
+### 8.1 合并本身
+
+合并提交 `0172730bd`，第一父 `5d5c0d572`（§6 刀序的最后一笔），第二父 = 上游 tip `ddd8408eb`。
+四项裁决（§6）全部按原样落地：一次合到 tip、跟着上游删、按定义符号找接替者、换新分叉点重立基线。
+
+**分叉点自此变更：`e111ec6fb` → `ddd8408eb`。** `scripts/check_p1_invariants.py:32 DEFAULT_BASE_REF`
+已改；`copaw_brand.json` 与 `p1_baseline.json` 由现跑 `--target-ref working` 重生成（不手改）。
+任何还在拿 `e111ec6fb` 当基线的读数都是过期口径，包括本文 §1 与 §3。
+
+一处合并意外：**干净自动合并会把两边并成比双方都大的文件**。`app/routers/agents.py` 分叉点 600 行、
+我们 4,325 行、上游 2,154 行，自动合并产出 **5,941 行且零冲突**。合并后专门查了重复 `def` 与重复
+route（`sort | uniq -d` 两项皆空），但语义等价性没法离线验 ⇒ 判据 113。
+
+### 8.2 合并后的 12 笔修复
+
+| 提交 | 做什么 | 账目代价 |
+| --- | --- | --- |
+| `9c2f21020` | P1 账册在新分叉点重立基线 | 见 8.3 |
+| `2cd093a5e` | locale 门禁的语言注册扫描跟着上游搬到 `constants/languageList.tsx`，并按调用点作者重新推豁免 | 判据 115/116 |
+| `1a616ca41` | rpa：我们的 browser tool import 跟随上游搬家进 `deprecated_browser/` | fork 自有文件 |
+| `9e697987f` | desktop 用例改钉它真正调用的 `get_stable_port` | fork 自有文件 |
+| `796c48db5` | 退掉钉 `app/runner/*`（上游整族删除）的 fork 守卫，**35 条** | 裁决 2 + 判据 109/114 |
+| `9ffe804a5` | 退掉钉 `app/mcp/{manager,stateful_client}.py` 的 fork 守卫，**16 条 / 4 枚文件** | 同上 |
+| `7db324f44` | MCP probe-status 端点按裁决"在上游驱动层重建"＋ 5 条用例重指 | **一枚上游自有文件都没动 ⇒ 冲突面零增长** |
+| `e195c60c6` | `unit-tests.yml` 改装 `".[dev,test]"` | 判据 120 |
+| `00e1fd423` | `npm install` 重生成 `console/package-lock.json` | 判据 117 |
+| `d25fdd255` | 配套把锁文件登记为 mechanical 在册行 | mechanical 0 → **1** |
+| `399c79996` | autouse 配置隔离夹具的落点搬出用例自己的 `tmp_path`，守卫用例改按 `getbasetemp()` 断言 | 判据 124 |
+| `2f85a4e06` | 21 条双替身断言改成 agentscope 2.x 的对象形状（5 枚 fork 自有文件 / 25 处） | 判据 127/128 |
+
+`7db324f44` 有一处**与旧行为明示不同**：旧 docstring 承诺"reconnecting it when it is not connected"，
+新的 `DriverManager.refresh_driver` 只在保存的 card 变了才重载 ⇒ **不再强制重连已掉线的客户端**
+（更重的公开替代是 `reload_driver`）。这是裁决 3 找接替者时量到的合同分歧（判据 112 那一型），
+不是漏掉的 bug。
+
+### 8.3 新基线读数
+
+现数（`--target-ref working --json`，`d25fdd255` 之后）：
+
+**108 文件 / +10,771 −519 / 行为 107 文件 / 命名 1·7·35 / mechanical 1**
+
+对照旧口径（`e111ec6fb` 基线，刀 83 之后）：145 文件 / +13,742 −2,322。**降幅全部来自分叉点换轨**
+—— 上一轮我们相对 `e111ec6fb` 的入侵行里，有一大半已经被上游自己吸收或重写了；这不是"还掉的真债"，
+是量尺换了（判据 125）。
+
+⚠ `console/package-lock.json` 在上游存在 ⇒ 是 upstream-owned，任何一次 `npm install` 重生成都会让
+`--check` 报 `NEW upstream-owned file touched` ⇒ **每把重生成锁的刀固定配一笔重立基线**（判据 117）。
+`totals.files = behavior 107 + naming 1`，机械行不计入文件数（判据 101）。
+
+### 8.4 环境（读数解锁的前提）
+
+合并后 `pyproject.toml` = `>=3.11,<3.14` + `agentscope[model-ollama]==2.0.9` ⇒ 共用 venv
+（py3.10.20 + agentscope 1.0.20）对本 worktree **不可用**，系统 python 3.14.4 又超上限。
+专用 venv `/tmp/copaw312`（py3.12.11 + agentscope 2.0.9 + mcp 1.30.0 + pytest 9.1.1，
+`uv pip install -e ".[dev,test]"`）是**唯一被授权**的验证环境；不要往共用 venv 里 `pip install -e .`。
+`agentscope-runtime 1.1.6.post2` 是手动补装的（判据 122：上游打包缺口，未改仓库）。
+
+`console/node_modules` 已装，`npm ci --dry-run` 无 EUSAGE。
+能离线取的 5 道门禁全绿：locale split（4,658 gated / 59 模板族 / 7 豁免 / 1,459 overlay 叶 / 23 上游键豁免）
+· P1 `--check` · brand verify（7 文件 / 35 行）· release channel R1–R5 · CI command targets（16 命令 / 3 目录）。
+
+### 8.5 五类读数（2026-10-09，`/tmp/copaw312` + `console/node_modules` 现取）
+
+| 读数 | 现数 |
+| --- | --- |
+| CI 那步 `tests/unit --ignore=tests/unit/channels` | **104 failed / 15,595 passed / 27 skipped / 4 xfailed / 0 collection error / 1,216.64 s** |
+| CI 一直 ignore 的 `tests/unit/channels` | **2,019 passed / 1 skipped / 0 failed / 123 s** ⇒ 全 `tests/unit` = **17,750 用例** |
+| CI 唯一 must-pass 那步（L1 硬门禁 5 目录） | **1,336 passed / 1 skipped / 0 failed / 29 s** ⇒ 必过门是绿的，104 条红落在 `continue-on-error: true` 那步 |
+| `console` `test:run` 全量 | **528 files / 4,826 tests ⇒ 22 files / 32 tests 红**，889 s |
+| `tsc -b --force` | exit 2、**19 errors / 12 files** |
+| prettier `--check` | **144 枚脏**，逐枚归属 **0 枚与上游逐字节相同**（134 fork 自有 + 10 fork 改动）；全仓无 workflow 跑它 ⇒ 本地口径（判据 126） |
+
+104 条按**测试文件作者**分：UPSTREAM_UNCHANGED 15 枚文件 / 67 条 · FORK_ONLY 10 / 30 ·
+FORK_MODIFIED 4 / 5。簇：最大 27 条（见 8.6）、~~21 条 `'TextBlock' object is not subscriptable`~~
+已由 `2f85a4e06` 结清（21 passed / 1 xfailed）、14 条 `qwenpaw update`（11 上游自有 + 3 我们的 overlay 守卫）、
+9 条 providers、6 条负载依赖、其余零散。
+
+vitest 32 条红分：7 条超时（6×20,000 ms + 1×15,000 ms，用例耗时 14,449–25,079 ms ⇒ 判据 107 那一型）、
+5 条 `open_external_link` spy 参数（上游自有）、6 条 `@agentscope-ai/chat/lib/…` 深层路径（fork 自有，
+判据 108 那一型）、`i18n.test.ts`（上游自有）报我们的 **overlay 命名空间漏进了上游对资源表的精确断言**、
+`/copaw-icon.svg` vs `/online.svg` 是品牌覆盖撞上游用例。
+
+### 8.6 三簇合并砍掉的宿主：两簇已清，一簇待裁
+
+`src/qwenpaw/app/runner/`（23 枚文件）与 `src/qwenpaw/app/mcp/{manager,stateful_client}.py` 整族被上游删除，
+我们对它们的在册改动**没有**重放到接替宿主（实测 `AgentRunner`、`MCPClientManager`、
+`_truncate/_compact/_paginate_chat_history_messages`、`normalize_in_memory_memory_state` 等 11+ 枚符号
+在 `src/` 零命中）。悬空引用实测：`tests/` 25 处 / 9 枚文件（8 枚 fork 自建、1 枚上游自有自带
+`importorskip`）；`src/` **不是 0 处，是 1 处** —— `app/routers/mcp_runtime_status.py:15`
+引用了上游删掉的 `_build_client_info`，而这枚宿主由 `app/routers/__init__.py` 注册 ⇒ 一次踩出
+**56 条 collection error**。`7db324f44` 修掉后收集数 = **15,725 / 0 error**。
+
+**唯一需要用户裁决的一笔 = 那 27 条**。`tests/unit/app/routers/test_workspace_router_agent_surface.py`
+与上游 tip 逐字节相同、27 条全红（判据 123 的实测型），根因是 fork 自有 helper
+`src/qwenpaw/app/routers/workspace.py:2352 _resolve_workspace_target` 走
+`get_loaded_agent_for_request` / `resolve_agent_id_for_request` 读 `request.state`，绕开了上游 tip 同文件
+`:195` 的 `await get_agent_for_request(request)`；上游用例打的是后者的替身、并传 `SimpleNamespace()`
+当 request ⇒ 生产侧 `AttributeError` 被路由自己的 `except Exception` 吞成 500。
+**价签**：这笔在册 +96/−54 的侵入 = 27 条上游用例。
+两条路：(a) 把 helper 收回上游的 `get_agent_for_request` 合同（减侵入，代价是要重放我们靠它做的事）；
+(b) 改上游那枚用例（冲突面 +1 枚文件，性质是"为绿而改上游测试"）。
+
+### 8.7 本笔新增判据 113–128
+
+- **113（干净自动合并会把两边并成比双方都大的文件）**：见 8.1。大宿主合并后要专门查重复定义与重复注册，
+  而"零冲突"不等于"语义正确"。
+- **114（"跟着上游删"会把 fork 自建的守卫用例留在原地）**：宿主删了，钉它的测试不会冲突、只会变
+  collection error ⇒ 接受 modify/delete 的同一笔里就要跑一遍 import 解析。补测：字符串型 patch 目标
+  （`patch("a.b.C.d")`）不会有 import，要单独扫；扫出来先问"定义体在哪枚文件"、再问"这条用例是不是本来就
+  skip"。合并后字符串目标净新增悬空 = 0。
+- **115（fork 写的门禁若按正则读上游文件的"形状"，上游一搬家就把上游整包报成缺文案）**：locale 门禁在
+  `LanguageSwitcher/index.tsx` 抓 `key: "<lang>"`，上游把表搬进 `constants/languageList.tsx` ⇒ 一门语言都
+  "没注册"，一次红 59 条。修法要保留"两处都没有才算缺"。
+- **116（同步后的门禁红先按调用点作者归属，再按文案归属）**：24 枚缺键里 23 枚、8 个模板族里 6 个都在
+  上游自己写的行上；补我们的文案会盖掉上游文案。其中 3 枚（`common.saveFailed`/`common.selectAll`/
+  `hub.errors.loadFailed`）上游今天在渲染裸键路径 ⇒ 那是上游的缺。
+- **117（`package-lock.json` 不能手工合）**：取上游字节 + `npm install`；代价固定 = 一笔 P1 重立基线。
+- **118（"我们的文件与上游逐字节相同"这种比法只看两边都存在的文件，fork 自建宿主天然在比较集外）**：
+  真断在那儿的 `mcp_runtime_status.py` 是我们新建的文件，逐字节 cmp 永远看不到它坏了。
+- **119（只走 `tests/` 的 import 检核器不能支撑一句关于 `src/` 的结论）**：检核器要用**已知会红的宿主**
+  校准过才能报数。
+- **120（上游重装 extra 会静默抽走 fork CI 的测试依赖）**：2.x 把 pytest 一族从 `[dev]` 挪进新的 `[test]`；
+  `unit-tests.yml` 是我们自有工作流、只装 `.[dev]` ⇒ 合并后 CI 连 pytest 都不装，而上游自己的 `tests.yml`
+  不会红。要比的是"extra 定义变了、我方装法还成不成立"。
+- **121（"什么都没收集到就大声失败"那步只看 `N tests collected` 会不会出现，踩不住收集错误）**：
+  56 条 collection error 时 pytest 照样打印 collected 行数 ⇒ 那道门禁绿着通过。破面要单独断言 error 计数为 0。
+- **122（`agentscope_runtime` 是上游没声明的依赖，不是我们的债）**：全仓唯一 importer 是
+  `app/routers/agents.py:88`，它不在任何 extra、也不在任何工作流里 ⇒ 上游打包缺口。
+- **123（上游逐字节相同的测试文件成片红，第一嫌疑是我们对同一宿主的在册侵入，不是上游坏了）**：
+  116 的镜像面 —— 合并后"谁的红"按**宿主被我们改过没有**归属。
+- **124（autouse 隔离夹具不能把状态目录建在用例自己的 `tmp_path` 里）**：`tmp_path` 对产品代码就是一枚
+  可见的工作区目录 ⇒ 17 条枚举工作区的用例把自己的 fixture 当成了被测内容。落点用
+  `tmp_path_factory.mktemp()`，守卫用例改按 `getbasetemp()` 断言。
+- **125（新分叉点会让所有历史基线数字作废，报数只能现算）**：`pytest tests/unit` 3,433 → 17,750、
+  前端 78 文件/491 用例 → 528 文件/4,826 用例。
+- **126（脏度读数没有 CI 读者时只是本地口径）**：prettier 144 枚脏、全仓零 workflow 跑它 ⇒ 不是合并阻塞；
+  但"0 枚上游逐字节相同文件脏"这一半是有用的归属证据。
+- **127（用例注入的 ContextVar 和解析器读的 ContextVar 可以不是同一枚 ⇒ 形状修完仍红时先比"注入点 vs 读取点"）**：
+  `test_file_io_realtime_events.py` 钉的是 `set_current_focus_dir`，而现树 `write_file` 的相对路径解析
+  （`_effective_project_roots()` → `get_all_project_dir_paths()` / `get_tool_base_dir()`）不看 focus dir。
+  取证法 = `git show <写用例那笔提交>:<宿主文件>` 拿当时的解析合同和现树对读。机制退役后留在树里的 setter
+  （这里只剩 `agents/utils/file_handling.py:118` 一个读者）会让用例伪装成生产回归。
+- **128（agentscope 2.x 的 `TextBlock` 是 pydantic 模型不是 dict ⇒ 断言按现树多数形状，纯形状改、断言强度不动）**：
+  `tb["text"]` → `TypeError`、`tb.get()` → `AttributeError`，正解 `tb.text`；现树 36 枚测试文件已在用
+  `content[0].text`，所以改的是跟随多数。判"双替身过期"要能一句话说清"哪一侧的字节变了"。
+
+### 8.8 没量什么
+
+- **CI 选择集复跑（104 → 理论约 83）未取**：取数时本机有另一棵树的 pytest 已跑 1h27m，负载依赖型红
+  无法归因（判据 107）。
+- **真浏览器 `copaw app` 一笔仍欠**（混淆项：`QwenPew Desktop.app` 会写 `~/.copaw/config.json`）。
+- **144 枚 prettier 脏一个 `--write` 都没跑**（判据 63：预红文件不在本轮顺手格式化）。
+- `pip install "mcp<1.28"`（`unit-tests.yml:78`）能不能去掉未判：pin-free venv 用 mcp 1.30.0
+  收集 15,725 / 0 error。
+
+相关账目：本节 = 已闭环 **91**；判据 113–128 原文在本节 8.7（§1–§6 引用的 84–86、101–112 仍是
+`2026-10-07-trial-merge-conflict-table.md` 与本文前七节的口径）。
