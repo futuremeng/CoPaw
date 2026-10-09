@@ -1,54 +1,82 @@
 # -*- coding: utf-8 -*-
 """Console "probe statuses" needs POST /mcp/{client_key}/refresh-status.
 
-The manager method and the UI call site both landed on trunk, but the route
-only ever existed on feat/upstream/mcp-runtime-status-v2, so every click was a
-swallowed 404 behind a success toast.
+The route is fork-owned. Upstream 2.x replaced the MCP client manager with the
+Driver layer, so the probe runs through ``DriverManager.refresh_driver`` and
+reports ``DriverRuntimeInfo.status == "active"``.
 """
 
-from types import SimpleNamespace
+from pathlib import Path
 
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from qwenpaw.config.config import MCPClientConfig
+from qwenpaw.app.driver_config_service import DriverConfigService
+from qwenpaw.drivers.capabilities import DriverRuntimeInfo
+from qwenpaw.drivers.constants import PROTOCOL_MCP
+from qwenpaw.drivers.contracts import DriverCard
+from qwenpaw.drivers.storage import dump_card
+
+CLIENT_KEY = "demo"
+MCP_URL = "https://mcp.example.com/coop/mcp"
 
 
-class _FakeManager:
-    def __init__(self, active: bool) -> None:
-        self.active = active
+class _DriverManagerStub:
+    """Stands in for ``DriverManager``; records which key was probed."""
+
+    def __init__(self, status: str) -> None:
+        self.status = status
         self.calls: list[str] = []
 
-    async def refresh_client_status(self, key, _config, timeout: float = 15.0):
-        self.calls.append(key)
-        return self.active
+    async def refresh_driver(self, name: str) -> DriverRuntimeInfo:
+        self.calls.append(name)
+        return DriverRuntimeInfo(
+            name=name,
+            protocol=PROTOCOL_MCP,
+            enabled=True,
+            status=self.status,
+        )
 
-    def is_active(self, key: str) -> bool:
-        return self.active
+
+class _WorkspaceStub:
+    """Minimal workspace: a real temp dir holding one DriverCard."""
+
+    def __init__(self, root: Path, manager: object) -> None:
+        self.workspace_dir = root
+        self.driver_manager = manager
 
 
-def _agent(manager) -> SimpleNamespace:
-    config = MCPClientConfig(
-        name="Demo",
-        transport="streamable_http",
-        url="http://demo.invalid/mcp",
-    )
-    return SimpleNamespace(
-        config=SimpleNamespace(mcp=SimpleNamespace(clients={"demo": config})),
-        mcp_manager=manager,
+def _seed_card(workspace: _WorkspaceStub) -> None:
+    config = DriverConfigService(workspace)
+    dump_card(
+        DriverCard(
+            name=CLIENT_KEY,
+            protocol=PROTOCOL_MCP,
+            endpoint={"url": MCP_URL, "transport": "sse"},
+        ),
+        config.card_path(CLIENT_KEY, protocol=PROTOCOL_MCP),
     )
 
 
 @pytest.fixture
 def client_factory(
     monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
 ) -> callable:
     from qwenpaw.app.routers.mcp_runtime_status import router
 
-    def _build(agent) -> TestClient:
+    def _build(
+        manager: object,
+        *,
+        seed: bool = True,
+    ) -> TestClient:
+        workspace = _WorkspaceStub(tmp_path, manager)
+        if seed:
+            _seed_card(workspace)
+
         async def _mock_get_agent_for_request(_request):
-            return agent
+            return workspace
 
         monkeypatch.setattr(
             "qwenpaw.app.agent_context.get_agent_for_request",
@@ -62,37 +90,37 @@ def client_factory(
 
 
 def test_refresh_route_probes_and_reports_active(client_factory) -> None:
-    manager = _FakeManager(active=True)
-    client = client_factory(_agent(manager))
+    manager = _DriverManagerStub(status="active")
+    client = client_factory(manager)
 
-    response = client.post("/mcp/demo/refresh-status")
+    response = client.post(f"/mcp/{CLIENT_KEY}/refresh-status")
 
     assert response.status_code == 200
-    assert manager.calls == ["demo"]
+    assert manager.calls == [CLIENT_KEY]
     body = response.json()
-    assert body["key"] == "demo"
+    assert body["key"] == CLIENT_KEY
     assert body["active"] is True
 
 
 def test_refresh_route_reports_dropped_client(client_factory) -> None:
-    client = client_factory(_agent(_FakeManager(active=False)))
+    client = client_factory(_DriverManagerStub(status="inactive"))
 
-    response = client.post("/mcp/demo/refresh-status")
+    response = client.post(f"/mcp/{CLIENT_KEY}/refresh-status")
 
     assert response.status_code == 200
     assert response.json()["active"] is False
 
 
 def test_refresh_route_404_for_unknown_key(client_factory) -> None:
-    client = client_factory(_agent(_FakeManager(active=True)))
+    client = client_factory(_DriverManagerStub(status="active"), seed=False)
 
     assert client.post("/mcp/nope/refresh-status").status_code == 404
 
 
 def test_refresh_route_503_without_manager(client_factory) -> None:
-    client = client_factory(_agent(None))
+    client = client_factory(None)
 
-    assert client.post("/mcp/demo/refresh-status").status_code == 503
+    assert client.post(f"/mcp/{CLIENT_KEY}/refresh-status").status_code == 503
 
 
 def _route_pairs(routes) -> set:
