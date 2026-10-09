@@ -10,7 +10,13 @@ from typing import Any
 REPO_ROOT = Path(__file__).resolve().parent.parent
 CONSOLE_LOCALES = REPO_ROOT / "console" / "src" / "locales"
 CONSOLE_SRC = REPO_ROOT / "console" / "src"
-SWITCHER = REPO_ROOT / "console" / "src" / "components" / "LanguageSwitcher" / "index.tsx"
+# Upstream moved LANGUAGE_LIST out of the switcher component into its own module,
+# so the switcher file alone no longer holds the `key: "<lang>"` literals.  Scan
+# both; a language that appears in neither counts as unregistered.
+SWITCHER_SOURCES = (
+    REPO_ROOT / "console" / "src" / "components" / "LanguageSwitcher" / "index.tsx",
+    REPO_ROOT / "console" / "src" / "constants" / "languageList.tsx",
+)
 LANGS = ("en", "zh", "ja", "ru", "pt-BR", "id")
 
 
@@ -73,10 +79,17 @@ for lang in LANGS:
             )
 
 switcher_keys: set[str] = set()
-if SWITCHER.exists():
-    switcher_keys = set(re.findall(r'key:\s*"([^"]+)"', SWITCHER.read_text(encoding="utf-8")))
+present_sources = [path for path in SWITCHER_SOURCES if path.exists()]
+if present_sources:
+    for path in present_sources:
+        switcher_keys |= set(
+            re.findall(r'key:\s*"([^"]+)"', path.read_text(encoding="utf-8"))
+        )
 else:
-    errors.append(f"missing language switcher: {SWITCHER.relative_to(REPO_ROOT)}")
+    errors.append(
+        "missing language switcher: "
+        + ", ".join(str(path.relative_to(REPO_ROOT)) for path in SWITCHER_SOURCES)
+    )
 
 for lang in LANGS:
     if lang not in switcher_keys:
@@ -113,17 +126,50 @@ LITERAL_KEY_RE = re.compile(
 
 # Conflict-surface knife 72 (judgment 52): copy ownership follows the author of
 # the *call-site line*, not the file that hosts it.  Asking that question needs
-# upstream v2's blobs, which are not reachable from a clone of this fork, so the
-# gate encodes the answer as this exemption list instead.  Every entry is a key
-# whose only production reads are upstream's own lines: supplying fork copy at
-# those paths would shadow upstream copy (judgment 44) or fix an upstream
-# defect from the fork.  Upstream owns these; the fork does not gate on them.
+# upstream's blobs.  Before the ddd8408eb sync they were not reachable from a
+# clone of this fork, so the gate encodes the answer as this exemption list
+# instead.  Every entry is a key whose only production reads are upstream's own
+# lines: supplying fork copy at those paths would shadow upstream copy
+# (judgment 44) or fix an upstream defect from the fork.  Upstream owns these;
+# the fork does not gate on them.
+#
+# Every entry below was attributed the same way: the merged host file is
+# byte-identical to `git show ddd8408eb:<path>` (or, for a file the fork also
+# edits, the reading line exists verbatim at that ref), and the key has no leaf
+# in the merged upstream bundle either -- so the gap is upstream's own.  Most
+# carry an inline default (`t("os.dock", "Dock")`), which is upstream writing
+# the dead-fallback pattern the fork spent knives 77-78 removing from its own
+# files.  Three do not: `common.saveFailed`, `common.selectAll` and
+# `hub.errors.loadFailed` render the raw key path on screen, an upstream defect
+# reported rather than fixed here.
+#
+# Re-derive this list from the ref on the next sync; an entry whose line moves
+# into fork-authored code must become an error again.
 UPSTREAM_OWNED_KEYS = {
+    "approval.alwaysAllowDisabledHint": "read from upstream's own line in components/ApprovalCard/ApprovalCard.tsx",
+    "chat.backgroundTasks.cancelFailed": "read from upstream's own line in hooks/useBackgroundTaskWatcher.ts",
+    "chat.fileReference.codeSnippet": "read from upstream's own line in pages/Chat/RichFileReferenceInput.tsx",
+    "common.next": "read from upstream's own line in pages/Settings/Market/MarketPanel.tsx",
+    "common.noData": "read from upstream's own line in os/Launcher.tsx",
+    "common.restore": "read from upstream's own line in os/WindowFrame.tsx",
+    "common.saveFailed": "read from upstream's own line in pages/Chat/components/ChatHeaderTitle/index.tsx",
+    "common.selectAll": "read from upstream's own line in pages/Settings/Backups/restore/RestoreAgentTable.tsx",
     "common.all": "read from upstream's own line in pages/Agent/ACP/index.tsx",
     "common.operationFailed": "read from upstream's own line in pages/Inbox/index.tsx",
     "common.unknown": "read from upstream's own lines (chat surfaces)",
-    "voiceTranscription.loadFailed": "read from upstream's own settings line",
+    "hub.errors.loadFailed": "read from upstream's own line in pages/Hub/index.tsx",
+    "hub.governance.models.memberCount": "read from upstream's own line in pages/Hub/governance/ManagedModelTable.tsx",
+    "hub.governance.users.count": "read from upstream's own line in pages/Hub/governance/UserManagement.tsx",
+    "nav.pawapps": "read from upstream's own line in pages/Settings/PawApps/index.tsx",
+    "os.dock": "read from upstream's own line in os/Dock.tsx",
+    "os.minimize": "read from upstream's own line in os/WindowFrame.tsx",
+    "os.zoom": "read from upstream's own line in os/WindowFrame.tsx",
+    "pawapps.noApps": "read from upstream's own line in pages/Settings/PawApps/index.tsx",
+    "pawapps.noUI": "read from upstream's own line in pages/Settings/PawApps/index.tsx",
+    "pawapps.openInNewTab": "read from upstream's own line in pages/Settings/PawApps/index.tsx",
+    "pawapps.selectApp": "read from upstream's own line in pages/Settings/PawApps/index.tsx",
     "skills.examples": "read only from a line upstream deleted in v2 (sync debt)",
+    "voiceTranscription.loadFailed": "read from upstream's own settings line",
 }
 
 CALL_RE = re.compile(r'(?<![A-Za-z0-9_$])(?:[A-Za-z0-9_]+\.)?t\(')
@@ -141,19 +187,40 @@ STRING_ARG_RE = re.compile(r'^["\']([^"\']+)["\']$')
 TEMPLATE_ROOT_RE = re.compile(r'^[`"]([A-Za-z][A-Za-z0-9_.]*?)\$\{')
 
 # Same exemption shape as UPSTREAM_OWNED_KEYS: the call-site line, not the file,
-# decides who owns the copy.  The two below are upstream's own reads and the gap
-# is upstream's (`channels.channelNames` is already absent from `en.json` at the
-# merge base, `pluginManager.kind` in upstream/main too), so supplying fork copy at
-# those paths would shadow upstream copy (judgment 44).  The three fork families
-# that used to be listed here -- 3 pipelineStage, 10 semanticReasonCode and 10
-# semanticReasonSummary keys -- got their copy in six languages, so they are gated
-# like every other family now; the enumeration guard in
+# decides who owns the copy.  Every family below is read from upstream's own
+# lines and has no leaf in upstream's own bundle either (the merged host file is
+# byte-identical to `git show ddd8408eb:<path>`, except the two `login.*`
+# families, whose reading lines appear verbatim at that ref inside a file the
+# fork also edits), so supplying fork copy at those paths would shadow upstream
+# copy (judgment 44).  The three fork families that used to be listed here -- 3
+# pipelineStage, 10 semanticReasonCode and 10 semanticReasonSummary keys -- got
+# their copy in six languages, so they are gated like every other family now; the
+# enumeration guard in
 # pages/Agent/Projects/tests/projectKnowledgePipelineUi.test.ts is what proves each
 # individual key renders, since this rule can only see the family (judgment 81).
 TEMPLATE_ROOT_EXEMPTIONS = {
     "channels.channelNames": (
         "read from upstream's own line in "
         "pages/Control/Channels/components/constants.ts"
+    ),
+    "cronJobs.cronDay": (
+        "read from upstream's own line in pages/Control/CronJobs/index.tsx"
+    ),
+    "files.conflict": (
+        "read from upstream's own line in features/files-workspace/FilesNavigator.tsx"
+    ),
+    "inbox.batch": (
+        "read from upstream's own line in "
+        "pages/Inbox/components/MailAccessControlDrawer.tsx"
+    ),
+    "inbox.mailProcessingReason_": (
+        "read from upstream's own line in pages/Inbox/components/MailProcessingPauses.tsx"
+    ),
+    "login.hubDisclaimerPoint": (
+        "read from upstream's own line in pages/Login/index.tsx"
+    ),
+    "login.hubTermsSection": (
+        "read from upstream's own line in pages/Login/index.tsx"
     ),
     "pluginManager.kind": (
         "read from upstream's own line in "

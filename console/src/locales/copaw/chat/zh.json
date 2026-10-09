@@ -19,7 +19,7 @@
     "historySwitchUnavailable": "当前页面不支持切换历史对话。",
     "messageContentLabel": "消息内容",
     "messageIdLabel": "消息 ID",
-    "newChat": "新对话",
+    "searchTooltip": "搜索所有聊天",
     "stopFailed": "停止对话失败。",
     "unknownMessageId": "未知",
     "unknownTime": "未知时间",

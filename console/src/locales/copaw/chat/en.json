@@ -19,7 +19,7 @@
     "historySwitchUnavailable": "Current page does not support switching history chats.",
     "messageContentLabel": "Message content",
     "messageIdLabel": "Message ID",
-    "newChat": "New chat",
+    "searchTooltip": "Search all chats",
     "stopFailed": "Failed to stop chat.",
     "unknownMessageId": "unknown",
     "unknownTime": "Unknown time",
