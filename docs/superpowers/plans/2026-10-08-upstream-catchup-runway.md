@@ -288,6 +288,9 @@ lock 走"取上游 + 重新生成"，剩下真正要逐块判的是这 12 枚（
    `console` 全量 `test:run`（基线 78 文件 / 491 用例）· `tsc -b --force` · 五道门禁
    （locale split / namespace boundaries / release channel R1–R5 / CI command targets / brand verify）·
    `~/.copaw/config.json` 哈希不变 · 真浏览器起一次 `copaw app` 走 overlay 路由。
+   ⚠ **那两句基线已作废**（判据 125：换分叉点会让所有历史读数失效，报数只能现算）。合并落地后的口径在
+   §8.5：`tests/unit` 全量 **17,750** 用例（其中 CI 那步 15,595 passed / 104 failed）、前端全量
+   **528 文件 / 4,826 用例**。这句是更正，不是把上面两行改掉 —— 上面那两行是那笔刀当时的真实读数。
 5. **账本后果（必须提前定）**：
    - `check_p1_invariants.py` 的 `DEFAULT_BASE_REF = e111ec6fb` 与真实分叉点**目前相等**；一旦合并落地，
      `git diff base..HEAD` 会把上游 1,184 枚提交的内容也计成"我们的 added 行" ⇒ 五表读数会一次性暴涨，
@@ -657,17 +660,75 @@ brand verify（7 文件 / 35 行）。flake8 对两枚被改文件只剩一枚�
 落地后只钉得住上游那枚入口 —— fork 侧的查找不再被断言。它们仍绿，但守卫力变窄，这是把桥放在用例侧
 而非生产侧的固有代价。
 
-### 8.10 剩下的 15 枚红按机制分派（同一选择集内）
+### 8.10 剩下的 15 枚红：按枚取栈后的归因（本笔已复算，替掉本节原先的按簇预判）
 
-| 机制 | 枚数 | 归属 |
-| --- | --- | --- |
-| config 路由写进 MagicMock workspace（`discord.enabled`、`ws_host`、`access_token` 落不回替身） | 4 | `test_config_router.py`，非解析层 |
-| `get_active_models` / `set_active_model` 的 agent-scope 替身（`MagicMock can't be used in 'await'` 一族） | 9 | `test_providers_active_openrouter.py` 8 + `test_providers_router.py` 1 |
-| 与 8.6 同型但落在别的宿主：`test_agents_router.py` 的 404 断言拿到 MagicMock 的 `state.agent_id`、`test_workspace_router.py::test_language_change_schedules_agent_reload` | 2 | 这两枚可以复用 8.9 那座桥的形状，但要逐枚确认替身对象 |
+原先这三行是按报错文本猜机制写的分派表。取到栈之后有两处判错了，下表是实测版。
 
-⇒ 下一把刀的料，不是本笔的连带。CI 选择集总量读数（104 → 理论 77）仍未取，见 8.12。
+| 枚数 | 落点 | 实测根因 | 归属 |
+| --- | --- | --- | --- |
+| 4 | `test_config_router.py`（上游逐字节相同） | **与 8.6 同根因**（原判"非解析层"是错的）：fork 把 `list_channels`/`get_channel`/`put_channels`/`put_channel` 改走 `resolve_agent_id_for_request` + `load_agent_config`（读盘），写侧再镜像进 `get_loaded_agent_for_request`；用例只钉上游那枚 `get_agent_for_request` ⇒ 读写都落不回替身，且那条"查找失败要 404"在上游入口上 | 测试侧桥，形状复用 8.9；404 那枚改钉 fork 入口（fork 侧同样会抛 404，只是不在 `get_agent_for_request` 里） |
+| 7 | `test_providers_active_openrouter.py`（上游逐字节相同） | **另一型**：fork 新增的生产钩子 `_preflight_model_slot`（`providers.py` 在册 +43/−8）在 `activate_model` 之前调 `provider.support_connection_check` → `await provider.check_model_connection(...)`；上游替身是 `MagicMock()`，前者恒真、后者不可 await ⇒ `TypeError: object MagicMock can't be used in 'await' expression` | 测试侧：替身要显式声明"这枚 provider 不支持连接检查"，因为上游用例从没有意图要测这钩子 |
+| 1 | `test_providers_active_openrouter.py::TestGetActiveModels::test_effective_scope_prefers_agent_model` | 解析层：`_load_agent_model` 现在按 agent id 读盘，而 `resolve_agent_id_for_request(request)` 拿到的是 `MagicMock.state.agent_id` ⇒ 生产侧 404 后回落全局槽 | 测试侧桥 |
+| 1 | `test_providers_router.py`（**fork 自建文件**） | 我们自己的账：用例 `monkeypatch.setattr(providers_mod, "save_agent_config", …)`，而该模块已不再导入这个名字 | 改我们自己的用例，零冲突代价 |
+| 1 | `test_agents_router.py::test_get_agent_returns_404_for_app_base_exception` | **生产侧**，不是解析层：合并后的 `agents.py` 把 `AppBaseException` 绑了两次（上游 `qwenpaw.exceptions` 在 `:19`、我们那行 `agentscope_runtime` 在 `:88`），**后写的赢** ⇒ 文件里 5 处 `except (ValueError, AppBaseException)` 抓的是第三方那枚类，上游的 404 合同在现网答 500 | 生产侧，刀 95 已修（见 8.11） |
+| 1 | `test_workspace_router.py::test_language_change_schedules_agent_reload`（上游自有、已在册 +99/−1） | 与 8.6 同型：`put_agent_language` 走 `_resolve_workspace_target`，替身 `MagicMock()` 的 `state.agent_id` 不在 `config.agents.profiles` 里 ⇒ 生产侧抛 404 | 测试侧桥，复用 8.9 那座夹具的形状 |
 
-### 8.11 本节新增判据 129–132
+⇒ 只有那 1 枚是生产侧、已由刀 95 结清；其余 14 枚是测试侧，代价 = **再动 2 枚上游自有用例文件**
+（`test_config_router.py`、`test_providers_active_openrouter.py`）+ 1 枚我们自己的文件。
+CI 选择集总量读数（104 → 理论 76，见 8.13 的推导）仍未在这棵树上重跑。
+
+### 8.11 刀 95：自动合并造出的导入影子（8.10 里那唯一一枚生产侧）
+
+**改了什么**：`src/qwenpaw/app/routers/agents.py` −3 行，删的是我们那行
+`from agentscope_runtime.engine.schemas.exception import AppBaseException`（合并后在 `:88`）。
+上游的同名绑定在 `:19`（`from qwenpaw.exceptions import AppBaseException`），两边并排落在同一文件后
+**Python 按后写的重新绑定** ⇒ 文件里 5 处 except 子句（现树 `:735/:785/:1165/:1363` 的
+`except (ValueError, AppBaseException)` 加 `:1461` 的裸 `except AppBaseException`；行号取修后，
+删的那三行在它们上面）抓的是第三方那枚类，而 router 抛的是我们自己那枚 ⇒ 上游用例要的 404 在现网答 500。
+
+**这是判据 113 的第一枚实测实例，而且是它最阴的一型**：合并零冲突、自动成功、唯一可见后果是文件变大；
+两行都是语法合法的 import，所以"重复定义"这个说法在工具里没有任何一栏会亮。
+
+**全仓扫过一遍才算归因**：AST 只遍历 `tree.body`（模块作用域）取 import 绑定，按**来源**分组
+（`pkg:<根包>` / `mod:<点数+模块>`；纯子模块导入如 `aiofiles` + `aiofiles.os` 因此折叠成同一来源，不算影子）。
+`src/` 现数（修后）：**39 枚模块作用域同名绑定 → 按来源只剩 2 枚真影子**，加本刀修掉的那枚共 3 枚；
+按名字分组的 39 枚里有 37 枚是"同名同来源的重复 import"（自动合并把两边 import 段并起来的形状，行为等价）。
+剩下的 2 枚显式豁免在同宿主同文件：
+`SkillPoolService`、`get_workspace_skills_dir`（`:58` 上游 `agents.skill_system` vs `:106` 我们保留的
+`agents.skills_manager`，我们的在后 ⇒ 现网跑的是**我们那份实现**）。这两枚没顺手翻过来是因为
+"上游自有的 router 该跑哪份实现"是产品裁决（上游那份 14/15 方法体不同、还多 4 枚自动化/改名方法），
+不是 lint 能定的事 —— 已进待裁队列，见本节末。
+
+**配的门禁**：fork 自有 `tests/unit/test_module_import_bindings.py`（125 行 / 4 条用例 / flake8 rc=0）。
+`KNOWN_SHADOWED_IMPORTS` 是豁免池，两个方向都钉（判据 66）：新增影子 ⇒ 红；池里的影子已修却不删条目 ⇒ 也红。
+另两条是自证用例（检测器对已知影子必须报出、对子模块导入必须不报），避免"门禁自己坏了却报绿"。
+
+**证红**：拿本刀自己的删除前状态（判据 67）—— `git apply -R` 把那三行装回去 ⇒
+`2 failed, 3 passed`，红的正是新守卫那条 **和** 上游那枚 404 用例；`git apply` 换回来 ⇒
+文件里 `agentscope` 命中 0、`62 passed`（守卫 4 + `test_agents_router.py` 58）。
+两态之间只动了那三行 ⇒ 连带面为零。
+
+**顺带结清判据 122**：那枚 `agentscope_runtime` 导入是全仓唯一读者。修法用 AST 走全 `src/` 树（含函数体内的
+import）现证 **0 处** 从 `agentscope_runtime` 根包导入；开刀前另用 `sys.meta_path` 导入阻断器在运行时验过同一件事
+⇒ 我们这侧的"上游未声明依赖"不再成立（上游自己仍缺，那是上游的账）。
+
+**两态对照（判据 107）**：同一选择集 `tests/unit/app/routers/` + `test_agents_workspace_initialization.py`
+刀 94 后 15 failed / 1,360 passed ⇒ 刀 95 后 **14 failed / 1,361 passed**（本机另有三株隔壁树的 pytest 在跑、
+load 18 ⇒ 只报通过/失败数，15 failed → 14 failed 这句是数，97.68 s 那句不是口径）。
+14 枚红逐枚同名 ⇒ 转绿的只有一枚，就是 8.10 那枚生产侧，连带面为零。
+L1 硬门禁五目录照旧 **1,336 passed / 1 skipped / 0 failed**。
+⚠ 取数顺序按判据 136 记清：这两句都在探针之前取（选择集先跑完、之后才 `git apply -R` 装影子证红），
+所以它们是最终树上的读数；撤销探针之后重跑的只有守卫用例 + `test_agents_router.py` 那 62 条，
+以及 `git diff --stat` 确认那枚文件回到 −3 行的字节。
+
+**账**：P1 **109 文件 / +10,791 −520**（invasive 比刀 94 少 3 行；文件数、行为文件数、命名 1·7·35、
+mechanical 1 全部零动）。冲突面 **+0 枚**：`agents.py` 本就在册，新守卫用例是 fork 自有文件。
+四道离线门禁读数与刀 94 逐字相同（locale split 4,658 gated / 59 模板族 / 7 豁免 / 1,459 overlay 叶 / 23 上游键豁免
+· release channel R1–R5 over 6 files · CI command targets 16 命令 / 3 目录 · brand verify 7 文件 / 35 行）。
+`agents.py` 的 F811 由 22 条降到 21 条 —— 剩下的 21 条里没有一条是跨来源影子（同名同来源的重复 import，
+行为等价），那是自动合并把两边 import 段并起来的形状，属于"要不要顺手整理上游文件"的另一个问题。
+
+### 8.12 本节新增判据 129–136
 
 - **129（给上游用例加 fork 桥，落点按"未来冲突面"计价，不是按可读性直觉）**：同一需求可以写成 33 个
   `patch.object` 兄弟项，也可以写成 1 枚模块内 autouse 夹具 +23 行；后者把未来合并的冲突集中在**一枚
@@ -680,16 +741,40 @@ brand verify（7 文件 / 35 行）。flake8 对两枚被改文件只剩一枚�
   提交之后，下一条命令必须重新确认 HEAD。本笔实测踩中：连吃两次把已推送的 `be5f3ba7c` 并进了新提交，
   于是本地不再能 fast-forward 到 `origin/sync/upstream-20261009`。复原 = `git diff <被吞提交> <新提交> > 补丁`
   → `git reset --hard <与 origin 逐位相等的那枚>` → `git apply` → 重新提交；内容零丢。
+- **133（重复 import 的影子要按"来源"分组，按"名字"分组只会淹在噪音里）**：`from a import X` 与
+  `from b import X` 才是事故；`from a import X` 出现两次是自动合并的形状、行为等价。本笔实测：`src/` 里
+  按名字收到 39 枚模块作用域同名绑定，按来源只剩 2 枚（+ 已修的这枚共 3 枚）—— 信噪比 39:3。
+  中间版本还走过一条弯路：用"父包/子模块算不同来源"的启发式，于是 `urllib` + `urllib.parse` 这类正常写法
+  全被报成影子；正解是把 `pkg:<根包>` 折叠成一个键，纯子模块导入因此不算两来源。
+  这条尺子的价值有具体后果：`except (ValueError, AppBaseException)` 抓的类**会**因为后写的那行 import 而换掉，
+  而两行都是合法语句，任何"读一遍文件"的复核都不会把它当错误。
+- **134（按簇预判不算归因，要按枚取栈）**：8.10 的初版是按报错文本猜机制的分派表，六行里两行猜错 ——
+  `test_config_router.py` 那 4 枚我判"非解析层"，取栈后它与 8.6 **同根因**；`test_agents_router.py` 那枚我并进
+  解析层，取栈后它是**生产侧**且是全仓唯一一枚生产侧。猜错的代价不是文档不准：按簇排刀会把 4 枚已经修好的
+  桥再排一遍，同时漏掉那枚会让现网答 500 的 bug。
+- **135（门禁的豁免池是"待裁登记表"，不是 suppress 列表，而且必须双向钉）**：每条豁免带"为什么现在不能改"
+  与去向（本池两条写的是"fork 版 vs 上游 `skill_system`，等待裁"），并且配一条反向用例 —— 池里的影子已修却不删
+  条目同样报红。单向豁免池会静默长大，这是判据 66 在门禁数据结构上的形态。
+- **136（全量读数不能与临时补丁探针并发；撞上了只能停掉重跑）**：本笔先起了后台 `pytest tests/unit`，随后为了
+  证红把三行影子 `git apply -R` 装回去约 90 秒。窗口极短、也不是每个用例都读那枚模块，但这个读数已经不能
+  作为"最终树上的读数"上报 ⇒ 杀掉重跑。判据 89 说的是"最后一次编辑之后整体重跑"，这条是它的时间面：
+  探针编辑与采集必须在时间上分离，哪怕探针最后撤销干净了。
 
-### 8.12 没量什么
+### 8.13 没量什么
 
-- **CI 选择集复跑（104 → 理论约 83）未取**：取数时本机有另一棵树的 pytest 已跑 1h27m，负载依赖型红
-  无法归因（判据 107）。
+- **CI 选择集复跑未取**：刀 94 前该选择集 104 枚红，刀 94 结清 27、刀 95 结清 1 ⇒ 理论 **76**，但这是从两笔
+  局部读数推的，没有在这棵树上重跑过那条命令（判据 107：本机曾有另一棵树的 pytest 跑了 1h27m，负载依赖型红
+  无法归因）。原先本节写的"理论约 83"是更早一次估算的残留，已按 8.10 的实测枚数改到这里。
 - **真浏览器 `copaw app` 一笔仍欠**（混淆项：`QwenPew Desktop.app` 会写 `~/.copaw/config.json`）。
 - **144 枚 prettier 脏一个 `--write` 都没跑**（判据 63：预红文件不在本轮顺手格式化）。
 - `pip install "mcp<1.28"`（`unit-tests.yml:78`）能不能去掉未判：pin-free venv 用 mcp 1.30.0
   收集 15,725 / 0 error。
 
-相关账目：本节 = 已闭环 **94**（刀 94 = 8.9 那笔，裁决 (b) 的落地）；判据 113–128 原文在本节 8.7、
-129–132 在 8.11（§1–§6 引用的 84–86、101–112 仍是
+相关账目：本节 = 已闭环 **95**（刀 94 = 8.9 那笔，裁决 (b) 的落地；刀 95 = 8.11 那笔，8.10 里唯一一枚生产侧）；
+判据 113–128 原文在本节 8.7、129–136 在 8.12（§1–§6 引用的 84–86、101–112 仍是
 `2026-10-07-trial-merge-conflict-table.md` 与本文前七节的口径）。
+
+**待裁（本笔新登记，不在刀序里）**：`SkillPoolService` / `get_workspace_skills_dir` 那对影子 —— 现网跑的是我们
+保留的 `agents/skills_manager.py` 那份（14/15 方法体与上游 `agents/skill_system/` 不同，上游另多 4 枚自动化/改名
+方法）。要么按裁决 2 跟着上游删、把 `agents.py` 的 import 翻到 `skill_system`，要么留我们那份并承认这是 fork
+自有能力。这需要产品侧一句话，不是合并能自动答的。
