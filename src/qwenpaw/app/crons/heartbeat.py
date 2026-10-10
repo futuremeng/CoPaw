@@ -36,6 +36,7 @@ from ..inbox_trace_store import (
     read_session_messages,
 )
 from ..crons.models import _crontab_dow_to_name
+from .heartbeat_quality_loop import append_quality_loop_digest
 from ...utils.io_utils import run_sync_io
 
 logger = logging.getLogger(__name__)
@@ -218,6 +219,11 @@ async def run_heartbeat_once(
     if not query_text:
         logger.debug("heartbeat skipped: empty query file")
         return
+
+    query_text = await append_quality_loop_digest(
+        query_text,
+        workspace_dir=workspace_dir,
+    )
 
     # Build request: single user message with query text
     req: Dict[str, Any] = {
