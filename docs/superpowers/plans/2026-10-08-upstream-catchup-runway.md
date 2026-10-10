@@ -1122,19 +1122,110 @@ baseline 三项全 0，delta 三项全 0，`result: PASSED`。结论没变（零
   自己的 tmp 目录判成不存在）。若照簇修，那枚真缺陷会被断言改写掩盖掉——这与我改 RC-A 的方向相反，代价是产品
   少建 `agent.json`。
 
-相关账目：本节 = 已闭环 **99**（刀 94 = 8.9 那笔，裁决 (b) 的落地；刀 95 = 8.11 那笔，8.10 里唯一一枚生产侧；
-刀 96 = 8.14 那笔，8.10 里其余 14 枚测试侧；刀 97 = 8.16 那笔，8.14 待办 ① 那枚生产侧签名；
-刀 98 = 8.18 那笔，8.14 待办 ① 剩下的 2 枚测试侧红；刀 99 = 8.20 那笔，8.18 末句登记的那 6 枚 migration 红）；
-判据 113–128 原文在本节 8.7、129–136 在 8.12、137–141 在 8.15、142–143 在 8.17、144–147 在 8.19、148–151 在 8.21
-（§1–§6 引用的 84–86、101–112 仍是
-`2026-10-07-trial-merge-conflict-table.md` 与本文前七节的口径）。
+**待裁（刀 99 登记，不在刀序里）**：那 25 枚 `with TestClient(app)` 的本机目录泄漏（8.20 已归因到文件、机制已量到
+导入期绑定 74 处），两条修法各有前置，需要一句"要不要为测试基建再开一刀"（刀 100 的 8.22 待裁 ③ 是同一机制的
+读数面）。
 
-**待裁（本笔新登记，不在刀序里）**：那 25 枚 `with TestClient(app)` 的本机目录泄漏（8.20 已归因到文件、机制已量到
-导入期绑定 74 处），两条修法各有前置，需要一句"要不要为测试基建再开一刀"。
-`2026-10-07-trial-merge-conflict-table.md` 与本文前七节的口径）。
+### 8.22 刀 100：那 14 枚散枚红 = 1 枚生产侧文件 + 5 枚测试侧文件（共 9 枚用例），余 5 枚是环境红
 
+8.20 的验收读数把在册测试侧红收到 **32** = 14 发布渠道 `pending` + 4 `test_multi_agent_manager_startup.py`
+subprocess 超时 + **14 散枚**。本刀只做那 14 枚，且**先逐枚取栈**再分派（判据 134/140；8.20 的 6 枚教训是"按簇
+预判只解释一半"）。取法 = 单文件跑 `-q --tb=line` 拿断言行号，再按行号读树里字节 + 读被钉的生产签名。
+逐枚落点（六枚文件、九枚用例）：
 
-**待裁（本笔新登记，不在刀序里）**：`SkillPoolService` / `get_workspace_skills_dir` 那对影子 —— 现网跑的是我们
+| 用例 | 实测的失败机制 | 分派 |
+|---|---|---|
+| `test_query_error_dump.py::test_timestamp_is_utc_and_zulu_formatted` | 上游用例钉 `re.fullmatch(r"\d{4}-…:\d{2}Z", ts_utc)`（无小数秒），fork 写的是 `isoformat().replace("+00:00","Z")` ⇒ 带微秒必红 | **生产侧**：整文件退回上游字节，`ts_utc` 回到 `strftime("%Y-%m-%dT%H:%M:%SZ")`，模块级 `UTC = timezone.utc` 一行也一并还回 |
+| `test_heartbeat.py::test_run_heartbeat_once_dispatches_with_agent_last_dispatch` | fork 自写的这枚用例（上游在该路径只有 109 行、无此枚）钉 `runner=` + `load_agent_config`，而 `heartbeat.py:189` 的签名是 `workspace=`、last-dispatch 走 `read_last_dispatch`，且 `hb.timeout_seconds` 是必读数 ⇒ `TypeError` | **测试侧**：参数改名 + 补 `timeout_seconds=HEARTBEAT_DEFAULT_TIMEOUT_SECONDS` + 打点改 `heartbeat.read_last_dispatch`。该生产文件对分叉点 diff 为空 ⇒ 上游的合同，fork 的用例过期 |
+| `test_manager.py::test_create_or_replace_raises_on_invalid_cron` / `…_without_started` | 两处断言写的是"先落库再校验"（fork 旧合同），现 `create_or_replace_job` 的第一句就是 `validate_job_spec` ⇒ 无效 spec 一处写都不留 | **测试侧**：docstring 换成上游合同陈述、断言改 `repo.list_jobs() == []`，第二枚另加 `pytest.raises(ValueError)`（判据 88：改的是钉得更严，不是弱化） |
+| `test_desktop_cmd_exit_code.py::test_closing_the_window_exits_zero` / `…webview_failure…` | `FakeProc` 记录的是 `proc.terminate()`，但 `desktop_cmd.py:297` 现在走 `shutdown_cmd._terminate_pid` → `_signal_process_tree_unix`（`:325` SIGTERM / `:336` SIGKILL），fake 的 `terminated` 永远 False | **测试侧**：桩换成 `qwenpaw.cli.shutdown_cmd._signal_process_tree_unix` 收集 `(pid, sig)`，正向钉 `== [(proc.pid, SIGTERM)]`；两枚否定式改钉 `== []`。这个 seam 正是上游自有 `test_cli_shutdown.py:319` 打的同一枚 ⇒ 顺带不再对真 pid 发真信号 |
+| `test_openai_stream_malformed_tool_use_compat.py`（旧两枚） | **计划里的变异探针不落红**：把 #4185 过滤的 `_tool_types` 掏空后两枚照绿。探针读到的真机制 = agentscope 2.0.9 `_model.py:442` 用 `delta_name or "unknown"` 给缺名工具调用**补名**（实测 `n_blocks=1 -> [('call_no_name', 'unknown')]`），`:432 index = tool_call.index` 会因缺 `index` 直接 `AttributeError`，而缺 `id` 在 `_model_response.py:154` 造 `ToolCallBlock` 时被 pydantic 判 `Input should be a valid string [input_value=None]` ⇒ 过滤器两条臂**都拿不到块** | **测试侧**：整文件重写为 4 枚，钉在真正还活着的 `_sanitize_tool_call` 两条 drop 臂上（缺 `index`、缺 `function`），另两枚把"补名而非丢弃"与"合法块幸存"写死。⚠ 上游 #4185 想防的"坏条目进 session history"在新库下已不成立——缺名块会以 `name="unknown"` 落库，缺 `id` 则整条流抛 `ValidationError`。**待裁**（见本节末） |
+| `test_retry_chat_model.py::test_retry_stream_when_remote_protocol_error` | 双层：`RetryChatModel.model_key`（`:456`）读 `self._inner.model`，fork 的替身仍交 `model_name` ⇒ `AttributeError`；改完又撞 `retry_chat_model.py:639` 的 `has_meaningful_stream_content(chunk.content)` ⇒ 替身 yield 裸 dict 再撞一次 | **测试侧**：`model = "fake"`、`yield SimpleNamespace(content="ok")`、断言读 `.content`——照抄本文件里上游自己的替身形状。生产侧那 14 行（`_iter_exception_chain` 的异常链重试）一枚未动；变异探针取上游前一刻的形式 `for current in (exc,)` 才隔离出这唯一一枚依赖者（第一版探针 `for current in []` 把整条重试性都废了，太粗） |
+
+**证红**：那 9 枚逐枚都在 8.20 实测读到的 32 枚 `FAILED` 名单里（`/tmp/k99_after_failed.txt`，本笔开刀前逐枚
+`grep` 复核 9/9 命中），开刀后又各自单文件跑过一次红才动代码。三枚变异探针全部用 Edit 撤销，撤销后
+`git diff --numstat HEAD -- openai_chat_model_compat.py` 读空自证；探针实测分别是
+缺 `index` 臂摘掉 ⇒ `test_tool_call_without_index_is_dropped` 红在库内 `_model.py:432 AttributeError`、
+缺 `function` 臂摘掉 ⇒ `test_tool_call_without_function_is_dropped` 红在多出一枚
+`ToolCallBlock(id='call_empty', name='unknown', input='')`、`_tool_types = ()` ⇒ 本文件 4 枚全绿
+（= 惰性证明），但同一轮上游自有 `test_openai_stream_toolcall_compat.py` 红 3 枚——那个名字还被 extra-content
+那一段用着，属于探针的连带面，不是 #4185 过滤器的作用。
+
+**账**：`query_error_dump.py` 对分叉点 diff 读空 ⇒ **离开册**（改前条目 +3/−3）；`test_heartbeat.py` +298→**306**、
+`test_manager.py` +163→**162**、`test_retry_chat_model.py` 66/0 不变；`test_desktop_cmd_exit_code.py`（+145/0）与
+`test_openai_stream_malformed_tool_use_compat.py`（+137/0）**两枚 fork 新建文件本来就不在册**——
+`check_p1_invariants.py:179` 的选文件逻辑是 `if path not in owned: continue`，`owned` 取自
+`git ls-tree -r ddd8408eb`，新分叉点无此路径 ⇒ 按定义零 P1 债，不是漏读（`git cat-file -e` 两枚均失败）。
+册 **114 → 113 files / +10,926 −517**，行为 **113 → 112 files / +10,891 / −482**，命名 1·7·35 与 mechanical 1 照旧。
++4 的 reconciliation 只能按文件比（判据 139）：−3（还回上游）+8（heartbeat）−1（manager）= **+4**，
+`removed` −517 = −520+3。
+
+**验收读数**（全部取在最后一次编辑之后，判据 89；本机 `HOME` = 开发者真目录，下面所有读数都带这个条件）：
+- CI 选择集（`tests/unit --ignore=tests/unit/channels -p no:randomly`）BEFORE **32 failed / 15,684 passed /
+  27 skipped / 4 xfailed**（= 8.20 的 AFTER，逐字节引 `/tmp/k99_after_failed.txt`）；AFTER
+  **23 failed / 15,695 passed / 27 skipped / 4 xfailed / 1,679.16 s**。差集 = 那 9 枚，收集 15,747 → 15,749
+  恰为 E 重写带来的 +2 ⇒ **0 枚新红**。
+- 余 23 = **14** 发布渠道 `pending`（`test_cli_update.py` 11 + `test_cli_update_overlay.py` 3，等阶段 2）
+  + **4** `test_multi_agent_manager_startup.py` 的 `subprocess.TimeoutExpired … timed out after 10 seconds`
+  + **5** 散枚。5 枚里 4 枚（acp 两枚 `_advertise_commands did not fire within 5.0s`、`shutdown_lifecycle`、
+  `shutdown_deadline_integration`）逐枚都在 8.20 那 32 里 ⇒ 本刀没碰；第 5 枚
+  `test_terminal_availability.py::test_app_starts_without_winpty` 是本刀换进来的，而 8.20 在册的
+  `test_fork_project.py::test_finalize_lock_released_after_subprocess_crash` 这轮绿 ⇒ **成员本身不稳**（判据 107）。
+  两态实测：这 5 枚单跑 `HOME=/tmp/k100_home2` **5 passed / 26.78 s**，同一批单跑真 HOME
+  **4 failed / 1 passed / 227.90 s**；日志里看得见原因——真 HOME 下这枚用例真的把整个 workspace 起来了
+  （`ChatManager created: ~/.copaw/workspaces/default/chats.json`、reme 载入 19 枚 doc 的 BM25 索引、
+  向外部 MCP server 发 `server/discover` 并收到 HTTP 500）。**所以报任何红读数都必须写明 HOME**，
+  这一族的"在册红数"在本机与 CI 干净 HOME 下不是同一个数。
+- L1 must-pass 五目录（按 `unit-tests.yml:114-119` 现枚举：`tests/unit/security`、`tests/contract/security`、
+  `tests/unit/agents/hooks`、`tests/unit/agents/memory`、`tests/unit/agents/utils`）
+  **1,336 passed / 1 skipped / 21.19 s**（与 8.20 同计数）。⚠ 本刀中途一度把 L1 读成 1,954，那是我自己多加了
+  `tests/unit/agents/tools` 的口径差，CI 定义里没有它（判据 92）。
+- 五道离线门禁 + 品牌账册全 rc=0，串与 8.20 逐字相同：locale `4658 production gated keys / 59 template key
+  families gated / 7 exempted / 1459 overlay keys en/zh / 23 upstream-owned keys exempted`；发布渠道
+  `R1-R5 over 6 channel files`；CI 命令目标 `16 run commands across 3 package dirs`；品牌
+  `ledger replayable: 7 files / 35 lines`；pipeline `4 files / 4 templates / 0 issues`；namespace 门禁带可读
+  baseline（`--upstream-ref upstream/main`）= `shared_count: 35 / copaw_only_count: 6`、baseline 三项 0、
+  delta 三项 0、`result: PASSED`。P1 `--write-baseline` 后 `--check` rc=0。
+- flake8：六枚文件只 `test_heartbeat.py` 有 10 处 E501，同文件 HEAD 副本 **11** 处 ⇒ 本笔净 −1、新增 0；
+  `query_error_dump.py` 退回上游字节后 0 处（HEAD 副本 2 处）。CI 仍无跑 flake8 的 workflow（判据 73）。
+
+**待裁（本笔新登记三件，都不在刀序里）**：
+1. **#4185 保护在新库下失效要不要生产侧补**（8.22 表第五行）：现在缺名工具调用会以 `name="unknown"` 落进
+   session history，缺 `id` 会让整条流 `ValidationError`。要么在 fork 侧加一条"丢/改名 `unknown` 块"的臂（那是
+   往上游自有文件再加行为，P1 上涨），要么认上游现在的行为并把这条从册里划掉。
+2. `test_heartbeat.py` 里 **4 枚自 skip** 的 quality-loop 用例：skip 理由引用的
+   `_collect_project_quality_loop_digest` 在 `src/` 现 0 命中，其 kwargs 与 patch 目标三层都过期 ⇒ 删还是修。
+3. `~/.copaw` 非密封那笔（8.20 已登记 25 枚 hanlp 用例的落盘泄漏）：本笔的 5 枚环境红是同一机制的**读数面**
+   （不止写脏，还会让用例自己变红），加进"要不要为测试基建再开一刀"的证据里。
+
+### 8.23 本笔新增判据 152–156
+
+- **152（变异探针不落红 = 那个机制已死的证据，不是"代码安全"的证据）**：我按计划把 #4185 过滤器的
+  `_tool_types` 掏空，两枚守卫照绿。正确结论是"这条臂不再起作用"，而不是"这条臂不需要"。探针绿了必须
+  继续往上游一层读它把输入改成了什么（这里读到 `delta_name or "unknown"`），否则下一步就会像我一开头那样
+  把守卫用例改写成"钉一个没人执行的意图"。
+- **153（库的改名与补默认会静默废掉 fork 自己的守卫）**：上游把 `model_name` 改名 `model`、把缺名工具调用
+  补成 `unknown`、把 `id` 收进 pydantic 的 `str` 合同——三处都不报错，但每一处都能让一个按旧形状写的守卫
+  永远绿或永远以另一种方式红。判"我们的兼容层还有效"必须重新读库字节里的默认值分支，不能只看它有没有抛异常。
+- **154（红读数必须写明 HOME；为卫生选的隔离 HOME 自己就能改变结果）**：同一批 5 枚用例，隔离 HOME
+  5 passed / 26.78 s，真 HOME 4 failed / 1 passed / 227.90 s，差 8.5 倍墙钟。带真 HOME 的"在册红 N 枚"与
+  CI 干净 HOME 的数不是同一个量，跨刀比较前必须确认两轮的 HOME 一致；否则我会把环境红算成回归。
+- **155（散枚红的成员集本身会换人）**：这轮 `test_fork_project` 那枚转绿、`test_terminal_availability`
+  那枚进集。判"本笔没引入新红"要按"差集是否恰为本笔修的枚 + 新收集枚"对账，而不是拿两个总数相减——
+    总数相减在成员换手时会给出一样的数却讲错原因（判据 139 的同一族）。
+- **156（"这枚文件怎么不在册"要先读工具的选文件逻辑）**：两枚 fork 新建测试文件带着 +145/0、+137/0 的对分叉点
+  diff 却不在册，我一开始当成读数漏了。真相是 `check_p1_invariants.py:179` 只认 base ref 存在的路径 ⇒
+  新文件按定义零 P1 债。任何"账对不上"先读脚本自己的选择集，再怀疑数（判据 73 的正向用法）。
+
+**待裁（刀 99 之后仍开放）**：`SkillPoolService` / `get_workspace_skills_dir` 那对影子 —— 现网跑的是我们
 保留的 `agents/skills_manager.py` 那份（14/15 方法体与上游 `agents/skill_system/` 不同，上游另多 4 枚自动化/改名
 方法）。要么按裁决 2 跟着上游删、把 `agents.py` 的 import 翻到 `skill_system`，要么留我们那份并承认这是 fork
 自有能力。这需要产品侧一句话，不是合并能自动答的。
+
+相关账目：本节 = 已闭环 **100**（刀 94 = 8.9 那笔，裁决 (b) 的落地；刀 95 = 8.11 那笔，8.10 里唯一一枚生产侧；
+刀 96 = 8.14 那笔，8.10 里其余 14 枚测试侧；刀 97 = 8.16 那笔，8.14 待办 ① 那枚生产侧签名；
+刀 98 = 8.18 那笔，8.14 待办 ① 剩下的 2 枚测试侧红；刀 99 = 8.20 那笔，8.18 末句登记的那 6 枚 migration 红；
+刀 100 = 8.22 那笔，8.20 验收读数里剩下的 14 枚散枚红）；
+判据 113–128 原文在本节 8.7、129–136 在 8.12、137–141 在 8.15、142–143 在 8.17、144–147 在 8.19、148–151 在 8.21、
+152–156 在 8.23（§1–§6 引用的 84–86、101–112 仍是
+`2026-10-07-trial-merge-conflict-table.md` 与本文前七节的口径）。
