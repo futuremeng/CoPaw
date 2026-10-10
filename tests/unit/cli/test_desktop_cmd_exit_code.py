@@ -9,6 +9,7 @@ POSIX ``128 + signum`` translation were dropped, so closing the window made
 """
 from __future__ import annotations
 
+import signal
 from typing import Any
 
 import pytest
@@ -18,29 +19,17 @@ from qwenpaw.cli import desktop_cmd as desktop_cmd_module
 
 
 class FakeProc:
-    """Minimal subprocess.Popen stand-in that records teardown calls."""
+    """Minimal subprocess.Popen stand-in recording the process state."""
 
     def __init__(self, returncode: int | None = None) -> None:
         self.pid = 4242
         self.returncode = returncode
-        self.terminated = False
-        self.killed = False
         self.stdin = None
         self.stdout = None
         self.stderr = None
 
     def poll(self) -> int | None:
         return self.returncode
-
-    def terminate(self) -> None:
-        if self.returncode is None:
-            self.terminated = True
-            self.returncode = -15
-
-    def kill(self) -> None:
-        if self.returncode is None:
-            self.killed = True
-            self.returncode = -9
 
     def wait(self, timeout: float | None = None) -> int | None:
         return self.returncode
@@ -62,7 +51,15 @@ def _patch_desktop(
     proc: FakeProc,
     *,
     ready: bool = True,
-) -> None:
+) -> list[tuple[int, object]]:
+    """Patch the desktop command's seams and return the recorded signals.
+
+    ``qwenpaw.cli.shutdown_cmd._signal_process_tree_unix`` is the seam the
+    shared teardown uses to signal a process tree; stubbing it (the same seam
+    upstream's own ``test_cli_shutdown.py`` uses) keeps the case from sending
+    real signals to ``FakeProc.pid`` and keeps the stdlib ``subprocess``
+    module out of the patch set.
+    """
     monkeypatch.setattr(desktop_cmd_module, "setup_logger", lambda *_a: None)
     monkeypatch.setattr(
         desktop_cmd_module,
@@ -86,6 +83,13 @@ def _patch_desktop(
     )
     monkeypatch.setattr(desktop_cmd_module, "webview", FakeWebview())
 
+    signals: list[tuple[int, object]] = []
+    monkeypatch.setattr(
+        "qwenpaw.cli.shutdown_cmd._signal_process_tree_unix",
+        lambda pid, sig: signals.append((pid, sig)),
+    )
+    return signals
+
 
 def _exit_code(result) -> int:
     if isinstance(result.exception, SystemExit):
@@ -96,11 +100,11 @@ def _exit_code(result) -> int:
 
 def test_closing_the_window_exits_zero(monkeypatch) -> None:
     proc = FakeProc()
-    _patch_desktop(monkeypatch, proc)
+    signals = _patch_desktop(monkeypatch, proc)
 
     result = CliRunner().invoke(desktop_cmd_module.desktop_cmd, [])
 
-    assert proc.terminated is True
+    assert signals == [(proc.pid, signal.SIGTERM)]
     assert _exit_code(result) == 0
 
 
@@ -108,12 +112,12 @@ def test_webview_failure_still_terminates_the_backend(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     proc = FakeProc()
-    _patch_desktop(monkeypatch, proc)
+    signals = _patch_desktop(monkeypatch, proc)
     monkeypatch.setattr(desktop_cmd_module, "webview", None)
 
     result = CliRunner().invoke(desktop_cmd_module.desktop_cmd, [])
 
-    assert proc.terminated is True
+    assert signals == [(proc.pid, signal.SIGTERM)]
     assert _exit_code(result) != 0
 
 
@@ -121,10 +125,11 @@ def test_startup_failure_propagates_the_backend_code(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     proc = FakeProc(returncode=3)
-    _patch_desktop(monkeypatch, proc, ready=False)
+    signals = _patch_desktop(monkeypatch, proc, ready=False)
 
     result = CliRunner().invoke(desktop_cmd_module.desktop_cmd, [])
 
+    assert signals == []
     assert _exit_code(result) == 3
 
 
@@ -132,9 +137,9 @@ def test_backend_killed_by_a_signal_uses_the_posix_code(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     proc = FakeProc(returncode=-9)
-    _patch_desktop(monkeypatch, proc)
+    signals = _patch_desktop(monkeypatch, proc)
 
     result = CliRunner().invoke(desktop_cmd_module.desktop_cmd, [])
 
-    assert proc.terminated is False
+    assert signals == []
     assert _exit_code(result) == 137
