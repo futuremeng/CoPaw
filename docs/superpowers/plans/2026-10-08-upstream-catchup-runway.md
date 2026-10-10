@@ -1128,6 +1128,23 @@ baseline 三项全 0，delta 三项全 0，`result: PASSED`。结论没变（零
 
 ### 8.22 刀 100：那 14 枚散枚红 = 1 枚生产侧文件 + 5 枚测试侧文件（共 9 枚用例），余 5 枚是环境红
 
+**七笔提交，均已推 `origin/sync/upstream-20261009`、未开 PR**（按落点分笔，`c263ecf15` 那笔的标题写"four test-side
+edits"不准确：账只响应 `query_error_dump.py` 出册（−3）+ heartbeat +8 + manager −1 = **+4**，另外三枚测试文件
+按 `check_p1_invariants.py:179` 的定义进不了册，所以账笔对它们是零响应）：
+
+- `22c112207` 生产侧 1 文件 +3/−3：`query_error_dump.py` 退回上游字节 ⇒ **出册**。
+- `a291a2fb4` 测试侧 crons 两文件 +23/−16：heartbeat 跟上游签名、manager 两枚断言正反向下调。
+- `0d6c98828` 测试侧 cli 1 文件 +26/−21：桩换到 `_signal_process_tree_unix`。
+- `4c0f5cb18` 测试侧 providers 1 文件 +49/−15：兼容用例整枚重写（fork 自建、出册）。
+- `57c403500` 测试侧 providers 1 文件 +3/−3：retry 替身的字段与 chunk 形状。
+- `c263ecf15` 账 `scripts/p1_baseline.json` +10/−18。
+- `e9e9da282` docs（本节 + §8.23）。
+
+提交后在 HEAD 上重取的两项：`check_p1_invariants.py --check`（默认 `--target-ref HEAD`）**rc=0**、
+读数串与上面"账"一节逐字相同；六枚相关测试文件（五枚本笔改过 + 上游的 `test_query_error_dump.py`）在
+`HOME=/tmp/k100_home2` 下 **175 passed / 4 skipped / 5.11 s**。CI 选择集的 AFTER 读数取在最后一枚**代码**编辑之后，
+其后只有账与 docs 两笔 ⇒ 判据 89 未被违反。
+
 8.20 的验收读数把在册测试侧红收到 **32** = 14 发布渠道 `pending` + 4 `test_multi_agent_manager_startup.py`
 subprocess 超时 + **14 散枚**。本刀只做那 14 枚，且**先逐枚取栈**再分派（判据 134/140；8.20 的 6 枚教训是"按簇
 预判只解释一半"）。取法 = 单文件跑 `-q --tb=line` 拿断言行号，再按行号读树里字节 + 读被钉的生产签名。
