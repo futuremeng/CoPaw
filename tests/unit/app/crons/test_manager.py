@@ -832,7 +832,7 @@ async def test_start_skips_invalid_cron_and_keeps_valid_job() -> None:
 
 @pytest.mark.asyncio
 async def test_create_or_replace_raises_on_invalid_cron() -> None:
-    """Current behavior: invalid cron is persisted, then scheduler raises."""
+    """Upstream contract: scheduler validation precedes persistence."""
     repo = _InMemoryRepo(JobsFile(jobs=[]))
     manager = CronManager(
         repo=repo,
@@ -855,17 +855,17 @@ async def test_create_or_replace_raises_on_invalid_cron() -> None:
         with pytest.raises(ValueError):
             await manager.create_or_replace_job(invalid)
 
-        # Current behavior: persistence happens before scheduler validation.
-        saved = await repo.list_jobs()
-        assert len(saved) == 1
-        assert saved[0].id == "job-bad"
+        # validate_job_spec is the first statement of _persist_and_register,
+        # so a rejected spec leaves the repository untouched.
+        assert await repo.list_jobs() == []
     finally:
         await manager.stop()
 
 
 @pytest.mark.asyncio
 async def test_create_or_replace_raises_without_started() -> None:
-    """Current behavior: invalid cron persists when manager is not started."""
+    """Upstream contract: an invalid cron raises before persistence even when
+    the manager was never started."""
     repo = _InMemoryRepo(JobsFile(jobs=[]))
     manager = CronManager(
         repo=repo,
@@ -884,8 +884,7 @@ async def test_create_or_replace_raises_without_started() -> None:
             target=DispatchTarget(user_id="u1", session_id="s1"),
         ),
     )
-    await manager.create_or_replace_job(invalid)
+    with pytest.raises(ValueError):
+        await manager.create_or_replace_job(invalid)
 
-    saved = await repo.list_jobs()
-    assert len(saved) == 1
-    assert saved[0].id == "job-bad2"
+    assert await repo.list_jobs() == []

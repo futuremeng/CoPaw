@@ -14,7 +14,11 @@ from qwenpaw.app.crons.heartbeat import (
     parse_heartbeat_every,
     run_heartbeat_once,
 )
-from qwenpaw.constant import HEARTBEAT_FILE, HEARTBEAT_TARGET_LAST
+from qwenpaw.constant import (
+    HEARTBEAT_DEFAULT_TIMEOUT_SECONDS,
+    HEARTBEAT_FILE,
+    HEARTBEAT_TARGET_LAST,
+)
 
 
 async def _stream_events(_request):
@@ -28,24 +32,28 @@ async def test_run_heartbeat_once_dispatches_with_agent_last_dispatch(
     heartbeat_file = tmp_path / HEARTBEAT_FILE
     heartbeat_file.write_text("ping", encoding="utf-8")
 
-    heartbeat_config = SimpleNamespace(active_hours=None, target=HEARTBEAT_TARGET_LAST)
+    heartbeat_config = SimpleNamespace(
+        active_hours=None,
+        target=HEARTBEAT_TARGET_LAST,
+        timeout_seconds=HEARTBEAT_DEFAULT_TIMEOUT_SECONDS,
+    )
     last_dispatch = SimpleNamespace(
         channel="console",
         user_id="user-1",
         session_id="session-1",
     )
-    runner = SimpleNamespace(stream_query=_stream_events)
+    workspace = SimpleNamespace(stream_query=_stream_events)
     channel_manager = SimpleNamespace(send_event=AsyncMock())
 
     with patch(
         "qwenpaw.app.crons.heartbeat.get_heartbeat_config",
         return_value=heartbeat_config,
     ), patch(
-        "qwenpaw.config.config.load_agent_config",
-        return_value=SimpleNamespace(last_dispatch=last_dispatch),
+        "qwenpaw.app.crons.heartbeat.read_last_dispatch",
+        return_value=last_dispatch,
     ):
         await run_heartbeat_once(
-            runner=runner,
+            workspace=workspace,
             channel_manager=channel_manager,
             agent_id="agent-1",
             workspace_dir=tmp_path,
