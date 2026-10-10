@@ -1854,7 +1854,7 @@ async def test_retry_stream_when_remote_protocol_error(
     monkeypatch,
 ) -> None:
     class _FakeInnerModel:
-        model_name = "fake"
+        model = "fake"
         stream = True
 
         def __init__(self) -> None:
@@ -1872,7 +1872,7 @@ async def test_retry_stream_when_remote_protocol_error(
                 return _fail_stream()
 
             async def _ok_stream():
-                yield {"ok": True}
+                yield SimpleNamespace(content="ok")
 
             return _ok_stream()
 
@@ -1893,4 +1893,4 @@ async def test_retry_stream_when_remote_protocol_error(
     async for chunk in result:
         chunks.append(chunk)
 
-    assert chunks == [{"ok": True}]
+    assert [chunk.content for chunk in chunks] == ["ok"]
