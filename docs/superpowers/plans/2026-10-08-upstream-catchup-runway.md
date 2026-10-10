@@ -1210,8 +1210,10 @@ subprocess 超时 + **14 散枚**。本刀只做那 14 枚，且**先逐枚取�
 1. **#4185 保护在新库下失效要不要生产侧补**（8.22 表第五行）：现在缺名工具调用会以 `name="unknown"` 落进
    session history，缺 `id` 会让整条流 `ValidationError`。要么在 fork 侧加一条"丢/改名 `unknown` 块"的臂（那是
    往上游自有文件再加行为，P1 上涨），要么认上游现在的行为并把这条从册里划掉。
-2. `test_heartbeat.py` 里 **4 枚自 skip** 的 quality-loop 用例：skip 理由引用的
-   `_collect_project_quality_loop_digest` 在 `src/` 现 0 命中，其 kwargs 与 patch 目标三层都过期 ⇒ 删还是修。
+2. ~~`test_heartbeat.py` 里 **4 枚自 skip** 的 quality-loop 用例~~ —— **刀 101 已裁"修"并落地（8.24）**。
+   ⚠ 本条原措辞"`_collect_project_quality_loop_digest` 在 `src/` 现 0 命中"只对四枚 heartbeat helper 成立，
+   对子系统不成立：`knowledge/graph_ops.py:492 maybe_start_quality_self_drive`、`:860 list_quality_loop_jobs`、
+   `app/routers/knowledge.py:2000` 三处合同都活着（判据 157）。
 3. `~/.copaw` 非密封那笔（8.20 已登记 25 枚 hanlp 用例的落盘泄漏）：本笔的 5 枚环境红是同一机制的**读数面**
    （不止写脏，还会让用例自己变红），加进"要不要为测试基建再开一刀"的证据里。
 
@@ -1234,6 +1236,115 @@ subprocess 超时 + **14 散枚**。本刀只做那 14 枚，且**先逐枚取�
   diff 却不在册，我一开始当成读数漏了。真相是 `check_p1_invariants.py:179` 只认 base ref 存在的路径 ⇒
   新文件按定义零 P1 债。任何"账对不上"先读脚本自己的选择集，再怀疑数（判据 73 的正向用法）。
 
+### 8.24 刀 101：8.22 待裁 ② 那 4 枚自 skip 判"修"，落点从上游宿主换到 fork 自有模块
+
+用户裁定口径 = "你觉得有价值就修，没价值就删"，我公开把范围收在 8.22 待裁 ② 那一件（待裁 ① #4185、
+待裁 ③ `~/.copaw` 密封不是"修/删"形状，仍开放）。
+
+**根因收到一笔提交一枚机制**：`git log -S "does not offload quality-loop digest collection in current runtime"
+-- tests/unit/app/crons/test_heartbeat.py` 唯一命中 `ac9b836db`（`fix(cron): add workspace fast-path and
+stabilize cron tests`）。能力本体是 `1182316c4`（2026-04-13 `feat: close quality-loop orchestration loop and
+harden auth status requests`，对 `src/copaw/app/crons/heartbeat.py` **+195/0**）写的，上游 `copaw → qwenpaw`
+改名合并把它吞掉；那笔没有连用例一起删，而是给四枚用例钉 skip ⇒ 这是一张止血欠条，不是产品侧放弃。
+
+**接替者逐枚查**（裁决 3 那一型）：`_collect_project_quality_loop_digest`、`append_quality_loop_digest`、
+`maybe_start_quality_self_drive`、`list_quality_loop_jobs` 四个符号在 `agentscope-ai/main` 命中均 **0 文件** ⇒
+上游没有接替者，"重设计"没有依据，按忠实恢复写；同时 8.22 待裁 ② 那句"在 `src/` 现 0 命中"已就地更正——
+无的是四枚 heartbeat helper，quality-loop 子系统的三处合同都活着（`knowledge/graph_ops.py:492`、`:860`、
+`app/routers/knowledge.py:2000`），照旧措辞会推出相反结论。
+
+**落点定价**：227 行 helper 全放 fork 自有新文件 `src/qwenpaw/app/crons/heartbeat_quality_loop.py`；
+上游宿主 `heartbeat.py` 只留 import 1 行 + 调用 4 行 = **对分叉点 +6**。对照 donor 形状（195 行重放进宿主）
+= 同一笔成果、册涨 6 还是 195、下次合并的冲突面按整枚文件算还是按 6 行算（判据 129/142 的又一次落地）。
+新文件本身按 `check_p1_invariants.py:179` 的定义零 P1 债。
+
+**接线位置与可达性**：插入点在 `run_heartbeat_once` 读完 HEARTBEAT.md、空文件 `return` 之后，
+在 `HEARTBEAT_TARGET_LAST`（`:246`）/ `HEARTBEAT_TARGET_INBOX`（`:272`）/ `main` 落流（`:392`）三条分支**之前** ⇒
+三种心跳目标都带摘要。两处生产调用方 `crons/manager.py:1015`、`app/routers/config.py:826` 都传
+`workspace_dir` ⇒ 恢复的是活路径而不是只被用例走到的分支。`KnowledgeConfig` 的 `enabled`
+（`config/product_models.py:262`，默认 True）与 `memify_enabled`（`:269`，默认 False）字段仍在，
+自动编排读这两枚 ⇒ 默认关；摘要采集本身不受这两枚限制。
+
+**四枚用例的合同改动**：`runner=` → `workspace=`（8.22 表第二行同一改法）；config 替身补
+`timeout_seconds=HEARTBEAT_DEFAULT_TIMEOUT_SECONDS`；打点目标从 `qwenpaw.app.crons.heartbeat.*` 移到
+`qwenpaw.app.crons.heartbeat_quality_loop.*`（前三枚另补一条 `_load_knowledge_config` 返回
+`enabled=False, memify_enabled=False`，让自动编排在不相关用例里保持关闭）。
+
+**证红顺序**（TDD：红必须是对的形状）：第一版红是 `AttributeError: module 'qwenpaw.app.crons' has no
+attribute 'heartbeat_quality_loop'`——用例打了还不存在的模块 ⇒ 先落骨架 + 宿主接线，才拿到行为型红
+`AssertionError: assert '[Project Quality Loop Digest]' in 'ping'`。三枚临时探针逐枚量牙齿，每枚只让它对应的
+那一枚用例红、其余三枚照旧绿，探针全部用 Edit 撤销，撤销后 `grep -rn PROBE` 读空。
+第四枚（offload 断言）是**机制性重写**不是搬运：宿主现在用 `run_sync_io`（`utils/io_utils.py:117`）把
+`get_heartbeat_config` 也扔到线程，`patch()` 装的 MagicMock 因此是第一枚被 offload 的可调用对象且无
+`__name__`，原断言"摘要是第一枚 `to_thread` 调用"不可达。实测一轮线程序列 =
+`[MagicMock, is_file, read_text_file_with_encoding_fallback, _collect_project_quality_loop_digest,
+read_last_dispatch]` ⇒ 改为容忍无名可调用 + 正向断言成员（判据 88 那一型）。
+
+**账**：`heartbeat.py` 首次进册 **+6**、`test_heartbeat.py` 306→**321**（+15），册
+**113 → 114 files / +10,947 −517**，行为 **112 → 113 files / +10,912 / −482**，命名 1·7·35 与 mechanical 1 照旧；
+`behavior_added` 的 +21 只能按文件对账（+6 宿主、+15 用例）。新模块 +227/0 零响应。
+`--check`（默认 `--target-ref HEAD`）rc=0；未提交态 `--check --target-ref working` 红 5 条
+（`files 113→114`、`behavior_added 10,891→10,912`、`behavior_files 112→113`、
+`NEW upstream-owned file touched: src/qwenpaw/app/crons/heartbeat.py`、
+`tests/unit/app/crons/test_heartbeat.py behavior grew: 306→321`）⇒ 配套 `chore(p1)` 重立基线一笔
+（`c263ecf15` 那一型）。⚠ 默认 HEAD 读不到未提交改动（判据 78），所以 `--check` rc=0 在这一笔里不代表成果。
+
+**验收读数**（全部取在最后一枚**代码**编辑之后，判据 89；本笔 `HOME` = `/tmp/k101_home`，读数带这个条件，
+判据 154）：
+- `tests/unit/app/crons` 改前 **163 passed / 4 skipped / 0.88 s** → 改后 **167 passed / 0 skipped / 1.00 s**。
+- CI 选择集（`tests/unit --ignore=tests/unit/channels -p no:randomly`）**15 failed / 15,707 passed /
+  23 skipped / 4 xfailed / 762.05 s**。收集 **15,749** 与 8.22 的 AFTER 逐位相同 ⇒ 本笔没换收集口径。
+  差额闭合：skipped −4 = 去 skip 的四枚；failed −8 = 8.22 那 8 枚环境/负载枚（acp 两枚
+  `did not fire within 5.0s`、`shutdown_lifecycle`、`shutdown_deadline_integration`、
+  `test_terminal_availability`、四枚 `test_multi_agent_manager_startup.py` subprocess 超时）这轮全绿；
+  新进集 1 枚 = `test_safety_checks.py::test_b1_normalize_before_home_glob_match`，机制读到函数字节：
+  `safety_checks.py:345 _HOME_TOP_LEVEL = frozenset({"home", "users"})` + `:443` 只看路径首段 ⇒
+  `../*`（cwd = `$HOME/project`）在 `/tmp` 下的 HOME 里首段是 `tmp`，不被判 catastrophic。两态实测：真 HOME
+  单文件 **158 passed**、隔离 HOME 单文件 **1 failed / 157 passed**，且把 `$HOME/project` 建出来照旧红 ⇒
+  判 HOME 形状，非负载、非本笔（判据 154 的第三种成因）。选择集 `FAILED` 名单里 `tests/unit/app/crons` **0 枚**。
+- L1 must-pass 五目录（`unit-tests.yml:112-119` 现枚举）真 HOME **1,336 passed / 1 skipped / 7.19 s**，
+  与 8.20/8.22 同计数；同一批在 `/tmp/k101_home` 下多出的那 1 枚就是上面这枚（判据 154 直接命中）。
+- 门禁按 CI 定义现枚举（判据 92）：`unit-tests.yml:68/84/89/94` + `tests.yml:207` + `local-gate.sh:24-27`
+  共 6 条，全 rc=0。locale 串与 8.22 逐字相同（`4658 production gated keys / 59 template key families gated /
+  7 exempted / 1459 overlay keys en/zh / 23 upstream-owned keys exempted`）；namespace 门禁本机
+  `qwenpaw_upstream_main` 不可解析（无该 remote），改用 `--upstream-ref agentscope-ai/main` ⇒
+  `copaw_only_count: 6`、delta 三项 0、`result: PASSED`；发布渠道 `R1-R5 over 6 channel files`；
+  CI 命令目标 `16 run commands across 3 package dirs`；channel contracts 18 渠道 OK；pipeline `0 issues`。
+- flake8 三枚文件：`heartbeat.py`、`heartbeat_quality_loop.py` **0 处**；`test_heartbeat.py` **4 处 E501**
+  全是未动的既有行（两枚函数签名 + 两枚 dict 字面量），同文件 HEAD 副本 **10** 处 ⇒ 净 −6、新增 0。
+  CI 无跑 flake8 的 workflow（判据 73），这一项是本地约定不是门禁。
+- 前端一枚文件未改 ⇒ vitest / tsc / prettier 不在本笔验收范围。
+
+**没量什么**：合并到 tip 后 CI 干净 HOME 的实际读数（本机取不了）；`append_quality_loop_digest` 在真机
+workspace 上产出的摘要文本没做人工复看，只有四枚用例断言；`memify_enabled=True` 时真起
+`maybe_start_quality_self_drive` 的端到端（用例打的是替身）。
+
+### 8.25 本笔新增判据 157–161
+
+- **157（skip 理由引用的机制要分两层读，再判修/删）**：那四枚 skip 的理由串指向
+  `_collect_project_quality_loop_digest`。只读"这个 helper 在不在 `src/`"会得出"能力已死 ⇒ 删用例"；
+  再读"它调的子系统合同活不活"（这里三处都活着，`graph_ops.py:492/860`、`knowledge.py:2000`）结论翻成
+  "helper 没了、能力还在 ⇒ 这是改名吞掉的欠条"。判"这枚能力还有没有价值"必须先做能力面的第二层取证。
+- **158（恢复一笔被改名吞掉的能力，落点按下一次合并的冲突面定价，不按 donor 的形状）**：同样四枚用例绿，
+  195 行重放进上游宿主 vs 227 行放进 fork 自有新文件 + 宿主 6 行。后者把册涨幅从 195 压到 6、把宿主冲突
+  从整枚文件压到 6 行可重放，新文件按定义零债。落点选择不是风格问题，是给未来的自己少开一次冲突。
+- **159（"我是第一枚被 offload 的调用"这类断言会在宿主自己开始 offloading 之后变成不可达）**：宿主的
+  `run_sync_io(get_heartbeat_config, …)` 让 `patch()` 装的 MagicMock 成为第一枚被扔进线程的可调用对象，
+  而 MagicMock 无 `__name__`。搬运旧断言必红在 `AttributeError: __name__`；正确做法是先打印整条序列
+  （这里五元素），再写成"容忍无名 + 正向断言成员"。
+- **160（红读数必须先分类，而"分类"的证据要取到函数字节）**：这枚 `tool_guard` 用例在两态 HOME 下单文件跑就
+  翻面，建目录不改结果 ⇒ 机制是 `_HOME_TOP_LEVEL = {"home","users"}` 的首段假设。没有那两处字节，
+  我会在册上把它写成"又一个 HOME 泄漏"，而它其实是"被测函数的路径形状假设 + 隔离 HOME 的选址"。
+- **161（`--check` rc=0 在有未提交改动时是空读）**：P1 门禁默认 `--target-ref HEAD`，本笔五处红全部只在
+  `--target-ref working` 下存在。任何"门禁绿了"的陈述都必须带上它读的是哪一态，否则一张还没进账的欠条
+  会以"通过"的面目出现（判据 78 的第二次咬人）。
+
+**待裁（本笔之后仍开放，都不在刀序里）**：8.22 待裁 ①（#4185 保护在新库下失效要不要生产侧补）、
+待裁 ③（`~/.copaw` 密封：74 处导入期 `WORKING_DIR` 绑定 vs 一枚 autouse patch）、
+以及 8.22 末那条 `SkillPoolService` / `get_workspace_skills_dir` 影子。本笔新登记的候选不是刀，
+是选址约定：以后为测试卫生选隔离 HOME，应选形状与真 HOME 同族的目录（`/Users/…`、`/home/…`），
+不要放在 `/tmp` 下（判据 160）。
+
 **待裁（刀 99 之后仍开放）**：`SkillPoolService` / `get_workspace_skills_dir` 那对影子 —— 现网跑的是我们
 保留的 `agents/skills_manager.py` 那份（14/15 方法体与上游 `agents/skill_system/` 不同，上游另多 4 枚自动化/改名
 方法）。要么按裁决 2 跟着上游删、把 `agents.py` 的 import 翻到 `skill_system`，要么留我们那份并承认这是 fork
@@ -1242,7 +1353,7 @@ subprocess 超时 + **14 散枚**。本刀只做那 14 枚，且**先逐枚取�
 相关账目：本节 = 已闭环 **100**（刀 94 = 8.9 那笔，裁决 (b) 的落地；刀 95 = 8.11 那笔，8.10 里唯一一枚生产侧；
 刀 96 = 8.14 那笔，8.10 里其余 14 枚测试侧；刀 97 = 8.16 那笔，8.14 待办 ① 那枚生产侧签名；
 刀 98 = 8.18 那笔，8.14 待办 ① 剩下的 2 枚测试侧红；刀 99 = 8.20 那笔，8.18 末句登记的那 6 枚 migration 红；
-刀 100 = 8.22 那笔，8.20 验收读数里剩下的 14 枚散枚红）；
+刀 100 = 8.22 那笔，8.20 验收读数里剩下的 14 枚散枚红；刀 101 = 8.24 那笔，8.22 待裁 ② 那 4 枚自 skip 的用例）；
 判据 113–128 原文在本节 8.7、129–136 在 8.12、137–141 在 8.15、142–143 在 8.17、144–147 在 8.19、148–151 在 8.21、
-152–156 在 8.23（§1–§6 引用的 84–86、101–112 仍是
+152–156 在 8.23、157–161 在 8.25（§1–§6 引用的 84–86、101–112 仍是
 `2026-10-07-trial-merge-conflict-table.md` 与本文前七节的口径）。
