@@ -370,7 +370,20 @@ class TestEnsureQaAgent:
             lambda c: saved.append(c),
         )
         migration._do_ensure_qa_agent()
-        assert saved == []
+        # Our builtin loop does not return early for an existing profile:
+        # it backfills the builtin metadata and heals agent_order, so a
+        # profile that predates those fields is written once.
+        assert len(saved) == 1
+        ref = saved[0].agents.profiles[BUILTIN_QA_AGENT_ID]
+        assert ref.is_builtin is True
+        assert ref.builtin_kind == "qa"
+        assert ref.builtin_label == "QA"
+        assert ref.system_protected is True
+        assert BUILTIN_QA_AGENT_ID in saved[0].agents.agent_order
+        # The steady state is the noop this test names: a second pass on a
+        # fully marked profile writes nothing.
+        migration._do_ensure_qa_agent()
+        assert len(saved) == 1
 
 
 class TestLegacyQaDisable:

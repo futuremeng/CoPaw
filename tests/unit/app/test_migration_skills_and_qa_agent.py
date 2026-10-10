@@ -779,11 +779,27 @@ class TestDoEnsureQaAgent:
 
         migration._do_ensure_qa_agent()
 
-        assert saved_configs == []
+        # Our builtin loop has no early return for an existing profile: it
+        # backfills the builtin metadata and heals agent_order, so the first
+        # pass on a profile that predates those fields does write config once.
+        assert len(saved_configs) == 1
         assert saved_agents == []
-        assert initialized == []
+        assert len(initialized) == 1
+        assert initialized[0][0] == existing
+        ref = saved_configs[0].agents.profiles[BUILTIN_QA_AGENT_ID]
+        assert ref.workspace_dir == str(existing)
+        assert ref.is_builtin is True
+        assert ref.builtin_kind == "qa"
+        assert ref.builtin_label == "QA"
+        assert ref.system_protected is True
+        assert BUILTIN_QA_AGENT_ID in saved_configs[0].agents.agent_order
         # the workspace json files are still ensured for an existing profile
         assert (existing / "chats.json").is_file()
+
+        # Steady state, which is what "noop" claims: once the metadata is in
+        # place a second pass writes no config at all.
+        migration._do_ensure_qa_agent()
+        assert len(saved_configs) == 1
 
     def test_existing_profile_with_a_custom_workspace_is_respected(
         self,
@@ -800,7 +816,12 @@ class TestDoEnsureQaAgent:
 
         migration._do_ensure_qa_agent()
 
-        assert saved_configs == []
+        # One write for the metadata backfill, but the directory the user
+        # chose stays the builtin's workspace.
+        assert len(saved_configs) == 1
+        ref = saved_configs[0].agents.profiles[BUILTIN_QA_AGENT_ID]
+        assert ref.workspace_dir == str(custom)
+        assert ref.is_builtin is True
         assert custom.is_dir()
         assert not (wd / "workspaces" / BUILTIN_QA_AGENT_ID).exists()
 
