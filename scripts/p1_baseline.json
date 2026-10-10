@@ -658,12 +658,12 @@
       "removed": 14
     },
     "src/qwenpaw/app/migration.py": {
-      "added": 160,
-      "behavior_added": 160,
-      "behavior_removed": 75,
+      "added": 171,
+      "behavior_added": 171,
+      "behavior_removed": 59,
       "mechanical": false,
       "naming": 0,
-      "removed": 75
+      "removed": 59
     },
     "src/qwenpaw/app/routers/__init__.py": {
       "added": 17,
@@ -881,6 +881,22 @@
       "naming": 0,
       "removed": 0
     },
+    "tests/unit/app/test_migration.py": {
+      "added": 14,
+      "behavior_added": 14,
+      "behavior_removed": 1,
+      "mechanical": false,
+      "naming": 0,
+      "removed": 1
+    },
+    "tests/unit/app/test_migration_skills_and_qa_agent.py": {
+      "added": 24,
+      "behavior_added": 24,
+      "behavior_removed": 3,
+      "mechanical": false,
+      "naming": 0,
+      "removed": 3
+    },
     "tests/unit/app/test_provider_startup_offload.py": {
       "added": 10,
       "behavior_added": 10,
@@ -907,15 +923,15 @@
     }
   },
   "totals": {
-    "added": 10873,
-    "behavior_added": 10838,
-    "behavior_files": 111,
-    "behavior_removed": 497,
-    "files": 112,
+    "added": 10922,
+    "behavior_added": 10887,
+    "behavior_files": 113,
+    "behavior_removed": 485,
+    "files": 114,
     "mechanical_files": 1,
     "naming_files": 1,
     "naming_lines": 35,
     "naming_touched_files": 7,
-    "removed": 532
+    "removed": 520
   }
 }
