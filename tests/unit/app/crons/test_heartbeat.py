@@ -69,21 +69,22 @@ async def test_run_heartbeat_once_dispatches_with_agent_last_dispatch(
 
 
 @pytest.mark.asyncio
-@pytest.mark.skip(
-    reason="qwenpaw heartbeat currently sends HEARTBEAT.md directly without quality-loop digest injection",
-)
 async def test_run_heartbeat_once_injects_quality_loop_digest(tmp_path) -> None:
     heartbeat_file = tmp_path / HEARTBEAT_FILE
     heartbeat_file.write_text("ping", encoding="utf-8")
 
-    heartbeat_config = SimpleNamespace(active_hours=None, target="main")
+    heartbeat_config = SimpleNamespace(
+        active_hours=None,
+        target="main",
+        timeout_seconds=HEARTBEAT_DEFAULT_TIMEOUT_SECONDS,
+    )
     captured_requests: list[dict] = []
 
     async def _stream_capture(request):
         captured_requests.append(request)
         yield {"type": "message", "text": "ok"}
 
-    runner = SimpleNamespace(stream_query=_stream_capture)
+    workspace = SimpleNamespace(stream_query=_stream_capture)
     channel_manager = SimpleNamespace(send_event=AsyncMock())
 
     project_quality_dir = tmp_path / "projects" / "demo" / ".knowledge"
@@ -106,9 +107,12 @@ async def test_run_heartbeat_once_injects_quality_loop_digest(tmp_path) -> None:
     with patch(
         "qwenpaw.app.crons.heartbeat.get_heartbeat_config",
         return_value=heartbeat_config,
+    ), patch(
+        "qwenpaw.app.crons.heartbeat_quality_loop._load_knowledge_config",
+        return_value=SimpleNamespace(enabled=False, memify_enabled=False),
     ):
         await run_heartbeat_once(
-            runner=runner,
+            workspace=workspace,
             channel_manager=channel_manager,
             agent_id="agent-1",
             workspace_dir=tmp_path,
@@ -124,23 +128,24 @@ async def test_run_heartbeat_once_injects_quality_loop_digest(tmp_path) -> None:
 
 
 @pytest.mark.asyncio
-@pytest.mark.skip(
-    reason="qwenpaw heartbeat currently sends HEARTBEAT.md directly without quality-loop guidance injection",
-)
 async def test_run_heartbeat_once_includes_actionable_quality_loop_guidance(
     tmp_path,
 ) -> None:
     heartbeat_file = tmp_path / HEARTBEAT_FILE
     heartbeat_file.write_text("ping", encoding="utf-8")
 
-    heartbeat_config = SimpleNamespace(active_hours=None, target="main")
+    heartbeat_config = SimpleNamespace(
+        active_hours=None,
+        target="main",
+        timeout_seconds=HEARTBEAT_DEFAULT_TIMEOUT_SECONDS,
+    )
     captured_requests: list[dict] = []
 
     async def _stream_capture(request):
         captured_requests.append(request)
         yield {"type": "message", "text": "ok"}
 
-    runner = SimpleNamespace(stream_query=_stream_capture)
+    workspace = SimpleNamespace(stream_query=_stream_capture)
     channel_manager = SimpleNamespace(send_event=AsyncMock())
 
     stagnated_quality_dir = tmp_path / "projects" / "alpha" / ".knowledge"
@@ -185,9 +190,12 @@ async def test_run_heartbeat_once_includes_actionable_quality_loop_guidance(
     with patch(
         "qwenpaw.app.crons.heartbeat.get_heartbeat_config",
         return_value=heartbeat_config,
+    ), patch(
+        "qwenpaw.app.crons.heartbeat_quality_loop._load_knowledge_config",
+        return_value=SimpleNamespace(enabled=False, memify_enabled=False),
     ):
         await run_heartbeat_once(
-            runner=runner,
+            workspace=workspace,
             channel_manager=channel_manager,
             agent_id="agent-1",
             workspace_dir=tmp_path,
@@ -204,16 +212,17 @@ async def test_run_heartbeat_once_includes_actionable_quality_loop_guidance(
 
 
 @pytest.mark.asyncio
-@pytest.mark.skip(
-    reason="qwenpaw heartbeat does not include quality-loop orchestration hooks in current runtime",
-)
 async def test_run_heartbeat_once_attempts_quality_loop_orchestration_for_actionable_projects(
     tmp_path,
 ) -> None:
     heartbeat_file = tmp_path / HEARTBEAT_FILE
     heartbeat_file.write_text("ping", encoding="utf-8")
 
-    heartbeat_config = SimpleNamespace(active_hours=None, target="main")
+    heartbeat_config = SimpleNamespace(
+        active_hours=None,
+        target="main",
+        timeout_seconds=HEARTBEAT_DEFAULT_TIMEOUT_SECONDS,
+    )
     captured_requests: list[dict] = []
     orchestration_calls: list[dict] = []
 
@@ -229,7 +238,7 @@ async def test_run_heartbeat_once_attempts_quality_loop_orchestration_for_action
             "reason": "STARTED",
         }
 
-    runner = SimpleNamespace(stream_query=_stream_capture)
+    workspace = SimpleNamespace(stream_query=_stream_capture)
     channel_manager = SimpleNamespace(send_event=AsyncMock())
 
     stagnated_quality_dir = tmp_path / "projects" / "alpha" / ".knowledge"
@@ -253,16 +262,15 @@ async def test_run_heartbeat_once_attempts_quality_loop_orchestration_for_action
         "qwenpaw.app.crons.heartbeat.get_heartbeat_config",
         return_value=heartbeat_config,
     ), patch(
-        "qwenpaw.app.crons.heartbeat.load_config",
-        return_value=SimpleNamespace(
-            knowledge=SimpleNamespace(enabled=True, memify_enabled=True),
-        ),
+        "qwenpaw.app.crons.heartbeat_quality_loop._load_knowledge_config",
+        return_value=SimpleNamespace(enabled=True, memify_enabled=True),
     ), patch(
-        "qwenpaw.app.crons.heartbeat.GraphOpsManager.maybe_start_quality_self_drive",
+        "qwenpaw.app.crons.heartbeat_quality_loop.GraphOpsManager"
+        ".maybe_start_quality_self_drive",
         new=_fake_maybe_start,
     ):
         await run_heartbeat_once(
-            runner=runner,
+            workspace=workspace,
             channel_manager=channel_manager,
             agent_id="agent-1",
             workspace_dir=tmp_path,
@@ -277,9 +285,6 @@ async def test_run_heartbeat_once_attempts_quality_loop_orchestration_for_action
 
 
 @pytest.mark.asyncio
-@pytest.mark.skip(
-    reason="qwenpaw heartbeat does not offload quality-loop digest collection in current runtime",
-)
 async def test_run_heartbeat_once_offloads_quality_digest_to_thread(
     tmp_path,
     monkeypatch,
@@ -287,8 +292,12 @@ async def test_run_heartbeat_once_offloads_quality_digest_to_thread(
     heartbeat_file = tmp_path / HEARTBEAT_FILE
     heartbeat_file.write_text("ping", encoding="utf-8")
 
-    heartbeat_config = SimpleNamespace(active_hours=None, target="main")
-    runner = SimpleNamespace(stream_query=_stream_events)
+    heartbeat_config = SimpleNamespace(
+        active_hours=None,
+        target="main",
+        timeout_seconds=HEARTBEAT_DEFAULT_TIMEOUT_SECONDS,
+    )
+    workspace = SimpleNamespace(stream_query=_stream_events)
     channel_manager = SimpleNamespace(send_event=AsyncMock())
     original_to_thread = asyncio.to_thread
     calls: list[tuple[Any, tuple[object, ...]]] = []
@@ -297,21 +306,27 @@ async def test_run_heartbeat_once_offloads_quality_digest_to_thread(
         calls.append((func, args))
         return await original_to_thread(func, *args, **kwargs)
 
-    monkeypatch.setattr("qwenpaw.app.crons.heartbeat.asyncio.to_thread", fake_to_thread)
+    monkeypatch.setattr(
+        "qwenpaw.app.crons.heartbeat_quality_loop.asyncio.to_thread",
+        fake_to_thread,
+    )
 
     with patch(
         "qwenpaw.app.crons.heartbeat.get_heartbeat_config",
         return_value=heartbeat_config,
+    ), patch(
+        "qwenpaw.app.crons.heartbeat_quality_loop._load_knowledge_config",
+        return_value=SimpleNamespace(enabled=False, memify_enabled=False),
     ):
         await run_heartbeat_once(
-            runner=runner,
+            workspace=workspace,
             channel_manager=channel_manager,
             agent_id="agent-1",
             workspace_dir=tmp_path,
         )
 
-    assert calls
-    assert calls[0][0].__name__ == "_collect_project_quality_loop_digest"
+    offloaded = [getattr(func, "__name__", "") for func, _ in calls]
+    assert "_collect_project_quality_loop_digest" in offloaded
 
 
 # ---------------------------------------------------------------------------
