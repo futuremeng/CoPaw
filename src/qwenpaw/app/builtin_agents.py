@@ -4,7 +4,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from pathlib import Path
 from typing import Callable
 
 from ..config.config import (
@@ -16,13 +15,17 @@ from ..constant import (
     BUILTIN_QA_AGENT_ID,
     BUILTIN_QA_AGENT_NAME,
     BUILTIN_QA_AGENT_SKILL_NAMES,
-    WORKING_DIR,
 )
 
 
 @dataclass(frozen=True)
 class BuiltinAgentSpec:
-    """Static specification for one builtin agent."""
+    """Static specification for one builtin agent.
+
+    Deliberately carries no workspace path: the startup code that creates
+    these agents resolves it against its own ``WORKING_DIR`` binding so a
+    test that redirects that constant redirects every write.
+    """
 
     id: str
     name: str
@@ -34,10 +37,6 @@ class BuiltinAgentSpec:
     tools_builder: Callable[[], ToolsConfig]
     visible_in_ui: bool = True
     system_protected: bool = True
-
-    @property
-    def workspace_dir(self) -> Path:
-        return (WORKING_DIR / "workspaces" / self.id).expanduser()
 
 
 BUILTIN_UNDERSTAND_PROJECT_SCANNER_ID = "CoPaw_Understand_ProjectScanner_0.1beta1"

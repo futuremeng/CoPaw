@@ -8,6 +8,10 @@ import logging
 import shutil
 from pathlib import Path
 
+from ..agents.templates import (
+    DEFAULT_AGENT_TEMPLATE,
+    build_agent_template,
+)
 from ..config.config import (
     AgentProfileConfig,
     AgentProfileRef,
@@ -29,6 +33,9 @@ from ..constant import (
 from ..config.utils import load_config, save_config
 
 logger = logging.getLogger(__name__)
+
+_DEFAULT_AGENT_NAME = "Default Agent"
+_DEFAULT_AGENT_DESCRIPTION = "Default QwenPaw agent"
 
 # Workspace items to migrate: (name, is_directory)
 _WORKSPACE_ITEMS_TO_MIGRATE = [
@@ -678,6 +685,14 @@ def _do_ensure_default_agent() -> None:
     # Only update config if agent didn't exist
     if not agent_existed:
         logger.info("Creating default agent...")
+        template_result = build_agent_template(
+            DEFAULT_AGENT_TEMPLATE,
+            name=_DEFAULT_AGENT_NAME,
+            agent_id="default",
+            workspace_dir=default_workspace,
+            fallback_language=config.agents.language or "zh",
+            description=_DEFAULT_AGENT_DESCRIPTION,
+        )
 
         # Add default agent reference to config
         config.agents.profiles["default"] = AgentProfileRef(
@@ -690,6 +705,7 @@ def _do_ensure_default_agent() -> None:
             config.agents.active_agent = "default"
 
         save_config(config)
+        save_agent_config("default", template_result.agent_config)
         logger.info(
             f"Created default agent with workspace: {default_workspace}",
         )
@@ -814,6 +830,17 @@ def _do_ensure_qa_agent() -> None:
     ensure_builtin_agents_exist(spec_ids=[BUILTIN_QA_AGENT_ID])
 
 
+def _builtin_workspace_dir(spec: BuiltinAgentSpec) -> Path:
+    """Canonical workspace path for a builtin agent spec.
+
+    Resolved here rather than on the spec so that the ``WORKING_DIR`` this
+    module binds is the one that counts: the startup unit tests patch
+    ``migration.WORKING_DIR``, and a path built inside ``builtin_agents``
+    would keep writing into the developer's live working dir.
+    """
+    return Path(f"{WORKING_DIR}/workspaces/{spec.id}").expanduser()
+
+
 def _build_builtin_agent_config(
     spec: BuiltinAgentSpec,
     language: str,
@@ -826,7 +853,7 @@ def _build_builtin_agent_config(
         builtin_kind=spec.builtin_kind,
         builtin_label=spec.builtin_label,
         system_protected=spec.system_protected,
-        workspace_dir=str(spec.workspace_dir),
+        workspace_dir=str(_builtin_workspace_dir(spec)),
         language=language,
         channels=ChannelConfig(),
         mcp=MCPConfig(),
@@ -866,7 +893,7 @@ def _do_ensure_builtin_agents(spec_ids: list[str] | None = None) -> None:
     language = config.agents.language or "zh"
 
     for spec in selected_specs:
-        workspace = spec.workspace_dir
+        workspace = _builtin_workspace_dir(spec)
         if spec.id in config.agents.profiles:
             agent_ref = config.agents.profiles[spec.id]
             workspace = Path(agent_ref.workspace_dir).expanduser()
