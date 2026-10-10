@@ -1005,10 +1005,132 @@ AFTER 日志 **41 failed / 15,671 passed / 27 skipped / 4 xfailed / 1,057.55 s**
 - **147（桥的账按行交，即使语义零变化）**：为守 79 列把一行 `setattr` 拆成五行，册上就是 +10/−2，而改动内容
   只是换一个名字。记账口径按行不按义，与判据 91 同族：格式改动和减法刀受同一把尺。
 
-相关账目：本节 = 已闭环 **98**（刀 94 = 8.9 那笔，裁决 (b) 的落地；刀 95 = 8.11 那笔，8.10 里唯一一枚生产侧；
+### 8.20 刀 99：那 6 枚 migration 红是三因，不是 8.18 末句猜的那一因
+
+**先立逐枚根因表**（判据 134/140）。8.18 末句给的机制——"`migration.py` 错误路径把 `save_config` 多写了一次"
+——是按簇预判；实测 6 枚里只有 3 枚吃这条，另 3 枚分别是生产侧少写一行与路径读取点走错。逐枚取法：刀 98
+那轮 CI 用 `--tb=line`，日志里带**断言所在行号**，再按行号读改前字节（`bed6aac13`）的测试源码。
+
+| 用例 | 改前失败的那一行断言 | 成因 | 分派 |
+|---|---|---|---|
+| `test_migration.py::TestEnsureDefaultAgent::test_creates_missing_default` | `:336 assert agent_configs == ["default"]` | fork 把上游建默认 agent 时的 `build_agent_template(...)` + `save_agent_config("default", ...)` 丢了 ⇒ 顶层配置写了、`agent.json` 没写 | **生产侧**（裁决 RC-A：恢复上游那两行） |
+| `test_migration_skills_and_qa_agent.py::TestDoEnsureQaAgent::test_creates_the_builtin_slot_and_moves_active_agent_off_legacy` | `:736 assert canonical.is_dir()` | 规格对象的 `workspace_dir` 在 fork 里读**导入期**绑定的 `constant.WORKING_DIR` ⇒ 用例打 `migration.WORKING_DIR` 打不住它，目录建到开发者 `~/.copaw` | **生产侧读取点**（裁决 RC-B：修读取点） |
+| `...::test_skips_creation_when_another_agent_owns_the_path` | `:765 assert saved_configs == []` | 同一读取点：`_other_agent_owns_workspace`（`:714`）拿真 HOME 下算出的 canonical 跟 `alice` 的 `wd/workspaces/<QA>` 比，看不见认领 ⇒ 走创建分支 | 同上 |
+| `test_migration.py::TestEnsureQaAgent::test_existing_qa_agent_noop` | `:373 assert saved == []` | fork 对已存在的 builtin profile 会回填 `is_builtin` / `builtin_kind` / `builtin_label` / `system_protected` 并 `save_config`，上游没有这一步 | **断言侧**（裁决 RC-B：改断言、不弱化） |
+| `...::test_existing_builtin_profile_is_a_noop` | `:782 assert saved_configs == []` | 同上 | 同上 |
+| `...::test_existing_profile_with_a_custom_workspace_is_respected` | `:803 assert saved_configs == []` | 同上（这条同时吃读取点：`custom` 目录的创建路径） | 同上 |
+
+**落点三笔**：
+- `a19268e30`（生产侧，2 文件 +35/−9）：`migration.py` +29/−2 恢复上游那两行，并新增
+  `_builtin_workspace_dir(spec)`（`:833-840`，调用点 `:856` / `:893`）；`builtin_agents.py` +6/−7 删掉
+  `workspace_dir` property 与随之失效的 `Path` / `WORKING_DIR` 导入。全仓 `grep "spec.workspace_dir"` 现 0 命中
+  ⇒ 规格对象不带路径，路径只由使用方自己的模块级绑定解析，这才是 monkeypatch 能生效的原因。上游那两行所在的
+  import 块还列 `QA_AGENT_TEMPLATE`，本文件 0 引用，故只取实际用到的两个名字。
+- `ed532158e`（上游自有断言，2 文件 +38/−4）：三枚 noop 断言改成钉 fork 真正做的事——回填四字段的**值**、
+  `agent_order` 含 QA id、二次调用幂等（仍只写一次）、`chats.json` 仍在、自定义 workspace 不被搬到 canonical。
+  判据 88：全是正向钉，没有一枚改成"允许写"。
+- `b6da69a66`（fork 自有新文件 143 行，见下"超出裁决范围的一处落点"）。
+
+**证红与改前证据**：改前两文件合跑 **6 failed / 63 passed**（69 枚，`/tmp/k99_before.txt`）；改后四文件合跑
+**73 passed in 1.27 s**（+4 = 2 枚新回填覆盖 + 2 枚刀 98 的启动守卫）。另有六枚单变量变异探针（把恢复的
+`save_agent_config` 退回、把 `_builtin_workspace_dir` 换成写死拼接、去掉 ref 回填、去掉 `agent_order` 自愈、
+去掉已存在 profile 的 `_initialize_agent_workspace` 重跑、去掉 `agent.json` 回填），每枚各自把自己对应的新断言
+读成红，探针全部用 Edit 撤销并以 `git diff --stat -- src/` 读空自证。⚠ 这六枚的改前字节没有留档，能复核的是
+"每枚新断言都有对应一行被改坏"这个映射，以及上面那份改前红日志。
+
+**一次假绿（自纠）**：99-A 那步我在生产改动尚未落盘时就报过"三枚转绿"，实际跑的是 `bed6aac13` 的字节；
+发现后重跑读到 **3 failed / 66 passed** 才继续。此后每个"绿"之前都先确认改动在场（判据 89 的同一族：
+读数只对取它时的树状态有效）。
+
+**超出裁决范围的一处落点（申报）**：`tests/unit/app/test_migration_builtin_backfill.py`（fork 自有，
+`git cat-file -e ddd8408eb:` 失败）。理由：改后的三枚上游断言在 `tests/unit` 下走的都是
+`load_agent_config` 抛异常的那一半（autouse 隔离所致，判据 148），也就是回填循环里 `agent.json` 那一半**永远
+走不到**；grep 证据 = 该循环只有 `migration.py:889` 一处调用它，上游用例没有一个把配置那一半满足掉。这枚文件
+把那一半单独摊开成两条：配置已合格 + `agent.json` 缺字段 ⇒ 只补字段、不动用户自选的 name/description；
+两边都合格 ⇒ 一次写都不做。它超出 RC-B 的字面（"改断言 + 修读取点"），补的是判据 134 要求的分支覆盖，
+不引入新语义。
+
+**泄漏：本刀只结清了一半，另一半归因到具体文件并登记**。
+- 已结清（marker 双向实测）：四文件 migration 簇跑完后 `~/.copaw/workspaces` 里**晚于 marker 的文件 0 处**，
+  `~/.copaw/qwenpaw.log` 本身也没被碰（同轮 73 passed）。
+- 仍在漏：`~/.copaw/qwenpaw.log` 15:26:33–15:27:58 那段写盘指纹是
+  `src/qwenpaw/app/migration.py:977/1000` + `src/qwenpaw/app/routers/agents.py:1995` +
+  `src/qwenpaw/app/_app.py:470 "Server ready in 0.293s"`。两条判据说明它是**源码 checkout 的进程**而不是桌面
+  bundle：① `src/` 前缀（bundle 打的是 `_internal/qwenpaw`，前缀为 `qwenpaw/...` 且没有 `.py`），
+  ② `:977` 这个行号只对刀 99 之后的字节成立。同一份 log 里两种前缀 = 两个进程；bundle 自己的 traceback
+  恰在其上方、时间戳 15:15:01。
+- 归因手段：仓外临时 pytest 插件 `/tmp/leaktrace/leaktrace.py` 包住 `migration._do_ensure_builtin_agents`，
+  把当时看到的 `migration.WORKING_DIR` 与 `PYTEST_CURRENT_TEST` 连栈写文件；整轮 CI 选择集跑完 **25 次命中全部
+  来自 `tests/unit/app/routers/test_copaw_hanlp_tasks_router.py`**，且 25 次的 `WORKING_DIR` 全是
+  `/Users/futuremeng/.copaw`。单文件复跑坐实：该文件 29 枚用例（25 枚各进一次真 lifespan，`with
+  TestClient(app)`）20.21 s 内在开发者真目录写出 **8 枚文件**（7 枚 builtin 的 `agent.json` +
+  `QwenPaw_QA_Agent_0.2/skill.json`）。
+- 机制：`migration.py` 的 `WORKING_DIR` 来自 `from ..constant import WORKING_DIR` 这个**导入期绑定**，全仓同形
+  绑定现数 74 处，而刀 86 那笔 autouse 隔离只打了 `_config_utils.WORKING_DIR` 一枚 ⇒ 配置读写被隔离、目录读写
+  没有。所以 `~/.copaw/config.json` 保住了（用例自己打了 `load_config`），代价是每次 CI 都在开发者真目录里重写
+  那 7 枚 builtin 的 `agent.json`。
+- 登记不修：两条修法各有前置——在 autouse 里补 `migration.WORKING_DIR` 要先量那 25 枚 hanlp 用例是否依赖真
+  HOME 下的产物；把 `with TestClient(app)` 换成不打 lifespan 的替身则要动一枚 fork 自有测试文件。这是第二笔
+  测试基建账，另开一刀，不在本刀顺手做（判据 66 的方向：本刀把 migration 簇隔离好了，盲区移到了那 25 枚）。
+
+**门禁读数的一处更正**：刀 94–98 都写"五道门禁输出串逐字相同"，其中 `check_namespace_boundaries.py` 那道记的
+是 `shared_count: 35 / copaw_only_count: 6`。本笔复核发现那四次传的是 `--upstream-ref qwenpaw_upstream_main`，
+这个名字在本地**不存在**（`git rev-parse` fatal，脚本只印一行 `warning: failed to read baseline ref` 然后照常
+跑）⇒ 它们从没打印过 baseline 块与 delta 块，"逐字相同"比的是半张表。换成能解析的本地 `upstream/main`
+（= 新分叉点，里面没有 `src/copaw`）后读数 = current `shared_count: 35 / copaw_only_count: 6 / 其余三项 0`，
+baseline 三项全 0，delta 三项全 0，`result: PASSED`。结论没变（零回归），变的是那句话此前没有 baseline 可比。
+
+**账**：新宿主 2 枚，都是上游自有测试文件（`test_migration.py` +14/−1、
+`test_migration_skills_and_qa_agent.py` +24/−3，改前与分叉点逐字节相同）；`migration.py` 净 +27；
+`builtin_agents.py` 与 `test_migration_builtin_backfill.py` 对分叉点 diff 为空 / 分叉点无此文件 ⇒ 不入册。
+册 112 → **114 files / +10,922 −520**，行为 **113 files / +10,887 / −485**，命名 1·7·35 与 mechanical 1 照旧。
++49 可加 = 11（`migration.py` 除恢复行以外的新写）+ 14 + 24；−12 可减 = 还回上游那 16 行（−16）与本笔自己新删
+的 4 行。`migration.py` 单文件的 `removed` 75 → **59**：这是判据 ㉑ 的第二例形状（把上游的东西还回去，账上是
+减债）。⚠ 面（133 文件 / 15,213 行为行）本笔没重算，仍引 `2026-10-07-trial-merge-conflict-table.md` 的口径。
+
+**验收读数**：
+- CI 选择集三态（同旗标 `tests/unit --ignore=tests/unit/channels -p no:randomly`，判据 107）：
+  BEFORE（= 刀 98 的 AFTER）38 failed / 15,676 passed / 27 skipped / 4 xfailed / 1,087.14 s；
+  AFTER ① **32 failed / 15,684 passed / 27 skipped / 4 xfailed / 1,038.58 s**（取在最后一次编辑之后，判据 89）；
+  AFTER ②（带泄漏插件重跑）**32 / 15,684 / 27 / 4 / 1,018.87 s**。两次 AFTER 的 `FAILED` node-id 集
+  **逐字节相同**（`diff` 空），收集总数 15,745 → 15,747 恰为本笔新增枚数，差集 = 那 6 枚 ⇒ **0 枚新红**，
+  刀 97 登记的 pty flake 两轮都没复现。在册测试侧红自此 38 → **32** = 14 发布渠道 `pending`（等阶段 2）
+  + 4 `test_multi_agent_manager_startup.py` subprocess 超时 + 14 散枚。
+- L1 must-pass 五目录 **1,336 passed / 1 skipped / 7.50 s**；五道离线门禁 + 品牌账册全 rc=0
+  （locale 门禁 `4658 production gated keys / 59 template key families gated / 7 exempted / 1459 overlay keys
+  en/zh / 23 upstream-owned keys exempted`；发布渠道 `R1-R5 over 6 channel files`；CI 命令目标 `16 run commands
+  across 3 package dirs`；品牌 `ledger replayable: 7 files / 35 lines`）；P1 `--check` rc=0（`--write-baseline`
+  之后）；namespace 门禁见上段更正。
+- flake8：`builtin_agents.py` 42/48/49 E501 + 164 W292、`migration.py` 912 E501 共 5 处，与改前字节
+  （`git show bed6aac13:` 同码 43/49/50/165 + `migration.py:885`）**同码同枚、只因本笔插入而行号位移**，
+  新增 0 处；三枚测试文件 0 处。⚠ 这一步 rc=1 是那 5 处既有违规，CI 里没有跑 flake8 的 workflow（判据 73）。
+
+### 8.21 本笔新增判据 148–151
+
+- **148（打一枚模块级绑定不等于隔离了那个常量）**：`from x import CONST` 在每个被导入模块里造出一份**独立**绑定
+  （`WORKING_DIR` 全仓现数 74 处），autouse 补丁只覆盖其中一枚 ⇒ 被检模块读的仍是开发者真目录。判"测试已与本
+  机目录解耦"必须枚举绑定枚数，或直接读那个模块自己的全局；否则就会像我一样把刀 86 那笔当成交付完成，
+  而每次 CI 仍在 8 枚真实文件上落盘。
+- **149（日志路径前缀能免费区分写盘进程）**：同一份 `~/.copaw/qwenpaw.log` 里源码 checkout 印
+  `src/qwenpaw/app/migration.py:977`，冻结桌面 bundle 印 `qwenpaw/...`（没有 `src/`、没有 `.py`）⇒ 两种前缀
+  混排就是两个进程。再叠一层"行号只对某个提交字节有效"就能把归属钉到某次改动之后，不用加instrumentation。
+- **150（"泄漏已结清"必须写明夹住的范围）**：我一度把 marker 前后 `~/.copaw` 的指纹读成一致，就写成"泄漏结清"；
+  那次 marker 只夹住了 migration 簇，一整轮 CI 选择集跑完照样冒 8 枚文件。结清类断言的主语要么是"这个样本"
+  要么是"这个进程"，不能是"测试套件"。
+- **151（按簇预判的机制不能顶替逐枚根因，判据 134/140 的实例）**：刀 98 留下的"错误路径多写一次 `save_config`"
+  确实存在于树里，但它只解释 6 枚中的 3 枚；另 3 枚一枚是生产侧少写（真缺陷）、两枚是路径读取点走错（把用例
+  自己的 tmp 目录判成不存在）。若照簇修，那枚真缺陷会被断言改写掩盖掉——这与我改 RC-A 的方向相反，代价是产品
+  少建 `agent.json`。
+
+相关账目：本节 = 已闭环 **99**（刀 94 = 8.9 那笔，裁决 (b) 的落地；刀 95 = 8.11 那笔，8.10 里唯一一枚生产侧；
 刀 96 = 8.14 那笔，8.10 里其余 14 枚测试侧；刀 97 = 8.16 那笔，8.14 待办 ① 那枚生产侧签名；
-刀 98 = 8.18 那笔，8.14 待办 ① 剩下的 2 枚测试侧红）；
-判据 113–128 原文在本节 8.7、129–136 在 8.12、137–141 在 8.15、142–143 在 8.17、144–147 在 8.19（§1–§6 引用的 84–86、101–112 仍是
+刀 98 = 8.18 那笔，8.14 待办 ① 剩下的 2 枚测试侧红；刀 99 = 8.20 那笔，8.18 末句登记的那 6 枚 migration 红）；
+判据 113–128 原文在本节 8.7、129–136 在 8.12、137–141 在 8.15、142–143 在 8.17、144–147 在 8.19、148–151 在 8.21
+（§1–§6 引用的 84–86、101–112 仍是
+`2026-10-07-trial-merge-conflict-table.md` 与本文前七节的口径）。
+
+**待裁（本笔新登记，不在刀序里）**：那 25 枚 `with TestClient(app)` 的本机目录泄漏（8.20 已归因到文件、机制已量到
+导入期绑定 74 处），两条修法各有前置，需要一句"要不要为测试基建再开一刀"。
 `2026-10-07-trial-merge-conflict-table.md` 与本文前七节的口径）。
 
 
