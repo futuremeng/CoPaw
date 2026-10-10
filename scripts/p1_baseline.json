@@ -641,14 +641,6 @@
       "naming": 0,
       "removed": 1
     },
-    "src/qwenpaw/app/chats/query_error_dump.py": {
-      "added": 3,
-      "behavior_added": 3,
-      "behavior_removed": 3,
-      "mechanical": false,
-      "naming": 0,
-      "removed": 3
-    },
     "src/qwenpaw/app/chats/session.py": {
       "added": 70,
       "behavior_added": 70,
@@ -818,16 +810,16 @@
       "removed": 1
     },
     "tests/unit/app/crons/test_heartbeat.py": {
-      "added": 298,
-      "behavior_added": 298,
+      "added": 306,
+      "behavior_added": 306,
       "behavior_removed": 0,
       "mechanical": false,
       "naming": 0,
       "removed": 0
     },
     "tests/unit/app/crons/test_manager.py": {
-      "added": 163,
-      "behavior_added": 163,
+      "added": 162,
+      "behavior_added": 162,
       "behavior_removed": 0,
       "mechanical": false,
       "naming": 0,
@@ -923,15 +915,15 @@
     }
   },
   "totals": {
-    "added": 10922,
-    "behavior_added": 10887,
-    "behavior_files": 113,
-    "behavior_removed": 485,
-    "files": 114,
+    "added": 10926,
+    "behavior_added": 10891,
+    "behavior_files": 112,
+    "behavior_removed": 482,
+    "files": 113,
     "mechanical_files": 1,
     "naming_files": 1,
     "naming_lines": 35,
     "naming_touched_files": 7,
-    "removed": 520
+    "removed": 517
   }
 }
