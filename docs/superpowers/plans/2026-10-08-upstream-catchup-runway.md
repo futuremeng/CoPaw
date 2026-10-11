@@ -2455,3 +2455,36 @@ fork 的写法，于是 P1 行为侵入 +5，而这 5 行没有一处改变行�
 **未办（不裁，只落点）**：① 那 10 枚在册文件的 prettier 脏（待裁）；② 15 枚在册文件的 black/ATC 脏（判据 184，待裁）；
 ③ flake8 残 587 的分档与可修层（在 §8.41 末给表，待裁）。
 
+### 8.40 刀 112（2026-10-11）：三处漏 `await` —— 一条返回协变量 repr，一条被裸 except 吞成日志
+
+**一句话结论**：`install_skill_from_hub` 在分叉点就是 `async def`，但三处 fork 自写的调用点当普通函数调它。
+市场安装路由把**协变量的 repr 当结果返回**，还传了签名里根本没有的 `overwrite=`；bundle 导入循环里
+每枚技能都记进 `skill_errors` 而一枚都没装 —— 因为协变量的 `.name` 抛 `AttributeError`，
+被循环那句裸 `except Exception` 收成了错误字符串。参照模式就在同一个 router 里：
+`_run_hub_install_task` 一直是正确 await 的写法。
+
+**落点**（两枚在册文件，账只减不增）：`app/routers/skills.py` 删
+`overwrite = payload.overwrite or bool(cfg.install.overwrite_default)` 与 `overwrite=` 实参并补 `await`；
+`app/routers/agents.py` 的 `_activate_import_bundle` 改 `async def` + `await install_skill_from_hub(...)` +
+调用点 `await`。P1 行为侵入 **10,963 → 10,961（−2）**，总账 117 文件 / **+10,997 −521**。
+
+**为什么先写用例而不是先改**：这类缺陷的症状是"接口 200、内容错"，改完再补用例就只能断言"现在对了"。
+两枚新用例都断**被 await 的那次调用的实参**，而不是断返回形状：
+`tests/unit/app/routers/test_agents_import_bundle_skills.py`（新文件）证 bundle 导入真的调到安装函数且不落
+`skill_errors`；`tests/unit/app/routers/test_skills_market.py` 追加一枚，捕获 `workspace_dir / bundle_url /
+version / enable / target_name / cancel_checker` 六个实参并断 `captured["cancel_checker"] is None`
+—— 后者同时清掉这枚新用例自己引出的那 1 条 pylint `W0613 unused-argument`（参数被记录=被断言=不再未用）。
+
+**读数**：CI 选择集（`tests/unit`）**2 failed / 17,834 passed / 24 skipped / 4 xfailed in 19m18s** ——
+红仍是 §8.35 那两枚 acp（工作区耦合，未裁），pass 数相对 §8.38 的 15,813 只增不减（批间新增），
+4 枚 strict xfail 仍红着（没被"顺手改绿"）。
+
+**判据 199（漏 await 的守卫要断"那次调用拿到了什么实参"，不能断"这次响应成功"）**：
+协变量不是错误 —— 它能让 HTTP 200、能让断言"返回非空"通过、能被 `str()` 得出一串可读的文本。
+所以按结果形状写的用例对这类缺陷天然免疫失效。可迁移的写法是把 mock 的 `captured` 字典当作合同面：
+断每个实参，尤其是**签名里不该存在的关键字**（`overwrite=`）与**默认值实参**（`cancel_checker is None`）——
+前者一旦上游签名变化就会红，后者保证被 await 的那次调用是完整的那次。
+
+**未办**：`_activate_import_bundle` 的 `overwrite` 形参现在无人使用（pylint `W0613` 保留在册）——
+它是调用方协议的一部分，删不删随 §8.41 的 unused-argument 一并裁，不在本刀做。
+
