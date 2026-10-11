@@ -2,7 +2,9 @@
 
 import pytest
 
-from qwenpaw.knowledge.knowledge_quantization_architecture import QuantizationArchitectureManager
+from qwenpaw.knowledge.knowledge_quantization_architecture import (
+    QuantizationArchitectureManager,
+)
 
 
 def test_schedule_l2_does_not_require_l1(tmp_path):
@@ -12,7 +14,11 @@ def test_schedule_l2_does_not_require_l1(tmp_path):
 
     assert result["stage"] == "l2"
     assert result["status"] == "ready"
-    stored = manager.get_stage_result(stage="l2", source_id="project-source-1", snapshot_id="snapshot-a")
+    stored = manager.get_stage_result(
+        stage="l2",
+        source_id="project-source-1",
+        snapshot_id="snapshot-a",
+    )
     assert stored is not None
     assert stored["status"] == "ready"
 

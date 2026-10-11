@@ -14,7 +14,10 @@ from qwenpaw.app.routers.agents_pipeline_core import (
     PipelineTemplateInfo,
     _pipeline_md_path,
 )
-from qwenpaw.rpa.workflow import build_ebook_screenshot_template, dump_rpa_template_package
+from qwenpaw.rpa.workflow import (
+    build_ebook_screenshot_template,
+    dump_rpa_template_package,
+)
 
 
 class _FakeAgentWorkspace:
@@ -31,7 +34,10 @@ class _FakeManager:
 
 
 @pytest.fixture
-def pipeline_router_client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> TestClient:
+def pipeline_router_client(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> TestClient:
     manager = _FakeManager(str(tmp_path))
     monkeypatch.setattr(
         pipeline_router_module.agents_router_impl,
@@ -57,7 +63,7 @@ def _sample_payload(template_id: str = "router-pipeline") -> dict:
                 "kind": "ingest",
                 "description": "collect",
                 "prompt": "Collect inputs and summarize them.",
-            }
+            },
         ],
     }
 
@@ -152,20 +158,29 @@ def test_list_project_pipeline_templates_offloads_to_thread(
         calls.append((func, args))
         return await original_to_thread(func, *args, **kwargs)
 
-    monkeypatch.setattr(pipeline_router_module.asyncio, "to_thread", fake_to_thread)
+    monkeypatch.setattr(
+        pipeline_router_module.asyncio,
+        "to_thread",
+        fake_to_thread,
+    )
     monkeypatch.setattr(
         pipeline_router_module,
         "_list_project_pipeline_templates",
-        lambda _project_dir: [PipelineTemplateInfo(**_sample_payload("tpl-1"))],
+        lambda _project_dir: [
+            PipelineTemplateInfo(**_sample_payload("tpl-1")),
+        ],
     )
 
     response = pipeline_router_client.get(
-        f"/agents/default/projects/{project_id}/pipelines/templates"
+        f"/agents/default/projects/{project_id}/pipelines/templates",
     )
 
     assert response.status_code == 200
     assert calls
-    assert calls[0][0] is pipeline_router_module._list_project_pipeline_templates_for_workspace
+    assert (
+        calls[0][0]
+        is pipeline_router_module._list_project_pipeline_templates_for_workspace
+    )
 
 
 def test_list_project_pipeline_runs_offloads_to_thread(
@@ -181,7 +196,11 @@ def test_list_project_pipeline_runs_offloads_to_thread(
         calls.append((func, args))
         return await original_to_thread(func, *args, **kwargs)
 
-    monkeypatch.setattr(pipeline_router_module.asyncio, "to_thread", fake_to_thread)
+    monkeypatch.setattr(
+        pipeline_router_module.asyncio,
+        "to_thread",
+        fake_to_thread,
+    )
     monkeypatch.setattr(
         pipeline_router_module,
         "_list_project_pipeline_runs",
@@ -192,17 +211,20 @@ def test_list_project_pipeline_runs_offloads_to_thread(
                 status="succeeded",
                 created_at="2026-01-01T00:00:00",
                 updated_at="2026-01-01T00:00:01",
-            )
+            ),
         ],
     )
 
     response = pipeline_router_client.get(
-        f"/agents/default/projects/{project_id}/pipelines/runs"
+        f"/agents/default/projects/{project_id}/pipelines/runs",
     )
 
     assert response.status_code == 200
     assert calls
-    assert calls[0][0] is pipeline_router_module._list_project_pipeline_runs_for_workspace
+    assert (
+        calls[0][0]
+        is pipeline_router_module._list_project_pipeline_runs_for_workspace
+    )
 
 
 def test_get_project_pipeline_run_offloads_to_thread(
@@ -218,7 +240,11 @@ def test_get_project_pipeline_run_offloads_to_thread(
         calls.append((func, args))
         return await original_to_thread(func, *args, **kwargs)
 
-    monkeypatch.setattr(pipeline_router_module.asyncio, "to_thread", fake_to_thread)
+    monkeypatch.setattr(
+        pipeline_router_module.asyncio,
+        "to_thread",
+        fake_to_thread,
+    )
     monkeypatch.setattr(
         pipeline_router_module,
         "_load_project_pipeline_run",
@@ -245,20 +271,23 @@ def test_get_project_pipeline_run_offloads_to_thread(
     )
 
     response = pipeline_router_client.get(
-        f"/agents/default/projects/{project_id}/pipelines/runs/run-1"
+        f"/agents/default/projects/{project_id}/pipelines/runs/run-1",
     )
 
     assert response.status_code == 200
     assert response.json()["id"] == "run-1"
     assert calls
-    assert calls[0][0] is pipeline_router_module._load_project_pipeline_run_for_workspace
+    assert (
+        calls[0][0]
+        is pipeline_router_module._load_project_pipeline_run_for_workspace
+    )
 
 
 def test_get_builtin_ebook_rpa_template_package(
     pipeline_router_client: TestClient,
 ):
     response = pipeline_router_client.get(
-        "/agents/default/pipelines/rpa/templates/ebook-screenshot/package"
+        "/agents/default/pipelines/rpa/templates/ebook-screenshot/package",
     )
 
     assert response.status_code == 200
@@ -310,7 +339,9 @@ def test_export_pipeline_template_as_rpa_package(
     assert payload["kind"] == "rpa"
     assert payload["template"]["id"] == "ebook-rpa-exportable"
     assert payload["template"]["steps"][1]["kind"] == "flow.loop"
-    assert payload["metadata"]["pipeline_template_id"] == "ebook-rpa-exportable"
+    assert (
+        payload["metadata"]["pipeline_template_id"] == "ebook-rpa-exportable"
+    )
     assert isinstance(payload["metadata"].get("exported_at"), str)
     assert payload["metadata"]["author"] == "Copilot"
     assert payload["metadata"]["note"] == "demo-export"

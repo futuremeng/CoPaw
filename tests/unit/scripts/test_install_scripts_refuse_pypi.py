@@ -23,8 +23,8 @@ UPSTREAM_MARKERS = (
 def _fact():
     return json.loads(
         (REPO_ROOT / "src/copaw/release_channel.json").read_text(
-            encoding="utf-8"
-        )
+            encoding="utf-8",
+        ),
     )
 
 
@@ -38,9 +38,7 @@ def test_clone_source_is_ours(rel):
 def test_refusal_points_at_our_releases_page(rel):
     fact = _fact()
     text = (REPO_ROOT / rel).read_text(encoding="utf-8")
-    assert (
-        f"https://github.com/{fact['github_repository']}/releases" in text
-    )
+    assert f"https://github.com/{fact['github_repository']}/releases" in text
     assert "not published to PyPI yet" in text
 
 
@@ -54,5 +52,8 @@ def test_no_upstream_distribution_identity(rel):
 def test_install_sh_still_parses():
     path = REPO_ROOT / "scripts/install.sh"
     subprocess.run(
-        ["bash", "-n", str(path)], check=True, capture_output=True, text=True
+        ["bash", "-n", str(path)],
+        check=True,
+        capture_output=True,
+        text=True,
     )

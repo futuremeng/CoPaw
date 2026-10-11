@@ -23,7 +23,12 @@ from qwenpaw.knowledge.graphify_provider import (
 
 def _write_graph_json(path, nodes, edges):
     """Write a minimal node-link graph.json compatible with NetworkX."""
-    data = {"directed": False, "multigraph": False, "nodes": nodes, "links": edges}
+    data = {
+        "directed": False,
+        "multigraph": False,
+        "nodes": nodes,
+        "links": edges,
+    }
     path.write_text(json.dumps(data), encoding="utf-8")
 
 
@@ -55,8 +60,8 @@ def test_graphify_query_remote_endpoint_success(monkeypatch):
                         "object": "OtherNode",
                         "score": 0.9,
                         "source_id": "remote",
-                    }
-                ]
+                    },
+                ],
             }
 
     def _fake_post(url, json, headers, timeout):
@@ -70,8 +75,16 @@ def test_graphify_query_remote_endpoint_success(monkeypatch):
     import httpx
 
     monkeypatch.setattr(httpx, "post", _fake_post)
-    cfg = GraphifyConfig(endpoint="https://graph.example.com", api_key="secret")
-    records = graphify_query(cfg, "test query", top_k=5, dataset_scope=["repo"])
+    cfg = GraphifyConfig(
+        endpoint="https://graph.example.com",
+        api_key="secret",
+    )
+    records = graphify_query(
+        cfg,
+        "test query",
+        top_k=5,
+        dataset_scope=["repo"],
+    )
     assert len(records) == 1
     assert records[0]["subject"] == "RemoteNode"
 
@@ -87,7 +100,11 @@ def test_graphify_query_remote_endpoint_http_error(monkeypatch):
         text = "boom"
 
         def raise_for_status(self):
-            raise httpx.HTTPStatusError("server error", request=req, response=resp)
+            raise httpx.HTTPStatusError(
+                "server error",
+                request=req,
+                response=resp,
+            )
 
         def json(self):
             return {}
@@ -110,17 +127,47 @@ def test_graphify_query_returns_records(tmp_path):
     _write_graph_json(
         graph_json,
         nodes=[
-            {"id": "n1", "label": "AgentRunner", "source_file": "runner.py", "source_location": "L1"},
-            {"id": "n2", "label": "ToolDispatcher", "source_file": "tools.py", "source_location": "L5"},
-            {"id": "n3", "label": "KnowledgeManager", "source_file": "knowledge.py", "source_location": "L10"},
+            {
+                "id": "n1",
+                "label": "AgentRunner",
+                "source_file": "runner.py",
+                "source_location": "L1",
+            },
+            {
+                "id": "n2",
+                "label": "ToolDispatcher",
+                "source_file": "tools.py",
+                "source_location": "L5",
+            },
+            {
+                "id": "n3",
+                "label": "KnowledgeManager",
+                "source_file": "knowledge.py",
+                "source_location": "L10",
+            },
         ],
         edges=[
-            {"source": "n1", "target": "n2", "relation": "calls", "confidence": "EXTRACTED"},
-            {"source": "n2", "target": "n3", "relation": "queries", "confidence": "INFERRED"},
+            {
+                "source": "n1",
+                "target": "n2",
+                "relation": "calls",
+                "confidence": "EXTRACTED",
+            },
+            {
+                "source": "n2",
+                "target": "n3",
+                "relation": "queries",
+                "confidence": "INFERRED",
+            },
         ],
     )
     cfg = GraphifyConfig(graph_path=str(graph_json))
-    records = graphify_query(cfg, "agent runner tool", top_k=10, dataset_scope=[])
+    records = graphify_query(
+        cfg,
+        "agent runner tool",
+        top_k=10,
+        dataset_scope=[],
+    )
     assert len(records) >= 1
     assert any(r["subject"] == "AgentRunner" for r in records)
 
@@ -129,7 +176,9 @@ def test_graphify_query_no_matching_terms_returns_empty(tmp_path):
     graph_json = tmp_path / "graph.json"
     _write_graph_json(
         graph_json,
-        nodes=[{"id": "n1", "label": "AgentRunner", "source_file": "runner.py"}],
+        nodes=[
+            {"id": "n1", "label": "AgentRunner", "source_file": "runner.py"},
+        ],
         edges=[],
     )
     cfg = GraphifyConfig(graph_path=str(graph_json))
@@ -141,18 +190,30 @@ def test_graphify_query_no_matching_terms_returns_empty(tmp_path):
 def test_graphify_query_respects_top_k(tmp_path):
     graph_json = tmp_path / "graph.json"
     nodes = [
-        {"id": f"n{i}", "label": f"concept_{i}_knowledge",
-         "source_file": f"file{i}.py"}
+        {
+            "id": f"n{i}",
+            "label": f"concept_{i}_knowledge",
+            "source_file": f"file{i}.py",
+        }
         for i in range(20)
     ]
     edges = [
-        {"source": f"n{i}", "target": f"n{i+1}",
-         "relation": "relates_to", "confidence": "EXTRACTED"}
+        {
+            "source": f"n{i}",
+            "target": f"n{i+1}",
+            "relation": "relates_to",
+            "confidence": "EXTRACTED",
+        }
         for i in range(19)
     ]
     _write_graph_json(graph_json, nodes, edges)
     cfg = GraphifyConfig(graph_path=str(graph_json))
-    records = graphify_query(cfg, "knowledge concept", top_k=3, dataset_scope=[])
+    records = graphify_query(
+        cfg,
+        "knowledge concept",
+        top_k=3,
+        dataset_scope=[],
+    )
     assert len(records) <= 3
 
 
@@ -165,7 +226,13 @@ def test_graphify_config_env_injection(tmp_path, monkeypatch):
     graph_json = tmp_path / "env_graph.json"
     _write_graph_json(
         graph_json,
-        nodes=[{"id": "n1", "label": "Scheduler_knowledge", "source_file": "sched.py"}],
+        nodes=[
+            {
+                "id": "n1",
+                "label": "Scheduler_knowledge",
+                "source_file": "sched.py",
+            },
+        ],
         edges=[],
     )
     monkeypatch.setenv("COPAW_GRAPHIFY_GRAPH_PATH", str(graph_json))
@@ -204,19 +271,34 @@ def test_graphify_config_env_not_set_leaves_defaults(monkeypatch):
 def test_graphify_memify_not_configured_raises():
     cfg = GraphifyConfig(dataset_dir="")
     with pytest.raises(GraphifyNotConfiguredError):
-        graphify_memify(cfg, pipeline_type="default", dataset_scope=[], dry_run=False)
+        graphify_memify(
+            cfg,
+            pipeline_type="default",
+            dataset_scope=[],
+            dry_run=False,
+        )
 
 
 def test_graphify_memify_dataset_dir_not_found(tmp_path):
     cfg = GraphifyConfig(dataset_dir=str(tmp_path / "nonexistent"))
-    result = graphify_memify(cfg, pipeline_type="default", dataset_scope=[], dry_run=False)
+    result = graphify_memify(
+        cfg,
+        pipeline_type="default",
+        dataset_scope=[],
+        dry_run=False,
+    )
     assert result["status"] == "failed"
     assert "GRAPHIFY_DATASET_DIR_NOT_FOUND" in result["warnings"]
 
 
 def test_graphify_memify_dry_run(tmp_path):
     cfg = GraphifyConfig(dataset_dir=str(tmp_path))
-    result = graphify_memify(cfg, pipeline_type="default", dataset_scope=[], dry_run=True)
+    result = graphify_memify(
+        cfg,
+        pipeline_type="default",
+        dataset_scope=[],
+        dry_run=True,
+    )
     assert result["status"] == "succeeded"
     assert "GRAPHIFY_MEMIFY_DRY_RUN" in result["warnings"]
 
@@ -236,7 +318,9 @@ def test_graphify_memify_internal_success(tmp_path):
         pipeline_type="default",
         dataset_scope=[],
         dry_run=False,
-        progress_callback=lambda payload: progress_events.append(dict(payload)),
+        progress_callback=lambda payload: progress_events.append(
+            dict(payload),
+        ),
     )
 
     assert result["status"] == "succeeded"
@@ -254,7 +338,12 @@ def test_graphify_memify_internal_no_eligible_files(tmp_path):
     (corpus / "image.bin").write_bytes(b"\x00\x01")
     cfg = GraphifyConfig(dataset_dir=str(corpus))
 
-    result = graphify_memify(cfg, pipeline_type="default", dataset_scope=[], dry_run=False)
+    result = graphify_memify(
+        cfg,
+        pipeline_type="default",
+        dataset_scope=[],
+        dry_run=False,
+    )
     assert result["status"] == "failed"
     assert "GRAPHIFY_MEMIFY_NO_ELIGIBLE_FILES" in result["warnings"]
 
@@ -274,7 +363,12 @@ def test_graphify_memify_remote_success(monkeypatch):
 
     monkeypatch.setattr(httpx, "post", lambda *a, **kw: _DummyResponse())
     cfg = GraphifyConfig(endpoint="https://graph.example.com")
-    result = graphify_memify(cfg, pipeline_type="default", dataset_scope=["repo"], dry_run=False)
+    result = graphify_memify(
+        cfg,
+        pipeline_type="default",
+        dataset_scope=["repo"],
+        dry_run=False,
+    )
     assert result["status"] == "running"
     assert "GRAPHIFY_REMOTE_MEMIFY_ACCEPTED" in result["warnings"]
 
@@ -290,13 +384,22 @@ def test_graphify_memify_remote_http_error(monkeypatch):
         text = "bad gateway"
 
         def raise_for_status(self):
-            raise httpx.HTTPStatusError("bad gateway", request=req, response=resp)
+            raise httpx.HTTPStatusError(
+                "bad gateway",
+                request=req,
+                response=resp,
+            )
 
         def json(self):
             return {}
 
     monkeypatch.setattr(httpx, "post", lambda *a, **kw: _DummyResponse())
     cfg = GraphifyConfig(endpoint="https://graph.example.com")
-    result = graphify_memify(cfg, pipeline_type="default", dataset_scope=[], dry_run=False)
+    result = graphify_memify(
+        cfg,
+        pipeline_type="default",
+        dataset_scope=[],
+        dry_run=False,
+    )
     assert result["status"] == "failed"
     assert "GRAPHIFY_REMOTE_MEMIFY_HTTP_ERROR" in result["warnings"]

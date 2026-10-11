@@ -86,7 +86,7 @@ def env(tmp_path, monkeypatch):
         migration,
         "save_agent_config",
         lambda agent_id, agent_config: saved_agents.append(
-            (agent_id, agent_config)
+            (agent_id, agent_config),
         ),
     )
     monkeypatch.setattr(

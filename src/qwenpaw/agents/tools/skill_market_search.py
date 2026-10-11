@@ -8,10 +8,18 @@ import json
 from agentscope.message import TextBlock
 from agentscope.tool import ToolResponse
 
-from ...app.routers.skills import _aggregate_marketplace, _load_current_market_config
+from ...app.routers.skills import (
+    _aggregate_marketplace,
+    _load_current_market_config,
+)
 
 
-def _matches_query(name: str, description: str, tags: list[str], query: str) -> bool:
+def _matches_query(
+    name: str,
+    description: str,
+    tags: list[str],
+    query: str,
+) -> bool:
     if not query:
         return True
     haystack = " ".join([name, description, " ".join(tags)]).lower()
@@ -39,7 +47,9 @@ async def skill_market_search(
         ToolResponse with formatted candidate list and market metadata.
     """
     query_text = (query or "").strip().lower()
-    normalized_tags = [t.strip().lower() for t in (tags or []) if t and t.strip()]
+    normalized_tags = [
+        t.strip().lower() for t in (tags or []) if t and t.strip()
+    ]
 
     try:
         cfg = _load_current_market_config()
@@ -52,13 +62,26 @@ async def skill_market_search(
         filtered = []
         for item in items:
             item_tags = [str(tag).strip().lower() for tag in item.tags]
-            if normalized_tags and not all(tag in item_tags for tag in normalized_tags):
+            if normalized_tags and not all(
+                tag in item_tags for tag in normalized_tags
+            ):
                 continue
-            if not _matches_query(item.name, item.description, item.tags, query_text):
+            if not _matches_query(
+                item.name,
+                item.description,
+                item.tags,
+                query_text,
+            ):
                 continue
             filtered.append(item)
 
-        filtered.sort(key=lambda it: (it.market_id, it.name.lower(), it.skill_id.lower()))
+        filtered.sort(
+            key=lambda it: (
+                it.market_id,
+                it.name.lower(),
+                it.skill_id.lower(),
+            ),
+        )
         capped = filtered[: max(1, min(int(limit), 50))]
 
         lines = [
@@ -92,13 +115,15 @@ async def skill_market_search(
                     f"[{idx}] {item.name} ({item.skill_id}) "
                     f"market={item.market_id} "
                     f"trust={market_trust.get(item.market_id, 'custom')} "
-                    f"version={item.version or 'n/a'}"
+                    f"version={item.version or 'n/a'}",
                 )
                 if item.tags:
                     lines.append(f"tags: {', '.join(item.tags)}")
                 if item.description:
                     lines.append(f"description: {item.description}")
-                lines.append(f"install_ref: market_id={item.market_id} skill_id={item.skill_id}")
+                lines.append(
+                    f"install_ref: market_id={item.market_id} skill_id={item.skill_id}",
+                )
                 lines.append("")
 
         json_payload = {
@@ -110,8 +135,12 @@ async def skill_market_search(
                 "limit": max(1, min(int(limit), 50)),
             },
             "meta": {
-                "enabled_market_count": int(meta.get("enabled_market_count", 0)),
-                "success_market_count": int(meta.get("success_market_count", 0)),
+                "enabled_market_count": int(
+                    meta.get("enabled_market_count", 0),
+                ),
+                "success_market_count": int(
+                    meta.get("success_market_count", 0),
+                ),
                 "item_count": int(meta.get("item_count", len(items))),
                 "matched_count": len(filtered),
                 "returned_count": len(capped),
@@ -146,7 +175,9 @@ async def skill_market_search(
         lines.append(json.dumps(json_payload, ensure_ascii=False))
         lines.append("JSON_RESULT_END")
 
-        return ToolResponse(content=[TextBlock(type="text", text="\n".join(lines).strip())])
+        return ToolResponse(
+            content=[TextBlock(type="text", text="\n".join(lines).strip())],
+        )
     except Exception as exc:
         error_payload = {
             "ok": False,

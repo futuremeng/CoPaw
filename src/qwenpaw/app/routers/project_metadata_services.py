@@ -54,7 +54,11 @@ def update_project_artifact_distill_mode_for_workspace(
     artifact_distill_mode: str,
     update_distill_mode: UpdateProjectArtifactDistillMode,
 ) -> Any:
-    return update_distill_mode(workspace_dir, project_id, artifact_distill_mode)
+    return update_distill_mode(
+        workspace_dir,
+        project_id,
+        artifact_distill_mode,
+    )
 
 
 def update_project_workspace_chat_binding_for_workspace(
@@ -179,7 +183,9 @@ def update_project_artifact_distill_mode(
 
     metadata_file = Path(summary.metadata_file)
     metadata, body = read_project_frontmatter_with_body(metadata_file)
-    metadata["artifact_distill_mode"] = normalize_project_artifact_distill_mode(
+    metadata[
+        "artifact_distill_mode"
+    ] = normalize_project_artifact_distill_mode(
         artifact_distill_mode,
     )
     write_project_frontmatter(metadata_file, metadata, body)
@@ -214,7 +220,9 @@ def update_project_workspace_chat_binding(
 
     metadata_file = Path(summary.metadata_file)
     metadata, body = read_project_frontmatter_with_body(metadata_file)
-    metadata["preferred_workspace_chat_id"] = preferred_workspace_chat_id.strip()
+    metadata[
+        "preferred_workspace_chat_id"
+    ] = preferred_workspace_chat_id.strip()
     write_project_metadata(metadata_file, metadata, body)
 
     updated = load_project_summary(project_dir)
@@ -286,7 +294,9 @@ def sync_project_agent_knowledge_registration(
             project_workspace_dir=summary.workspace_dir,
         )
         filtered_sources = [
-            source for source in config.knowledge.sources if source.id != expected_source.id
+            source
+            for source in config.knowledge.sources
+            if source.id != expected_source.id
         ]
         if len(filtered_sources) != len(config.knowledge.sources):
             config.knowledge.sources = filtered_sources
@@ -349,7 +359,9 @@ def maybe_start_project_auto_knowledge_sync(
     build_project_source_spec: BuildProjectSourceSpec,
     project_knowledge_pipeline_manager_factory: ProjectKnowledgePipelineManagerFactory,
 ) -> dict[str, Any] | None:
-    workspace_dir = Path(str(getattr(workspace, "workspace_dir", "") or "")).resolve()
+    workspace_dir = Path(
+        str(getattr(workspace, "workspace_dir", "") or ""),
+    ).resolve()
     if not workspace_dir.exists():
         return None
 
@@ -367,7 +379,7 @@ def maybe_start_project_auto_knowledge_sync(
     knowledge_config = config.knowledge.model_copy(deep=True)
     setattr(knowledge_config, "nlp", config.nlp.model_copy(deep=True))
     if not knowledge_config.enabled or not bool(
-        getattr(knowledge_config, "memify_enabled", False)
+        getattr(knowledge_config, "memify_enabled", False),
     ):
         return None
 

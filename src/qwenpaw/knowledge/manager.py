@@ -38,11 +38,23 @@ _CHAT_URL_RE = re.compile(
 _URL_TRAILING_STRIP_CHARS = ".,;:!?)]}\"'`*，。！？；：、）】》〉」』"
 
 # URL exclusion helpers
-_URL_SENSITIVE_PARAMS = frozenset({
-    "access_token", "token", "api_key", "apikey", "apitoken",
-    "secret", "password", "auth", "key", "webhook_token",
-    "sign", "signature", "hmac",
-})
+_URL_SENSITIVE_PARAMS = frozenset(
+    {
+        "access_token",
+        "token",
+        "api_key",
+        "apikey",
+        "apitoken",
+        "secret",
+        "password",
+        "auth",
+        "key",
+        "webhook_token",
+        "sign",
+        "signature",
+        "hmac",
+    },
+)
 _PRIVATE_HOST_RE = re.compile(
     r"^("
     r"localhost"
@@ -85,8 +97,12 @@ _TITLE_STOP_WORDS = {
     "知识",
     "数据",
 }
-_LIGHTWEIGHT_TOKEN_RE = re.compile(r"[A-Za-z0-9]+(?:[_-][A-Za-z0-9]+)*|[\u4e00-\u9fff]{2,}")
-_SEMANTIC_TOKEN_RE = re.compile(r"[A-Za-z][A-Za-z0-9_-]{2,}|[\u4e00-\u9fff]{2,}")
+_LIGHTWEIGHT_TOKEN_RE = re.compile(
+    r"[A-Za-z0-9]+(?:[_-][A-Za-z0-9]+)*|[\u4e00-\u9fff]{2,}",
+)
+_SEMANTIC_TOKEN_RE = re.compile(
+    r"[A-Za-z][A-Za-z0-9_-]{2,}|[\u4e00-\u9fff]{2,}",
+)
 _SEMANTIC_STOP_WORDS = {
     *_TITLE_STOP_WORDS,
     "is",
@@ -185,9 +201,18 @@ _NER_FORMAT_VERSION = "1.1"
 _SYNTAX_FORMAT_VERSION = "0.2"
 _SEMANTIC_STAGE_PATH_KEYS = {
     "cor": ("cor_path", "cor_structured_path", "cor_annotated_path"),
-    "ner": ("ner_path", "ner_structured_path", "ner_annotated_path", "ner_stats_path"),
+    "ner": (
+        "ner_path",
+        "ner_structured_path",
+        "ner_annotated_path",
+        "ner_stats_path",
+    ),
     "pos": ("pos_path", "pos_structured_path", "pos_line_stats_path"),
-    "syntax": ("syntax_path", "syntax_structured_path", "syntax_annotated_path"),
+    "syntax": (
+        "syntax_path",
+        "syntax_structured_path",
+        "syntax_annotated_path",
+    ),
 }
 _INTERLINEAR_CHAR_RE = re.compile(r"[A-Za-z0-9\u4e00-\u9fff]")
 
@@ -214,16 +239,16 @@ def _safe_count_int(value: Any) -> int:
         return 0
 
 
-
-
-
 def split_text_into_sentences(text: str) -> list[str]:
     """Split long text into sentence-like segments for batch NER."""
     parts = re.split(r"[。！？；;!?]+", str(text or ""))
     return [part.strip() for part in parts if str(part or "").strip()]
 
 
-def _invoke_ner_batch(ner_model: Any, sentences: list[str]) -> list[list[dict[str, Any]]]:
+def _invoke_ner_batch(
+    ner_model: Any,
+    sentences: list[str],
+) -> list[list[dict[str, Any]]]:
     """Invoke model in batch mode when possible, and fallback to per-sentence calls."""
 
     def _normalize_single_output(output: Any) -> list[dict[str, Any]]:
@@ -247,7 +272,14 @@ def _invoke_ner_batch(ner_model: Any, sentences: list[str]) -> list[list[dict[st
                     for row in batch_output:
                         normalized.append(_normalize_single_output(row))
                     if len(normalized) < len(sentences):
-                        normalized.extend([[] for _ in range(len(sentences) - len(normalized))])
+                        normalized.extend(
+                            [
+                                []
+                                for _ in range(
+                                    len(sentences) - len(normalized),
+                                )
+                            ],
+                        )
                     return normalized[: len(sentences)]
                 if isinstance(batch_output[0], dict) and len(sentences) == 1:
                     return [_normalize_single_output(batch_output)]
@@ -275,7 +307,11 @@ def process_ner_with_sliding_window(
     if isinstance(interlinear_file, str):
         lines = split_text_into_sentences(interlinear_file)
     else:
-        lines = [line.strip() for line in interlinear_file if str(line or "").strip()]
+        lines = [
+            line.strip()
+            for line in interlinear_file
+            if str(line or "").strip()
+        ]
 
     if not lines:
         return []
@@ -295,14 +331,21 @@ def process_ner_with_sliding_window(
         batch_results = _invoke_ner_batch(ner_model, batch_lines)
 
         for local_idx, sentence_entities in enumerate(batch_results):
-            sentence = batch_lines[local_idx] if local_idx < len(batch_lines) else ""
+            sentence = (
+                batch_lines[local_idx] if local_idx < len(batch_lines) else ""
+            )
             global_line_idx = start_idx + local_idx
             base_offset = line_offsets[global_line_idx]
             search_cursor = 0
 
             for entity in sentence_entities:
                 text = str(entity.get("text") or "").strip()
-                label = str(entity.get("label") or entity.get("type") or "entity").strip() or "entity"
+                label = (
+                    str(
+                        entity.get("label") or entity.get("type") or "entity",
+                    ).strip()
+                    or "entity"
+                )
 
                 start = entity.get("start")
                 end = entity.get("end")
@@ -348,15 +391,20 @@ def process_ner_with_sliding_window(
                         "end": global_end,
                         "text": text,
                         "label": label,
-                    }
+                    },
                 )
 
     return final_entities
 
+
 class KnowledgeManager:
     """Manage knowledge source indexing within the CoPaw working directory."""
 
-    def __init__(self, project_root: Path, knowledge_dirname: str = ".knowledge"):
+    def __init__(
+        self,
+        project_root: Path,
+        knowledge_dirname: str = ".knowledge",
+    ):
         self.project_root = Path(project_root)
         self.working_dir = self.project_root
         self.knowledge_dir = self.project_root / knowledge_dirname
@@ -374,7 +422,9 @@ class KnowledgeManager:
         self.remote_blob_dir = self.knowledge_dir / "remote-blob"
         self.remote_meta_dir = self.knowledge_dir / "remote-meta"
         self.catalog_path = self.knowledge_dir / "catalog.json"
-        self.backfill_state_path = self.knowledge_dir / "history-backfill-state.json"
+        self.backfill_state_path = (
+            self.knowledge_dir / "history-backfill-state.json"
+        )
         self.backfill_progress_path = (
             self.knowledge_dir / "history-backfill-progress.json"
         )
@@ -412,7 +462,9 @@ class KnowledgeManager:
         normalized: dict[str, Any] = {
             "engine": str(payload.get("engine") or "hanlp"),
             "status": str(payload.get("status") or "unavailable"),
-            "reason_code": str(payload.get("reason_code") or fallback_reason_code),
+            "reason_code": str(
+                payload.get("reason_code") or fallback_reason_code,
+            ),
             "reason": str(payload.get("reason") or fallback_reason),
         }
         normalized_task_key = str(task_key or "").strip()
@@ -441,8 +493,14 @@ class KnowledgeManager:
                 task_state = self._semantic_runtime.ner_status(config)
                 normalized_task_key = "ner_msra"
             else:
-                task_state = self._semantic_runtime.task_status(normalized_task_key, config)
-            return self._normalize_semantic_runtime_state(task_state, task_key=normalized_task_key)
+                task_state = self._semantic_runtime.task_status(
+                    normalized_task_key,
+                    config,
+                )
+            return self._normalize_semantic_runtime_state(
+                task_state,
+                task_key=normalized_task_key,
+            )
         except Exception:
             pass
 
@@ -455,7 +513,10 @@ class KnowledgeManager:
             task_key=normalized_task_key,
         )
 
-    def get_semantic_engine_state(self, config: KnowledgeConfig | None = None) -> dict:
+    def get_semantic_engine_state(
+        self,
+        config: KnowledgeConfig | None = None,
+    ) -> dict:
         """Return the current semantic engine state for project-pipeline gating."""
         if config is None:
             return self._semantic_engine_state(
@@ -470,8 +531,14 @@ class KnowledgeManager:
                 return {
                     "engine": str(task_state.get("engine") or "hanlp"),
                     "status": str(task_state.get("status") or "unavailable"),
-                    "reason_code": str(task_state.get("reason_code") or "NLP_ENGINE_UNAVAILABLE"),
-                    "reason": str(task_state.get("reason") or "NLP semantic engine is not configured."),
+                    "reason_code": str(
+                        task_state.get("reason_code")
+                        or "NLP_ENGINE_UNAVAILABLE",
+                    ),
+                    "reason": str(
+                        task_state.get("reason")
+                        or "NLP semantic engine is not configured.",
+                    ),
                 }
         except Exception:
             pass
@@ -482,8 +549,14 @@ class KnowledgeManager:
                 return {
                     "engine": str(probe_state.get("engine") or "hanlp"),
                     "status": str(probe_state.get("status") or "unavailable"),
-                    "reason_code": str(probe_state.get("reason_code") or "NLP_ENGINE_UNAVAILABLE"),
-                    "reason": str(probe_state.get("reason") or "NLP semantic engine is not configured."),
+                    "reason_code": str(
+                        probe_state.get("reason_code")
+                        or "NLP_ENGINE_UNAVAILABLE",
+                    ),
+                    "reason": str(
+                        probe_state.get("reason")
+                        or "NLP semantic engine is not configured.",
+                    ),
                 }
         except Exception:
             pass
@@ -506,15 +579,25 @@ class KnowledgeManager:
         """Return the indexed documents for a source, based only on interlinear-manifest.json.
         返回的每个 document 必须包含原始文档路径（document_path 或 relative_path），以便测试断言 .endswith('xxx.md') 能通过。
         """
-        interlinear_manifest = self._load_source_interlinear_manifest(source_id)
+        interlinear_manifest = self._load_source_interlinear_manifest(
+            source_id,
+        )
         artifacts = interlinear_manifest.get("artifacts", [])
         docs: dict[str, dict[str, Any]] = {}
         for artifact in artifacts:
-            doc_id = artifact.get("doc_id") or artifact.get("document_path") or artifact.get("path")
+            doc_id = (
+                artifact.get("doc_id")
+                or artifact.get("document_path")
+                or artifact.get("path")
+            )
             if not doc_id:
                 continue
             # 构造返回结构，优先暴露原始文档路径
-            doc_path = artifact.get("document_path") or artifact.get("relative_path") or artifact.get("path")
+            doc_path = (
+                artifact.get("document_path")
+                or artifact.get("relative_path")
+                or artifact.get("path")
+            )
             doc = dict(artifact)
             doc["path"] = doc_path
             docs[doc_id] = doc
@@ -530,11 +613,15 @@ class KnowledgeManager:
         lightweight: bool = False,
     ) -> dict[str, Any]:
         """interlinear-only: Return status/statistics for a source based on interlinear/轻量化工件。"""
-        interlinear_manifest = self._load_source_interlinear_manifest(source_id)
+        interlinear_manifest = self._load_source_interlinear_manifest(
+            source_id,
+        )
         summary = interlinear_manifest.get("summary", {})
         stats = self._load_source_stats(source_id)
         chunk_manifest_count = len(self._load_source_chunk_manifest(source_id))
-        raw_document_count = _safe_count_int(stats.get("raw_document_count") or 0)
+        raw_document_count = _safe_count_int(
+            stats.get("raw_document_count") or 0,
+        )
         document_count = max(
             raw_document_count,
             _safe_count_int(stats.get("document_count") or 0),
@@ -574,7 +661,9 @@ class KnowledgeManager:
                 "needs_reindex": False,
                 "error": None,
                 "raw_document_count": raw_document_count,
-                "raw_total_bytes": _safe_count_int(stats.get("raw_total_bytes") or 0),
+                "raw_total_bytes": _safe_count_int(
+                    stats.get("raw_total_bytes") or 0,
+                ),
                 "raw_last_ingested_at": stats.get("raw_last_ingested_at"),
                 "stats_updated_at": stats.get("stats_updated_at"),
             }
@@ -593,11 +682,16 @@ class KnowledgeManager:
                 "needs_reindex": needs_reindex,
                 "error": None,
                 "raw_document_count": raw_document_count,
-                "raw_total_bytes": _safe_count_int(stats.get("raw_total_bytes") or 0),
+                "raw_total_bytes": _safe_count_int(
+                    stats.get("raw_total_bytes") or 0,
+                ),
                 "raw_last_ingested_at": stats.get("raw_last_ingested_at"),
                 "stats_updated_at": stats.get("stats_updated_at"),
             }
-        status = self._merge_status_with_project_file_analysis_stats(status, source)
+        status = self._merge_status_with_project_file_analysis_stats(
+            status,
+            source,
+        )
         if source is not None:
             status.update(self._remote_source_status(source))
         return status
@@ -609,7 +703,11 @@ class KnowledgeManager:
     ) -> list[dict[str, Any]]:
         """Return configured sources with index metadata when available."""
         results: list[dict[str, Any]] = []
-        semantic_state = self.get_semantic_engine_state(config) if include_semantic else None
+        semantic_state = (
+            self.get_semantic_engine_state(config)
+            if include_semantic
+            else None
+        )
         for source in config.sources:
             payload = source.model_dump(mode="json")
             if include_semantic:
@@ -622,7 +720,11 @@ class KnowledgeManager:
                 payload["subject"] = source.name
                 payload["summary"] = source.summary
                 payload["keywords"] = []
-            payload["status"] = self.get_source_status(source.id, source, config)
+            payload["status"] = self.get_source_status(
+                source.id,
+                source,
+                config,
+            )
             results.append(payload)
         return results
 
@@ -655,7 +757,9 @@ class KnowledgeManager:
         if location_name and location_name != name_text:
             candidates.append(location_name)
 
-        merged = self._normalize_text("\n".join(part for part in candidates if part))
+        merged = self._normalize_text(
+            "\n".join(part for part in candidates if part),
+        )
         if not merged:
             return {
                 "subject": name_text,
@@ -663,7 +767,11 @@ class KnowledgeManager:
                 "keywords": [],
             }
 
-        processed = self._process_knowledge_text(merged, top_n=top_n, config=config)
+        processed = self._process_knowledge_text(
+            merged,
+            top_n=top_n,
+            config=config,
+        )
         if not processed.get("subject") and name_text:
             processed["subject"] = name_text
         if not processed.get("summary") and summary_text:
@@ -676,9 +784,15 @@ class KnowledgeManager:
 
     def _uses_unprefixed_project_storage(self, source_id: str) -> bool:
         safe_source_id = self._safe_name(source_id)
-        return safe_source_id.startswith("project-") and safe_source_id.endswith("-workspace")
+        return safe_source_id.startswith(
+            "project-",
+        ) and safe_source_id.endswith("-workspace")
 
-    def _prefixed_source_storage_flat_path(self, source_id: str, filename: str) -> Path:
+    def _prefixed_source_storage_flat_path(
+        self,
+        source_id: str,
+        filename: str,
+    ) -> Path:
         safe_source_id = self._safe_name(source_id)
         safe_filename = self._safe_name(filename)
         return self.root_dir / f"{safe_source_id}--{safe_filename}"
@@ -729,7 +843,10 @@ class KnowledgeManager:
         )
         sentence_count = self._sum_chunk_sentence_count(chunks)
         document_stats = self._build_document_stats(documents)
-        processing_fingerprint = self.compute_processing_fingerprint(config, running_config)
+        processing_fingerprint = self.compute_processing_fingerprint(
+            config,
+            running_config,
+        )
         payload: dict[str, Any] = {
             "source": source.model_dump(mode="json"),
             "indexed_at": indexed_at,
@@ -765,29 +882,73 @@ class KnowledgeManager:
             "char_count": document_stats["char_count"],
             "token_count": document_stats["token_count"],
             "indexed_at": payload["indexed_at"],
-            "cor_ready_chunk_count": _safe_count_int(payload.get("cor_ready_chunk_count") or 0),
-            "cor_ready_document_count": _safe_count_int(payload.get("cor_ready_chunk_count") or 0),  # Alias
-            "cor_cluster_count": _safe_count_int(payload.get("cor_cluster_count") or 0),
-            "cor_replacement_count": _safe_count_int(payload.get("cor_replacement_count") or 0),
-            "cor_effective_chunk_count": _safe_count_int(payload.get("cor_effective_chunk_count") or 0),
-            "cor_reason_code": str(payload.get("cor_reason_code") or "").strip(),
+            "cor_ready_chunk_count": _safe_count_int(
+                payload.get("cor_ready_chunk_count") or 0,
+            ),
+            "cor_ready_document_count": _safe_count_int(
+                payload.get("cor_ready_chunk_count") or 0,
+            ),  # Alias
+            "cor_cluster_count": _safe_count_int(
+                payload.get("cor_cluster_count") or 0,
+            ),
+            "cor_replacement_count": _safe_count_int(
+                payload.get("cor_replacement_count") or 0,
+            ),
+            "cor_effective_chunk_count": _safe_count_int(
+                payload.get("cor_effective_chunk_count") or 0,
+            ),
+            "cor_reason_code": str(
+                payload.get("cor_reason_code") or "",
+            ).strip(),
             "cor_reason": str(payload.get("cor_reason") or "").strip(),
-            "cor_ready_chunk_ratio": float(payload.get("cor_ready_chunk_ratio") or 0.0),
-            "cor_effective_chunk_ratio": float(payload.get("cor_effective_chunk_ratio") or 0.0),
-            "ner_ready_chunk_count": _safe_count_int(payload.get("ner_ready_chunk_count") or 0),
-            "ner_entity_count": _safe_count_int(payload.get("ner_entity_count") or 0),
-            "tokenize_ready_chunk_count": _safe_count_int(payload.get("tokenize_ready_chunk_count") or 0),
-            "tokenize_line_count": _safe_count_int(payload.get("tokenize_line_count") or 0),
-            "tokenize_token_count": _safe_count_int(payload.get("tokenize_token_count") or 0),
-            "syntax_ready_chunk_count": _safe_count_int(payload.get("syntax_ready_chunk_count") or 0),
-            "syntax_ready_document_count": _safe_count_int(payload.get("syntax_ready_chunk_count") or 0),  # Alias
-            "syntax_sentence_count": _safe_count_int(payload.get("syntax_sentence_count") or 0),
-            "syntax_token_count": _safe_count_int(payload.get("syntax_token_count") or 0),
-            "syntax_pos_count": _safe_count_int(payload.get("syntax_pos_count") or 0),
-            "syntax_pos_tag_type_count": _safe_count_int(payload.get("syntax_pos_tag_type_count") or 0),
-            "pos_coverage_on_syntax_tokens": float(payload.get("pos_coverage_on_syntax_tokens") or 0.0),
-            "pos_coverage_on_document_tokens": float(payload.get("pos_coverage_on_document_tokens") or 0.0),
-            "syntax_relation_count": _safe_count_int(payload.get("syntax_relation_count") or 0),
+            "cor_ready_chunk_ratio": float(
+                payload.get("cor_ready_chunk_ratio") or 0.0,
+            ),
+            "cor_effective_chunk_ratio": float(
+                payload.get("cor_effective_chunk_ratio") or 0.0,
+            ),
+            "ner_ready_chunk_count": _safe_count_int(
+                payload.get("ner_ready_chunk_count") or 0,
+            ),
+            "ner_entity_count": _safe_count_int(
+                payload.get("ner_entity_count") or 0,
+            ),
+            "tokenize_ready_chunk_count": _safe_count_int(
+                payload.get("tokenize_ready_chunk_count") or 0,
+            ),
+            "tokenize_line_count": _safe_count_int(
+                payload.get("tokenize_line_count") or 0,
+            ),
+            "tokenize_token_count": _safe_count_int(
+                payload.get("tokenize_token_count") or 0,
+            ),
+            "syntax_ready_chunk_count": _safe_count_int(
+                payload.get("syntax_ready_chunk_count") or 0,
+            ),
+            "syntax_ready_document_count": _safe_count_int(
+                payload.get("syntax_ready_chunk_count") or 0,
+            ),  # Alias
+            "syntax_sentence_count": _safe_count_int(
+                payload.get("syntax_sentence_count") or 0,
+            ),
+            "syntax_token_count": _safe_count_int(
+                payload.get("syntax_token_count") or 0,
+            ),
+            "syntax_pos_count": _safe_count_int(
+                payload.get("syntax_pos_count") or 0,
+            ),
+            "syntax_pos_tag_type_count": _safe_count_int(
+                payload.get("syntax_pos_tag_type_count") or 0,
+            ),
+            "pos_coverage_on_syntax_tokens": float(
+                payload.get("pos_coverage_on_syntax_tokens") or 0.0,
+            ),
+            "pos_coverage_on_document_tokens": float(
+                payload.get("pos_coverage_on_document_tokens") or 0.0,
+            ),
+            "syntax_relation_count": _safe_count_int(
+                payload.get("syntax_relation_count") or 0,
+            ),
         }
 
     def materialize_semantic_artifacts_for_source(
@@ -842,7 +1003,10 @@ class KnowledgeManager:
             stage = str(stage_payload.get("stage") or "").strip().lower()
             if stage not in {"tokenize", "pos", "cor", "ner", "syntax"}:
                 return
-            done_chunks = max(0, _safe_count_int(stage_payload.get("done_chunks") or 0))
+            done_chunks = max(
+                0,
+                _safe_count_int(stage_payload.get("done_chunks") or 0),
+            )
             if total_chunks > 0:
                 done_chunks = min(done_chunks, total_chunks)
             stage_done[stage] = max(stage_done.get(stage, 0), done_chunks)
@@ -856,7 +1020,9 @@ class KnowledgeManager:
                 # Keep the latest tokenize document snapshot so later stages
                 # do not overwrite it with an empty payload.
                 last_documents_progress[:] = [
-                    dict(item) for item in documents_progress if isinstance(item, dict)
+                    dict(item)
+                    for item in documents_progress
+                    if isinstance(item, dict)
                 ]
 
             processed = (
@@ -869,7 +1035,13 @@ class KnowledgeManager:
             denom = total_chunks * 5
             ratio = (processed / denom) if denom > 0 else 1.0
             progress = 45 + int(max(0.0, min(1.0, ratio)) * 25)
-            stage_title = {"tokenize": "Tokenize", "pos": "POS", "cor": "COR", "ner": "NER", "syntax": "Syntax"}.get(
+            stage_title = {
+                "tokenize": "Tokenize",
+                "pos": "POS",
+                "cor": "COR",
+                "ner": "NER",
+                "syntax": "Syntax",
+            }.get(
                 stage,
                 stage.upper(),
             )
@@ -887,10 +1059,18 @@ class KnowledgeManager:
                     "l2_progress": {
                         "total_chunks": total_chunks,
                         "tokenize_done_chunks": stage_done["tokenize"],
-                        "tokenize_done_lines": _safe_count_int(live_metrics.get("tokenize_done_lines") or 0),
-                        "tokenize_total_lines": _safe_count_int(live_metrics.get("tokenize_total_lines") or 0),
-                        "tokenize_done_documents": _safe_count_int(live_metrics.get("tokenize_done_documents") or 0),
-                        "tokenize_total_documents": _safe_count_int(live_metrics.get("tokenize_total_documents") or 0),
+                        "tokenize_done_lines": _safe_count_int(
+                            live_metrics.get("tokenize_done_lines") or 0,
+                        ),
+                        "tokenize_total_lines": _safe_count_int(
+                            live_metrics.get("tokenize_total_lines") or 0,
+                        ),
+                        "tokenize_done_documents": _safe_count_int(
+                            live_metrics.get("tokenize_done_documents") or 0,
+                        ),
+                        "tokenize_total_documents": _safe_count_int(
+                            live_metrics.get("tokenize_total_documents") or 0,
+                        ),
                         "pos_done_chunks": stage_done["pos"],
                         "cor_done_chunks": stage_done["cor"],
                         "ner_done_chunks": stage_done["ner"],
@@ -898,7 +1078,7 @@ class KnowledgeManager:
                     },
                     "l2_metrics": dict(live_metrics),
                     "l2_documents_progress": list(last_documents_progress),
-                }
+                },
             )
 
         self._write_chunk_tokenize_artifacts(
@@ -951,7 +1131,9 @@ class KnowledgeManager:
 
     def _apply_semantic_stage_metrics(self, payload: dict[str, Any]) -> None:
         raw_chunks = payload.get("chunks")
-        chunks: list[dict[str, Any]] = raw_chunks if isinstance(raw_chunks, list) else []
+        chunks: list[dict[str, Any]] = (
+            raw_chunks if isinstance(raw_chunks, list) else []
+        )
         cor_ready_chunk_count = 0
         cor_cluster_count = 0
         cor_replacement_count = 0
@@ -984,13 +1166,25 @@ class KnowledgeManager:
 
             if str(chunk.get("tokenize_status") or "").strip() == "ready":
                 tokenize_ready_chunk_count += 1
-            tokenize_line_count += max(0, _safe_count_int(chunk.get("tokenize_line_count") or 0))
-            tokenize_token_count += max(0, _safe_count_int(chunk.get("tokenize_token_count") or 0))
+            tokenize_line_count += max(
+                0,
+                _safe_count_int(chunk.get("tokenize_line_count") or 0),
+            )
+            tokenize_token_count += max(
+                0,
+                _safe_count_int(chunk.get("tokenize_token_count") or 0),
+            )
 
             if str(chunk.get("pos_status") or "").strip() == "ready":
                 pos_ready_chunk_count += 1
-            pos_line_count += max(0, _safe_count_int(chunk.get("pos_line_count") or 0))
-            pos_token_count += max(0, _safe_count_int(chunk.get("pos_token_count") or 0))
+            pos_line_count += max(
+                0,
+                _safe_count_int(chunk.get("pos_line_count") or 0),
+            )
+            pos_token_count += max(
+                0,
+                _safe_count_int(chunk.get("pos_token_count") or 0),
+            )
             pos_count += max(0, _safe_count_int(chunk.get("pos_count") or 0))
             raw_pos_tag_types = chunk.get("pos_tag_types")
             if isinstance(raw_pos_tag_types, list):
@@ -1001,9 +1195,18 @@ class KnowledgeManager:
 
             if str(chunk.get("ner_status") or "").strip() == "ready":
                 ner_ready_chunk_count += 1
-            ner_entity_count += max(0, _safe_count_int(chunk.get("ner_entity_count") or 0))
-            ner_batch_count += max(0, _safe_count_int(chunk.get("ner_batch_count") or 0))
-            ner_worker_restart_count += max(0, _safe_count_int(chunk.get("ner_worker_restart_count") or 0))
+            ner_entity_count += max(
+                0,
+                _safe_count_int(chunk.get("ner_entity_count") or 0),
+            )
+            ner_batch_count += max(
+                0,
+                _safe_count_int(chunk.get("ner_batch_count") or 0),
+            )
+            ner_worker_restart_count += max(
+                0,
+                _safe_count_int(chunk.get("ner_worker_restart_count") or 0),
+            )
             raw_worker_pids = chunk.get("ner_worker_pids")
             if isinstance(raw_worker_pids, list):
                 for item in raw_worker_pids:
@@ -1016,28 +1219,46 @@ class KnowledgeManager:
 
             if str(chunk.get("syntax_status") or "").strip() == "ready":
                 syntax_ready_chunk_count += 1
-            syntax_sentence_count += max(0, _safe_count_int(chunk.get("syntax_sentence_count") or 0))
-            syntax_token_count += max(0, _safe_count_int(chunk.get("syntax_token_count") or 0))
-            syntax_pos_count += max(0, _safe_count_int(chunk.get("syntax_pos_count") or 0))
+            syntax_sentence_count += max(
+                0,
+                _safe_count_int(chunk.get("syntax_sentence_count") or 0),
+            )
+            syntax_token_count += max(
+                0,
+                _safe_count_int(chunk.get("syntax_token_count") or 0),
+            )
+            syntax_pos_count += max(
+                0,
+                _safe_count_int(chunk.get("syntax_pos_count") or 0),
+            )
             raw_pos_tag_types = chunk.get("syntax_pos_tag_types")
             if isinstance(raw_pos_tag_types, list):
                 for item in raw_pos_tag_types:
                     tag = str(item or "").strip()
                     if tag:
                         syntax_pos_tag_types.add(tag)
-            syntax_relation_count += max(0, _safe_count_int(chunk.get("syntax_relation_count") or 0))
+            syntax_relation_count += max(
+                0,
+                _safe_count_int(chunk.get("syntax_relation_count") or 0),
+            )
 
             reason_code = str(chunk.get("cor_reason_code") or "").strip()
             reason = str(chunk.get("cor_reason") or "").strip()
             if reason_code:
-                cor_reason_counts[reason_code] = cor_reason_counts.get(reason_code, 0) + 1
+                cor_reason_counts[reason_code] = (
+                    cor_reason_counts.get(reason_code, 0) + 1
+                )
                 if reason and reason_code not in cor_reason_messages:
                     cor_reason_messages[reason_code] = reason
             if str(chunk.get("cor_status") or "").strip() != "ready":
                 continue
             cor_ready_chunk_count += 1
-            chunk_cluster_count = _safe_count_int(chunk.get("cor_cluster_count") or 0)
-            chunk_replacement_count = _safe_count_int(chunk.get("cor_replacement_count") or 0)
+            chunk_cluster_count = _safe_count_int(
+                chunk.get("cor_cluster_count") or 0,
+            )
+            chunk_replacement_count = _safe_count_int(
+                chunk.get("cor_replacement_count") or 0,
+            )
             cor_cluster_count += max(0, chunk_cluster_count)
             cor_replacement_count += max(0, chunk_replacement_count)
             if chunk_replacement_count > 0:
@@ -1050,7 +1271,10 @@ class KnowledgeManager:
                 cor_reason_counts.items(),
                 key=lambda item: (item[1], item[0]),
             )[0]
-            dominant_cor_reason = cor_reason_messages.get(dominant_cor_reason_code, "")
+            dominant_cor_reason = cor_reason_messages.get(
+                dominant_cor_reason_code,
+                "",
+            )
 
         payload["cor_ready_chunk_count"] = cor_ready_chunk_count
         payload["cor_cluster_count"] = cor_cluster_count
@@ -1059,7 +1283,9 @@ class KnowledgeManager:
         payload["cor_reason_code"] = dominant_cor_reason_code
         payload["cor_reason"] = dominant_cor_reason
         payload["cor_ready_chunk_ratio"] = (
-            float(cor_ready_chunk_count / len(chunks)) if len(chunks) > 0 else 0.0
+            float(cor_ready_chunk_count / len(chunks))
+            if len(chunks) > 0
+            else 0.0
         )
         payload["cor_effective_chunk_ratio"] = (
             float(cor_effective_chunk_count / cor_ready_chunk_count)
@@ -1088,10 +1314,16 @@ class KnowledgeManager:
         payload["syntax_pos_tag_types"] = sorted(syntax_pos_tag_types)
         payload["syntax_pos_tag_type_count"] = len(syntax_pos_tag_types)
         payload["pos_coverage_on_syntax_tokens"] = (
-            float(payload["syntax_pos_count"] / syntax_token_count) if syntax_token_count > 0 else 0.0
+            float(payload["syntax_pos_count"] / syntax_token_count)
+            if syntax_token_count > 0
+            else 0.0
         )
         source_id = str(payload.get("source_id") or "").strip()
-        tokenize_file_token_total = self._load_source_tokenize_file_total_count(source_id) if source_id else 0
+        tokenize_file_token_total = (
+            self._load_source_tokenize_file_total_count(source_id)
+            if source_id
+            else 0
+        )
         if tokenize_file_token_total > 0:
             payload["token_count"] = tokenize_file_token_total
             payload["tokenize_file_token_total"] = tokenize_file_token_total
@@ -1099,7 +1331,9 @@ class KnowledgeManager:
             payload["tokenize_file_token_total"] = 0
         document_token_count = _safe_count_int(payload.get("token_count") or 0)
         payload["pos_coverage_on_document_tokens"] = (
-            float(payload["syntax_pos_count"] / document_token_count) if document_token_count > 0 else 0.0
+            float(payload["syntax_pos_count"] / document_token_count)
+            if document_token_count > 0
+            else 0.0
         )
         payload["syntax_relation_count"] = syntax_relation_count
 
@@ -1122,7 +1356,9 @@ class KnowledgeManager:
     def delete_index(self, source_id: str) -> None:
         """Delete persisted artifacts for a source based on all stage manifests."""
         # interlinear/Lightweight
-        interlinear_manifest = self._load_source_interlinear_manifest(source_id)
+        interlinear_manifest = self._load_source_interlinear_manifest(
+            source_id,
+        )
         for artifact in interlinear_manifest.get("artifacts", []):
             for field in ("path", "line_index_path"):
                 path = artifact.get(field)
@@ -1176,7 +1412,12 @@ class KnowledgeManager:
         if source_dir.exists():
             shutil.rmtree(source_dir, ignore_errors=True)
 
-    def clear_knowledge(self, config: KnowledgeConfig, *, remove_sources: bool = True) -> dict[str, Any]:
+    def clear_knowledge(
+        self,
+        config: KnowledgeConfig,
+        *,
+        remove_sources: bool = True,
+    ) -> dict[str, Any]:
         """interlinear-only: 清理所有知识工件和配置。"""
         source_count = len(config.sources)
         if self.root_dir.exists():
@@ -1228,24 +1469,35 @@ class KnowledgeManager:
             if item and item.strip()
         }
         for source in config.sources:
-            if not self._project_registration_enabled(source, cache=project_registration_cache):
+            if not self._project_registration_enabled(
+                source,
+                cache=project_registration_cache,
+            ):
                 continue
             if source_ids and source.id not in source_ids:
                 continue
             if source_types and source.type not in source_types:
                 continue
-            source_scope_type, source_scope_id = self._resolve_source_scope(source)
+            source_scope_type, source_scope_id = self._resolve_source_scope(
+                source,
+            )
             if scope_type and source_scope_type != scope_type:
                 continue
             if scope_id and source_scope_id != scope_id:
                 continue
             if project_scope_set:
-                source_project_id = (getattr(source, "project_id", "") or "").strip()
+                source_project_id = (
+                    getattr(source, "project_id", "") or ""
+                ).strip()
                 in_project_scope = source_project_id in project_scope_set
                 is_global_source = not source_project_id
-                if not in_project_scope and not (include_global and is_global_source):
+                if not in_project_scope and not (
+                    include_global and is_global_source
+                ):
                     continue
-            interlinear_manifest = self._load_source_interlinear_manifest(source.id)
+            interlinear_manifest = self._load_source_interlinear_manifest(
+                source.id,
+            )
             artifacts = interlinear_manifest.get("artifacts", [])
             if not artifacts:
                 payload = self._load_index_payload(source.id) or {}
@@ -1256,13 +1508,17 @@ class KnowledgeManager:
                     if not chunk_path:
                         continue
                     try:
-                        text = (self.root_dir / chunk_path).read_text(encoding="utf-8")
+                        text = (self.root_dir / chunk_path).read_text(
+                            encoding="utf-8",
+                        )
                     except Exception:
                         text = ""
                     score = self._score_chunk(text, terms)
                     if score <= 0:
                         continue
-                    chunk_id = str(chunk.get("chunk_id") or "").strip() or source.id
+                    chunk_id = (
+                        str(chunk.get("chunk_id") or "").strip() or source.id
+                    )
                     evidence_id = self._build_search_evidence_id(
                         source_id=source.id,
                         document_path=str(chunk.get("document_path") or ""),
@@ -1278,7 +1534,8 @@ class KnowledgeManager:
                             "source_name": source_map[source.id].name,
                             "source_type": source.type,
                             "document_path": chunk.get("document_path"),
-                            "document_title": chunk.get("document_title") or chunk.get("document_path"),
+                            "document_title": chunk.get("document_title")
+                            or chunk.get("document_path"),
                             "chunk_id": chunk_id,
                             "chunk_path": chunk_path,
                             "line_no": 0,
@@ -1288,7 +1545,9 @@ class KnowledgeManager:
                             "evidence_id": evidence_id,
                             "scope_type": source_scope_type,
                             "scope_id": source_scope_id,
-                            "scope_priority": 100 if source_scope_type == "agent" else 50,
+                            "scope_priority": 100
+                            if source_scope_type == "agent"
+                            else 50,
                             "score": score,
                             "snippet": self._build_snippet(text, terms),
                         },
@@ -1299,13 +1558,19 @@ class KnowledgeManager:
                 if not interlinear_path:
                     continue
                 line_no = int(artifact.get("line_no") or 0)
-                line_index_path = str(artifact.get("line_index_path") or "").strip()
+                line_index_path = str(
+                    artifact.get("line_index_path") or "",
+                ).strip()
                 line_count = _safe_count_int(artifact.get("line_count") or 0)
                 line_index_start = 1 if line_count > 0 else 0
                 line_index_end = line_count if line_count > 0 else 0
-                chunk_id = str(artifact.get("chunk_id") or "").strip() or source.id
+                chunk_id = (
+                    str(artifact.get("chunk_id") or "").strip() or source.id
+                )
                 try:
-                    text = (self.root_dir / interlinear_path).read_text(encoding="utf-8")
+                    text = (self.root_dir / interlinear_path).read_text(
+                        encoding="utf-8",
+                    )
                 except Exception:
                     text = ""
                 score = self._score_chunk(text, terms)
@@ -1336,7 +1601,9 @@ class KnowledgeManager:
                         "evidence_id": evidence_id,
                         "scope_type": source_scope_type,
                         "scope_id": source_scope_id,
-                        "scope_priority": 100 if source_scope_type == "agent" else 50,
+                        "scope_priority": 100
+                        if source_scope_type == "agent"
+                        else 50,
                         "score": score,
                         "snippet": self._build_snippet(text, terms),
                     },
@@ -1394,7 +1661,11 @@ class KnowledgeManager:
     def _source_metadata_path(self, source_id: str) -> Path:
         return self._source_storage_path(source_id, "source.json")
 
-    def _write_source_index_payload(self, source_id: str, payload: dict[str, Any]) -> None:
+    def _write_source_index_payload(
+        self,
+        source_id: str,
+        payload: dict[str, Any],
+    ) -> None:
         index_path = self._source_index_path(source_id)
         index_path.parent.mkdir(parents=True, exist_ok=True)
         index_path.write_text(
@@ -1423,7 +1694,12 @@ class KnowledgeManager:
             encoding="utf-8",
         )
 
-    def _chunk_stage_paths(self, chunk: dict[str, Any], *, stage: str) -> list[str]:
+    def _chunk_stage_paths(
+        self,
+        chunk: dict[str, Any],
+        *,
+        stage: str,
+    ) -> list[str]:
         keys = _SEMANTIC_STAGE_PATH_KEYS.get(stage, ())
         paths: list[str] = []
         for key in keys:
@@ -1432,7 +1708,12 @@ class KnowledgeManager:
                 paths.append(relative_path)
         return paths
 
-    def _chunk_stage_ready_for_resume(self, chunk: dict[str, Any], *, stage: str) -> bool:
+    def _chunk_stage_ready_for_resume(
+        self,
+        chunk: dict[str, Any],
+        *,
+        stage: str,
+    ) -> bool:
         if str(chunk.get(f"{stage}_status") or "").strip().lower() != "ready":
             return False
         relative_paths = self._chunk_stage_paths(chunk, stage=stage)
@@ -1482,7 +1763,11 @@ class KnowledgeManager:
             return {}
         return payload if isinstance(payload, dict) else {}
 
-    def _write_source_stats(self, source_id: str, payload: dict[str, Any]) -> None:
+    def _write_source_stats(
+        self,
+        source_id: str,
+        payload: dict[str, Any],
+    ) -> None:
         path = self._source_stats_path(source_id)
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(
@@ -1527,7 +1812,10 @@ class KnowledgeManager:
                 int(payload.get("document_count", 0) or 0),
             ),
             "document_count": int(payload.get("document_count", 0) or 0),
-            "snapshot_count": int(payload.get("snapshot_count", payload.get("document_count", 0)) or 0),
+            "snapshot_count": int(
+                payload.get("snapshot_count", payload.get("document_count", 0))
+                or 0,
+            ),
             "chunk_count": int(payload.get("chunk_count", 0) or 0),
             "sentence_count": int(payload.get("sentence_count", 0) or 0),
             "char_count": int(payload.get("char_count", 0) or 0),
@@ -1543,13 +1831,22 @@ class KnowledgeManager:
         project_id: str = "",
         project_workspace_dir: str | Path | None = None,
     ) -> Path | None:
-        if project_workspace_dir is not None and str(project_workspace_dir).strip():
+        if (
+            project_workspace_dir is not None
+            and str(project_workspace_dir).strip()
+        ):
             candidate = Path(project_workspace_dir).expanduser()
         elif project_id:
-            project_candidate = self.project_root / "projects" / str(project_id).strip()
+            project_candidate = (
+                self.project_root / "projects" / str(project_id).strip()
+            )
             if project_candidate.exists() and project_candidate.is_dir():
                 candidate = project_candidate
-            elif self.project_root.exists() and self.project_root.is_dir() and self.project_root.name == str(project_id).strip():
+            elif (
+                self.project_root.exists()
+                and self.project_root.is_dir()
+                and self.project_root.name == str(project_id).strip()
+            ):
                 candidate = self.project_root
             else:
                 return None
@@ -1576,7 +1873,12 @@ class KnowledgeManager:
         )
         if resolved_project_dir is None:
             return None
-        return resolved_project_dir / ".knowledge" / "stats" / self._safe_name(step_id)
+        return (
+            resolved_project_dir
+            / ".knowledge"
+            / "stats"
+            / self._safe_name(step_id)
+        )
 
     def _project_step_latest_stats_path(
         self,
@@ -1622,7 +1924,11 @@ class KnowledgeManager:
             project_workspace_dir=project_workspace_dir,
             step_id=step_id,
         )
-        if latest_path is None or not latest_path.exists() or not latest_path.is_file():
+        if (
+            latest_path is None
+            or not latest_path.exists()
+            or not latest_path.is_file()
+        ):
             return {}
         try:
             payload = json.loads(latest_path.read_text(encoding="utf-8"))
@@ -1643,7 +1949,11 @@ class KnowledgeManager:
             project_workspace_dir=project_workspace_dir,
             step_id=step_id,
         )
-        if history_path is None or not history_path.exists() or not history_path.is_file():
+        if (
+            history_path is None
+            or not history_path.exists()
+            or not history_path.is_file()
+        ):
             return []
         try:
             lines = history_path.read_text(encoding="utf-8").splitlines()
@@ -1700,17 +2010,16 @@ class KnowledgeManager:
             "step_id": normalized_step_id,
             "indexed_at": str(indexed_at or "").strip() or None,
             "updated_at": now,
-            "metrics": {
-                key: value
-                for key, value in (metrics or {}).items()
-            },
+            "metrics": {key: value for key, value in (metrics or {}).items()},
         }
         if isinstance(extra_fields, dict):
-            record.update({
-                key: value
-                for key, value in extra_fields.items()
-                if key not in record
-            })
+            record.update(
+                {
+                    key: value
+                    for key, value in extra_fields.items()
+                    if key not in record
+                },
+            )
         latest_path.parent.mkdir(parents=True, exist_ok=True)
         latest_path.write_text(
             json.dumps(record, ensure_ascii=False, indent=2),
@@ -1734,11 +2043,22 @@ class KnowledgeManager:
             project_workspace_dir=source.location,
             step_id="file_analysis",
         )
-        metrics = project_stats.get("metrics") if isinstance(project_stats, dict) else None
+        metrics = (
+            project_stats.get("metrics")
+            if isinstance(project_stats, dict)
+            else None
+        )
         if not isinstance(metrics, dict) or not metrics:
             return status
         merged = dict(status)
-        for key in ("document_count", "snapshot_count", "chunk_count", "sentence_count", "char_count", "token_count"):
+        for key in (
+            "document_count",
+            "snapshot_count",
+            "chunk_count",
+            "sentence_count",
+            "char_count",
+            "token_count",
+        ):
             merged[key] = max(
                 _safe_count_int(merged.get(key) or 0),
                 _safe_count_int(metrics.get(key) or 0),
@@ -1747,16 +2067,22 @@ class KnowledgeManager:
             _safe_count_int(metrics.get(key) or 0) > 0
             for key in ("document_count", "snapshot_count", "chunk_count")
         )
-        merged["indexed_at"] = str(
-            merged.get("indexed_at")
-            or project_stats.get("indexed_at")
-            or ""
-        ).strip() or None
-        merged["stats_updated_at"] = str(
-            merged.get("stats_updated_at")
-            or project_stats.get("updated_at")
-            or ""
-        ).strip() or None
+        merged["indexed_at"] = (
+            str(
+                merged.get("indexed_at")
+                or project_stats.get("indexed_at")
+                or "",
+            ).strip()
+            or None
+        )
+        merged["stats_updated_at"] = (
+            str(
+                merged.get("stats_updated_at")
+                or project_stats.get("updated_at")
+                or "",
+            ).strip()
+            or None
+        )
         return merged
 
     def _update_project_file_analysis_stats_after_index(
@@ -1769,7 +2095,10 @@ class KnowledgeManager:
             return
         metrics = {
             "document_count": int(payload.get("document_count", 0) or 0),
-            "snapshot_count": int(payload.get("snapshot_count", payload.get("document_count", 0)) or 0),
+            "snapshot_count": int(
+                payload.get("snapshot_count", payload.get("document_count", 0))
+                or 0,
+            ),
             "chunk_count": int(payload.get("chunk_count", 0) or 0),
             "sentence_count": int(payload.get("sentence_count", 0) or 0),
             "char_count": int(payload.get("char_count", 0) or 0),
@@ -1807,18 +2136,32 @@ class KnowledgeManager:
         return self._source_storage_path(source_id, "snapshot-manifest.json")
 
     def _source_interlinear_manifest_path(self, source_id: str) -> Path:
-        return self._source_storage_path(source_id, "interlinear-manifest.json")
+        return self._source_storage_path(
+            source_id,
+            "interlinear-manifest.json",
+        )
 
     def _source_lightweight_manifest_path(self, source_id: str) -> Path:
-        return self._source_storage_path(source_id, "lightweight-manifest.json")
+        return self._source_storage_path(
+            source_id,
+            "lightweight-manifest.json",
+        )
 
     def _source_tokenize_file_totals_path(self, source_id: str) -> Path:
-        return self._source_storage_path(source_id, "tokenize-file-totals.json")
+        return self._source_storage_path(
+            source_id,
+            "tokenize-file-totals.json",
+        )
 
-    def _source_uses_root_raw_dir(self, source: KnowledgeSourceSpec | None) -> bool:
+    def _source_uses_root_raw_dir(
+        self,
+        source: KnowledgeSourceSpec | None,
+    ) -> bool:
         if source is None:
             return False
-        return source.type == "directory" and bool(str(source.project_id or "").strip())
+        return source.type == "directory" and bool(
+            str(source.project_id or "").strip(),
+        )
 
     def _source_raw_dir(
         self,
@@ -1869,7 +2212,11 @@ class KnowledgeManager:
             if isinstance(item, str) and str(item).strip()
         }
 
-    def _write_source_chunk_manifest(self, source_id: str, chunk_paths: set[str]) -> None:
+    def _write_source_chunk_manifest(
+        self,
+        source_id: str,
+        chunk_paths: set[str],
+    ) -> None:
         self._source_chunk_manifest_path(source_id).write_text(
             json.dumps(
                 {
@@ -1978,7 +2325,11 @@ class KnowledgeManager:
             if isinstance(item, str) and str(item).strip()
         }
 
-    def _write_source_ner_manifest(self, source_id: str, ner_paths: set[str]) -> None:
+    def _write_source_ner_manifest(
+        self,
+        source_id: str,
+        ner_paths: set[str],
+    ) -> None:
         self._source_ner_manifest_path(source_id).write_text(
             json.dumps(
                 {
@@ -1992,7 +2343,11 @@ class KnowledgeManager:
             encoding="utf-8",
         )
 
-    def _write_source_cor_manifest(self, source_id: str, cor_paths: set[str]) -> None:
+    def _write_source_cor_manifest(
+        self,
+        source_id: str,
+        cor_paths: set[str],
+    ) -> None:
         self._source_cor_manifest_path(source_id).write_text(
             json.dumps(
                 {
@@ -2006,7 +2361,11 @@ class KnowledgeManager:
             encoding="utf-8",
         )
 
-    def _write_source_syntax_manifest(self, source_id: str, syntax_paths: set[str]) -> None:
+    def _write_source_syntax_manifest(
+        self,
+        source_id: str,
+        syntax_paths: set[str],
+    ) -> None:
         self._source_syntax_manifest_path(source_id).write_text(
             json.dumps(
                 {
@@ -2020,7 +2379,11 @@ class KnowledgeManager:
             encoding="utf-8",
         )
 
-    def _write_source_pos_manifest(self, source_id: str, pos_paths: set[str]) -> None:
+    def _write_source_pos_manifest(
+        self,
+        source_id: str,
+        pos_paths: set[str],
+    ) -> None:
         self._source_pos_manifest_path(source_id).write_text(
             json.dumps(
                 {
@@ -2034,7 +2397,11 @@ class KnowledgeManager:
             encoding="utf-8",
         )
 
-    def _write_source_tokenize_manifest(self, source_id: str, tokenize_paths: set[str]) -> None:
+    def _write_source_tokenize_manifest(
+        self,
+        source_id: str,
+        tokenize_paths: set[str],
+    ) -> None:
         self._source_tokenize_manifest_path(source_id).write_text(
             json.dumps(
                 {
@@ -2048,7 +2415,10 @@ class KnowledgeManager:
             encoding="utf-8",
         )
 
-    def _load_source_snapshot_manifest(self, source_id: str) -> list[dict[str, str]]:
+    def _load_source_snapshot_manifest(
+        self,
+        source_id: str,
+    ) -> list[dict[str, str]]:
         path = self._source_snapshot_manifest_path(source_id)
         if not path.exists():
             return []
@@ -2072,23 +2442,35 @@ class KnowledgeManager:
             results.append(
                 {
                     "document_path": document_path,
-                    "relative_path": str(item.get("relative_path") or "").strip(),
-                    "title": str(item.get("title") or Path(document_path).name or document_path),
+                    "relative_path": str(
+                        item.get("relative_path") or "",
+                    ).strip(),
+                    "title": str(
+                        item.get("title")
+                        or Path(document_path).name
+                        or document_path,
+                    ),
                     "snapshot_path": snapshot_path,
-                    "snapshot_relative_path": str(item.get("snapshot_relative_path") or "").strip(),
+                    "snapshot_relative_path": str(
+                        item.get("snapshot_relative_path") or "",
+                    ).strip(),
                     "snapshot_at": str(item.get("snapshot_at") or "").strip(),
-                }
+                },
             )
         results.sort(
             key=lambda item: (
                 item.get("document_path") or "",
                 item.get("snapshot_at") or "",
                 item.get("snapshot_path") or "",
-            )
+            ),
         )
         return results
 
-    def _write_source_snapshot_manifest(self, source_id: str, snapshots: list[dict[str, str]]) -> None:
+    def _write_source_snapshot_manifest(
+        self,
+        source_id: str,
+        snapshots: list[dict[str, str]],
+    ) -> None:
         manifest_path = self._source_snapshot_manifest_path(source_id)
         manifest_path.parent.mkdir(parents=True, exist_ok=True)
         manifest_path.write_text(
@@ -2141,25 +2523,43 @@ class KnowledgeManager:
             if isinstance(item, str) and str(item).strip()
         }
 
-    def _write_source_interlinear_manifest(self, source_id: str, artifacts: list[dict]) -> None:
+    def _write_source_interlinear_manifest(
+        self,
+        source_id: str,
+        artifacts: list[dict],
+    ) -> None:
         """
         写入统一 schema 的 interlinear-manifest.json。
         artifacts: 每个元素包含 path/line_index_path/document_path/title/line_count/char_count/token_count/updated_at 等。
         """
-        normalized_artifacts = [item for item in artifacts if isinstance(item, dict)]
+        normalized_artifacts = [
+            item for item in artifacts if isinstance(item, dict)
+        ]
         summary = {
             "document_count": len(
                 {
                     str(a.get("document_path") or "").strip()
                     for a in normalized_artifacts
                     if str(a.get("document_path") or "").strip()
-                }
+                },
             ),
             "artifact_count": len(normalized_artifacts),
-            "line_count": sum(_safe_count_int(a.get("line_count") or 0) for a in normalized_artifacts),
-            "sentence_count": sum(_safe_count_int(a.get("line_count") or 0) for a in normalized_artifacts),
-            "char_count": sum(_safe_count_int(a.get("char_count") or 0) for a in normalized_artifacts),
-            "token_count": sum(_safe_count_int(a.get("token_count") or 0) for a in normalized_artifacts),
+            "line_count": sum(
+                _safe_count_int(a.get("line_count") or 0)
+                for a in normalized_artifacts
+            ),
+            "sentence_count": sum(
+                _safe_count_int(a.get("line_count") or 0)
+                for a in normalized_artifacts
+            ),
+            "char_count": sum(
+                _safe_count_int(a.get("char_count") or 0)
+                for a in normalized_artifacts
+            ),
+            "token_count": sum(
+                _safe_count_int(a.get("token_count") or 0)
+                for a in normalized_artifacts
+            ),
         }
         payload = {
             "source_id": source_id,
@@ -2168,10 +2568,15 @@ class KnowledgeManager:
             "summary": summary,
         }
         self._source_interlinear_manifest_path(source_id).write_text(
-            json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8"
+            json.dumps(payload, ensure_ascii=False, indent=2),
+            encoding="utf-8",
         )
 
-    def _write_source_lightweight_manifest(self, source_id: str, lightweight_paths: set[str]) -> None:
+    def _write_source_lightweight_manifest(
+        self,
+        source_id: str,
+        lightweight_paths: set[str],
+    ) -> None:
         self._source_lightweight_manifest_path(source_id).write_text(
             json.dumps(
                 {
@@ -2191,11 +2596,18 @@ class KnowledgeManager:
         snapshot_entry: dict[str, Any],
     ) -> str:
         document_path = str(snapshot_entry.get("document_path") or "").strip()
-        snapshot_relative_path = str(snapshot_entry.get("snapshot_relative_path") or "").strip()
+        snapshot_relative_path = str(
+            snapshot_entry.get("snapshot_relative_path") or "",
+        ).strip()
         snapshot_path = str(snapshot_entry.get("snapshot_path") or "").strip()
         raw_key = f"{source_id}:{document_path}:{snapshot_relative_path or snapshot_path}"
         digest = hashlib.sha1(raw_key.encode("utf-8")).hexdigest()[:12]
-        base_name = Path(snapshot_relative_path or snapshot_path or document_path or source_id).name
+        base_name = Path(
+            snapshot_relative_path
+            or snapshot_path
+            or document_path
+            or source_id,
+        ).name
         stem = self._safe_name(Path(base_name).stem or base_name or source_id)
         return f"{stem}__{digest}"
 
@@ -2203,7 +2615,10 @@ class KnowledgeManager:
     def _count_interlinear_line_chars(text: str) -> int:
         return len(_INTERLINEAR_CHAR_RE.findall(text or ""))
 
-    def _build_interlinear_relative_paths(self, artifact_key: str) -> dict[str, Path]:
+    def _build_interlinear_relative_paths(
+        self,
+        artifact_key: str,
+    ) -> dict[str, Path]:
         key = self._safe_name(artifact_key)
         return {
             "interlinear": Path("interlinear") / f"{key}.txt",
@@ -2216,26 +2631,45 @@ class KnowledgeManager:
         source_id: str,
         snapshot_entry: dict[str, Any],
     ) -> dict[str, str]:
-        snapshot_path = Path(str(snapshot_entry.get("snapshot_path") or "").strip())
+        snapshot_path = Path(
+            str(snapshot_entry.get("snapshot_path") or "").strip(),
+        )
         if not snapshot_path.exists() or not snapshot_path.is_file():
             return {}
 
         raw_text = self._read_local_text(snapshot_path)
         sentence_lines = self._split_chunk_sentences(raw_text)
-        interlinear_lines = sentence_lines if sentence_lines else ([raw_text.strip()] if raw_text.strip() else [])
+        interlinear_lines = (
+            sentence_lines
+            if sentence_lines
+            else ([raw_text.strip()] if raw_text.strip() else [])
+        )
 
-        artifact_key = self._build_interlinear_artifact_key(source_id, snapshot_entry)
+        artifact_key = self._build_interlinear_artifact_key(
+            source_id,
+            snapshot_entry,
+        )
         relative_paths = self._build_interlinear_relative_paths(artifact_key)
         interlinear_path = self.root_dir / relative_paths["interlinear"]
         line_index_path = self.root_dir / relative_paths["line_index"]
-        lightweight_result_path = self.root_dir / relative_paths["lightweight_result"]
+        lightweight_result_path = (
+            self.root_dir / relative_paths["lightweight_result"]
+        )
 
         interlinear_path.parent.mkdir(parents=True, exist_ok=True)
         line_index_path.parent.mkdir(parents=True, exist_ok=True)
         lightweight_result_path.parent.mkdir(parents=True, exist_ok=True)
 
-        interlinear_path.write_text("\n".join(interlinear_lines), encoding="utf-8")
-        persisted_lines = [line for line in interlinear_path.read_text(encoding="utf-8").splitlines()]
+        interlinear_path.write_text(
+            "\n".join(interlinear_lines),
+            encoding="utf-8",
+        )
+        persisted_lines = [
+            line
+            for line in interlinear_path.read_text(
+                encoding="utf-8",
+            ).splitlines()
+        ]
         if not persisted_lines and interlinear_lines:
             persisted_lines = list(interlinear_lines)
 
@@ -2243,14 +2677,17 @@ class KnowledgeManager:
         lightweight_result: list[dict[str, Any]] = []
         for line_no, line_text in enumerate(persisted_lines, start=1):
             char_count = self._count_interlinear_line_chars(line_text)
-            tokens = self._tokenize_lightweight_text(line_text, exclude_stop_words=False)
+            tokens = self._tokenize_lightweight_text(
+                line_text,
+                exclude_stop_words=False,
+            )
             token_count = len(tokens)
             line_index_rows.append(
                 {
                     "line_index": line_no,
                     "char_count": char_count,
                     "token_count": token_count,
-                }
+                },
             )
             lightweight_result.append(
                 {
@@ -2263,7 +2700,11 @@ class KnowledgeManager:
             )
 
         line_index_path.write_text(
-            "\n".join(json.dumps(item, ensure_ascii=False) for item in line_index_rows) + "\n",
+            "\n".join(
+                json.dumps(item, ensure_ascii=False)
+                for item in line_index_rows
+            )
+            + "\n",
             encoding="utf-8",
         )
         lightweight_result_path.write_text(
@@ -2273,8 +2714,12 @@ class KnowledgeManager:
 
         return {
             "interlinear_path": relative_paths["interlinear"].as_posix(),
-            "interlinear_line_index_path": relative_paths["line_index"].as_posix(),
-            "lightweight_path": relative_paths["lightweight_result"].as_posix(),
+            "interlinear_line_index_path": relative_paths[
+                "line_index"
+            ].as_posix(),
+            "lightweight_path": relative_paths[
+                "lightweight_result"
+            ].as_posix(),
         }
 
     def _materialize_interlinear_and_lightweight_for_source(
@@ -2282,7 +2727,9 @@ class KnowledgeManager:
         source_id: str,
         snapshots: list[dict[str, str]],
     ) -> None:
-        previous_interlinear = self._load_source_interlinear_manifest(source_id)
+        previous_interlinear = self._load_source_interlinear_manifest(
+            source_id,
+        )
         previous_interlinear_paths: set[str] = set()
         for artifact in previous_interlinear.get("artifacts", []):
             if not isinstance(artifact, dict):
@@ -2291,7 +2738,9 @@ class KnowledgeManager:
                 path_value = str(artifact.get(field) or "").strip()
                 if path_value:
                     previous_interlinear_paths.add(path_value)
-        previous_lightweight_paths = self._load_source_lightweight_manifest(source_id)
+        previous_lightweight_paths = self._load_source_lightweight_manifest(
+            source_id,
+        )
 
         current_interlinear_paths: set[str] = set()
         current_lightweight_paths: set[str] = set()
@@ -2299,12 +2748,21 @@ class KnowledgeManager:
         artifacts: list[dict] = []
 
         for snapshot_entry in snapshots:
-            generated = self._write_snapshot_interlinear_and_lightweight(source_id, snapshot_entry)
+            generated = self._write_snapshot_interlinear_and_lightweight(
+                source_id,
+                snapshot_entry,
+            )
             if not generated:
                 continue
-            interlinear_path = str(generated.get("interlinear_path") or "").strip()
-            interlinear_line_index_path = str(generated.get("interlinear_line_index_path") or "").strip()
-            lightweight_path = str(generated.get("lightweight_path") or "").strip()
+            interlinear_path = str(
+                generated.get("interlinear_path") or "",
+            ).strip()
+            interlinear_line_index_path = str(
+                generated.get("interlinear_line_index_path") or "",
+            ).strip()
+            lightweight_path = str(
+                generated.get("lightweight_path") or "",
+            ).strip()
 
             for path_value in (interlinear_path, interlinear_line_index_path):
                 if path_value:
@@ -2320,7 +2778,9 @@ class KnowledgeManager:
                 line_index_file = self.root_dir / interlinear_line_index_path
                 if line_index_file.exists() and line_index_file.is_file():
                     try:
-                        for raw_line in line_index_file.read_text(encoding="utf-8").splitlines():
+                        for raw_line in line_index_file.read_text(
+                            encoding="utf-8",
+                        ).splitlines():
                             row_text = str(raw_line or "").strip()
                             if not row_text:
                                 continue
@@ -2328,8 +2788,12 @@ class KnowledgeManager:
                             if not isinstance(row, dict):
                                 continue
                             line_count += 1
-                            char_count += _safe_count_int(row.get("char_count") or 0)
-                            token_count += _safe_count_int(row.get("token_count") or 0)
+                            char_count += _safe_count_int(
+                                row.get("char_count") or 0,
+                            )
+                            token_count += _safe_count_int(
+                                row.get("token_count") or 0,
+                            )
                     except Exception:
                         line_count = 0
                         char_count = 0
@@ -2339,38 +2803,60 @@ class KnowledgeManager:
                 {
                     "path": interlinear_path,
                     "line_index_path": interlinear_line_index_path,
-                    "document_path": str(snapshot_entry.get("document_path") or "").strip(),
+                    "document_path": str(
+                        snapshot_entry.get("document_path") or "",
+                    ).strip(),
                     "title": str(snapshot_entry.get("title") or "").strip(),
-                    "snapshot_path": str(snapshot_entry.get("snapshot_path") or "").strip(),
-                    "snapshot_relative_path": str(snapshot_entry.get("snapshot_relative_path") or "").strip(),
+                    "snapshot_path": str(
+                        snapshot_entry.get("snapshot_path") or "",
+                    ).strip(),
+                    "snapshot_relative_path": str(
+                        snapshot_entry.get("snapshot_relative_path") or "",
+                    ).strip(),
                     "line_count": line_count,
                     "char_count": char_count,
                     "token_count": token_count,
                     "updated_at": datetime.now(UTC).isoformat(),
-                }
+                },
             )
 
             metadata_rows.append(
                 {
-                    "document_path": str(snapshot_entry.get("document_path") or "").strip(),
-                    "snapshot_path": str(snapshot_entry.get("snapshot_path") or "").strip(),
-                    "snapshot_relative_path": str(snapshot_entry.get("snapshot_relative_path") or "").strip(),
+                    "document_path": str(
+                        snapshot_entry.get("document_path") or "",
+                    ).strip(),
+                    "snapshot_path": str(
+                        snapshot_entry.get("snapshot_path") or "",
+                    ).strip(),
+                    "snapshot_relative_path": str(
+                        snapshot_entry.get("snapshot_relative_path") or "",
+                    ).strip(),
                     "interlinear_path": interlinear_path,
                     "interlinear_line_index_path": interlinear_line_index_path,
                     "lightweight_path": lightweight_path,
                 },
             )
 
-        for interlinear_path in previous_interlinear_paths - current_interlinear_paths:
+        for interlinear_path in (
+            previous_interlinear_paths - current_interlinear_paths
+        ):
             self._delete_interlinear_path(interlinear_path)
-        for lightweight_path in previous_lightweight_paths - current_lightweight_paths:
+        for lightweight_path in (
+            previous_lightweight_paths - current_lightweight_paths
+        ):
             self._delete_lightweight_path(lightweight_path)
 
         # 写入统一 schema 的 interlinear-manifest.json
         self._write_source_interlinear_manifest(source_id, artifacts)
-        self._write_source_lightweight_manifest(source_id, current_lightweight_paths)
+        self._write_source_lightweight_manifest(
+            source_id,
+            current_lightweight_paths,
+        )
 
-        metadata_path = self._source_storage_path(source_id, "interlinear-lightweight-map.json")
+        metadata_path = self._source_storage_path(
+            source_id,
+            "interlinear-lightweight-map.json",
+        )
         metadata_path.parent.mkdir(parents=True, exist_ok=True)
         metadata_path.write_text(
             json.dumps(
@@ -2385,8 +2871,14 @@ class KnowledgeManager:
             encoding="utf-8",
         )
 
-    def _load_source_interlinear_lightweight_map_rows(self, source_id: str) -> list[dict[str, str]]:
-        metadata_path = self._source_storage_path(source_id, "interlinear-lightweight-map.json")
+    def _load_source_interlinear_lightweight_map_rows(
+        self,
+        source_id: str,
+    ) -> list[dict[str, str]]:
+        metadata_path = self._source_storage_path(
+            source_id,
+            "interlinear-lightweight-map.json",
+        )
         if not metadata_path.exists() or not metadata_path.is_file():
             return []
         try:
@@ -2404,11 +2896,19 @@ class KnowledgeManager:
                 continue
             normalized.append(
                 {
-                    "document_path": str(item.get("document_path") or "").strip(),
-                    "snapshot_path": str(item.get("snapshot_path") or "").strip(),
-                    "snapshot_relative_path": str(item.get("snapshot_relative_path") or "").strip(),
-                    "interlinear_path": str(item.get("interlinear_path") or "").strip(),
-                }
+                    "document_path": str(
+                        item.get("document_path") or "",
+                    ).strip(),
+                    "snapshot_path": str(
+                        item.get("snapshot_path") or "",
+                    ).strip(),
+                    "snapshot_relative_path": str(
+                        item.get("snapshot_relative_path") or "",
+                    ).strip(),
+                    "interlinear_path": str(
+                        item.get("interlinear_path") or "",
+                    ).strip(),
+                },
             )
         return normalized
 
@@ -2419,22 +2919,36 @@ class KnowledgeManager:
     ) -> str:
         chunk_document_path = str(chunk.get("document_path") or "").strip()
         chunk_snapshot_path = str(chunk.get("snapshot_path") or "").strip()
-        chunk_snapshot_relative_path = str(chunk.get("snapshot_relative_path") or "").strip()
+        chunk_snapshot_relative_path = str(
+            chunk.get("snapshot_relative_path") or "",
+        ).strip()
 
         def _match(row: dict[str, str]) -> bool:
             if not isinstance(row, dict):
                 return False
             row_document_path = str(row.get("document_path") or "").strip()
             row_snapshot_path = str(row.get("snapshot_path") or "").strip()
-            row_snapshot_relative_path = str(row.get("snapshot_relative_path") or "").strip()
-            same_document = bool(chunk_document_path and row_document_path and chunk_document_path == row_document_path)
+            row_snapshot_relative_path = str(
+                row.get("snapshot_relative_path") or "",
+            ).strip()
+            same_document = bool(
+                chunk_document_path
+                and row_document_path
+                and chunk_document_path == row_document_path,
+            )
             same_snapshot_relative = bool(
                 chunk_snapshot_relative_path
                 and row_snapshot_relative_path
-                and chunk_snapshot_relative_path == row_snapshot_relative_path
+                and chunk_snapshot_relative_path == row_snapshot_relative_path,
             )
-            same_snapshot_path = bool(chunk_snapshot_path and row_snapshot_path and chunk_snapshot_path == row_snapshot_path)
-            if same_document and (same_snapshot_relative or same_snapshot_path):
+            same_snapshot_path = bool(
+                chunk_snapshot_path
+                and row_snapshot_path
+                and chunk_snapshot_path == row_snapshot_path,
+            )
+            if same_document and (
+                same_snapshot_relative or same_snapshot_path
+            ):
                 return True
             if same_document:
                 return True
@@ -2467,13 +2981,17 @@ class KnowledgeManager:
     ) -> tuple[str, str]:
         for chunk in chunks:
             snapshot_path = str(chunk.get("snapshot_path") or "").strip()
-            snapshot_text = self._read_text_file_if_exists(snapshot_path).strip()
+            snapshot_text = self._read_text_file_if_exists(
+                snapshot_path,
+            ).strip()
             if snapshot_text:
                 return snapshot_text, "snapshot_full_document"
 
         for chunk in chunks:
             document_path = str(chunk.get("document_path") or "").strip()
-            document_text = self._read_text_file_if_exists(document_path).strip()
+            document_text = self._read_text_file_if_exists(
+                document_path,
+            ).strip()
             if document_text:
                 return document_text, "document_full_text_fallback"
 
@@ -2487,7 +3005,11 @@ class KnowledgeManager:
             if not chunk_path:
                 continue
             try:
-                chunk_text = (self.root_dir / chunk_path).read_text(encoding="utf-8").strip()
+                chunk_text = (
+                    (self.root_dir / chunk_path)
+                    .read_text(encoding="utf-8")
+                    .strip()
+                )
             except FileNotFoundError:
                 continue
             if chunk_text:
@@ -2497,14 +3019,21 @@ class KnowledgeManager:
 
         return "", "source_text_unavailable"
 
-    def _resolve_chunks_text(self, chunks: list[dict[str, Any]]) -> tuple[str, str]:
+    def _resolve_chunks_text(
+        self,
+        chunks: list[dict[str, Any]],
+    ) -> tuple[str, str]:
         parts: list[str] = []
         for chunk in chunks:
             chunk_path = str(chunk.get("chunk_path") or "").strip()
             if not chunk_path:
                 continue
             try:
-                chunk_text = (self.root_dir / chunk_path).read_text(encoding="utf-8").strip()
+                chunk_text = (
+                    (self.root_dir / chunk_path)
+                    .read_text(encoding="utf-8")
+                    .strip()
+                )
             except FileNotFoundError:
                 continue
             if chunk_text:
@@ -2514,21 +3043,31 @@ class KnowledgeManager:
         return "", "chunks_text_unavailable"
 
     @staticmethod
-    def _source_requires_chunks_only(source: KnowledgeSourceSpec | None) -> bool:
+    def _source_requires_chunks_only(
+        source: KnowledgeSourceSpec | None,
+    ) -> bool:
         if source is None:
             return False
         project_id = str(getattr(source, "project_id", "") or "").strip()
         if project_id:
             return True
         source_id = str(getattr(source, "id", "") or "").strip().lower()
-        return source_id.startswith("project-") and source_id.endswith("-workspace")
+        return source_id.startswith("project-") and source_id.endswith(
+            "-workspace",
+        )
 
     @staticmethod
     def _is_project_workspace_source(source: KnowledgeSourceSpec) -> bool:
         source_id = str(getattr(source, "id", "") or "").strip().lower()
-        if not (source_id.startswith("project-") and source_id.endswith("-workspace")):
+        if not (
+            source_id.startswith("project-")
+            and source_id.endswith("-workspace")
+        ):
             return False
-        return str(getattr(source, "type", "") or "").strip().lower() == "directory"
+        return (
+            str(getattr(source, "type", "") or "").strip().lower()
+            == "directory"
+        )
 
     @staticmethod
     def _normalize_project_registration_flag(raw_value: Any) -> bool:
@@ -2582,8 +3121,16 @@ class KnowledgeManager:
             return cache[project_id]
 
         metadata_candidates = (
-            self.project_root / "projects" / project_id / ".agent" / "PROJECT.md",
-            self.project_root / "projects" / project_id / ".agent" / "project.md",
+            self.project_root
+            / "projects"
+            / project_id
+            / ".agent"
+            / "PROJECT.md",
+            self.project_root
+            / "projects"
+            / project_id
+            / ".agent"
+            / "project.md",
             self.project_root / "projects" / project_id / "PROJECT.md",
             self.project_root / "projects" / project_id / "project.md",
         )
@@ -2593,12 +3140,12 @@ class KnowledgeManager:
                 continue
             try:
                 payload = self._parse_markdown_frontmatter(
-                    metadata_path.read_text(encoding="utf-8", errors="ignore")
+                    metadata_path.read_text(encoding="utf-8", errors="ignore"),
                 )
             except Exception:
                 payload = {}
             enabled = self._normalize_project_registration_flag(
-                payload.get("project_agent_knowledge_registered")
+                payload.get("project_agent_knowledge_registered"),
             )
             break
 
@@ -2608,14 +3155,21 @@ class KnowledgeManager:
 
     @staticmethod
     def _chunk_document_group_key(chunk: dict[str, Any]) -> str:
-        snapshot_relative_path = str(chunk.get("snapshot_relative_path") or "").strip()
+        snapshot_relative_path = str(
+            chunk.get("snapshot_relative_path") or "",
+        ).strip()
         document_path = str(chunk.get("document_path") or "").strip()
         chunk_path = str(chunk.get("chunk_path") or "").strip()
         chunk_id = str(chunk.get("chunk_id") or "").strip()
-        return snapshot_relative_path or document_path or chunk_path or chunk_id
+        return (
+            snapshot_relative_path or document_path or chunk_path or chunk_id
+        )
 
     @classmethod
-    def _group_document_chunks(cls, chunks: list[dict[str, Any]]) -> list[list[dict[str, Any]]]:
+    def _group_document_chunks(
+        cls,
+        chunks: list[dict[str, Any]],
+    ) -> list[list[dict[str, Any]]]:
         grouped: dict[str, list[dict[str, Any]]] = {}
         order: list[str] = []
         for chunk in chunks:
@@ -2627,7 +3181,9 @@ class KnowledgeManager:
         return [grouped[key] for key in order]
 
     @staticmethod
-    def _group_chunks_for_ner(chunks: list[dict[str, Any]]) -> list[list[dict[str, Any]]]:
+    def _group_chunks_for_ner(
+        chunks: list[dict[str, Any]],
+    ) -> list[list[dict[str, Any]]]:
         return KnowledgeManager._group_document_chunks(chunks)
 
     def _resolve_document_ner_input_text(
@@ -2645,18 +3201,26 @@ class KnowledgeManager:
                 return chunks_text, chunks_text, "", chunks_input_mode
             if not allow_fallback:
                 return "", "", "", "chunks_required"
-            source_text, input_mode = self._resolve_document_source_text(chunks, source=source)
+            source_text, input_mode = self._resolve_document_source_text(
+                chunks,
+                source=source,
+            )
             return source_text, source_text, "", input_mode
 
         interlinear_path = ""
         for chunk in chunks:
-            interlinear_path = self._resolve_chunk_interlinear_path(chunk, map_rows)
+            interlinear_path = self._resolve_chunk_interlinear_path(
+                chunk,
+                map_rows,
+            )
             if interlinear_path:
                 break
 
         if interlinear_path:
             try:
-                interlinear_text = (self.root_dir / interlinear_path).read_text(encoding="utf-8")
+                interlinear_text = (
+                    self.root_dir / interlinear_path
+                ).read_text(encoding="utf-8")
                 normalized_interlinear = str(interlinear_text or "").strip()
                 if normalized_interlinear:
                     return (
@@ -2671,7 +3235,10 @@ class KnowledgeManager:
         if not allow_fallback:
             return "", "", interlinear_path, "interlinear_required"
 
-        source_text, input_mode = self._resolve_document_source_text(chunks, source=source)
+        source_text, input_mode = self._resolve_document_source_text(
+            chunks,
+            source=source,
+        )
         return source_text, source_text, interlinear_path, input_mode
 
     def _delete_chunk_path(self, relative_path: str | Path | None) -> None:
@@ -2788,7 +3355,10 @@ class KnowledgeManager:
                 break
             current = current.parent
 
-    def _delete_interlinear_path(self, relative_path: str | Path | None) -> None:
+    def _delete_interlinear_path(
+        self,
+        relative_path: str | Path | None,
+    ) -> None:
         text = str(relative_path or "").strip()
         if not text:
             return
@@ -2807,7 +3377,10 @@ class KnowledgeManager:
                 break
             current = current.parent
 
-    def _delete_lightweight_path(self, relative_path: str | Path | None) -> None:
+    def _delete_lightweight_path(
+        self,
+        relative_path: str | Path | None,
+    ) -> None:
         text = str(relative_path or "").strip()
         if not text:
             return
@@ -2867,7 +3440,11 @@ class KnowledgeManager:
         raw_document_path = str(document_path or "").strip()
         normalized_path: str | None = None
 
-        if source.type == "directory" and source.location and raw_document_path:
+        if (
+            source.type == "directory"
+            and source.location
+            and raw_document_path
+        ):
             try:
                 root = Path(source.location).expanduser().resolve()
                 resolved = Path(raw_document_path).expanduser().resolve()
@@ -2880,14 +3457,22 @@ class KnowledgeManager:
         elif source.type == "url":
             candidate = raw_document_path or str(source.location or source.id)
             parsed = urlparse(candidate)
-            normalized_path = parsed.path.strip("/") or parsed.netloc or self._safe_name(source.id)
+            normalized_path = (
+                parsed.path.strip("/")
+                or parsed.netloc
+                or self._safe_name(source.id)
+            )
         elif source.type == "chat":
             candidate = raw_document_path or str(source.location or source.id)
-            normalized_path = Path(candidate).name or self._safe_name(source.id)
+            normalized_path = Path(candidate).name or self._safe_name(
+                source.id,
+            )
 
         if not normalized_path:
             candidate = raw_document_path or str(source.location or source.id)
-            normalized_path = Path(candidate).name or self._safe_name(source.id)
+            normalized_path = Path(candidate).name or self._safe_name(
+                source.id,
+            )
 
         safe_parts = [
             self._safe_name(part)
@@ -2898,7 +3483,10 @@ class KnowledgeManager:
             safe_parts = [self._safe_name(source.id)]
         return Path(*safe_parts)
 
-    def _normalize_snapshot_chunk_path(self, snapshot_relative_path: str) -> Path:
+    def _normalize_snapshot_chunk_path(
+        self,
+        snapshot_relative_path: str,
+    ) -> Path:
         safe_parts = [
             self._safe_name(part)
             for part in Path(snapshot_relative_path).parts
@@ -2913,9 +3501,13 @@ class KnowledgeManager:
         source: KnowledgeSourceSpec,
         chunk: dict[str, Any],
     ) -> Path:
-        snapshot_relative_path = str(chunk.get("snapshot_relative_path") or "").strip()
+        snapshot_relative_path = str(
+            chunk.get("snapshot_relative_path") or "",
+        ).strip()
         if snapshot_relative_path:
-            normalized_doc_path = self._normalize_snapshot_chunk_path(snapshot_relative_path)
+            normalized_doc_path = self._normalize_snapshot_chunk_path(
+                snapshot_relative_path,
+            )
         else:
             normalized_doc_path = self._normalize_chunk_document_path(
                 source,
@@ -2931,13 +3523,21 @@ class KnowledgeManager:
         target = self.chunks_dir
         if str(parent) not in {"", "."}:
             target = target / parent
-        return target.relative_to(self.root_dir) / f"{basename}.{chunk_index}.txt"
+        return (
+            target.relative_to(self.root_dir) / f"{basename}.{chunk_index}.txt"
+        )
 
     def _build_cor_relative_path(self, chunk_relative_path: str) -> Path:
         chunk_path = Path(str(chunk_relative_path or "").strip())
         if not chunk_path.parts:
-            return self.cor_dir.relative_to(self.root_dir) / "knowledge.cor.txt"
-        relative_parts = chunk_path.parts[1:] if chunk_path.parts[0] == self.chunks_dir.name else chunk_path.parts
+            return (
+                self.cor_dir.relative_to(self.root_dir) / "knowledge.cor.txt"
+            )
+        relative_parts = (
+            chunk_path.parts[1:]
+            if chunk_path.parts[0] == self.chunks_dir.name
+            else chunk_path.parts
+        )
         basename = chunk_path.name
         if basename.endswith(".txt"):
             basename = f"{basename[:-4]}.cor.txt"
@@ -2946,21 +3546,41 @@ class KnowledgeManager:
         target = self.cor_dir.joinpath(*relative_parts[:-1], basename)
         return target.relative_to(self.root_dir)
 
-    def _build_cor_structured_relative_path(self, chunk_relative_path: str) -> Path:
+    def _build_cor_structured_relative_path(
+        self,
+        chunk_relative_path: str,
+    ) -> Path:
         cor_path = self._build_cor_relative_path(chunk_relative_path)
-        base = cor_path.name[:-4] if cor_path.name.endswith(".txt") else cor_path.name
+        base = (
+            cor_path.name[:-4]
+            if cor_path.name.endswith(".txt")
+            else cor_path.name
+        )
         return cor_path.with_name(f"{base}.json")
 
-    def _build_cor_annotated_relative_path(self, chunk_relative_path: str) -> Path:
+    def _build_cor_annotated_relative_path(
+        self,
+        chunk_relative_path: str,
+    ) -> Path:
         cor_path = self._build_cor_relative_path(chunk_relative_path)
-        base = cor_path.name[:-4] if cor_path.name.endswith(".txt") else cor_path.name
+        base = (
+            cor_path.name[:-4]
+            if cor_path.name.endswith(".txt")
+            else cor_path.name
+        )
         return cor_path.with_name(f"{base}.annotated.md")
 
     def _build_ner_relative_path(self, chunk_relative_path: str) -> Path:
         chunk_path = Path(str(chunk_relative_path or "").strip())
         if not chunk_path.parts:
-            return self.ner_dir.relative_to(self.root_dir) / "knowledge.ner.txt"
-        relative_parts = chunk_path.parts[1:] if chunk_path.parts[0] == self.chunks_dir.name else chunk_path.parts
+            return (
+                self.ner_dir.relative_to(self.root_dir) / "knowledge.ner.txt"
+            )
+        relative_parts = (
+            chunk_path.parts[1:]
+            if chunk_path.parts[0] == self.chunks_dir.name
+            else chunk_path.parts
+        )
         basename = chunk_path.name
         if basename.endswith(".txt"):
             basename = f"{basename[:-4]}.ner.txt"
@@ -2969,26 +3589,51 @@ class KnowledgeManager:
         target = self.ner_dir.joinpath(*relative_parts[:-1], basename)
         return target.relative_to(self.root_dir)
 
-    def _build_ner_structured_relative_path(self, chunk_relative_path: str) -> Path:
+    def _build_ner_structured_relative_path(
+        self,
+        chunk_relative_path: str,
+    ) -> Path:
         ner_path = self._build_ner_relative_path(chunk_relative_path)
-        base = ner_path.name[:-4] if ner_path.name.endswith(".txt") else ner_path.name
+        base = (
+            ner_path.name[:-4]
+            if ner_path.name.endswith(".txt")
+            else ner_path.name
+        )
         return ner_path.with_name(f"{base}.json")
 
-    def _build_ner_annotated_relative_path(self, chunk_relative_path: str) -> Path:
+    def _build_ner_annotated_relative_path(
+        self,
+        chunk_relative_path: str,
+    ) -> Path:
         ner_path = self._build_ner_relative_path(chunk_relative_path)
-        base = ner_path.name[:-4] if ner_path.name.endswith(".txt") else ner_path.name
+        base = (
+            ner_path.name[:-4]
+            if ner_path.name.endswith(".txt")
+            else ner_path.name
+        )
         return ner_path.with_name(f"{base}.annotated.md")
 
     def _build_ner_stats_relative_path(self, chunk_relative_path: str) -> Path:
         ner_path = self._build_ner_relative_path(chunk_relative_path)
-        base = ner_path.name[:-4] if ner_path.name.endswith(".txt") else ner_path.name
+        base = (
+            ner_path.name[:-4]
+            if ner_path.name.endswith(".txt")
+            else ner_path.name
+        )
         return ner_path.with_name(f"{base}.stats.json")
 
     def _build_syntax_relative_path(self, chunk_relative_path: str) -> Path:
         chunk_path = Path(str(chunk_relative_path or "").strip())
         if not chunk_path.parts:
-            return self.syntax_dir.relative_to(self.root_dir) / "knowledge.syntax.txt"
-        relative_parts = chunk_path.parts[1:] if chunk_path.parts[0] == self.chunks_dir.name else chunk_path.parts
+            return (
+                self.syntax_dir.relative_to(self.root_dir)
+                / "knowledge.syntax.txt"
+            )
+        relative_parts = (
+            chunk_path.parts[1:]
+            if chunk_path.parts[0] == self.chunks_dir.name
+            else chunk_path.parts
+        )
         basename = chunk_path.name
         if basename.endswith(".txt"):
             basename = f"{basename[:-4]}.syntax.txt"
@@ -2997,21 +3642,42 @@ class KnowledgeManager:
         target = self.syntax_dir.joinpath(*relative_parts[:-1], basename)
         return target.relative_to(self.root_dir)
 
-    def _build_syntax_structured_relative_path(self, chunk_relative_path: str) -> Path:
+    def _build_syntax_structured_relative_path(
+        self,
+        chunk_relative_path: str,
+    ) -> Path:
         syntax_path = self._build_syntax_relative_path(chunk_relative_path)
-        base = syntax_path.name[:-4] if syntax_path.name.endswith(".txt") else syntax_path.name
+        base = (
+            syntax_path.name[:-4]
+            if syntax_path.name.endswith(".txt")
+            else syntax_path.name
+        )
         return syntax_path.with_name(f"{base}.json")
 
-    def _build_syntax_annotated_relative_path(self, chunk_relative_path: str) -> Path:
+    def _build_syntax_annotated_relative_path(
+        self,
+        chunk_relative_path: str,
+    ) -> Path:
         syntax_path = self._build_syntax_relative_path(chunk_relative_path)
-        base = syntax_path.name[:-4] if syntax_path.name.endswith(".txt") else syntax_path.name
+        base = (
+            syntax_path.name[:-4]
+            if syntax_path.name.endswith(".txt")
+            else syntax_path.name
+        )
         return syntax_path.with_name(f"{base}.annotated.md")
 
     def _build_tokenize_relative_path(self, chunk_relative_path: str) -> Path:
         chunk_path = Path(str(chunk_relative_path or "").strip())
         if not chunk_path.parts:
-            return self.tokenize_dir.relative_to(self.root_dir) / "knowledge.tokenize.txt"
-        relative_parts = chunk_path.parts[1:] if chunk_path.parts[0] == self.chunks_dir.name else chunk_path.parts
+            return (
+                self.tokenize_dir.relative_to(self.root_dir)
+                / "knowledge.tokenize.txt"
+            )
+        relative_parts = (
+            chunk_path.parts[1:]
+            if chunk_path.parts[0] == self.chunks_dir.name
+            else chunk_path.parts
+        )
         basename = chunk_path.name
         if basename.endswith(".txt"):
             basename = f"{basename[:-4]}.tokenize.txt"
@@ -3020,21 +3686,41 @@ class KnowledgeManager:
         target = self.tokenize_dir.joinpath(*relative_parts[:-1], basename)
         return target.relative_to(self.root_dir)
 
-    def _build_tokenize_structured_relative_path(self, chunk_relative_path: str) -> Path:
+    def _build_tokenize_structured_relative_path(
+        self,
+        chunk_relative_path: str,
+    ) -> Path:
         tokenize_path = self._build_tokenize_relative_path(chunk_relative_path)
-        base = tokenize_path.name[:-4] if tokenize_path.name.endswith(".txt") else tokenize_path.name
+        base = (
+            tokenize_path.name[:-4]
+            if tokenize_path.name.endswith(".txt")
+            else tokenize_path.name
+        )
         return tokenize_path.with_name(f"{base}.json")
 
-    def _build_tokenize_line_stats_relative_path(self, chunk_relative_path: str) -> Path:
+    def _build_tokenize_line_stats_relative_path(
+        self,
+        chunk_relative_path: str,
+    ) -> Path:
         tokenize_path = self._build_tokenize_relative_path(chunk_relative_path)
-        base = tokenize_path.name[:-4] if tokenize_path.name.endswith(".txt") else tokenize_path.name
+        base = (
+            tokenize_path.name[:-4]
+            if tokenize_path.name.endswith(".txt")
+            else tokenize_path.name
+        )
         return tokenize_path.with_name(f"{base}.line-stats.json")
 
     def _build_pos_relative_path(self, chunk_relative_path: str) -> Path:
         chunk_path = Path(str(chunk_relative_path or "").strip())
         if not chunk_path.parts:
-            return self.pos_dir.relative_to(self.root_dir) / "knowledge.pos.txt"
-        relative_parts = chunk_path.parts[1:] if chunk_path.parts[0] == self.chunks_dir.name else chunk_path.parts
+            return (
+                self.pos_dir.relative_to(self.root_dir) / "knowledge.pos.txt"
+            )
+        relative_parts = (
+            chunk_path.parts[1:]
+            if chunk_path.parts[0] == self.chunks_dir.name
+            else chunk_path.parts
+        )
         basename = chunk_path.name
         if basename.endswith(".txt"):
             basename = f"{basename[:-4]}.pos.txt"
@@ -3043,24 +3729,42 @@ class KnowledgeManager:
         target = self.pos_dir.joinpath(*relative_parts[:-1], basename)
         return target.relative_to(self.root_dir)
 
-    def _build_pos_structured_relative_path(self, chunk_relative_path: str) -> Path:
+    def _build_pos_structured_relative_path(
+        self,
+        chunk_relative_path: str,
+    ) -> Path:
         pos_path = self._build_pos_relative_path(chunk_relative_path)
-        base = pos_path.name[:-4] if pos_path.name.endswith(".txt") else pos_path.name
+        base = (
+            pos_path.name[:-4]
+            if pos_path.name.endswith(".txt")
+            else pos_path.name
+        )
         return pos_path.with_name(f"{base}.json")
 
-    def _build_pos_line_stats_relative_path(self, chunk_relative_path: str) -> Path:
+    def _build_pos_line_stats_relative_path(
+        self,
+        chunk_relative_path: str,
+    ) -> Path:
         pos_path = self._build_pos_relative_path(chunk_relative_path)
-        base = pos_path.name[:-4] if pos_path.name.endswith(".txt") else pos_path.name
+        base = (
+            pos_path.name[:-4]
+            if pos_path.name.endswith(".txt")
+            else pos_path.name
+        )
         return pos_path.with_name(f"{base}.line-stats.json")
 
     def _chunk_file_key(self, chunk: dict[str, Any]) -> str:
-        return str(chunk.get("document_path") or chunk.get("document_title") or "knowledge").strip()
+        return str(
+            chunk.get("document_path")
+            or chunk.get("document_title")
+            or "knowledge",
+        ).strip()
 
     def _chunk_version_id(self, chunk: dict[str, Any]) -> str:
         snapshot_ref = str(
             chunk.get("snapshot_relative_path")
             or chunk.get("snapshot_path")
-            or ""
+            or "",
         ).strip()
         matched = re.search(r"snapshot_([0-9A-Za-z]+)", snapshot_ref)
         if matched:
@@ -3070,12 +3774,15 @@ class KnowledgeManager:
                 self._chunk_file_key(chunk),
                 str(chunk.get("snapshot_at") or "").strip(),
                 str(chunk.get("chunk_id") or "").strip(),
-            ]
+            ],
         )
         return hashlib.sha1(raw.encode("utf-8")).hexdigest()[:16]
 
     @staticmethod
-    def _token_offsets_from_text(text: str, tokens: list[str]) -> list[tuple[int, int]]:
+    def _token_offsets_from_text(
+        text: str,
+        tokens: list[str],
+    ) -> list[tuple[int, int]]:
         source_text = str(text or "")
         offsets: list[tuple[int, int]] = []
         cursor = 0
@@ -3117,7 +3824,10 @@ class KnowledgeManager:
                 continue
             mentions: list[dict[str, Any]] = []
             for mention_index, raw_mention in enumerate(raw_cluster, start=1):
-                if not isinstance(raw_mention, (list, tuple)) or len(raw_mention) < 3:
+                if (
+                    not isinstance(raw_mention, (list, tuple))
+                    or len(raw_mention) < 3
+                ):
                     continue
                 surface = str(raw_mention[0] or "").strip()
                 try:
@@ -3133,11 +3843,16 @@ class KnowledgeManager:
                         "surface": surface,
                         "token_start": token_start,
                         "token_end": token_end,
-                    }
+                    },
                 )
             if not mentions:
                 continue
-            mentions.sort(key=lambda item: (int(item["token_start"]), int(item["token_end"])))
+            mentions.sort(
+                key=lambda item: (
+                    int(item["token_start"]),
+                    int(item["token_end"]),
+                ),
+            )
             canonical = max(
                 mentions,
                 key=lambda item: (
@@ -3150,7 +3865,7 @@ class KnowledgeManager:
                     "cluster_id": f"c{cluster_index}",
                     "canonical_mention": canonical,
                     "mentions": mentions,
-                }
+                },
             )
         return tokens, clusters
 
@@ -3167,7 +3882,11 @@ class KnowledgeManager:
         offsets = self._token_offsets_from_text(source_text, tokens)
         replacements: list[dict[str, Any]] = []
         for cluster in clusters:
-            canonical = cluster.get("canonical_mention") if isinstance(cluster, dict) else None
+            canonical = (
+                cluster.get("canonical_mention")
+                if isinstance(cluster, dict)
+                else None
+            )
             if not isinstance(canonical, dict):
                 continue
             canonical_surface = str(canonical.get("surface") or "").strip()
@@ -3181,7 +3900,11 @@ class KnowledgeManager:
                     continue
                 token_start = int(mention.get("token_start") or 0)
                 token_end = int(mention.get("token_end") or 0)
-                if token_start < 0 or token_end <= token_start or token_end > len(offsets):
+                if (
+                    token_start < 0
+                    or token_end <= token_start
+                    or token_end > len(offsets)
+                ):
                     continue
                 char_start = int(offsets[token_start][0])
                 char_end = int(offsets[token_end - 1][1])
@@ -3198,13 +3921,15 @@ class KnowledgeManager:
                         "end": char_end,
                         "source_surface": source_text[char_start:char_end],
                         "replacement_surface": canonical_surface,
-                    }
+                    },
                 )
 
         if not replacements:
             return source_text, list(tokens), []
 
-        replacements.sort(key=lambda item: (int(item["start"]), int(item["end"])))
+        replacements.sort(
+            key=lambda item: (int(item["start"]), int(item["end"])),
+        )
         filtered: list[dict[str, Any]] = []
         last_end = -1
         for item in replacements:
@@ -3224,7 +3949,10 @@ class KnowledgeManager:
                 + str(item.get("replacement_surface") or "")
                 + resolved_text[end:]
             )
-        resolved_tokens = [match.group(0) for match in _LIGHTWEIGHT_TOKEN_RE.finditer(resolved_text)]
+        resolved_tokens = [
+            match.group(0)
+            for match in _LIGHTWEIGHT_TOKEN_RE.finditer(resolved_text)
+        ]
         return resolved_text, resolved_tokens, filtered
 
     def _render_chunk_cor_structured_payload(
@@ -3237,7 +3965,11 @@ class KnowledgeManager:
         cor_input_mode: str = "chunk_fallback",
     ) -> dict[str, Any]:
         tokens, clusters = self._normalize_hanlp_coref_payload(raw_result)
-        resolved_text, resolved_tokens, replacements = self._resolve_text_from_coref(text, tokens, clusters)
+        (
+            resolved_text,
+            resolved_tokens,
+            replacements,
+        ) = self._resolve_text_from_coref(text, tokens, clusters)
         resolution_mode = "hanlp_cor" if replacements else "identity_fallback"
         return {
             "artifact": "cor_structured",
@@ -3318,16 +4050,24 @@ class KnowledgeManager:
         for item in structured_payload.get("replacements") or []:
             if not isinstance(item, dict):
                 continue
-            source_surface = str(item.get("source_surface") or "").replace("|", "\\|")
-            replacement_surface = str(item.get("replacement_surface") or "").replace("|", "\\|")
+            source_surface = str(item.get("source_surface") or "").replace(
+                "|",
+                "\\|",
+            )
+            replacement_surface = str(
+                item.get("replacement_surface") or "",
+            ).replace("|", "\\|")
             lines.append(
                 "| "
                 f"{item.get('cluster_id') or ''} | {item.get('mention_id') or ''} | {item.get('canonical_mention_id') or ''} | "
-                f"{source_surface} | {replacement_surface} | {item.get('start') or 0} | {item.get('end') or 0} |"
+                f"{source_surface} | {replacement_surface} | {item.get('start') or 0} | {item.get('end') or 0} |",
             )
         return "\n".join(lines)
 
-    def _load_chunk_cor_structured(self, chunk: dict[str, Any]) -> dict[str, Any] | None:
+    def _load_chunk_cor_structured(
+        self,
+        chunk: dict[str, Any],
+    ) -> dict[str, Any] | None:
         raw = self._read_artifact_text(chunk, "cor_structured_path")
         if not raw.strip():
             return None
@@ -3337,7 +4077,10 @@ class KnowledgeManager:
             return None
         return payload if isinstance(payload, dict) else None
 
-    def _resolve_chunk_text_via_cor(self, chunk: dict[str, Any]) -> tuple[str, str, str, str]:
+    def _resolve_chunk_text_via_cor(
+        self,
+        chunk: dict[str, Any],
+    ) -> tuple[str, str, str, str]:
         original_text, _ = self._resolve_document_source_text([chunk])
         cor_payload = self._load_chunk_cor_structured(chunk)
         if not cor_payload:
@@ -3346,7 +4089,9 @@ class KnowledgeManager:
         if not resolved_text:
             resolved_text = original_text
         cor_path = str(chunk.get("cor_structured_path") or "")
-        resolution_mode = str(cor_payload.get("resolution_mode") or "identity_fallback")
+        resolution_mode = str(
+            cor_payload.get("resolution_mode") or "identity_fallback",
+        )
         source_text = str(cor_payload.get("source_text") or original_text)
         return resolved_text, cor_path, resolution_mode, source_text
 
@@ -3369,7 +4114,11 @@ class KnowledgeManager:
 
     @staticmethod
     def _sentence_index_for_offset(text: str, start: int) -> int:
-        return 1 + sum(1 for char in str(text or "")[:max(0, start)] if char in _NER_SENTENCE_DELIMITERS)
+        return 1 + sum(
+            1
+            for char in str(text or "")[: max(0, start)]
+            if char in _NER_SENTENCE_DELIMITERS
+        )
 
     def _normalize_hanlp_ner_mentions(
         self,
@@ -3384,7 +4133,14 @@ class KnowledgeManager:
         labeled_rows: list[tuple[Any, str]] = []
         if isinstance(normalized_result, dict):
             wrapped_rows: list[Any] | None = None
-            for key in ("mentions", "entities", "items", "results", "data", "ner"):
+            for key in (
+                "mentions",
+                "entities",
+                "items",
+                "results",
+                "data",
+                "ner",
+            ):
                 candidate = normalized_result.get(key)
                 if isinstance(candidate, list):
                     wrapped_rows = candidate
@@ -3401,7 +4157,9 @@ class KnowledgeManager:
                         continue
                     for entry in candidate:
                         labeled_rows.append((entry, label_key))
-                normalized_result = [item for item, _ in labeled_rows] if labeled_rows else []
+                normalized_result = (
+                    [item for item, _ in labeled_rows] if labeled_rows else []
+                )
 
         if not isinstance(normalized_result, list):
             return []
@@ -3435,8 +4193,22 @@ class KnowledgeManager:
                 implied_label = str(labeled_rows[index][1] or "").strip()
 
             if isinstance(item, dict):
-                surface = str(item.get("text") or item.get("surface") or item.get("word") or "").strip()
-                label = str(item.get("label") or item.get("type") or item.get("tag") or implied_label or "entity").strip() or "entity"
+                surface = str(
+                    item.get("text")
+                    or item.get("surface")
+                    or item.get("word")
+                    or "",
+                ).strip()
+                label = (
+                    str(
+                        item.get("label")
+                        or item.get("type")
+                        or item.get("tag")
+                        or implied_label
+                        or "entity",
+                    ).strip()
+                    or "entity"
+                )
                 span = item.get("span")
                 if isinstance(span, (list, tuple)) and len(span) >= 2:
                     start = int(span[0] or 0)
@@ -3444,13 +4216,19 @@ class KnowledgeManager:
                 else:
                     start = int(item.get("start") or -1)
                     end = int(item.get("end") or -1)
-                confidence = float(item.get("confidence") or item.get("score") or 1.0)
+                confidence = float(
+                    item.get("confidence") or item.get("score") or 1.0,
+                )
             elif isinstance(item, (list, tuple)):
                 if len(item) >= 1:
                     surface = str(item[0] or "").strip()
                 if len(item) >= 2:
                     second = item[1]
-                    if isinstance(second, str) and second.strip() and not str(second).isdigit():
+                    if (
+                        isinstance(second, str)
+                        and second.strip()
+                        and not str(second).isdigit()
+                    ):
                         label = str(second).strip() or "entity"
                     else:
                         label = implied_label or "entity"
@@ -3491,8 +4269,11 @@ class KnowledgeManager:
                     "start": start,
                     "end": end,
                     "confidence": confidence,
-                    "sentence_index": self._sentence_index_for_offset(source_text, start),
-                }
+                    "sentence_index": self._sentence_index_for_offset(
+                        source_text,
+                        start,
+                    ),
+                },
             )
 
         mentions.sort(key=lambda item: (int(item["start"]), int(item["end"])))
@@ -3514,9 +4295,9 @@ class KnowledgeManager:
                 invalid_state = dict(state)
                 invalid_state["status"] = "unavailable"
                 invalid_state["reason_code"] = "HANLP_NER_LABEL_INVALID"
-                invalid_state["reason"] = (
-                    "HanLP NER returned invalid labels (only fallback-like labels were detected)."
-                )
+                invalid_state[
+                    "reason"
+                ] = "HanLP NER returned invalid labels (only fallback-like labels were detected)."
                 return [], invalid_state
             return mentions, state
 
@@ -3527,7 +4308,11 @@ class KnowledgeManager:
     def _has_meaningful_ner_labels(mentions: list[dict[str, Any]]) -> bool:
         invalid_labels = {"", "entity", "semantic_token"}
         for mention in mentions:
-            label = str(mention.get("label") or mention.get("type") or "").strip().lower()
+            label = (
+                str(mention.get("label") or mention.get("type") or "")
+                .strip()
+                .lower()
+            )
             if label not in invalid_labels:
                 return True
         return False
@@ -3549,7 +4334,11 @@ class KnowledgeManager:
         config: KnowledgeConfig,
         batch_size: int,
     ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
-        lines = [line.strip() for line in str(text or "").splitlines() if line.strip()]
+        lines = [
+            line.strip()
+            for line in str(text or "").splitlines()
+            if line.strip()
+        ]
         if not lines:
             return [], {
                 "batch_count": 0,
@@ -3575,10 +4364,18 @@ class KnowledgeManager:
         for start_idx in range(0, len(lines), safe_batch_size):
             batch_lines = lines[start_idx : start_idx + safe_batch_size]
             batch_text = "\n".join(batch_lines)
-            batch_mentions, batch_state = self._collect_chunk_ner_mentions_with_fallback(batch_text, config=config)
+            (
+                batch_mentions,
+                batch_state,
+            ) = self._collect_chunk_ner_mentions_with_fallback(
+                batch_text,
+                config=config,
+            )
             worker_pid_raw = batch_state.get("worker_pid")
             try:
-                worker_pid = int(worker_pid_raw) if worker_pid_raw is not None else -1
+                worker_pid = (
+                    int(worker_pid_raw) if worker_pid_raw is not None else -1
+                )
             except (TypeError, ValueError):
                 worker_pid = -1
             if worker_pid > 0:
@@ -3587,8 +4384,12 @@ class KnowledgeManager:
                 worker_restart_count += 1
             if str(batch_state.get("status") or "").strip().lower() != "ready":
                 runtime_status = "unavailable"
-                runtime_reason_code = str(batch_state.get("reason_code") or runtime_reason_code)
-                runtime_reason = str(batch_state.get("reason") or runtime_reason)
+                runtime_reason_code = str(
+                    batch_state.get("reason_code") or runtime_reason_code,
+                )
+                runtime_reason = str(
+                    batch_state.get("reason") or runtime_reason,
+                )
             batch_base_offset = line_offsets[start_idx]
 
             for mention in batch_mentions:
@@ -3610,7 +4411,9 @@ class KnowledgeManager:
                 global_end = batch_base_offset + local_end_int
 
                 normalized = str(mention.get("normalized") or "").strip()
-                label = str(mention.get("label") or "entity").strip() or "entity"
+                label = (
+                    str(mention.get("label") or "entity").strip() or "entity"
+                )
                 key = (global_start, global_end, normalized, label)
                 if key in seen:
                     continue
@@ -3622,15 +4425,25 @@ class KnowledgeManager:
                 updated["sentence_index"] = (
                     start_idx
                     + 1
-                    + sum(1 for char in batch_text[:local_start_int] if char in _NER_SENTENCE_DELIMITERS)
+                    + sum(
+                        1
+                        for char in batch_text[:local_start_int]
+                        if char in _NER_SENTENCE_DELIMITERS
+                    )
                 )
                 merged.append(updated)
 
-        merged.sort(key=lambda item: (int(item.get("start") or 0), int(item.get("end") or 0)))
+        merged.sort(
+            key=lambda item: (
+                int(item.get("start") or 0),
+                int(item.get("end") or 0),
+            ),
+        )
         for index, mention in enumerate(merged, start=1):
             mention["entity_id"] = f"e{index}"
         return merged, {
-            "batch_count": (len(lines) + safe_batch_size - 1) // safe_batch_size,
+            "batch_count": (len(lines) + safe_batch_size - 1)
+            // safe_batch_size,
             "worker_restart_count": worker_restart_count,
             "worker_pids": sorted(worker_pids),
             "status": runtime_status,
@@ -3639,11 +4452,18 @@ class KnowledgeManager:
         }
 
     @staticmethod
-    def _build_chunk_ner_catalog(mentions: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    def _build_chunk_ner_catalog(
+        mentions: list[dict[str, Any]],
+    ) -> list[dict[str, Any]]:
         grouped: dict[tuple[str, str], dict[str, Any]] = {}
         for mention in mentions:
             normalized = str(mention.get("normalized") or "").strip()
-            label = str(mention.get("label") or mention.get("type") or "entity").strip() or "entity"
+            label = (
+                str(
+                    mention.get("label") or mention.get("type") or "entity",
+                ).strip()
+                or "entity"
+            )
             if not normalized:
                 continue
             key = (normalized, label)
@@ -3657,7 +4477,10 @@ class KnowledgeManager:
                 },
             )
             entry["mention_count"] += 1
-        return sorted(grouped.values(), key=lambda item: (str(item["label"]), str(item["normalized"])))
+        return sorted(
+            grouped.values(),
+            key=lambda item: (str(item["label"]), str(item["normalized"])),
+        )
 
     def _build_chunk_ner_mentions(
         self,
@@ -3671,13 +4494,25 @@ class KnowledgeManager:
         occupied: set[int] = set()
         mentions: list[dict[str, Any]] = []
         ranked_entities = sorted(
-            {str(item or "").strip().lower() for item in entities if str(item or "").strip()},
+            {
+                str(item or "").strip().lower()
+                for item in entities
+                if str(item or "").strip()
+            },
             key=lambda item: (-len(item), item),
         )
 
         for normalized in ranked_entities:
-            flags = re.IGNORECASE if re.fullmatch(r"[A-Za-z0-9_-]+", normalized) else 0
-            for match in re.finditer(re.escape(normalized), source_text, flags):
+            flags = (
+                re.IGNORECASE
+                if re.fullmatch(r"[A-Za-z0-9_-]+", normalized)
+                else 0
+            )
+            for match in re.finditer(
+                re.escape(normalized),
+                source_text,
+                flags,
+            ):
                 start, end = match.span()
                 if start == end:
                     continue
@@ -3685,7 +4520,9 @@ class KnowledgeManager:
                     continue
                 occupied.update(range(start, end))
                 sentence_index = 1 + sum(
-                    1 for char in source_text[:start] if char in _NER_SENTENCE_DELIMITERS
+                    1
+                    for char in source_text[:start]
+                    if char in _NER_SENTENCE_DELIMITERS
                 )
                 mentions.append(
                     {
@@ -3697,7 +4534,7 @@ class KnowledgeManager:
                         "end": end,
                         "confidence": 1.0,
                         "sentence_index": sentence_index,
-                    }
+                    },
                 )
 
         mentions.sort(key=lambda item: (int(item["start"]), int(item["end"])))
@@ -3767,7 +4604,7 @@ class KnowledgeManager:
                 f"|id={mention.get('entity_id') or ''}"
                 f"|norm={mention.get('normalized') or ''}"
                 f"|score={float(mention.get('confidence') or 0.0):.2f}"
-                "]]"
+                "]]",
             )
             cursor = end
         parts.append(text[cursor:])
@@ -3805,10 +4642,13 @@ class KnowledgeManager:
         ]
         for mention in mentions:
             surface = str(mention.get("surface") or "").replace("|", "\\|")
-            normalized = str(mention.get("normalized") or "").replace("|", "\\|")
+            normalized = str(mention.get("normalized") or "").replace(
+                "|",
+                "\\|",
+            )
             lines.append(
                 "| "
-                f"{mention.get('entity_id') or ''} | {surface} | {mention.get('label') or 'semantic_token'} | {mention.get('start') or 0} | {mention.get('end') or 0} |"
+                f"{mention.get('entity_id') or ''} | {surface} | {mention.get('label') or 'semantic_token'} | {mention.get('start') or 0} | {mention.get('end') or 0} |",
             )
         return "\n".join(lines)
 
@@ -3824,15 +4664,26 @@ class KnowledgeManager:
             end = index + 1
             sentence_text = normalized[start:end]
             if sentence_text.strip():
-                sentences.append({"text": sentence_text, "start": start, "end": end})
+                sentences.append(
+                    {"text": sentence_text, "start": start, "end": end},
+                )
             start = end
         if start < len(normalized):
             sentence_text = normalized[start:]
             if sentence_text.strip():
-                sentences.append({"text": sentence_text, "start": start, "end": len(normalized)})
+                sentences.append(
+                    {
+                        "text": sentence_text,
+                        "start": start,
+                        "end": len(normalized),
+                    },
+                )
         return sentences
 
-    def _load_chunk_ner_mentions(self, chunk: dict[str, Any]) -> list[dict[str, Any]]:
+    def _load_chunk_ner_mentions(
+        self,
+        chunk: dict[str, Any],
+    ) -> list[dict[str, Any]]:
         raw = self._read_artifact_text(chunk, "ner_structured_path")
         if not raw.strip():
             return []
@@ -3862,7 +4713,10 @@ class KnowledgeManager:
             sentence_start = int(sentence.get("start") or 0)
             sentence_end = int(sentence.get("end") or sentence_start)
             tokens: list[dict[str, Any]] = []
-            for token_index, match in enumerate(_LIGHTWEIGHT_TOKEN_RE.finditer(sentence_text), start=1):
+            for token_index, match in enumerate(
+                _LIGHTWEIGHT_TOKEN_RE.finditer(sentence_text),
+                start=1,
+            ):
                 token_start = sentence_start + match.start()
                 token_end = sentence_start + match.end()
                 tokens.append(
@@ -3871,7 +4725,7 @@ class KnowledgeManager:
                         "text": match.group(0),
                         "start": token_start,
                         "end": token_end,
-                    }
+                    },
                 )
             total_tokens += len(tokens)
 
@@ -3879,10 +4733,14 @@ class KnowledgeManager:
             for mention in mentions:
                 mention_start = int(mention.get("start") or 0)
                 mention_end = int(mention.get("end") or 0)
-                if mention_start < sentence_start or mention_end > sentence_end:
+                if (
+                    mention_start < sentence_start
+                    or mention_end > sentence_end
+                ):
                     continue
                 overlapping_tokens = [
-                    token for token in tokens
+                    token
+                    for token in tokens
                     if int(token.get("start") or 0) < mention_end
                     and int(token.get("end") or 0) > mention_start
                 ]
@@ -3894,9 +4752,17 @@ class KnowledgeManager:
                         "normalized": str(mention.get("normalized") or ""),
                         "start": mention_start,
                         "end": mention_end,
-                        "token_start": int(overlapping_tokens[0].get("token_index") or 0) if overlapping_tokens else 0,
-                        "token_end": int(overlapping_tokens[-1].get("token_index") or 0) if overlapping_tokens else 0,
-                    }
+                        "token_start": int(
+                            overlapping_tokens[0].get("token_index") or 0,
+                        )
+                        if overlapping_tokens
+                        else 0,
+                        "token_end": int(
+                            overlapping_tokens[-1].get("token_index") or 0,
+                        )
+                        if overlapping_tokens
+                        else 0,
+                    },
                 )
 
             syntax_tasks: list[dict[str, Any]] = []
@@ -3904,7 +4770,12 @@ class KnowledgeManager:
             constituency: dict[str, Any] | None = None
             pos_tags: list[dict[str, Any]] = []
             if config is not None and sentence_text.strip():
-                syntax_tasks, dependencies, constituency, pos_tags = self._collect_sentence_syntax_tasks(
+                (
+                    syntax_tasks,
+                    dependencies,
+                    constituency,
+                    pos_tags,
+                ) = self._collect_sentence_syntax_tasks(
                     sentence_text,
                     sentence_start=sentence_start,
                     tokens=tokens,
@@ -3921,7 +4792,9 @@ class KnowledgeManager:
                 pos_tag_types.add(pos_value)
             total_pos += sentence_pos_count
 
-            parse_mode = "nlp_task_matrix" if syntax_tasks else "tokenized_only"
+            parse_mode = (
+                "nlp_task_matrix" if syntax_tasks else "tokenized_only"
+            )
             parse_confidence = 1.0 if syntax_tasks else 0.0
 
             syntax_sentences.append(
@@ -3939,7 +4812,7 @@ class KnowledgeManager:
                     "parse_confidence": parse_confidence,
                     "syntax_tasks": syntax_tasks,
                     "constituency": constituency,
-                }
+                },
             )
         return syntax_sentences, total_tokens, total_pos, sorted(pos_tag_types)
 
@@ -3950,8 +4823,16 @@ class KnowledgeManager:
         sentence_start: int,
         tokens: list[dict[str, Any]],
         config: KnowledgeConfig,
-    ) -> tuple[list[dict[str, Any]], list[dict[str, Any]], dict[str, Any] | None, list[dict[str, Any]]]:
-        task_specs = getattr(getattr(config.nlp, "task_matrix", None), "tasks", {}) or {}
+    ) -> tuple[
+        list[dict[str, Any]],
+        list[dict[str, Any]],
+        dict[str, Any] | None,
+        list[dict[str, Any]],
+    ]:
+        task_specs = (
+            getattr(getattr(config.nlp, "task_matrix", None), "tasks", {})
+            or {}
+        )
         task_order = ("pos", "dep", "sdp", "con")
         syntax_tasks: list[dict[str, Any]] = []
         dependencies: list[dict[str, Any]] = []
@@ -3960,19 +4841,34 @@ class KnowledgeManager:
 
         for task_key in task_order:
             task_cfg = task_specs.get(task_key)
-            if task_cfg is not None and not bool(getattr(task_cfg, "enabled", True)):
+            if task_cfg is not None and not bool(
+                getattr(task_cfg, "enabled", True),
+            ):
                 continue
             if task_key == "dep":
-                raw_result, state = self._semantic_runtime.run_dep(sentence_text, config)
+                raw_result, state = self._semantic_runtime.run_dep(
+                    sentence_text,
+                    config,
+                )
             else:
-                raw_result, state = self._semantic_runtime.run_task(task_key, sentence_text, config)
+                raw_result, state = self._semantic_runtime.run_task(
+                    task_key,
+                    sentence_text,
+                    config,
+                )
             self._remember_semantic_engine_state(state)
             if state.get("status") != "ready":
                 continue
-            if task_key == "dep" and not self._is_valid_dep_payload(raw_result):
-                logger.warning("Skipped invalid HanLP DEP payload in sentence syntax collection")
+            if task_key == "dep" and not self._is_valid_dep_payload(
+                raw_result,
+            ):
+                logger.warning(
+                    "Skipped invalid HanLP DEP payload in sentence syntax collection",
+                )
                 continue
-            task_name = str(getattr(task_cfg, "task_name", task_key) or task_key)
+            task_name = str(
+                getattr(task_cfg, "task_name", task_key) or task_key,
+            )
             task_entry = {
                 "task_key": task_key,
                 "task_name": task_name,
@@ -3987,7 +4883,7 @@ class KnowledgeManager:
                             raw_result,
                             sentence_start=sentence_start,
                             tokens=tokens,
-                        )
+                        ),
                     )
                 except Exception:
                     logger.warning(
@@ -3997,14 +4893,20 @@ class KnowledgeManager:
                     )
             elif task_key == "pos":
                 try:
-                    pos_tags = self._normalize_hanlp_pos_tags(raw_result, tokens=tokens)
+                    pos_tags = self._normalize_hanlp_pos_tags(
+                        raw_result,
+                        tokens=tokens,
+                    )
                 except Exception:
                     logger.warning(
                         "Failed to normalize HanLP POS payload",
                         exc_info=True,
                     )
             elif task_key == "con":
-                constituency = self._normalize_hanlp_constituency(task_key, raw_result)
+                constituency = self._normalize_hanlp_constituency(
+                    task_key,
+                    raw_result,
+                )
 
         return syntax_tasks, dependencies, constituency, pos_tags
 
@@ -4029,8 +4931,15 @@ class KnowledgeManager:
             return rows
         for index, item in enumerate(labels, start=1):
             if isinstance(item, dict):
-                tag = str(item.get("pos") or item.get("tag") or item.get("label") or "").strip()
-                token_index = _safe_count_int(item.get("token_index") or item.get("index") or index)
+                tag = str(
+                    item.get("pos")
+                    or item.get("tag")
+                    or item.get("label")
+                    or "",
+                ).strip()
+                token_index = _safe_count_int(
+                    item.get("token_index") or item.get("index") or index,
+                )
                 token_text = str(item.get("text") or "")
             else:
                 tag = str(item or "").strip()
@@ -4038,7 +4947,11 @@ class KnowledgeManager:
                 token_text = ""
             if token_index <= 0:
                 token_index = index
-            token = tokens[token_index - 1] if 1 <= token_index <= len(tokens) else {}
+            token = (
+                tokens[token_index - 1]
+                if 1 <= token_index <= len(tokens)
+                else {}
+            )
             if not token_text:
                 token_text = str(token.get("text") or "")
             rows.append(
@@ -4046,20 +4959,35 @@ class KnowledgeManager:
                     "token_index": token_index,
                     "text": token_text,
                     "pos": tag,
-                }
+                },
             )
         return rows
 
     @staticmethod
     def _is_valid_dep_payload(raw_result: Any) -> bool:
         if isinstance(raw_result, dict):
-            heads = raw_result.get("head") or raw_result.get("heads") or raw_result.get("arcs")
-            relations = raw_result.get("deprel") or raw_result.get("relations") or raw_result.get("labels")
-            return isinstance(heads, list) and isinstance(relations, list) and len(relations) > 0
+            heads = (
+                raw_result.get("head")
+                or raw_result.get("heads")
+                or raw_result.get("arcs")
+            )
+            relations = (
+                raw_result.get("deprel")
+                or raw_result.get("relations")
+                or raw_result.get("labels")
+            )
+            return (
+                isinstance(heads, list)
+                and isinstance(relations, list)
+                and len(relations) > 0
+            )
         if isinstance(raw_result, list):
             for item in raw_result:
                 if isinstance(item, dict):
-                    if any(key in item for key in ("head", "head_index", "deprel", "relation")):
+                    if any(
+                        key in item
+                        for key in ("head", "head_index", "deprel", "relation")
+                    ):
                         return True
                 elif isinstance(item, (list, tuple)) and len(item) >= 3:
                     return True
@@ -4105,7 +5033,10 @@ class KnowledgeManager:
                     return default
                 next_value = None
                 for item in current:
-                    if isinstance(item, (int, float, str, bool, list, tuple, dict)):
+                    if isinstance(
+                        item,
+                        (int, float, str, bool, list, tuple, dict),
+                    ):
                         next_value = item
                         break
                 current = next_value if next_value is not None else current[0]
@@ -4124,17 +5055,32 @@ class KnowledgeManager:
         rows: list[dict[str, Any]] = []
 
         if isinstance(raw_result, dict):
-            heads = raw_result.get("head") or raw_result.get("heads") or raw_result.get("arcs")
-            relations = raw_result.get("deprel") or raw_result.get("relations") or raw_result.get("labels")
+            heads = (
+                raw_result.get("head")
+                or raw_result.get("heads")
+                or raw_result.get("arcs")
+            )
+            relations = (
+                raw_result.get("deprel")
+                or raw_result.get("relations")
+                or raw_result.get("labels")
+            )
             words = raw_result.get("tokens") or raw_result.get("tok") or []
             if isinstance(heads, list) and isinstance(relations, list):
                 for dependent_index, relation in enumerate(relations, start=1):
                     if dependent_index - 1 >= len(heads):
                         head_index = 0
                     else:
-                        head_index = self._coerce_dependency_index(heads[dependent_index - 1], default=0)
+                        head_index = self._coerce_dependency_index(
+                            heads[dependent_index - 1],
+                            default=0,
+                        )
                     dependent = self._token_text_at(tokens, dependent_index)
-                    if not dependent and isinstance(words, list) and dependent_index - 1 < len(words):
+                    if (
+                        not dependent
+                        and isinstance(words, list)
+                        and dependent_index - 1 < len(words)
+                    ):
                         dependent = str(words[dependent_index - 1] or "")
                     row = self._build_dependency_row(
                         task_key,
@@ -4153,25 +5099,49 @@ class KnowledgeManager:
             for fallback_index, item in enumerate(raw_result, start=1):
                 if isinstance(item, dict):
                     dependent_index = self._coerce_dependency_index(
-                        item.get("dependent_index") or item.get("id") or fallback_index,
+                        item.get("dependent_index")
+                        or item.get("id")
+                        or fallback_index,
                         default=fallback_index,
                     )
                     head_index = self._coerce_dependency_index(
                         item.get("head_index") or item.get("head") or 0,
                         default=0,
                     )
-                    relation = str(item.get("relation") or item.get("label") or item.get("deprel") or "").strip()
-                    dependent = str(item.get("dependent") or item.get("form") or item.get("text") or self._token_text_at(tokens, dependent_index))
+                    relation = str(
+                        item.get("relation")
+                        or item.get("label")
+                        or item.get("deprel")
+                        or "",
+                    ).strip()
+                    dependent = str(
+                        item.get("dependent")
+                        or item.get("form")
+                        or item.get("text")
+                        or self._token_text_at(tokens, dependent_index),
+                    )
                 elif isinstance(item, (list, tuple)) and len(item) >= 3:
                     if isinstance(item[0], int):
-                        dependent_index = self._coerce_dependency_index(item[0], default=fallback_index)
-                        head_index = self._coerce_dependency_index(item[1], default=0)
+                        dependent_index = self._coerce_dependency_index(
+                            item[0],
+                            default=fallback_index,
+                        )
+                        head_index = self._coerce_dependency_index(
+                            item[1],
+                            default=0,
+                        )
                         relation = str(item[2] or "").strip()
-                        dependent = self._token_text_at(tokens, dependent_index)
+                        dependent = self._token_text_at(
+                            tokens,
+                            dependent_index,
+                        )
                     else:
                         dependent_index = fallback_index
                         dependent = str(item[0] or "")
-                        head_index = self._coerce_dependency_index(item[1], default=0)
+                        head_index = self._coerce_dependency_index(
+                            item[1],
+                            default=0,
+                        )
                         relation = str(item[2] or "").strip()
                 else:
                     continue
@@ -4201,7 +5171,11 @@ class KnowledgeManager:
     ) -> dict[str, Any] | None:
         if dependent_index <= 0:
             return None
-        token = tokens[dependent_index - 1] if 1 <= dependent_index <= len(tokens) else {}
+        token = (
+            tokens[dependent_index - 1]
+            if 1 <= dependent_index <= len(tokens)
+            else {}
+        )
         start = int(token.get("start") or sentence_start)
         end = int(token.get("end") or start)
         return {
@@ -4210,18 +5184,25 @@ class KnowledgeManager:
             "head_index": head_index,
             "relation": relation,
             "dependent": dependent,
-            "head": self._token_text_at(tokens, head_index) if head_index > 0 else "ROOT",
+            "head": self._token_text_at(tokens, head_index)
+            if head_index > 0
+            else "ROOT",
             "start": start,
             "end": end,
         }
 
     @staticmethod
-    def _normalize_hanlp_constituency(task_key: str, raw_result: Any) -> dict[str, Any] | None:
+    def _normalize_hanlp_constituency(
+        task_key: str,
+        raw_result: Any,
+    ) -> dict[str, Any] | None:
         if raw_result is None:
             return None
         tree = raw_result
         if isinstance(raw_result, dict):
-            tree = raw_result.get("tree") or raw_result.get("con") or raw_result
+            tree = (
+                raw_result.get("tree") or raw_result.get("con") or raw_result
+            )
         return {
             "task_key": task_key,
             "tree": tree,
@@ -4240,7 +5221,12 @@ class KnowledgeManager:
         mentions: list[dict[str, Any]],
         config: KnowledgeConfig | None = None,
     ) -> dict[str, Any]:
-        sentences, token_count, pos_count, pos_tag_types = self._build_chunk_syntax_sentences(
+        (
+            sentences,
+            token_count,
+            pos_count,
+            pos_tag_types,
+        ) = self._build_chunk_syntax_sentences(
             input_text,
             mentions,
             config=config,
@@ -4252,10 +5238,16 @@ class KnowledgeManager:
                 if isinstance(sentence, dict)
                 for task in (sentence.get("syntax_tasks") or [])
                 if isinstance(task, dict) and str(task.get("task_key") or "")
-            }
+            },
         )
         relation_count = sum(
-            len([item for item in (sentence.get("dependencies") or []) if isinstance(item, dict)])
+            len(
+                [
+                    item
+                    for item in (sentence.get("dependencies") or [])
+                    if isinstance(item, dict)
+                ],
+            )
             for sentence in sentences
             if isinstance(sentence, dict)
         )
@@ -4283,7 +5275,9 @@ class KnowledgeManager:
             "pos_tag_types": pos_tag_types,
             "relation_count": relation_count,
             "task_keys": task_keys,
-            "entity_alignment_source": str(chunk.get("ner_structured_path") or ""),
+            "entity_alignment_source": str(
+                chunk.get("ner_structured_path") or "",
+            ),
             "sentences": sentences,
         }
 
@@ -4311,7 +5305,9 @@ class KnowledgeManager:
             if not isinstance(sentence, dict):
                 continue
             lines.append("")
-            lines.append(f"[Sentence {sentence.get('sentence_index') or 0}] {sentence.get('sentence_text') or ''}")
+            lines.append(
+                f"[Sentence {sentence.get('sentence_index') or 0}] {sentence.get('sentence_text') or ''}",
+            )
             token_labels = [
                 f"{token.get('token_index') or 0}:{token.get('text') or ''}"
                 for token in (sentence.get("tokens") or [])
@@ -4378,56 +5374,95 @@ class KnowledgeManager:
                     "",
                     "| token_index | text | start | end |",
                     "| ---: | --- | ---: | ---: |",
-                ]
+                ],
             )
             for token in sentence.get("tokens") or []:
                 if not isinstance(token, dict):
                     continue
                 token_text = str(token.get("text") or "").replace("|", "\\|")
                 lines.append(
-                    f"| {token.get('token_index') or 0} | {token_text} | {token.get('start') or 0} | {token.get('end') or 0} |"
+                    f"| {token.get('token_index') or 0} | {token_text} | {token.get('start') or 0} | {token.get('end') or 0} |",
                 )
-            pos_tags = [item for item in (sentence.get("pos_tags") or []) if isinstance(item, dict)]
+            pos_tags = [
+                item
+                for item in (sentence.get("pos_tags") or [])
+                if isinstance(item, dict)
+            ]
             if pos_tags:
-                lines.extend(["", "### POS Tags", "", "| token_index | text | pos |", "| ---: | --- | --- |"])
+                lines.extend(
+                    [
+                        "",
+                        "### POS Tags",
+                        "",
+                        "| token_index | text | pos |",
+                        "| ---: | --- | --- |",
+                    ],
+                )
                 for pos in pos_tags:
                     pos_text = str(pos.get("text") or "").replace("|", "\\|")
                     pos_label = str(pos.get("pos") or "").replace("|", "\\|")
-                    lines.append(f"| {pos.get('token_index') or 0} | {pos_text} | {pos_label} |")
-            lines.extend(["", "### Entity Alignment", "", "| id | surface | label | token_start | token_end |", "| --- | --- | --- | ---: | ---: |"])
+                    lines.append(
+                        f"| {pos.get('token_index') or 0} | {pos_text} | {pos_label} |",
+                    )
+            lines.extend(
+                [
+                    "",
+                    "### Entity Alignment",
+                    "",
+                    "| id | surface | label | token_start | token_end |",
+                    "| --- | --- | --- | ---: | ---: |",
+                ],
+            )
             for entity in sentence.get("entities") or []:
                 if not isinstance(entity, dict):
                     continue
                 surface = str(entity.get("surface") or "").replace("|", "\\|")
                 lines.append(
-                    f"| {entity.get('entity_id') or ''} | {surface} | {entity.get('label') or 'semantic_token'} | {entity.get('token_start') or 0} | {entity.get('token_end') or 0} |"
+                    f"| {entity.get('entity_id') or ''} | {surface} | {entity.get('label') or 'semantic_token'} | {entity.get('token_start') or 0} | {entity.get('token_end') or 0} |",
                 )
-            dependencies = [item for item in (sentence.get("dependencies") or []) if isinstance(item, dict)]
+            dependencies = [
+                item
+                for item in (sentence.get("dependencies") or [])
+                if isinstance(item, dict)
+            ]
             if dependencies:
-                lines.extend([
-                    "",
-                    "### Dependencies",
-                    "",
-                    "| task | dependent | head | relation |",
-                    "| --- | --- | --- | --- |",
-                ])
+                lines.extend(
+                    [
+                        "",
+                        "### Dependencies",
+                        "",
+                        "| task | dependent | head | relation |",
+                        "| --- | --- | --- | --- |",
+                    ],
+                )
                 for dep in dependencies:
-                    dependent = str(dep.get("dependent") or "").replace("|", "\\|")
+                    dependent = str(dep.get("dependent") or "").replace(
+                        "|",
+                        "\\|",
+                    )
                     head = str(dep.get("head") or "").replace("|", "\\|")
-                    relation = str(dep.get("relation") or "").replace("|", "\\|")
+                    relation = str(dep.get("relation") or "").replace(
+                        "|",
+                        "\\|",
+                    )
                     lines.append(
-                        f"| {dep.get('task_key') or ''} | {dependent} | {head} | {relation} |"
+                        f"| {dep.get('task_key') or ''} | {dependent} | {head} | {relation} |",
                     )
             constituency = sentence.get("constituency")
-            if isinstance(constituency, dict) and constituency.get("tree") is not None:
-                lines.extend([
-                    "",
-                    "### Constituency",
-                    "",
-                    "```text",
-                    str(constituency.get("tree") or ""),
-                    "```",
-                ])
+            if (
+                isinstance(constituency, dict)
+                and constituency.get("tree") is not None
+            ):
+                lines.extend(
+                    [
+                        "",
+                        "### Constituency",
+                        "",
+                        "```text",
+                        str(constituency.get("tree") or ""),
+                        "```",
+                    ],
+                )
             lines.append("")
         return "\n".join(lines)
 
@@ -4490,10 +5525,14 @@ class KnowledgeManager:
         ]
         payload = {
             "artifact": "tokenize_file_totals",
-            "format_version": str(globals().get("_TOKENIZE_LINE_STATS_FORMAT_VERSION") or "0.1"),
+            "format_version": str(
+                globals().get("_TOKENIZE_LINE_STATS_FORMAT_VERSION") or "0.1",
+            ),
             "source_id": source_id,
             "file_count": len(entries),
-            "token_count_total": sum(int(item.get("token_count") or 0) for item in entries),
+            "token_count_total": sum(
+                int(item.get("token_count") or 0) for item in entries
+            ),
             "files": entries,
             "updated_at": datetime.now(UTC).isoformat(),
         }
@@ -4620,7 +5659,9 @@ class KnowledgeManager:
                 continue
             entity_label = escape(str(entity.get("label") or "entity"))
             entity_text = escape(str(entity.get("normalized") or ""))
-            lines.append(f"    <entity type=\"{entity_label}\">{entity_text}</entity>")
+            lines.append(
+                f'    <entity type="{entity_label}">{entity_text}</entity>',
+            )
         lines.extend(["  </entities>", "</chunk>"])
         return "\n".join(lines)
 
@@ -4698,7 +5739,9 @@ class KnowledgeManager:
             if path.exists() and path.is_file():
                 candidates.append(path)
 
-        interlinear_manifest = self._load_source_interlinear_manifest(source_id)
+        interlinear_manifest = self._load_source_interlinear_manifest(
+            source_id,
+        )
         for artifact in interlinear_manifest.get("artifacts", []):
             artifact_path = str(artifact.get("path") or "").strip()
             if not artifact_path:
@@ -4706,12 +5749,16 @@ class KnowledgeManager:
             path = self.root_dir / artifact_path
             if path.exists() and path.is_file():
                 candidates.append(path)
-            line_index_path = str(artifact.get("line_index_path") or "").strip()
+            line_index_path = str(
+                artifact.get("line_index_path") or "",
+            ).strip()
             if line_index_path:
                 path = self.root_dir / line_index_path
                 if path.exists() and path.is_file():
                     candidates.append(path)
-        for lightweight_path in self._load_source_lightweight_manifest(source_id):
+        for lightweight_path in self._load_source_lightweight_manifest(
+            source_id,
+        ):
             path = self.root_dir / str(lightweight_path)
             if path.exists() and path.is_file():
                 candidates.append(path)
@@ -4738,10 +5785,15 @@ class KnowledgeManager:
             return {"indexed": False, "documents": []}
         document_text_by_group: dict[str, str] = {}
         for chunks in self._group_document_chunks(payload.get("chunks") or []):
-            source_text, _ = self._resolve_document_source_text(chunks, source=source)
+            source_text, _ = self._resolve_document_source_text(
+                chunks,
+                source=source,
+            )
             if not chunks:
                 continue
-            document_text_by_group[self._chunk_document_group_key(chunks[0])] = source_text
+            document_text_by_group[
+                self._chunk_document_group_key(chunks[0])
+            ] = source_text
         documents: list[dict[str, Any]] = []
         for chunk in payload.get("chunks") or []:
             if not isinstance(chunk, dict):
@@ -4749,60 +5801,147 @@ class KnowledgeManager:
             documents.append(
                 {
                     "path": str(chunk.get("document_path") or source_id),
-                    "title": str(chunk.get("document_title") or chunk.get("document_path") or source_id),
-                    "text": document_text_by_group.get(self._chunk_document_group_key(chunk), ""),
+                    "title": str(
+                        chunk.get("document_title")
+                        or chunk.get("document_path")
+                        or source_id,
+                    ),
+                    "text": document_text_by_group.get(
+                        self._chunk_document_group_key(chunk),
+                        "",
+                    ),
                     "chunk_id": str(chunk.get("chunk_id") or ""),
                     "chunk_path": str(chunk.get("chunk_path") or ""),
                     "snapshot_path": str(chunk.get("snapshot_path") or ""),
-                    "snapshot_relative_path": str(chunk.get("snapshot_relative_path") or ""),
+                    "snapshot_relative_path": str(
+                        chunk.get("snapshot_relative_path") or "",
+                    ),
                     "snapshot_at": str(chunk.get("snapshot_at") or ""),
-                    "file_key": str(chunk.get("file_key") or self._chunk_file_key(chunk)),
-                    "version_id": str(chunk.get("version_id") or self._chunk_version_id(chunk)),
+                    "file_key": str(
+                        chunk.get("file_key") or self._chunk_file_key(chunk),
+                    ),
+                    "version_id": str(
+                        chunk.get("version_id")
+                        or self._chunk_version_id(chunk),
+                    ),
                     "cor_path": str(chunk.get("cor_path") or ""),
-                    "cor_structured_path": str(chunk.get("cor_structured_path") or ""),
-                    "cor_annotated_path": str(chunk.get("cor_annotated_path") or ""),
-                    "cor_status": str(chunk.get("cor_status") or "unavailable"),
+                    "cor_structured_path": str(
+                        chunk.get("cor_structured_path") or "",
+                    ),
+                    "cor_annotated_path": str(
+                        chunk.get("cor_annotated_path") or "",
+                    ),
+                    "cor_status": str(
+                        chunk.get("cor_status") or "unavailable",
+                    ),
                     "cor_reason_code": str(chunk.get("cor_reason_code") or ""),
                     "cor_reason": str(chunk.get("cor_reason") or ""),
-                    "cor_interlinear_path": str(chunk.get("cor_interlinear_path") or ""),
+                    "cor_interlinear_path": str(
+                        chunk.get("cor_interlinear_path") or "",
+                    ),
                     "cor_input_mode": str(chunk.get("cor_input_mode") or ""),
-                    "cor_cluster_count": _safe_count_int(chunk.get("cor_cluster_count") or 0),
-                    "cor_replacement_count": _safe_count_int(chunk.get("cor_replacement_count") or 0),
-                    "cor_format_version": str(chunk.get("cor_format_version") or ""),
-                    "cor_resolution_mode": str(chunk.get("cor_resolution_mode") or "identity_fallback"),
+                    "cor_cluster_count": _safe_count_int(
+                        chunk.get("cor_cluster_count") or 0,
+                    ),
+                    "cor_replacement_count": _safe_count_int(
+                        chunk.get("cor_replacement_count") or 0,
+                    ),
+                    "cor_format_version": str(
+                        chunk.get("cor_format_version") or "",
+                    ),
+                    "cor_resolution_mode": str(
+                        chunk.get("cor_resolution_mode")
+                        or "identity_fallback",
+                    ),
                     "cor_text": self._read_artifact_text(chunk, "cor_path"),
-                    "cor_structured_text": self._read_artifact_text(chunk, "cor_structured_path"),
-                    "cor_annotated_text": self._read_artifact_text(chunk, "cor_annotated_path"),
+                    "cor_structured_text": self._read_artifact_text(
+                        chunk,
+                        "cor_structured_path",
+                    ),
+                    "cor_annotated_text": self._read_artifact_text(
+                        chunk,
+                        "cor_annotated_path",
+                    ),
                     "ner_path": str(chunk.get("ner_path") or ""),
-                    "ner_structured_path": str(chunk.get("ner_structured_path") or ""),
-                    "ner_annotated_path": str(chunk.get("ner_annotated_path") or ""),
+                    "ner_structured_path": str(
+                        chunk.get("ner_structured_path") or "",
+                    ),
+                    "ner_annotated_path": str(
+                        chunk.get("ner_annotated_path") or "",
+                    ),
                     "ner_stats_path": str(chunk.get("ner_stats_path") or ""),
-                    "ner_status": str(chunk.get("ner_status") or "unavailable"),
+                    "ner_status": str(
+                        chunk.get("ner_status") or "unavailable",
+                    ),
                     "ner_reason_code": str(chunk.get("ner_reason_code") or ""),
                     "ner_reason": str(chunk.get("ner_reason") or ""),
                     "ner_input_mode": str(chunk.get("ner_input_mode") or ""),
-                    "ner_entity_count": _safe_count_int(chunk.get("ner_entity_count") or 0),
-                    "ner_format_version": str(chunk.get("ner_format_version") or ""),
+                    "ner_entity_count": _safe_count_int(
+                        chunk.get("ner_entity_count") or 0,
+                    ),
+                    "ner_format_version": str(
+                        chunk.get("ner_format_version") or "",
+                    ),
                     "ner_text": self._read_ner_text(chunk),
-                    "ner_structured_text": self._read_artifact_text(chunk, "ner_structured_path"),
-                    "ner_annotated_text": self._read_artifact_text(chunk, "ner_annotated_path"),
-                    "ner_stats_text": self._read_artifact_text(chunk, "ner_stats_path"),
+                    "ner_structured_text": self._read_artifact_text(
+                        chunk,
+                        "ner_structured_path",
+                    ),
+                    "ner_annotated_text": self._read_artifact_text(
+                        chunk,
+                        "ner_annotated_path",
+                    ),
+                    "ner_stats_text": self._read_artifact_text(
+                        chunk,
+                        "ner_stats_path",
+                    ),
                     "syntax_path": str(chunk.get("syntax_path") or ""),
-                    "syntax_structured_path": str(chunk.get("syntax_structured_path") or ""),
-                    "syntax_annotated_path": str(chunk.get("syntax_annotated_path") or ""),
-                    "syntax_status": str(chunk.get("syntax_status") or "unavailable"),
-                    "syntax_interlinear_path": str(chunk.get("syntax_interlinear_path") or ""),
-                    "syntax_input_mode": str(chunk.get("syntax_input_mode") or ""),
-                    "syntax_sentence_count": _safe_count_int(chunk.get("syntax_sentence_count") or 0),
-                    "syntax_token_count": _safe_count_int(chunk.get("syntax_token_count") or 0),
-                    "syntax_pos_count": _safe_count_int(chunk.get("syntax_pos_count") or 0),
-                    "syntax_pos_tag_type_count": _safe_count_int(chunk.get("syntax_pos_tag_type_count") or 0),
-                    "syntax_relation_count": _safe_count_int(chunk.get("syntax_relation_count") or 0),
-                    "syntax_format_version": str(chunk.get("syntax_format_version") or ""),
-                    "syntax_text": self._read_artifact_text(chunk, "syntax_path"),
-                    "syntax_structured_text": self._read_artifact_text(chunk, "syntax_structured_path"),
-                    "syntax_annotated_text": self._read_artifact_text(chunk, "syntax_annotated_path"),
-                }
+                    "syntax_structured_path": str(
+                        chunk.get("syntax_structured_path") or "",
+                    ),
+                    "syntax_annotated_path": str(
+                        chunk.get("syntax_annotated_path") or "",
+                    ),
+                    "syntax_status": str(
+                        chunk.get("syntax_status") or "unavailable",
+                    ),
+                    "syntax_interlinear_path": str(
+                        chunk.get("syntax_interlinear_path") or "",
+                    ),
+                    "syntax_input_mode": str(
+                        chunk.get("syntax_input_mode") or "",
+                    ),
+                    "syntax_sentence_count": _safe_count_int(
+                        chunk.get("syntax_sentence_count") or 0,
+                    ),
+                    "syntax_token_count": _safe_count_int(
+                        chunk.get("syntax_token_count") or 0,
+                    ),
+                    "syntax_pos_count": _safe_count_int(
+                        chunk.get("syntax_pos_count") or 0,
+                    ),
+                    "syntax_pos_tag_type_count": _safe_count_int(
+                        chunk.get("syntax_pos_tag_type_count") or 0,
+                    ),
+                    "syntax_relation_count": _safe_count_int(
+                        chunk.get("syntax_relation_count") or 0,
+                    ),
+                    "syntax_format_version": str(
+                        chunk.get("syntax_format_version") or "",
+                    ),
+                    "syntax_text": self._read_artifact_text(
+                        chunk,
+                        "syntax_path",
+                    ),
+                    "syntax_structured_text": self._read_artifact_text(
+                        chunk,
+                        "syntax_structured_path",
+                    ),
+                    "syntax_annotated_text": self._read_artifact_text(
+                        chunk,
+                        "syntax_annotated_path",
+                    ),
+                },
             )
         return {
             "indexed": True,
@@ -4874,7 +6013,10 @@ class KnowledgeManager:
         for chunk in payload.get("chunks") or []:
             if not isinstance(chunk, dict):
                 continue
-            chunk_relative_path = self._build_chunk_relative_path(source, chunk)
+            chunk_relative_path = self._build_chunk_relative_path(
+                source,
+                chunk,
+            )
             chunk["chunk_path"] = chunk_relative_path.as_posix()
             chunk_file_path = self.root_dir / chunk_relative_path
             chunk_file_path.parent.mkdir(parents=True, exist_ok=True)
@@ -4912,7 +6054,9 @@ class KnowledgeManager:
                 chunk["cor_replacement_count"] = 0
                 chunk["cor_resolution_mode"] = "identity_fallback"
                 chunk["cor_reason_code"] = "INDEXING_DEFERRED"
-                chunk["cor_reason"] = "Semantic artifact generation is deferred to graphifying stage."
+                chunk[
+                    "cor_reason"
+                ] = "Semantic artifact generation is deferred to graphifying stage."
                 chunk.pop("cor_path", None)
                 chunk.pop("cor_structured_path", None)
                 chunk.pop("cor_annotated_path", None)
@@ -4921,7 +6065,9 @@ class KnowledgeManager:
                 chunk["ner_entity_count"] = 0
                 chunk["ner_format_version"] = _NER_FORMAT_VERSION
                 chunk["ner_reason_code"] = "INDEXING_DEFERRED"
-                chunk["ner_reason"] = "Semantic artifact generation is deferred to graphifying stage."
+                chunk[
+                    "ner_reason"
+                ] = "Semantic artifact generation is deferred to graphifying stage."
                 chunk["ner_input_mode"] = ""
                 chunk.pop("ner_path", None)
                 chunk.pop("ner_structured_path", None)
@@ -4955,14 +6101,19 @@ class KnowledgeManager:
                 self._delete_syntax_path(syntax_path)
             self._write_source_syntax_manifest(source.id, set())
 
-            stale_tokenize_paths = self._load_source_tokenize_manifest(source.id)
+            stale_tokenize_paths = self._load_source_tokenize_manifest(
+                source.id,
+            )
             for tokenize_path in stale_tokenize_paths:
                 self._delete_tokenize_path(tokenize_path)
             self._write_source_tokenize_manifest(source.id, set())
             self._write_source_tokenize_file_totals(source.id, {})
 
         self._write_source_index_payload(source.id, payload)
-        self._write_source_metadata(source, indexed_at=str(payload.get("indexed_at") or ""))
+        self._write_source_metadata(
+            source,
+            indexed_at=str(payload.get("indexed_at") or ""),
+        )
         self._source_content_md_path(source.id).write_text(
             self._build_source_markdown(source, documents),
             encoding="utf-8",
@@ -5033,7 +6184,10 @@ class KnowledgeManager:
             return "\n".join(lines)
 
         for doc in documents:
-            title = self._truncate_title(doc.get("title", "document"), max_len=200)
+            title = self._truncate_title(
+                doc.get("title", "document"),
+                max_len=200,
+            )
             path = doc.get("path", "")
             text = doc.get("text", "").strip()
             lines.extend(
@@ -5059,7 +6213,9 @@ class KnowledgeManager:
                 dt = dt.replace(tzinfo=UTC)
             return dt.astimezone(UTC).strftime("%Y%m%dT%H%M%S%fZ")
         except ValueError:
-            return re.sub(r"[^0-9A-Za-z]+", "", raw) or datetime.now(UTC).strftime("%Y%m%dT%H%M%S%fZ")
+            return re.sub(r"[^0-9A-Za-z]+", "", raw) or datetime.now(
+                UTC,
+            ).strftime("%Y%m%dT%H%M%S%fZ")
 
     def _snapshot_filename(self, filename: str, indexed_at: str) -> str:
         path = Path(filename or "knowledge")
@@ -5105,7 +6261,12 @@ class KnowledgeManager:
             target = parent if str(parent) not in {"", "."} else Path()
             return target / self._snapshot_filename(filename, indexed_at)
 
-        source_path = str(document.get("source_path") or document.get("path") or source.location or source.id)
+        source_path = str(
+            document.get("source_path")
+            or document.get("path")
+            or source.location
+            or source.id,
+        )
         filename = Path(source_path).name or self._safe_name(source.id)
         return Path(self._snapshot_filename(filename, indexed_at))
 
@@ -5128,7 +6289,9 @@ class KnowledgeManager:
     ) -> bool:
         if not snapshot_entry:
             return False
-        snapshot_path_raw = str(snapshot_entry.get("snapshot_path") or "").strip()
+        snapshot_path_raw = str(
+            snapshot_entry.get("snapshot_path") or "",
+        ).strip()
         if not snapshot_path_raw:
             return False
         snapshot_path = Path(snapshot_path_raw)
@@ -5144,18 +6307,26 @@ class KnowledgeManager:
         raw_root: Path,
         snapshot_entry: dict[str, str],
     ) -> dict[str, str]:
-        snapshot_relative = str(snapshot_entry.get("snapshot_relative_path") or "").strip()
+        snapshot_relative = str(
+            snapshot_entry.get("snapshot_relative_path") or "",
+        ).strip()
         if not snapshot_relative:
             return snapshot_entry
 
         target_path = raw_root / snapshot_relative
-        current_path_raw = str(snapshot_entry.get("snapshot_path") or "").strip()
+        current_path_raw = str(
+            snapshot_entry.get("snapshot_path") or "",
+        ).strip()
         current_path = Path(current_path_raw) if current_path_raw else None
         if current_path == target_path:
             return snapshot_entry
 
         target_path.parent.mkdir(parents=True, exist_ok=True)
-        if current_path is not None and current_path.exists() and current_path.is_file():
+        if (
+            current_path is not None
+            and current_path.exists()
+            and current_path.is_file()
+        ):
             if target_path != current_path:
                 shutil.copy2(current_path, target_path)
                 self._delete_snapshot_file(current_path)
@@ -5185,7 +6356,9 @@ class KnowledgeManager:
         results: list[dict[str, str]] = []
 
         for document in documents:
-            source_path_raw = str(document.get("source_path") or document.get("path") or "").strip()
+            source_path_raw = str(
+                document.get("source_path") or document.get("path") or "",
+            ).strip()
             if not source_path_raw:
                 continue
             source_path = Path(source_path_raw).expanduser().resolve()
@@ -5193,15 +6366,27 @@ class KnowledgeManager:
                 continue
             document_path = str(document.get("path") or source_path.as_posix())
             latest_snapshot = latest_by_document.get(document_path)
-            if latest_snapshot is not None and self._snapshot_matches_source(source_path, latest_snapshot):
+            if latest_snapshot is not None and self._snapshot_matches_source(
+                source_path,
+                latest_snapshot,
+            ):
                 reused_entry = dict(latest_snapshot)
                 if self._source_uses_root_raw_dir(source):
-                    reused_entry = self._ensure_snapshot_entry_under_raw_root(raw_root, reused_entry)
+                    reused_entry = self._ensure_snapshot_entry_under_raw_root(
+                        raw_root,
+                        reused_entry,
+                    )
                     if reused_entry != latest_snapshot:
-                        manifest = [reused_entry if item is latest_snapshot else item for item in manifest]
+                        manifest = [
+                            reused_entry if item is latest_snapshot else item
+                            for item in manifest
+                        ]
                         latest_by_document[document_path] = reused_entry
                         seen = {
-                            (item.get("document_path") or "", item.get("snapshot_path") or "")
+                            (
+                                item.get("document_path") or "",
+                                item.get("snapshot_path") or "",
+                            )
                             for item in manifest
                         }
                 results.append(reused_entry)
@@ -5216,13 +6401,18 @@ class KnowledgeManager:
             shutil.copy2(source_path, target_path)
             snapshot_entry = {
                 "document_path": document_path,
-                "relative_path": str(document.get("relative_path") or "").strip(),
+                "relative_path": str(
+                    document.get("relative_path") or "",
+                ).strip(),
                 "title": str(document.get("title") or source_path.name),
                 "snapshot_path": target_path.as_posix(),
                 "snapshot_relative_path": snapshot_relative.as_posix(),
                 "snapshot_at": indexed_at,
             }
-            key = (snapshot_entry["document_path"], snapshot_entry["snapshot_path"])
+            key = (
+                snapshot_entry["document_path"],
+                snapshot_entry["snapshot_path"],
+            )
             if key not in seen:
                 manifest.append(snapshot_entry)
                 seen.add(key)
@@ -5239,7 +6429,9 @@ class KnowledgeManager:
     ) -> list[dict[str, Any]]:
         documents: list[dict[str, Any]] = []
         for snapshot in self._load_source_snapshot_manifest(source.id):
-            snapshot_path_raw = str(snapshot.get("snapshot_path") or "").strip()
+            snapshot_path_raw = str(
+                snapshot.get("snapshot_path") or "",
+            ).strip()
             if not snapshot_path_raw:
                 continue
             snapshot_path = Path(snapshot_path_raw)
@@ -5249,12 +6441,18 @@ class KnowledgeManager:
             documents.append(
                 {
                     "path": str(snapshot.get("document_path") or source.id),
-                    "title": str(snapshot.get("title") or Path(snapshot_path_raw).name),
+                    "title": str(
+                        snapshot.get("title") or Path(snapshot_path_raw).name,
+                    ),
                     "text": text,
                     "snapshot_path": snapshot_path_raw,
-                    "snapshot_relative_path": str(snapshot.get("snapshot_relative_path") or "").strip(),
-                    "snapshot_at": str(snapshot.get("snapshot_at") or "").strip(),
-                }
+                    "snapshot_relative_path": str(
+                        snapshot.get("snapshot_relative_path") or "",
+                    ).strip(),
+                    "snapshot_at": str(
+                        snapshot.get("snapshot_at") or "",
+                    ).strip(),
+                },
             )
         return documents
 
@@ -5267,15 +6465,34 @@ class KnowledgeManager:
     ) -> list[dict[str, Any]]:
         if source.type not in {"file", "directory"}:
             return documents
-        snapshot_manifest = self._persist_source_snapshots(source, documents, indexed_at=indexed_at)
-        self._materialize_interlinear_and_lightweight_for_source(source.id, snapshot_manifest)
+        snapshot_manifest = self._persist_source_snapshots(
+            source,
+            documents,
+            indexed_at=indexed_at,
+        )
+        self._materialize_interlinear_and_lightweight_for_source(
+            source.id,
+            snapshot_manifest,
+        )
         snapshot_documents = self._load_snapshot_documents(source)
         return snapshot_documents or documents
 
-    def _write_media_semantic_if_needed(self, file_path: Path, media_root: Path) -> None:
+    def _write_media_semantic_if_needed(
+        self,
+        file_path: Path,
+        media_root: Path,
+    ) -> None:
         suffix = file_path.suffix.lower()
         media_kind = None
-        if suffix in {".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp", ".svg"}:
+        if suffix in {
+            ".png",
+            ".jpg",
+            ".jpeg",
+            ".gif",
+            ".webp",
+            ".bmp",
+            ".svg",
+        }:
             media_kind = "image"
         elif suffix in {".mp3", ".wav", ".m4a", ".flac", ".ogg"}:
             media_kind = "audio"
@@ -5319,7 +6536,11 @@ class KnowledgeManager:
             path = Path(source.location).expanduser().resolve()
             return [self._read_file_document(path, config)]
         if source.type == "directory":
-            return self._read_directory_documents(Path(source.location), source, config)
+            return self._read_directory_documents(
+                Path(source.location),
+                source,
+                config,
+            )
         if source.type == "url":
             if source.content and source.content.strip():
                 return [
@@ -5327,7 +6548,7 @@ class KnowledgeManager:
                         "path": source.location or source.id,
                         "title": source.name,
                         "text": self._normalize_text(source.content),
-                    }
+                    },
                 ]
             return [self._read_url_document(source.location)]
         if source.type == "chat":
@@ -5336,8 +6557,12 @@ class KnowledgeManager:
             return self._read_chat_documents()
         text_content = source.content.strip()
         if not text_content and source.location.strip():
-            text_content = Path(source.location).expanduser().read_text(
-                encoding="utf-8",
+            text_content = (
+                Path(source.location)
+                .expanduser()
+                .read_text(
+                    encoding="utf-8",
+                )
             )
         return [
             {
@@ -5375,8 +6600,10 @@ class KnowledgeManager:
                 if (
                     "exceeds max size" not in error_text
                     and "not decodable as text" not in error_text
-                    and "structured data and is not part of document knowledge" not in error_text
-                    and "image data and is not part of document knowledge" not in error_text
+                    and "structured data and is not part of document knowledge"
+                    not in error_text
+                    and "image data and is not part of document knowledge"
+                    not in error_text
                     and "excluded from processing scope" not in error_text
                 ):
                     raise
@@ -5388,7 +6615,12 @@ class KnowledgeManager:
                     )
         return documents
 
-    def save_uploaded_file(self, source_id: str, filename: str, data: bytes) -> Path:
+    def save_uploaded_file(
+        self,
+        source_id: str,
+        filename: str,
+        data: bytes,
+    ) -> Path:
         """Persist an uploaded file and return its saved path."""
         safe_source = self._safe_name(source_id)
         safe_name = self._safe_name(Path(filename).name)
@@ -5422,7 +6654,11 @@ class KnowledgeManager:
 
         for relative_path, data in files:
             normalized = Path(relative_path)
-            safe_parts = [self._safe_name(part) for part in normalized.parts if part not in {"", "."}]
+            safe_parts = [
+                self._safe_name(part)
+                for part in normalized.parts
+                if part not in {"", "."}
+            ]
             if not safe_parts:
                 continue
             file_path = target_dir.joinpath(*safe_parts)
@@ -5449,7 +6685,10 @@ class KnowledgeManager:
         for chat in chats:
             session_id = chat.get("session_id", "")
             user_id = chat.get("user_id", "")
-            session_path = sessions_dir / self._session_filename(session_id, user_id)
+            session_path = sessions_dir / self._session_filename(
+                session_id,
+                user_id,
+            )
             collected_text = ""
             if session_path.exists():
                 state = json.loads(session_path.read_text(encoding="utf-8"))
@@ -5477,7 +6716,10 @@ class KnowledgeManager:
             )
         return documents
 
-    def _read_single_chat_document(self, session_id: str) -> list[dict[str, str]]:
+    def _read_single_chat_document(
+        self,
+        session_id: str,
+    ) -> list[dict[str, str]]:
         """Load a single chat session by session_id and return it as one text document."""
         chats_path = self.working_dir / CHATS_FILE
         sessions_dir = self.working_dir / "sessions"
@@ -5500,12 +6742,24 @@ class KnowledgeManager:
         # Try known session filename patterns
         candidates: list[Path] = []
         if user_id:
-            candidates.append(sessions_dir / self._session_filename(session_id, user_id))
-        candidates.append(sessions_dir / self._session_filename(session_id, ""))
+            candidates.append(
+                sessions_dir / self._session_filename(session_id, user_id),
+            )
+        candidates.append(
+            sessions_dir / self._session_filename(session_id, ""),
+        )
         # Glob fallback: any file ending with the sanitized session_id
         safe_sid = _sanitize_filename(session_id)
-        candidates.extend(sessions_dir.glob(f"*_{safe_sid}.json") if sessions_dir.exists() else [])
-        candidates.extend(sessions_dir.glob(f"{safe_sid}.json") if sessions_dir.exists() else [])
+        candidates.extend(
+            sessions_dir.glob(f"*_{safe_sid}.json")
+            if sessions_dir.exists()
+            else [],
+        )
+        candidates.extend(
+            sessions_dir.glob(f"{safe_sid}.json")
+            if sessions_dir.exists()
+            else [],
+        )
 
         session_path: Path | None = None
         for candidate in candidates:
@@ -5515,7 +6769,7 @@ class KnowledgeManager:
 
         if session_path is None:
             raise FileNotFoundError(
-                f"Session file not found for session_id: {session_id}"
+                f"Session file not found for session_id: {session_id}",
             )
 
         state = json.loads(session_path.read_text(encoding="utf-8"))
@@ -5529,7 +6783,7 @@ class KnowledgeManager:
                 "path": str(session_path),
                 "title": chat_name,
                 "text": text,
-            }
+            },
         ]
 
     def auto_collect_from_messages(
@@ -5558,7 +6812,9 @@ class KnowledgeManager:
             running_config=running_config,
         )
         return {
-            "changed": bool(user_stage.get("changed") or text_stage.get("changed")),
+            "changed": bool(
+                user_stage.get("changed") or text_stage.get("changed"),
+            ),
             "file_sources": int(user_stage.get("file_sources", 0) or 0),
             "url_sources": int(user_stage.get("url_sources", 0) or 0),
             "text_sources": int(text_stage.get("text_sources", 0) or 0),
@@ -5580,7 +6836,7 @@ class KnowledgeManager:
     ) -> dict[str, Any]:
         """Collect file/url knowledge immediately from user-sent content."""
         if not config.enabled or not bool(
-            getattr(running_config, "knowledge_enabled", True)
+            getattr(running_config, "knowledge_enabled", True),
         ):
             return {
                 "changed": False,
@@ -5595,20 +6851,32 @@ class KnowledgeManager:
         errors: list[dict[str, str]] = []
         user_messages = list(request_messages or [])
 
-        knowledge_auto_collect_chat_files = getattr(running_config, "knowledge_auto_collect_chat_files", None)
+        knowledge_auto_collect_chat_files = getattr(
+            running_config,
+            "knowledge_auto_collect_chat_files",
+            None,
+        )
         if knowledge_auto_collect_chat_files is None:
-            knowledge_auto_collect_chat_files = config.automation.knowledge_auto_collect_chat_files
+            knowledge_auto_collect_chat_files = (
+                config.automation.knowledge_auto_collect_chat_files
+            )
 
-        knowledge_auto_collect_chat_urls = getattr(running_config, "knowledge_auto_collect_chat_urls", None)
+        knowledge_auto_collect_chat_urls = getattr(
+            running_config,
+            "knowledge_auto_collect_chat_urls",
+            None,
+        )
         if knowledge_auto_collect_chat_urls is None:
-            knowledge_auto_collect_chat_urls = config.automation.knowledge_auto_collect_chat_urls
+            knowledge_auto_collect_chat_urls = (
+                config.automation.knowledge_auto_collect_chat_urls
+            )
         auto_collect_url_min_chars = int(
             getattr(
                 running_config,
                 "auto_collect_url_min_chars",
                 _AUTO_COLLECT_URL_MIN_CONTENT_CHARS,
             )
-            or _AUTO_COLLECT_URL_MIN_CONTENT_CHARS
+            or _AUTO_COLLECT_URL_MIN_CONTENT_CHARS,
         )
 
         if knowledge_auto_collect_chat_files:
@@ -5667,7 +6935,7 @@ class KnowledgeManager:
     ) -> dict[str, Any]:
         """Collect text knowledge after response, based on one user-assistant turn pair."""
         if not config.enabled or not bool(
-            getattr(running_config, "knowledge_enabled", True)
+            getattr(running_config, "knowledge_enabled", True),
         ):
             return {
                 "changed": False,
@@ -5676,9 +6944,15 @@ class KnowledgeManager:
                 "text_sources": 0,
             }
 
-        knowledge_auto_collect_long_text = getattr(running_config, "knowledge_auto_collect_long_text", None)
+        knowledge_auto_collect_long_text = getattr(
+            running_config,
+            "knowledge_auto_collect_long_text",
+            None,
+        )
         if knowledge_auto_collect_long_text is None:
-            knowledge_auto_collect_long_text = config.automation.knowledge_auto_collect_long_text
+            knowledge_auto_collect_long_text = (
+                config.automation.knowledge_auto_collect_long_text
+            )
         if not knowledge_auto_collect_long_text:
             return {
                 "changed": False,
@@ -5687,9 +6961,15 @@ class KnowledgeManager:
                 "text_sources": 0,
             }
 
-        knowledge_long_text_min_chars = getattr(running_config, "knowledge_long_text_min_chars", None)
+        knowledge_long_text_min_chars = getattr(
+            running_config,
+            "knowledge_long_text_min_chars",
+            None,
+        )
         if not isinstance(knowledge_long_text_min_chars, int):
-            knowledge_long_text_min_chars = config.automation.knowledge_long_text_min_chars
+            knowledge_long_text_min_chars = (
+                config.automation.knowledge_long_text_min_chars
+            )
 
         errors: list[dict[str, str]] = []
         changed = False
@@ -5729,7 +7009,7 @@ class KnowledgeManager:
     ) -> dict[str, Any]:
         """Backfill historical chat-session data into knowledge sources once."""
         if not config.enabled or not bool(
-            getattr(running_config, "knowledge_enabled", True)
+            getattr(running_config, "knowledge_enabled", True),
         ):
             self._save_backfill_progress(
                 {
@@ -5738,16 +7018,17 @@ class KnowledgeManager:
                     "failed": False,
                     "reason": "knowledge_disabled",
                     "updated_at": datetime.now(UTC).isoformat(),
-                }
+                },
             )
-            return {"changed": False, "skipped": True, "reason": "knowledge_disabled"}
+            return {
+                "changed": False,
+                "skipped": True,
+                "reason": "knowledge_disabled",
+            }
 
         signature = self._history_backfill_signature(running_config)
         state = self._load_backfill_state()
-        if (
-            state.get("completed")
-            and state.get("signature") == signature
-        ):
+        if state.get("completed") and state.get("signature") == signature:
             self._save_backfill_progress(
                 {
                     "running": False,
@@ -5755,9 +7036,13 @@ class KnowledgeManager:
                     "failed": False,
                     "reason": "already_completed",
                     "updated_at": datetime.now(UTC).isoformat(),
-                }
+                },
             )
-            return {"changed": False, "skipped": True, "reason": "already_completed"}
+            return {
+                "changed": False,
+                "skipped": True,
+                "reason": "already_completed",
+            }
 
         chats_path = self.working_dir / CHATS_FILE
         if chats_path.exists():
@@ -5768,7 +7053,9 @@ class KnowledgeManager:
 
         sessions_dir = self.working_dir / "sessions"
         total_sessions = sum(
-            1 for chat in chats if str(chat.get("session_id", "") or "").strip()
+            1
+            for chat in chats
+            if str(chat.get("session_id", "") or "").strip()
         )
         changed = False
         traversed_sessions = 0
@@ -5788,22 +7075,40 @@ class KnowledgeManager:
                 "processed_sessions": 0,
                 "current_session_id": None,
                 "updated_at": datetime.now(UTC).isoformat(),
-            }
+            },
         )
 
-        knowledge_long_text_min_chars = getattr(running_config, "knowledge_long_text_min_chars", None)
+        knowledge_long_text_min_chars = getattr(
+            running_config,
+            "knowledge_long_text_min_chars",
+            None,
+        )
         if not isinstance(knowledge_long_text_min_chars, int):
-            knowledge_long_text_min_chars = config.automation.knowledge_long_text_min_chars
-        knowledge_auto_collect_chat_files = getattr(running_config, "knowledge_auto_collect_chat_files", False)
-        knowledge_auto_collect_chat_urls = getattr(running_config, "knowledge_auto_collect_chat_urls", True)
-        knowledge_auto_collect_long_text = getattr(running_config, "knowledge_auto_collect_long_text", False)
+            knowledge_long_text_min_chars = (
+                config.automation.knowledge_long_text_min_chars
+            )
+        knowledge_auto_collect_chat_files = getattr(
+            running_config,
+            "knowledge_auto_collect_chat_files",
+            False,
+        )
+        knowledge_auto_collect_chat_urls = getattr(
+            running_config,
+            "knowledge_auto_collect_chat_urls",
+            True,
+        )
+        knowledge_auto_collect_long_text = getattr(
+            running_config,
+            "knowledge_auto_collect_long_text",
+            False,
+        )
         auto_collect_url_min_chars = int(
             getattr(
                 running_config,
                 "auto_collect_url_min_chars",
                 _AUTO_COLLECT_URL_MIN_CONTENT_CHARS,
             )
-            or _AUTO_COLLECT_URL_MIN_CONTENT_CHARS
+            or _AUTO_COLLECT_URL_MIN_CONTENT_CHARS,
         )
 
         try:
@@ -5824,10 +7129,13 @@ class KnowledgeManager:
                         "processed_sessions": processed_sessions,
                         "current_session_id": session_id,
                         "updated_at": datetime.now(UTC).isoformat(),
-                    }
+                    },
                 )
 
-                session_path = sessions_dir / self._session_filename(session_id, user_id)
+                session_path = sessions_dir / self._session_filename(
+                    session_id,
+                    user_id,
+                )
                 if not session_path.exists():
                     continue
                 state_payload = self._load_json(session_path)
@@ -5901,7 +7209,7 @@ class KnowledgeManager:
                     "traversed_sessions": traversed_sessions,
                     "processed_sessions": processed_sessions,
                     "updated_at": datetime.now(UTC).isoformat(),
-                }
+                },
             )
             raise
 
@@ -5925,7 +7233,7 @@ class KnowledgeManager:
                 "traversed_sessions": traversed_sessions,
                 "processed_sessions": processed_sessions,
                 "updated_at": datetime.now(UTC).isoformat(),
-            }
+            },
         )
         result = {
             "changed": changed,
@@ -5970,21 +7278,23 @@ class KnowledgeManager:
         source_kind = self.classify_source_path(file_path.as_posix())
         if source_kind == "ignored":
             raise ValueError(
-                f"Knowledge file is excluded from processing scope: {file_path}"
+                f"Knowledge file is excluded from processing scope: {file_path}",
             )
         if file_path.suffix.lower() in _STRUCTURED_FILE_EXTENSIONS:
             raise ValueError(
-                f"Knowledge file is structured data and is not part of document knowledge: {file_path}"
+                f"Knowledge file is structured data and is not part of document knowledge: {file_path}",
             )
         if file_path.suffix.lower() in _IMAGE_FILE_EXTENSIONS:
             raise ValueError(
-                f"Knowledge file is image data and is not part of document knowledge: {file_path}"
+                f"Knowledge file is image data and is not part of document knowledge: {file_path}",
             )
         if file_path.stat().st_size > config.index.max_file_size:
             raise ValueError(f"Knowledge file exceeds max size: {file_path}")
         text = self._read_text_file_content(file_path)
         if text is None:
-            raise ValueError(f"Knowledge file is not decodable as text: {file_path}")
+            raise ValueError(
+                f"Knowledge file is not decodable as text: {file_path}",
+            )
         return {
             "path": str(file_path),
             "source_path": str(file_path),
@@ -6009,7 +7319,9 @@ class KnowledgeManager:
     def _read_url_document(url: str) -> dict[str, str]:
         response = httpx.get(url, timeout=10.0, follow_redirects=True)
         response.raise_for_status()
-        content_type = str(response.headers.get("content-type", "") or "").lower()
+        content_type = str(
+            response.headers.get("content-type", "") or "",
+        ).lower()
         if content_type and not any(
             marker in content_type for marker in _TEXTUAL_CONTENT_TYPE_MARKERS
         ):
@@ -6021,7 +7333,8 @@ class KnowledgeManager:
                 "text": "",
             }
         if content_type and any(
-            marker in content_type for marker in _STRUCTURED_CONTENT_TYPE_MARKERS
+            marker in content_type
+            for marker in _STRUCTURED_CONTENT_TYPE_MARKERS
         ):
             return {
                 "path": url,
@@ -6042,8 +7355,18 @@ class KnowledgeManager:
                 )
                 if extracted:
                     title = extracted
-            content = re.sub(r"<script.*?</script>", " ", content, flags=re.S | re.I)
-            content = re.sub(r"<style.*?</style>", " ", content, flags=re.S | re.I)
+            content = re.sub(
+                r"<script.*?</script>",
+                " ",
+                content,
+                flags=re.S | re.I,
+            )
+            content = re.sub(
+                r"<style.*?</style>",
+                " ",
+                content,
+                flags=re.S | re.I,
+            )
             content = re.sub(r"<[^>]+>", " ", content)
         return {
             "path": url,
@@ -6065,10 +7388,14 @@ class KnowledgeManager:
             self._extract_text_from_runtime_message(message)
             for message in messages
         ]
-        return self._normalize_text("\n\n".join(item for item in snippets if item))
+        return self._normalize_text(
+            "\n\n".join(item for item in snippets if item),
+        )
 
     @staticmethod
-    def _messages_from_session_state(state: dict[str, Any]) -> list[dict[str, Any]]:
+    def _messages_from_session_state(
+        state: dict[str, Any],
+    ) -> list[dict[str, Any]]:
         memory_state = state.get("agent", {}).get("memory", {})
         if isinstance(memory_state, dict):
             raw_entries = memory_state.get("content", [])
@@ -6086,7 +7413,10 @@ class KnowledgeManager:
                 raw_message = entry
             if not isinstance(raw_message, dict):
                 continue
-            if raw_message.get("type") in {"plugin_call", "plugin_call_output"}:
+            if raw_message.get("type") in {
+                "plugin_call",
+                "plugin_call_output",
+            }:
                 continue
             messages.append(raw_message)
         return messages
@@ -6116,7 +7446,15 @@ class KnowledgeManager:
                 if data is not None:
                     walk(data)
                 for nested_key, nested_value in node.items():
-                    if nested_key in {"text", "thinking", "output", "name", "role", "content", "data"}:
+                    if nested_key in {
+                        "text",
+                        "thinking",
+                        "output",
+                        "name",
+                        "role",
+                        "content",
+                        "data",
+                    }:
                         continue
                     if isinstance(nested_value, (dict, list)):
                         walk(nested_value)
@@ -6141,7 +7479,9 @@ class KnowledgeManager:
             parsed_ref = urlparse(file_ref)
             remote_hash = None
             if parsed_ref.scheme in {"http", "https"}:
-                remote_hash = hashlib.sha1(file_ref.encode("utf-8")).hexdigest()
+                remote_hash = hashlib.sha1(
+                    file_ref.encode("utf-8"),
+                ).hexdigest()
             stored_path = self._materialize_file_reference(
                 file_ref,
                 block.get("name") or Path(file_ref).name or "chat-file",
@@ -6149,7 +7489,9 @@ class KnowledgeManager:
             )
             if stored_path is None:
                 continue
-            digest = hashlib.sha1(str(stored_path).encode("utf-8")).hexdigest()[:12]
+            digest = hashlib.sha1(
+                str(stored_path).encode("utf-8"),
+            ).hexdigest()[:12]
             source_id = f"auto-file-{digest}"
             if source_id in seen_ids:
                 continue
@@ -6227,19 +7569,21 @@ class KnowledgeManager:
                 text
                 for role, text in self._iter_message_texts(request_messages)
                 if str(role).lower() == "user"
-            )
+            ),
         )
         assistant_text = self._normalize_text(
             "\n".join(
                 text
                 for role, text in self._iter_message_texts(response_messages)
                 if str(role).lower() == "assistant"
-            )
+            ),
         )
         if not user_text or not assistant_text:
             return []
 
-        merged = self._normalize_text(f"用户: {user_text}\n\n智能体: {assistant_text}")
+        merged = self._normalize_text(
+            f"用户: {user_text}\n\n智能体: {assistant_text}",
+        )
         if len(merged) < knowledge_long_text_min_chars:
             return []
 
@@ -6265,7 +7609,7 @@ class KnowledgeManager:
                     f"Auto-saved from user-assistant turn in {session_id}"
                     + (f" for {user_id}" if user_id else "")
                 ),
-            )
+            ),
         ]
 
     def _build_url_sources_from_messages(
@@ -6300,7 +7644,11 @@ class KnowledgeManager:
                         continue
                 # Capture surrounding text context from the conversation message
                 # so title generation can use it without fetching the URL.
-                context_snippet = self._extract_url_context(text, url, max_chars=400)
+                context_snippet = self._extract_url_context(
+                    text,
+                    url,
+                    max_chars=400,
+                )
                 summary = (
                     f"Auto-collected URL from {role} message in {session_id}"
                     + (f" for {user_id}" if user_id else "")
@@ -6360,7 +7708,10 @@ class KnowledgeManager:
         return found
 
     @staticmethod
-    def _should_exclude_url(url: str, automation_config: Any | None = None) -> bool:
+    def _should_exclude_url(
+        url: str,
+        automation_config: Any | None = None,
+    ) -> bool:
         """Return True if the URL should be excluded from auto-collection.
 
         Exclusion criteria (all can be toggled via automation_config):
@@ -6377,7 +7728,11 @@ class KnowledgeManager:
         exclude_private = True
         if automation_config is not None:
             exclude_private = bool(
-                getattr(automation_config, "url_exclude_private_addresses", True)
+                getattr(
+                    automation_config,
+                    "url_exclude_private_addresses",
+                    True,
+                ),
             )
         if exclude_private:
             host = parsed.hostname or ""
@@ -6388,7 +7743,7 @@ class KnowledgeManager:
         exclude_tokens = True
         if automation_config is not None:
             exclude_tokens = bool(
-                getattr(automation_config, "url_exclude_token_params", True)
+                getattr(automation_config, "url_exclude_token_params", True),
             )
         if exclude_tokens and parsed.query:
             try:
@@ -6421,8 +7776,8 @@ class KnowledgeManager:
         if idx == -1:
             return ""
         half = max_chars // 2
-        before = text[max(0, idx - half): idx].strip()
-        after = text[idx + len(url): idx + len(url) + half].strip()
+        before = text[max(0, idx - half) : idx].strip()
+        after = text[idx + len(url) : idx + len(url) + half].strip()
         parts = [p for p in (before, after) if p]
         snippet = " ... ".join(parts)
         # Compact whitespace
@@ -6439,7 +7794,10 @@ class KnowledgeManager:
             return block.dict()
         return None
 
-    def _iter_message_blocks(self, messages: list[Any]) -> list[dict[str, Any]]:
+    def _iter_message_blocks(
+        self,
+        messages: list[Any],
+    ) -> list[dict[str, Any]]:
         blocks: list[dict[str, Any]] = []
         for message in messages:
             content = getattr(message, "content", None)
@@ -6456,7 +7814,10 @@ class KnowledgeManager:
                     blocks.append(payload)
         return blocks
 
-    def _iter_message_texts(self, messages: list[Any]) -> list[tuple[str, str]]:
+    def _iter_message_texts(
+        self,
+        messages: list[Any],
+    ) -> list[tuple[str, str]]:
         texts: list[tuple[str, str]] = []
         for message in messages:
             role = getattr(message, "role", None)
@@ -6488,7 +7849,10 @@ class KnowledgeManager:
                 texts.append((role, "\n".join(joined)))
         return texts
 
-    def _extract_text_from_runtime_message(self, message: dict[str, Any]) -> str:
+    def _extract_text_from_runtime_message(
+        self,
+        message: dict[str, Any],
+    ) -> str:
         content = message.get("content")
         if isinstance(content, str):
             return self._normalize_text(content)
@@ -6647,13 +8011,25 @@ class KnowledgeManager:
     def _history_backfill_signature(self, running_config: Any | None) -> str:
         payload = {
             "knowledge_auto_collect_chat_files": bool(
-                getattr(running_config, "knowledge_auto_collect_chat_files", False),
+                getattr(
+                    running_config,
+                    "knowledge_auto_collect_chat_files",
+                    False,
+                ),
             ),
             "knowledge_auto_collect_chat_urls": bool(
-                getattr(running_config, "knowledge_auto_collect_chat_urls", True),
+                getattr(
+                    running_config,
+                    "knowledge_auto_collect_chat_urls",
+                    True,
+                ),
             ),
             "knowledge_auto_collect_long_text": bool(
-                getattr(running_config, "knowledge_auto_collect_long_text", False),
+                getattr(
+                    running_config,
+                    "knowledge_auto_collect_long_text",
+                    False,
+                ),
             ),
             "knowledge_long_text_min_chars": int(
                 getattr(running_config, "knowledge_long_text_min_chars", 2000),
@@ -6664,7 +8040,9 @@ class KnowledgeManager:
             "version": 2,
         }
         return hashlib.sha1(
-            json.dumps(payload, sort_keys=True, ensure_ascii=False).encode("utf-8"),
+            json.dumps(payload, sort_keys=True, ensure_ascii=False).encode(
+                "utf-8",
+            ),
         ).hexdigest()
 
     @staticmethod
@@ -6716,7 +8094,11 @@ class KnowledgeManager:
         total_sessions = int(payload.get("total_sessions", 0) or 0)
         traversed_sessions = int(payload.get("traversed_sessions", 0) or 0)
         safe_total = max(total_sessions, 1)
-        percent = 100 if completed else int(max(0, min(100, (traversed_sessions / safe_total) * 100)))
+        percent = (
+            100
+            if completed
+            else int(max(0, min(100, (traversed_sessions / safe_total) * 100)))
+        )
 
         stage = "idle"
         if running:
@@ -6733,9 +8115,8 @@ class KnowledgeManager:
             "failed": failed,
             "stage": stage,
             "current_stage": stage,
-            "stage_message": str(payload.get("reason") or "").strip() or (
-                "Backfilling history sessions" if running else ""
-            ),
+            "stage_message": str(payload.get("reason") or "").strip()
+            or ("Backfilling history sessions" if running else ""),
             "progress": percent,
             "percent": percent,
             "current": traversed_sessions,
@@ -6743,7 +8124,9 @@ class KnowledgeManager:
             "eta_seconds": None,
             "total_sessions": total_sessions,
             "traversed_sessions": traversed_sessions,
-            "processed_sessions": int(payload.get("processed_sessions", 0) or 0),
+            "processed_sessions": int(
+                payload.get("processed_sessions", 0) or 0,
+            ),
             "current_session_id": payload.get("current_session_id"),
             "error": payload.get("error"),
             "updated_at": payload.get("updated_at"),
@@ -6800,7 +8183,10 @@ class KnowledgeManager:
             encoding="utf-8",
         )
 
-    def _remote_source_status(self, source: KnowledgeSourceSpec) -> dict[str, Any]:
+    def _remote_source_status(
+        self,
+        source: KnowledgeSourceSpec,
+    ) -> dict[str, Any]:
         remote_hash = ""
         for tag in source.tags or []:
             if tag.startswith("remote:url_hash:"):
@@ -6859,7 +8245,9 @@ class KnowledgeManager:
             if existing.id != normalized.id:
                 continue
             existing_normalized = self._source_with_auto_name(existing, config)
-            if existing_normalized.model_dump(mode="json") == normalized.model_dump(mode="json"):
+            if existing_normalized.model_dump(
+                mode="json",
+            ) == normalized.model_dump(mode="json"):
                 return False
             config.sources[index] = normalized
             return True
@@ -6879,7 +8267,7 @@ class KnowledgeManager:
             if generated_summary:
                 updates["summary"] = generated_summary
                 source_for_title = source.model_copy(
-                    update={"summary": generated_summary}
+                    update={"summary": generated_summary},
                 )
 
         generated = self._generate_source_name(source_for_title, config)
@@ -6984,8 +8372,14 @@ class KnowledgeManager:
         top_n: int = _KEYWORD_DEFAULT_TOP_N,
     ) -> dict[str, Any]:
         candidates = self._collect_source_processing_candidates(source, config)
-        merged = self._normalize_text("\n".join(part for part in candidates if part))
-        processed = self._process_knowledge_text(merged, top_n=top_n, config=config)
+        merged = self._normalize_text(
+            "\n".join(part for part in candidates if part),
+        )
+        processed = self._process_knowledge_text(
+            merged,
+            top_n=top_n,
+            config=config,
+        )
 
         # Keep deterministic priority for subjects: summary > content > index/title.
         for candidate in candidates:
@@ -7010,9 +8404,19 @@ class KnowledgeManager:
             }
 
         return {
-            "subject": self._extract_subject_from_text(normalized, config=config),
-            "summary": self._extract_summary_from_text(normalized, config=config),
-            "keywords": self._extract_keywords_from_text(normalized, top_n=top_n, config=config),
+            "subject": self._extract_subject_from_text(
+                normalized,
+                config=config,
+            ),
+            "summary": self._extract_summary_from_text(
+                normalized,
+                config=config,
+            ),
+            "keywords": self._extract_keywords_from_text(
+                normalized,
+                top_n=top_n,
+                config=config,
+            ),
         }
 
     def _collect_source_processing_candidates(
@@ -7031,14 +8435,21 @@ class KnowledgeManager:
         if indexed_payload:
             chunk_titles: list[str] = []
             document_texts: list[str] = []
-            chunk_rows = [chunk for chunk in indexed_payload.get("chunks", []) if isinstance(chunk, dict)]
+            chunk_rows = [
+                chunk
+                for chunk in indexed_payload.get("chunks", [])
+                if isinstance(chunk, dict)
+            ]
             for chunks in self._group_document_chunks(chunk_rows):
                 if not chunks:
                     continue
                 chunk_title = chunks[0].get("document_title")
                 if isinstance(chunk_title, str) and chunk_title.strip():
                     chunk_titles.append(chunk_title)
-                source_text, _ = self._resolve_document_source_text(chunks, source=source)
+                source_text, _ = self._resolve_document_source_text(
+                    chunks,
+                    source=source,
+                )
                 if source_text.strip():
                     document_texts.append(source_text)
 
@@ -7093,7 +8504,10 @@ class KnowledgeManager:
         except Exception:
             return ""
 
-    def _load_index_payload_safe(self, source_id: str) -> dict[str, Any] | None:
+    def _load_index_payload_safe(
+        self,
+        source_id: str,
+    ) -> dict[str, Any] | None:
         index_path = self._source_index_path(source_id)
         if not index_path.exists():
             return None
@@ -7102,7 +8516,11 @@ class KnowledgeManager:
         except Exception:
             return None
 
-    def _read_local_text_snippet(self, path: Path, max_chars: int = 2400) -> str:
+    def _read_local_text_snippet(
+        self,
+        path: Path,
+        max_chars: int = 2400,
+    ) -> str:
         try:
             resolved = path.expanduser().resolve()
             if not resolved.exists() or not resolved.is_file():
@@ -7112,7 +8530,11 @@ class KnowledgeManager:
         except Exception:
             return ""
 
-    def _read_directory_text_snippet(self, directory: Path, max_chars: int = 2400) -> str:
+    def _read_directory_text_snippet(
+        self,
+        directory: Path,
+        max_chars: int = 2400,
+    ) -> str:
         try:
             root = directory.expanduser().resolve()
             if not root.exists() or not root.is_dir():
@@ -7120,7 +8542,10 @@ class KnowledgeManager:
             for path in root.rglob("*"):
                 if not path.is_file():
                     continue
-                snippet = self._read_local_text_snippet(path, max_chars=max_chars)
+                snippet = self._read_local_text_snippet(
+                    path,
+                    max_chars=max_chars,
+                )
                 if snippet:
                     return snippet
         except Exception:
@@ -7158,7 +8583,9 @@ class KnowledgeManager:
             if not tokens:
                 score = 0.0
             else:
-                unique_score = sum(token_freq.get(token, 0) for token in set(tokens))
+                unique_score = sum(
+                    token_freq.get(token, 0) for token in set(tokens)
+                )
                 score = unique_score / (len(tokens) ** 0.5)
             if score > best_score:
                 best_score = score
@@ -7184,7 +8611,11 @@ class KnowledgeManager:
         return self._semantic_title_from_text(text, config=config)
 
     @staticmethod
-    def _tokenize_lightweight_text(text: str, *, exclude_stop_words: bool = False) -> list[str]:
+    def _tokenize_lightweight_text(
+        text: str,
+        *,
+        exclude_stop_words: bool = False,
+    ) -> list[str]:
         normalized = re.sub(r"\s+", " ", (text or "").strip())
         if not normalized:
             return []
@@ -7286,20 +8717,26 @@ class KnowledgeManager:
             text = document["text"]
             if not text:
                 continue
-            chunk_subject = str(document.get("snapshot_path") or document["path"])
+            chunk_subject = str(
+                document.get("snapshot_path") or document["path"],
+            )
             for index, start in enumerate(range(0, len(text), chunk_size)):
                 chunk_text = text[start : start + chunk_size]
                 if not chunk_text.strip():
                     continue
                 sentences = KnowledgeManager._split_chunk_sentences(chunk_text)
-                normalized_chunk_text = "\n".join(sentences) if sentences else chunk_text.strip()
+                normalized_chunk_text = (
+                    "\n".join(sentences) if sentences else chunk_text.strip()
+                )
                 chunks.append(
                     {
                         "chunk_id": f"{chunk_subject}::{index}",
                         "document_path": document["path"],
                         "document_title": document["title"],
                         "snapshot_path": document.get("snapshot_path"),
-                        "snapshot_relative_path": document.get("snapshot_relative_path"),
+                        "snapshot_relative_path": document.get(
+                            "snapshot_relative_path",
+                        ),
                         "snapshot_at": document.get("snapshot_at"),
                         "text": normalized_chunk_text,
                         "sentence_count": len(sentences),
@@ -7308,7 +8745,10 @@ class KnowledgeManager:
         return chunks
 
     @classmethod
-    def _build_document_stats(cls, documents: list[dict[str, str]]) -> dict[str, int]:
+    def _build_document_stats(
+        cls,
+        documents: list[dict[str, str]],
+    ) -> dict[str, int]:
         char_count = 0
         token_count = 0
         for document in documents:
@@ -7316,7 +8756,9 @@ class KnowledgeManager:
             if not text:
                 continue
             char_count += cls._count_text_chars(text)
-            token_count += len(cls._tokenize_lightweight_text(text, exclude_stop_words=False))
+            token_count += len(
+                cls._tokenize_lightweight_text(text, exclude_stop_words=False),
+            )
         return {
             "char_count": char_count,
             "token_count": token_count,
@@ -7373,7 +8815,7 @@ class KnowledgeManager:
                 cls._tokenize_lightweight_text(
                     str(chunk.get("text") or ""),
                     exclude_stop_words=False,
-                )
+                ),
             )
         return total
 
@@ -7386,7 +8828,9 @@ class KnowledgeManager:
         if not isinstance(chunk_size, int):
             chunk_size = config.index.chunk_size
         chunk_overlap = int(getattr(config.index, "chunk_overlap", 0) or 0)
-        memify_flag = 1 if bool(getattr(config, "memify_enabled", False)) else 0
+        memify_flag = (
+            1 if bool(getattr(config, "memify_enabled", False)) else 0
+        )
         raw = f"{KNOWLEDGE_PROCESSING_VERSION}:{chunk_size}:{chunk_overlap}:me{memify_flag}"
         return hashlib.sha1(raw.encode("utf-8")).hexdigest()[:16]
 
@@ -7438,7 +8882,10 @@ class KnowledgeManager:
             return False
         if any(part in _INTERNAL_EXCLUDED_DIRS for part in path_parts):
             return False
-        if path_parts and path_parts[-1].lower() in _INTERNAL_EXCLUDED_FILENAMES:
+        if (
+            path_parts
+            and path_parts[-1].lower() in _INTERNAL_EXCLUDED_FILENAMES
+        ):
             return False
         if any(
             fnmatch.fnmatch(normalized, pattern)

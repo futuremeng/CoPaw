@@ -16,11 +16,27 @@ from threading import Lock
 from typing import Optional
 from types import SimpleNamespace
 
-from fastapi import APIRouter, Body, File, Form, HTTPException, Query, Request, UploadFile, WebSocket, WebSocketDisconnect
+from fastapi import (
+    APIRouter,
+    Body,
+    File,
+    Form,
+    HTTPException,
+    Query,
+    Request,
+    UploadFile,
+    WebSocket,
+    WebSocketDisconnect,
+)
 from fastapi.responses import StreamingResponse
 
 from ...config import load_config, save_config
-from ...config.config import KnowledgeConfig, KnowledgeSourceSpec, load_agent_config, save_agent_config
+from ...config.config import (
+    KnowledgeConfig,
+    KnowledgeSourceSpec,
+    load_agent_config,
+    save_agent_config,
+)
 from ...constant import WORKING_DIR
 from ...knowledge import (
     GraphOpsManager,
@@ -58,7 +74,12 @@ nlp_router = APIRouter(prefix="/nlp", tags=["knowledge"])
 
 _PROJECT_PIPELINE_RUNTIME_LOCK = Lock()
 _PROJECT_PIPELINE_RUNTIME_META: dict[str, dict[str, object]] = {}
-_PROJECT_PIPELINE_ERROR_SOURCES = {"", "workflow_step", "execution_loop", "flow_control"}
+_PROJECT_PIPELINE_ERROR_SOURCES = {
+    "",
+    "workflow_step",
+    "execution_loop",
+    "flow_control",
+}
 _PROJECT_PIPELINE_COMMAND_CONFLICT = "PROJECT_PIPELINE_COMMAND_CONFLICT"
 _PROJECT_PIPELINE_FLOW_RUN_NOT_FOUND = "PROJECT_PIPELINE_FLOW_RUN_NOT_FOUND"
 _SUPPORTED_PROJECT_STEP_STATS = frozenset(
@@ -67,7 +88,7 @@ _SUPPORTED_PROJECT_STEP_STATS = frozenset(
         "file_analysis",
         "source_scan",
         "domain_graph_build",
-    }
+    },
 )
 
 
@@ -84,7 +105,10 @@ def _normalize_project_step_id(step_id: str) -> str:
     return ""
 
 
-def _project_pipeline_runtime_key(workspace_dir: str | Path, project_id: str) -> str:
+def _project_pipeline_runtime_key(
+    workspace_dir: str | Path,
+    project_id: str,
+) -> str:
     return f"{Path(workspace_dir).resolve().as_posix()}::{project_id}"
 
 
@@ -102,8 +126,15 @@ _PROJECT_PIPELINE_RUNTIME_STATE_FIELDS = (
 )
 
 
-def _project_pipeline_state_path(workspace_dir: str | Path, project_id: str) -> Path:
-    return Path(workspace_dir) / _knowledge_dirname_for_project(project_id) / "project-pipeline-state.json"
+def _project_pipeline_state_path(
+    workspace_dir: str | Path,
+    project_id: str,
+) -> Path:
+    return (
+        Path(workspace_dir)
+        / _knowledge_dirname_for_project(project_id)
+        / "project-pipeline-state.json"
+    )
 
 
 def _persist_project_pipeline_runtime_meta_to_state(
@@ -127,7 +158,10 @@ def _persist_project_pipeline_runtime_meta_to_state(
         else:
             state_payload[field] = payload.get(field)
     state_path.parent.mkdir(parents=True, exist_ok=True)
-    state_path.write_text(json.dumps(state_payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    state_path.write_text(
+        json.dumps(state_payload, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
 
 
 def _load_project_pipeline_runtime_meta_from_state(
@@ -177,10 +211,18 @@ def _record_project_pipeline_runtime_event(
     with _PROJECT_PIPELINE_RUNTIME_LOCK:
         existing_payload = _PROJECT_PIPELINE_RUNTIME_META.get(key) or {}
         existing_flow_run_id = str(existing_payload.get("flow_run_id") or "")
-        existing_control_command = str(existing_payload.get("recent_control_command") or "")
-        existing_control_updated_at = str(existing_payload.get("control_updated_at") or "")
-        existing_recent_error_code = str(existing_payload.get("recent_error_code") or "")
-        existing_recent_error_source = str(existing_payload.get("recent_error_source") or "")
+        existing_control_command = str(
+            existing_payload.get("recent_control_command") or "",
+        )
+        existing_control_updated_at = str(
+            existing_payload.get("control_updated_at") or "",
+        )
+        existing_recent_error_code = str(
+            existing_payload.get("recent_error_code") or "",
+        )
+        existing_recent_error_source = str(
+            existing_payload.get("recent_error_source") or "",
+        )
     now_iso = datetime.now(timezone.utc).isoformat()
     normalized_control_command = str(control_command or "").strip().lower()
     normalized_recent_error_code = (
@@ -189,17 +231,26 @@ def _record_project_pipeline_runtime_event(
         else str(recent_error_code or "").strip()
     )
     if recent_error_source is None:
-        normalized_recent_error_source = _normalize_project_pipeline_error_source(existing_recent_error_source)
+        normalized_recent_error_source = (
+            _normalize_project_pipeline_error_source(
+                existing_recent_error_source,
+            )
+        )
     else:
-        normalized_recent_error_source = _normalize_project_pipeline_error_source(recent_error_source)
+        normalized_recent_error_source = (
+            _normalize_project_pipeline_error_source(recent_error_source)
+        )
     payload = {
         "operation_id": operation_id,
         "idempotency_key": idempotency_key,
         "deduplicated": bool(deduplicated),
         "last_action": action,
         "flow_run_id": str(flow_run_id or existing_flow_run_id),
-        "recent_control_command": normalized_control_command or existing_control_command,
-        "control_updated_at": now_iso if normalized_control_command else existing_control_updated_at,
+        "recent_control_command": normalized_control_command
+        or existing_control_command,
+        "control_updated_at": now_iso
+        if normalized_control_command
+        else existing_control_updated_at,
         "recent_error_code": normalized_recent_error_code,
         "recent_error_source": normalized_recent_error_source,
         "updated_at": now_iso,
@@ -271,7 +322,7 @@ def _project_pipeline_state_with_runtime_meta(
 ) -> dict[str, object]:
     merged = dict(state)
     normalized_state_error_source = _normalize_project_pipeline_error_source(
-        merged.get("recent_error_source")
+        merged.get("recent_error_source"),
     )
     if normalized_state_error_source:
         merged["recent_error_source"] = normalized_state_error_source
@@ -284,11 +335,13 @@ def _project_pipeline_state_with_runtime_meta(
             step_outputs = pipeline_run.get("step_outputs")
             if isinstance(step_outputs, dict):
                 merged.setdefault("step_outputs", step_outputs)
-            recent_error_code = str(pipeline_run.get("recent_error_code") or "").strip()
+            recent_error_code = str(
+                pipeline_run.get("recent_error_code") or "",
+            ).strip()
             if recent_error_code:
                 merged.setdefault("recent_error_code", recent_error_code)
             recent_error_source = _normalize_project_pipeline_error_source(
-                pipeline_run.get("recent_error_source")
+                pipeline_run.get("recent_error_source"),
             )
             if recent_error_source:
                 merged.setdefault("recent_error_source", recent_error_source)
@@ -307,16 +360,30 @@ def _project_pipeline_state_with_runtime_meta(
     merged.setdefault("deduplicated", runtime_meta.get("deduplicated"))
     merged.setdefault("last_action", runtime_meta.get("last_action"))
     merged.setdefault("flow_run_id", runtime_meta.get("flow_run_id"))
-    merged.setdefault("recent_control_command", runtime_meta.get("recent_control_command"))
-    merged.setdefault("control_updated_at", runtime_meta.get("control_updated_at"))
+    merged.setdefault(
+        "recent_control_command",
+        runtime_meta.get("recent_control_command"),
+    )
+    merged.setdefault(
+        "control_updated_at",
+        runtime_meta.get("control_updated_at"),
+    )
     merged.setdefault("operation_updated_at", runtime_meta.get("updated_at"))
-    runtime_recent_error_code = str(runtime_meta.get("recent_error_code") or "").strip()
-    if not str(merged.get("recent_error_code") or "").strip() and runtime_recent_error_code:
+    runtime_recent_error_code = str(
+        runtime_meta.get("recent_error_code") or "",
+    ).strip()
+    if (
+        not str(merged.get("recent_error_code") or "").strip()
+        and runtime_recent_error_code
+    ):
         merged["recent_error_code"] = runtime_recent_error_code
     runtime_recent_error_source = _normalize_project_pipeline_error_source(
-        runtime_meta.get("recent_error_source")
+        runtime_meta.get("recent_error_source"),
     )
-    if not str(merged.get("recent_error_source") or "").strip() and runtime_recent_error_source:
+    if (
+        not str(merged.get("recent_error_source") or "").strip()
+        and runtime_recent_error_source
+    ):
         merged["recent_error_source"] = runtime_recent_error_source
     merged.setdefault("recent_error_code", "")
     merged.setdefault("recent_error_source", "")
@@ -325,7 +392,13 @@ def _project_pipeline_state_with_runtime_meta(
 
 def _map_project_pipeline_status_to_flow_target(status: str) -> str:
     normalized = str(status or "").strip().lower()
-    if normalized in {"queued", "pending", "indexing", "graphifying", "running"}:
+    if normalized in {
+        "queued",
+        "pending",
+        "indexing",
+        "graphifying",
+        "running",
+    }:
         return "running"
     if normalized in {"succeeded", "failed", "cancelled"}:
         return normalized
@@ -342,7 +415,9 @@ def _sync_project_pipeline_flow_state(
     if not flow_run_id:
         return
 
-    target = _map_project_pipeline_status_to_flow_target(str(state.get("status") or ""))
+    target = _map_project_pipeline_status_to_flow_target(
+        str(state.get("status") or ""),
+    )
     if not target:
         return
 
@@ -374,7 +449,10 @@ def _sync_project_pipeline_flow_state(
         except Exception:
             return
 
-    if target in {"succeeded", "failed", "cancelled"} and current in {"queued", "paused"}:
+    if target in {"succeeded", "failed", "cancelled"} and current in {
+        "queued",
+        "paused",
+    }:
         _try_transition("running")
     if current != target:
         _try_transition(target)
@@ -394,7 +472,10 @@ def _sync_project_pipeline_flow_resume_command(
         return
     try:
         service = get_flow_engine_service()
-        current_run = service.get_run(agent_id=agent_id, run_id=normalized_flow_run_id)
+        current_run = service.get_run(
+            agent_id=agent_id,
+            run_id=normalized_flow_run_id,
+        )
     except Exception:
         return
     if current_run is None:
@@ -444,7 +525,12 @@ def _sync_project_pipeline_flow_resume_command(
 
 def _task_sort_key(payload: dict[str, object]) -> tuple[int, str]:
     status = str(payload.get("status") or "")
-    active_rank = 0 if status in {"pending", "running", "queued", "indexing", "graphifying"} else 1
+    active_rank = (
+        0
+        if status
+        in {"pending", "running", "queued", "indexing", "graphifying"}
+        else 1
+    )
     return (active_rank, str(payload.get("updated_at") or ""))
 
 
@@ -468,9 +554,15 @@ def _collect_knowledge_tasks_snapshot(
     )
     active_memify_jobs = graph_ops.list_memify_jobs(active_only=True, limit=5)
     tasks.extend(active_memify_jobs)
-    active_quality_jobs = graph_ops.list_quality_loop_jobs(active_only=True, limit=3)
+    active_quality_jobs = graph_ops.list_quality_loop_jobs(
+        active_only=True,
+        limit=3,
+    )
     tasks.extend(active_quality_jobs)
-    recent_memify_jobs = graph_ops.list_memify_jobs(active_only=False, limit=10)
+    recent_memify_jobs = graph_ops.list_memify_jobs(
+        active_only=False,
+        limit=10,
+    )
     latest_terminal_memify = next(
         (
             job
@@ -481,7 +573,10 @@ def _collect_knowledge_tasks_snapshot(
     )
     if latest_terminal_memify is not None:
         latest_job_id = str(latest_terminal_memify.get("job_id") or "")
-        if all(str(item.get("job_id") or "") != latest_job_id for item in active_memify_jobs):
+        if all(
+            str(item.get("job_id") or "") != latest_job_id
+            for item in active_memify_jobs
+        ):
             tasks.append(latest_terminal_memify)
 
     knowledge_manager = _manager_for_workspace(
@@ -496,7 +591,7 @@ def _collect_knowledge_tasks_snapshot(
                 "job_id": "history-backfill",
                 "status": "running",
                 **backfill_progress,
-            }
+            },
         )
 
     if project_id:
@@ -519,20 +614,43 @@ def _collect_knowledge_tasks_snapshot(
                 {
                     "task_id": f"project-pipeline:{project_id}",
                     **project_pipeline,
-                }
+                },
             )
 
     normalized_tasks = []
     for index, task in enumerate(tasks):
         payload = dict(task)
-        payload.setdefault("task_id", str(payload.get("job_id") or f"knowledge-task-{index}"))
+        payload.setdefault(
+            "task_id",
+            str(payload.get("job_id") or f"knowledge-task-{index}"),
+        )
         payload.setdefault("task_type", "knowledge")
         payload.setdefault("status", "running")
-        payload.setdefault("stage", str(payload.get("current_stage") or "running"))
-        payload.setdefault("current_stage", str(payload.get("stage") or payload.get("current_stage") or "running"))
+        payload.setdefault(
+            "stage",
+            str(payload.get("current_stage") or "running"),
+        )
+        payload.setdefault(
+            "current_stage",
+            str(
+                payload.get("stage")
+                or payload.get("current_stage")
+                or "running",
+            ),
+        )
         payload.setdefault("stage_message", "")
-        payload.setdefault("percent", _coerce_int(payload.get("progress") or payload.get("percent") or 0))
-        payload.setdefault("progress", _coerce_int(payload.get("percent") or payload.get("progress") or 0))
+        payload.setdefault(
+            "percent",
+            _coerce_int(
+                payload.get("progress") or payload.get("percent") or 0,
+            ),
+        )
+        payload.setdefault(
+            "progress",
+            _coerce_int(
+                payload.get("percent") or payload.get("progress") or 0,
+            ),
+        )
         payload.setdefault("current", 0)
         payload.setdefault("total", 0)
         normalized_tasks.append(payload)
@@ -602,8 +720,16 @@ def _extract_zip_to_temp(data: bytes) -> Path:
 
 
 def _detect_extract_root(tmp_dir: Path) -> Path:
-    entries = [entry for entry in tmp_dir.iterdir() if not entry.name.startswith(".__")]
-    if len(entries) == 1 and entries[0].is_dir() and (entries[0] / "sources").exists():
+    entries = [
+        entry
+        for entry in tmp_dir.iterdir()
+        if not entry.name.startswith(".__")
+    ]
+    if (
+        len(entries) == 1
+        and entries[0].is_dir()
+        and (entries[0] / "sources").exists()
+    ):
         return entries[0]
     return tmp_dir
 
@@ -629,7 +755,10 @@ def _restore_backup_tree(
 
     legacy_sources_dir = manager.root_dir / "sources"
     if legacy_sources_dir.exists() and legacy_sources_dir.is_dir():
-        for source_dir in sorted(legacy_sources_dir.iterdir(), key=lambda item: item.name):
+        for source_dir in sorted(
+            legacy_sources_dir.iterdir(),
+            key=lambda item: item.name,
+        ):
             if not source_dir.is_dir():
                 continue
             source_id = source_dir.name
@@ -637,25 +766,46 @@ def _restore_backup_tree(
             index_json_path = source_dir / "index.json"
             if source_json_path.exists() and source_json_path.is_file():
                 try:
-                    source_payload = json.loads(source_json_path.read_text(encoding="utf-8"))
-                    source_obj = source_payload.get("source") if isinstance(source_payload, dict) else None
+                    source_payload = json.loads(
+                        source_json_path.read_text(encoding="utf-8"),
+                    )
+                    source_obj = (
+                        source_payload.get("source")
+                        if isinstance(source_payload, dict)
+                        else None
+                    )
                     if isinstance(source_obj, dict):
-                        source_id = str(source_obj.get("id") or source_id).strip() or source_id
+                        source_id = (
+                            str(source_obj.get("id") or source_id).strip()
+                            or source_id
+                        )
                 except Exception:
                     pass
             elif index_json_path.exists() and index_json_path.is_file():
                 try:
-                    index_payload = json.loads(index_json_path.read_text(encoding="utf-8"))
-                    source_obj = index_payload.get("source") if isinstance(index_payload, dict) else None
+                    index_payload = json.loads(
+                        index_json_path.read_text(encoding="utf-8"),
+                    )
+                    source_obj = (
+                        index_payload.get("source")
+                        if isinstance(index_payload, dict)
+                        else None
+                    )
                     if isinstance(source_obj, dict):
-                        source_id = str(source_obj.get("id") or source_id).strip() or source_id
+                        source_id = (
+                            str(source_obj.get("id") or source_id).strip()
+                            or source_id
+                        )
                 except Exception:
                     pass
 
             for file_item in source_dir.iterdir():
                 if not file_item.is_file():
                     continue
-                flat_path = manager._source_storage_flat_path(source_id, file_item.name)
+                flat_path = manager._source_storage_flat_path(
+                    source_id,
+                    file_item.name,
+                )
                 flat_path.parent.mkdir(parents=True, exist_ok=True)
                 shutil.copy2(file_item, flat_path)
 
@@ -668,7 +818,12 @@ def _restore_backup_tree(
     return manager.list_sources_from_storage()
 
 
-def _clamp_int(value: str | None, default: int, minimum: int, maximum: int) -> int:
+def _clamp_int(
+    value: str | None,
+    default: int,
+    minimum: int,
+    maximum: int,
+) -> int:
     try:
         parsed = int((value or "").strip())
     except (TypeError, ValueError):
@@ -695,8 +850,16 @@ def _resolve_project_id(
 ) -> str | None:
     return _normalize_project_id(
         explicit_project_id
-        or (request.query_params.get("project_id") if request is not None else None)
-        or (request.headers.get("X-Project-Id") if request is not None else None)
+        or (
+            request.query_params.get("project_id")
+            if request is not None
+            else None
+        )
+        or (
+            request.headers.get("X-Project-Id")
+            if request is not None
+            else None
+        ),
     )
 
 
@@ -726,12 +889,19 @@ async def _project_step_stats_response(
 ) -> dict[str, object]:
     normalized_step_id = _normalize_project_step_id(step_id)
     if not normalized_step_id:
-        raise HTTPException(status_code=404, detail="PROJECT_STEP_STATS_NOT_FOUND")
-    _, _, _, workspace_dir, _ = await _resolve_knowledge_request_context(request)
+        raise HTTPException(
+            status_code=404,
+            detail="PROJECT_STEP_STATS_NOT_FOUND",
+        )
+    _, _, _, workspace_dir, _ = await _resolve_knowledge_request_context(
+        request,
+    )
     project_id = _resolve_project_id(request)
     if not project_id:
         raise HTTPException(status_code=400, detail="PROJECT_ID_REQUIRED")
-    project_workspace_dir = (Path(workspace_dir) / "projects" / project_id).resolve()
+    project_workspace_dir = (
+        Path(workspace_dir) / "projects" / project_id
+    ).resolve()
     manager = _manager_for_workspace(
         workspace_dir,
         project_id=project_id,
@@ -778,17 +948,30 @@ def _resolve_ner_target_file_path(
     if not text:
         raise HTTPException(status_code=400, detail="NER_FILE_PATH_REQUIRED")
 
-    project_workspace = _resolve_project_workspace_dir(workspace_dir, project_id)
+    project_workspace = _resolve_project_workspace_dir(
+        workspace_dir,
+        project_id,
+    )
     if not project_workspace.exists() or not project_workspace.is_dir():
-        raise HTTPException(status_code=404, detail="PROJECT_WORKSPACE_NOT_FOUND")
+        raise HTTPException(
+            status_code=404,
+            detail="PROJECT_WORKSPACE_NOT_FOUND",
+        )
 
     candidate = Path(text).expanduser()
-    resolved = candidate.resolve() if candidate.is_absolute() else (project_workspace / candidate).resolve()
+    resolved = (
+        candidate.resolve()
+        if candidate.is_absolute()
+        else (project_workspace / candidate).resolve()
+    )
 
     try:
         resolved.relative_to(project_workspace)
     except ValueError as exc:
-        raise HTTPException(status_code=400, detail="NER_FILE_PATH_OUT_OF_SCOPE") from exc
+        raise HTTPException(
+            status_code=400,
+            detail="NER_FILE_PATH_OUT_OF_SCOPE",
+        ) from exc
 
     if not resolved.exists() or not resolved.is_file():
         raise HTTPException(status_code=404, detail="NER_FILE_NOT_FOUND")
@@ -797,7 +980,9 @@ def _resolve_ner_target_file_path(
 
 
 def _build_manual_ner_source_id(file_path: Path) -> str:
-    digest = hashlib.sha1(file_path.as_posix().encode("utf-8")).hexdigest()[:16]
+    digest = hashlib.sha1(file_path.as_posix().encode("utf-8")).hexdigest()[
+        :16
+    ]
     return f"manual-ner-{digest}"
 
 
@@ -806,7 +991,9 @@ def _build_project_file_source_spec(
     project_id: str,
     file_path: Path,
 ) -> KnowledgeSourceSpec:
-    digest = hashlib.sha1(file_path.as_posix().encode("utf-8")).hexdigest()[:16]
+    digest = hashlib.sha1(file_path.as_posix().encode("utf-8")).hexdigest()[
+        :16
+    ]
     source_id = f"project-file-{digest}"
     return KnowledgeSourceSpec(
         id=source_id,
@@ -838,7 +1025,9 @@ def _load_manual_source_paths(
     project_id: str,
 ) -> list[str]:
     state = manager.get_state(project_id)
-    return _normalize_manual_source_paths(list(state.get("manual_source_paths") or []))
+    return _normalize_manual_source_paths(
+        list(state.get("manual_source_paths") or []),
+    )
 
 
 def _persist_manual_source_paths(
@@ -880,20 +1069,28 @@ def _collect_project_source_candidates(
     *,
     project_workspace_dir: Path,
 ) -> list[dict[str, object]]:
-    if not project_workspace_dir.exists() or not project_workspace_dir.is_dir():
+    if (
+        not project_workspace_dir.exists()
+        or not project_workspace_dir.is_dir()
+    ):
         return []
 
     def _infer_stage(relative_path: str) -> str:
         normalized = relative_path.strip().replace("\\", "/")
         if normalized.startswith("original/"):
             return "original"
-        if normalized.startswith("intermediate/") or normalized.startswith("metadata/"):
+        if normalized.startswith("intermediate/") or normalized.startswith(
+            "metadata/",
+        ):
             return "intermediate"
         if normalized.startswith("output/"):
             return "artifact"
         return "other"
 
-    def _build_source_item(relative_path: str, file_path: Path) -> dict[str, object] | None:
+    def _build_source_item(
+        relative_path: str,
+        file_path: Path,
+    ) -> dict[str, object] | None:
         suffix = file_path.suffix.lower().lstrip(".")
         category = KnowledgeManager.classify_source_path(relative_path)
         if category == "ignored":
@@ -905,12 +1102,18 @@ def _collect_project_source_candidates(
             "stage": _infer_stage(relative_path),
             "content_type": suffix or "other",
             "size_bytes": int(stat.st_size),
-            "modified_time": datetime.fromtimestamp(stat.st_mtime, tz=timezone.utc).isoformat(),
+            "modified_time": datetime.fromtimestamp(
+                stat.st_mtime,
+                tz=timezone.utc,
+            ).isoformat(),
         }
 
     filter_config = KnowledgeConfig()
     candidates: list[dict[str, object]] = []
-    for path in sorted(project_workspace_dir.glob("**/*"), key=lambda item: item.as_posix().lower()):
+    for path in sorted(
+        project_workspace_dir.glob("**/*"),
+        key=lambda item: item.as_posix().lower(),
+    ):
         if not path.is_file():
             continue
         try:
@@ -933,7 +1136,9 @@ def _collect_manual_source_items(
         normalized = relative_path.strip().replace("\\", "/")
         if normalized.startswith("original/"):
             return "original"
-        if normalized.startswith("intermediate/") or normalized.startswith("metadata/"):
+        if normalized.startswith("intermediate/") or normalized.startswith(
+            "metadata/",
+        ):
             return "intermediate"
         if normalized.startswith("output/"):
             return "artifact"
@@ -952,7 +1157,10 @@ def _collect_manual_source_items(
         if file_path.exists() and file_path.is_file():
             stat = file_path.stat()
             size_bytes = int(stat.st_size)
-            modified_time = datetime.fromtimestamp(stat.st_mtime, tz=timezone.utc).isoformat()
+            modified_time = datetime.fromtimestamp(
+                stat.st_mtime,
+                tz=timezone.utc,
+            ).isoformat()
         else:
             size_bytes = 0
             modified_time = ""
@@ -964,7 +1172,7 @@ def _collect_manual_source_items(
                 "content_type": suffix or "other",
                 "size_bytes": size_bytes,
                 "modified_time": modified_time,
-            }
+            },
         )
     return items
 
@@ -1005,7 +1213,10 @@ def _quantization_facade_for_workspace(
 def _normalize_quant_stage(stage: str) -> str:
     normalized = (stage or "").strip().lower()
     if normalized not in {"l1", "l2", "l3"}:
-        raise HTTPException(status_code=400, detail="QUANTIZATION_STAGE_INVALID")
+        raise HTTPException(
+            status_code=400,
+            detail="QUANTIZATION_STAGE_INVALID",
+        )
     return normalized
 
 
@@ -1016,8 +1227,13 @@ def _project_pipeline_coordinator_for_workspace(
 ) -> ProjectPipelineCoordinator:
     normalized_project_id = _normalize_project_id(project_id)
 
-    def _factory(_requested_project_id: str) -> ProjectKnowledgePipelineManager:
-        resolved_project_id = _normalize_project_id(_requested_project_id) or normalized_project_id
+    def _factory(
+        _requested_project_id: str,
+    ) -> ProjectKnowledgePipelineManager:
+        resolved_project_id = (
+            _normalize_project_id(_requested_project_id)
+            or normalized_project_id
+        )
         return _project_pipeline_for_workspace(
             workspace_dir,
             project_id=resolved_project_id,
@@ -1039,7 +1255,9 @@ def _effective_knowledge_config(
     while structural knowledge settings remain in root config.knowledge.
     """
     effective = knowledge_config.model_copy(deep=True)
-    effective.enabled = bool(getattr(running_config, "knowledge_enabled", effective.enabled))
+    effective.enabled = bool(
+        getattr(running_config, "knowledge_enabled", effective.enabled),
+    )
     effective.automation.knowledge_auto_collect_chat_files = bool(
         getattr(
             running_config,
@@ -1078,7 +1296,10 @@ def _effective_knowledge_config(
     return effective
 
 
-def _attach_runtime_nlp(knowledge_config: KnowledgeConfig, root_config) -> KnowledgeConfig:
+def _attach_runtime_nlp(
+    knowledge_config: KnowledgeConfig,
+    root_config,
+) -> KnowledgeConfig:
     """Attach top-level nlp config to runtime knowledge payload."""
     effective = knowledge_config.model_copy(deep=True)
     setattr(effective, "nlp", root_config.nlp.model_copy(deep=True))
@@ -1096,10 +1317,13 @@ async def _resolve_knowledge_request_context(request: Request | None):
         try:
             explicit_agent_requested = bool(
                 getattr(request.state, "agent_id", None)
-                or request.headers.get("X-Agent-Id")
+                or request.headers.get("X-Agent-Id"),
             )
             agent_id = resolve_agent_id_for_request(request)
-            workspace = get_loaded_agent_for_request(request, agent_id=agent_id)
+            workspace = get_loaded_agent_for_request(
+                request,
+                agent_id=agent_id,
+            )
             if workspace is not None:
                 running_config = workspace.config.running
                 workspace_dir = workspace.workspace_dir
@@ -1113,7 +1337,10 @@ async def _resolve_knowledge_request_context(request: Request | None):
             # initialized MultiAgentManager.
             pass
 
-    knowledge_config = _effective_knowledge_config(config.knowledge, running_config)
+    knowledge_config = _effective_knowledge_config(
+        config.knowledge,
+        running_config,
+    )
     knowledge_config = _attach_runtime_nlp(knowledge_config, config)
     return config, knowledge_config, running_config, workspace_dir, agent_id
 
@@ -1138,12 +1365,18 @@ async def _resolve_knowledge_ws_context(websocket: WebSocket):
         except Exception:
             pass
 
-    knowledge_config = _effective_knowledge_config(config.knowledge, running_config)
+    knowledge_config = _effective_knowledge_config(
+        config.knowledge,
+        running_config,
+    )
     knowledge_config = _attach_runtime_nlp(knowledge_config, config)
     return config, knowledge_config, running_config, workspace_dir
 
 
-def _find_source(config: KnowledgeConfig, source_id: str) -> Optional[KnowledgeSourceSpec]:
+def _find_source(
+    config: KnowledgeConfig,
+    source_id: str,
+) -> Optional[KnowledgeSourceSpec]:
     for source in config.sources:
         if source.id == source_id:
             return source
@@ -1152,7 +1385,9 @@ def _find_source(config: KnowledgeConfig, source_id: str) -> Optional[KnowledgeS
 
 @router.get("/config", response_model=KnowledgeConfig)
 async def get_knowledge_config(request: Request) -> KnowledgeConfig:
-    _, effective_knowledge, _, _, _ = await _resolve_knowledge_request_context(request)
+    _, effective_knowledge, _, _, _ = await _resolve_knowledge_request_context(
+        request,
+    )
     return effective_knowledge
 
 
@@ -1161,8 +1396,16 @@ async def put_knowledge_config(
     request: Request,
     knowledge_config: KnowledgeConfig = Body(...),
 ) -> KnowledgeConfig:
-    config, _, running_config, _, agent_id = await _resolve_knowledge_request_context(request)
-    previous_enabled = bool(getattr(running_config, "knowledge_enabled", False))
+    (
+        config,
+        _,
+        running_config,
+        _,
+        agent_id,
+    ) = await _resolve_knowledge_request_context(request)
+    previous_enabled = bool(
+        getattr(running_config, "knowledge_enabled", False),
+    )
 
     # Persist structural knowledge config in root config.
     config.knowledge = knowledge_config
@@ -1193,41 +1436,33 @@ async def put_knowledge_config(
     config.knowledge.enabled = bool(
         getattr(running_config, "knowledge_enabled", knowledge_config.enabled),
     )
-    config.knowledge.automation.knowledge_auto_collect_chat_files = (
-        bool(
-            getattr(
-                running_config,
-                "knowledge_auto_collect_chat_files",
-                knowledge_config.automation.knowledge_auto_collect_chat_files,
-            ),
-        )
+    config.knowledge.automation.knowledge_auto_collect_chat_files = bool(
+        getattr(
+            running_config,
+            "knowledge_auto_collect_chat_files",
+            knowledge_config.automation.knowledge_auto_collect_chat_files,
+        ),
     )
-    config.knowledge.automation.knowledge_auto_collect_chat_urls = (
-        bool(
-            getattr(
-                running_config,
-                "knowledge_auto_collect_chat_urls",
-                knowledge_config.automation.knowledge_auto_collect_chat_urls,
-            ),
-        )
+    config.knowledge.automation.knowledge_auto_collect_chat_urls = bool(
+        getattr(
+            running_config,
+            "knowledge_auto_collect_chat_urls",
+            knowledge_config.automation.knowledge_auto_collect_chat_urls,
+        ),
     )
-    config.knowledge.automation.knowledge_auto_collect_long_text = (
-        bool(
-            getattr(
-                running_config,
-                "knowledge_auto_collect_long_text",
-                knowledge_config.automation.knowledge_auto_collect_long_text,
-            ),
-        )
+    config.knowledge.automation.knowledge_auto_collect_long_text = bool(
+        getattr(
+            running_config,
+            "knowledge_auto_collect_long_text",
+            knowledge_config.automation.knowledge_auto_collect_long_text,
+        ),
     )
-    config.knowledge.automation.knowledge_long_text_min_chars = (
-        int(
-            getattr(
-                running_config,
-                "knowledge_long_text_min_chars",
-                knowledge_config.automation.knowledge_long_text_min_chars,
-            ),
-        )
+    config.knowledge.automation.knowledge_long_text_min_chars = int(
+        getattr(
+            running_config,
+            "knowledge_long_text_min_chars",
+            knowledge_config.automation.knowledge_long_text_min_chars,
+        ),
     )
     config.knowledge.index.chunk_size = int(
         getattr(
@@ -1255,13 +1490,18 @@ async def put_knowledge_config(
     return _effective_knowledge_config(config.knowledge, running_config)
 
 
-
 @router.get("/sources")
 async def list_sources(
     request: Request,
     include_semantic: bool = Query(default=False),
 ):
-    _, knowledge_config, _, workspace_dir, _ = await _resolve_knowledge_request_context(request)
+    (
+        _,
+        knowledge_config,
+        _,
+        workspace_dir,
+        _,
+    ) = await _resolve_knowledge_request_context(request)
     project_id = _resolve_project_id(request)
     manager = _manager_for_workspace(
         workspace_dir,
@@ -1302,7 +1542,13 @@ async def upsert_source(
     request: Request,
     source: KnowledgeSourceSpec = Body(...),
 ) -> KnowledgeSourceSpec:
-    config, knowledge_config, _, workspace_dir, _ = await _resolve_knowledge_request_context(request)
+    (
+        config,
+        knowledge_config,
+        _,
+        workspace_dir,
+        _,
+    ) = await _resolve_knowledge_request_context(request)
     manager = _manager_for_workspace(
         workspace_dir,
         project_id=_resolve_project_id(request, source.project_id),
@@ -1316,7 +1562,7 @@ async def upsert_source(
     project_id_is_explicit = "project_id" in source.model_fields_set
     if existing is not None and not project_id_is_explicit:
         source = source.model_copy(
-            update={"project_id": (existing.project_id or "").strip()}
+            update={"project_id": (existing.project_id or "").strip()},
         )
     if existing is None:
         config.knowledge.sources.append(source)
@@ -1336,7 +1582,9 @@ async def upload_knowledge_file(
     data = await file.read()
     if not data:
         raise HTTPException(status_code=400, detail="Uploaded file is empty")
-    _, _, _, workspace_dir, _ = await _resolve_knowledge_request_context(request)
+    _, _, _, workspace_dir, _ = await _resolve_knowledge_request_context(
+        request,
+    )
     manager = _manager_for_workspace(
         workspace_dir,
         project_id=_resolve_project_id(request),
@@ -1368,7 +1616,9 @@ async def upload_knowledge_directory(
     saved_pairs = []
     for relative_path, upload in zip(relative_paths, files):
         saved_pairs.append((relative_path, await upload.read()))
-    _, _, _, workspace_dir, _ = await _resolve_knowledge_request_context(request)
+    _, _, _, workspace_dir, _ = await _resolve_knowledge_request_context(
+        request,
+    )
     manager = _manager_for_workspace(
         workspace_dir,
         project_id=_resolve_project_id(request),
@@ -1386,11 +1636,20 @@ async def upload_knowledge_directory(
 
 @router.delete("/sources/{source_id}")
 async def delete_source(source_id: str, request: Request):
-    config, knowledge_config, _, workspace_dir, _ = await _resolve_knowledge_request_context(request)
+    (
+        config,
+        knowledge_config,
+        _,
+        workspace_dir,
+        _,
+    ) = await _resolve_knowledge_request_context(request)
     _ensure_knowledge_enabled_flag(knowledge_config.enabled)
     source = _find_source(config.knowledge, source_id)
     if source is None:
-        raise HTTPException(status_code=404, detail="KNOWLEDGE_SOURCE_NOT_FOUND")
+        raise HTTPException(
+            status_code=404,
+            detail="KNOWLEDGE_SOURCE_NOT_FOUND",
+        )
     config.knowledge.sources = [
         item for item in config.knowledge.sources if item.id != source_id
     ]
@@ -1411,9 +1670,18 @@ async def clear_knowledge(
 ):
     """Clear all persisted knowledge data and optionally remove source configs."""
     if not confirm:
-        raise HTTPException(status_code=400, detail="KNOWLEDGE_CLEAR_CONFIRM_REQUIRED")
+        raise HTTPException(
+            status_code=400,
+            detail="KNOWLEDGE_CLEAR_CONFIRM_REQUIRED",
+        )
 
-    config, knowledge_config, _, workspace_dir, _ = await _resolve_knowledge_request_context(request)
+    (
+        config,
+        knowledge_config,
+        _,
+        workspace_dir,
+        _,
+    ) = await _resolve_knowledge_request_context(request)
     _ensure_knowledge_enabled_flag(knowledge_config.enabled)
     manager = _manager_for_workspace(
         workspace_dir,
@@ -1430,11 +1698,20 @@ async def clear_knowledge(
 
 @router.post("/sources/{source_id}/index")
 async def index_source(source_id: str, request: Request):
-    config, knowledge_config, running_config, workspace_dir, _ = await _resolve_knowledge_request_context(request)
+    (
+        config,
+        knowledge_config,
+        running_config,
+        workspace_dir,
+        _,
+    ) = await _resolve_knowledge_request_context(request)
     _ensure_knowledge_enabled_flag(knowledge_config.enabled)
     source = _find_source(config.knowledge, source_id)
     if source is None:
-        raise HTTPException(status_code=404, detail="KNOWLEDGE_SOURCE_NOT_FOUND")
+        raise HTTPException(
+            status_code=404,
+            detail="KNOWLEDGE_SOURCE_NOT_FOUND",
+        )
     try:
         manager = _manager_for_workspace(
             workspace_dir,
@@ -1455,10 +1732,15 @@ async def index_source(source_id: str, request: Request):
 
 @router.get("/sources/{source_id}/content")
 async def get_source_content(source_id: str, request: Request):
-    config, _, _, workspace_dir, _ = await _resolve_knowledge_request_context(request)
+    config, _, _, workspace_dir, _ = await _resolve_knowledge_request_context(
+        request,
+    )
     source = _find_source(config.knowledge, source_id)
     if source is None:
-        raise HTTPException(status_code=404, detail="KNOWLEDGE_SOURCE_NOT_FOUND")
+        raise HTTPException(
+            status_code=404,
+            detail="KNOWLEDGE_SOURCE_NOT_FOUND",
+        )
     manager = _manager_for_workspace(
         workspace_dir,
         project_id=_resolve_project_id(request),
@@ -1468,7 +1750,13 @@ async def get_source_content(source_id: str, request: Request):
 
 @router.post("/index")
 async def index_all_sources(request: Request):
-    config, knowledge_config, running_config, workspace_dir, _ = await _resolve_knowledge_request_context(request)
+    (
+        config,
+        knowledge_config,
+        running_config,
+        workspace_dir,
+        _,
+    ) = await _resolve_knowledge_request_context(request)
     _ensure_knowledge_enabled_flag(knowledge_config.enabled)
     try:
         manager = _manager_for_workspace(
@@ -1499,7 +1787,13 @@ async def process_ner_for_file(
     - `file_path` accepts an absolute path or a project/workspace-relative path.
     - `overwrite` defaults to `True` and will replace previous results for the same source id.
     """
-    _, knowledge_config, running_config, workspace_dir, _ = await _resolve_knowledge_request_context(request)
+    (
+        _,
+        knowledge_config,
+        running_config,
+        workspace_dir,
+        _,
+    ) = await _resolve_knowledge_request_context(request)
     _ensure_knowledge_enabled_flag(knowledge_config.enabled)
 
     project_id = _resolve_project_id(request)
@@ -1509,17 +1803,27 @@ async def process_ner_for_file(
         file_path=file_path,
     )
 
-    normalized_source_id = str(source_id or "").strip() or _build_manual_ner_source_id(resolved_file)
-    normalized_source_name = str(source_name or "").strip() or f"Manual NER: {resolved_file.name}"
+    normalized_source_id = str(
+        source_id or "",
+    ).strip() or _build_manual_ner_source_id(resolved_file)
+    normalized_source_name = (
+        str(source_name or "").strip() or f"Manual NER: {resolved_file.name}"
+    )
 
     manager = _manager_for_workspace(
         workspace_dir,
         project_id=project_id,
     )
 
-    existing_status = await asyncio.to_thread(manager.get_source_status, normalized_source_id)
+    existing_status = await asyncio.to_thread(
+        manager.get_source_status,
+        normalized_source_id,
+    )
     if bool(existing_status.get("indexed")) and not bool(overwrite):
-        raise HTTPException(status_code=409, detail="NER_RESULT_ALREADY_EXISTS")
+        raise HTTPException(
+            status_code=409,
+            detail="NER_RESULT_ALREADY_EXISTS",
+        )
 
     if bool(overwrite):
         await asyncio.to_thread(manager.delete_index, normalized_source_id)
@@ -1544,7 +1848,10 @@ async def process_ner_for_file(
             knowledge_config,
             running_config,
         )
-        documents_payload = await asyncio.to_thread(manager.get_source_documents, normalized_source_id)
+        documents_payload = await asyncio.to_thread(
+            manager.get_source_documents,
+            normalized_source_id,
+        )
     except (FileNotFoundError, ValueError, OSError) as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception as exc:
@@ -1573,13 +1880,26 @@ async def search_knowledge(
     scope_type: Optional[str] = Query(default=None),
     scope_id: Optional[str] = Query(default=None),
 ):
-    config, knowledge_config, _, workspace_dir, _ = await _resolve_knowledge_request_context(request)
+    (
+        config,
+        knowledge_config,
+        _,
+        workspace_dir,
+        _,
+    ) = await _resolve_knowledge_request_context(request)
     _ensure_knowledge_enabled_flag(knowledge_config.enabled)
     ids = [item for item in (source_ids or "").split(",") if item]
     types = [item for item in (source_types or "").split(",") if item]
-    projects = [item.strip() for item in (project_scope or "").split(",") if item.strip()]
+    projects = [
+        item.strip()
+        for item in (project_scope or "").split(",")
+        if item.strip()
+    ]
     normalized_scope_type = (scope_type or "").strip().lower()
-    if normalized_scope_type and normalized_scope_type not in {"agent", "project"}:
+    if normalized_scope_type and normalized_scope_type not in {
+        "agent",
+        "project",
+    }:
         raise HTTPException(status_code=400, detail="INVALID_SCOPE_TYPE")
     normalized_scope_id = (scope_id or "").strip()
     manager = _manager_for_workspace(
@@ -1587,13 +1907,19 @@ async def search_knowledge(
         project_id=_resolve_project_id(request),
     )
     search_config = knowledge_config
-    if not projects and not normalized_scope_type and not _resolve_project_id(request):
+    if (
+        not projects
+        and not normalized_scope_type
+        and not _resolve_project_id(request)
+    ):
         search_config = knowledge_config.model_copy(deep=True)
         search_config.sources = [
             source
             for source in list(search_config.sources or [])
-            if "visibility:sync-only" not in {
-                str(tag).strip().lower() for tag in list(getattr(source, "tags", []) or [])
+            if "visibility:sync-only"
+            not in {
+                str(tag).strip().lower()
+                for tag in list(getattr(source, "tags", []) or [])
             }
         ]
     return await asyncio.to_thread(
@@ -1619,7 +1945,13 @@ async def run_quantization_stage(
     metrics: dict[str, object] | None = Body(default=None),
     metadata: dict[str, object] | None = Body(default=None),
 ):
-    _, knowledge_config, _, workspace_dir, _ = await _resolve_knowledge_request_context(request)
+    (
+        _,
+        knowledge_config,
+        _,
+        workspace_dir,
+        _,
+    ) = await _resolve_knowledge_request_context(request)
     _ensure_knowledge_enabled_flag(knowledge_config.enabled)
     normalized_stage = _normalize_quant_stage(stage)
     if not bool(getattr(knowledge_config, "memify_enabled", False)):
@@ -1650,7 +1982,13 @@ async def get_quantization_stage_stats(
     snapshot_id: str = Query(default=""),
     limit: int = Query(default=50, ge=1, le=200),
 ):
-    _, knowledge_config, _, workspace_dir, _ = await _resolve_knowledge_request_context(request)
+    (
+        _,
+        knowledge_config,
+        _,
+        workspace_dir,
+        _,
+    ) = await _resolve_knowledge_request_context(request)
     _ensure_knowledge_enabled_flag(knowledge_config.enabled)
     normalized_stage = _normalize_quant_stage(stage)
     if not bool(getattr(knowledge_config, "memify_enabled", False)):
@@ -1669,7 +2007,10 @@ async def get_quantization_stage_stats(
             snapshot_id=snapshot_text,
         )
         if payload is None:
-            raise HTTPException(status_code=404, detail="QUANTIZATION_STAGE_RESULT_NOT_FOUND")
+            raise HTTPException(
+                status_code=404,
+                detail="QUANTIZATION_STAGE_RESULT_NOT_FOUND",
+            )
         return payload
     return await asyncio.to_thread(
         facade.list_stage_stats,
@@ -1685,7 +2026,13 @@ async def compare_quantization_stages(
     source_id: str = Query(...),
     snapshot_id: str = Query(...),
 ):
-    _, knowledge_config, _, workspace_dir, _ = await _resolve_knowledge_request_context(request)
+    (
+        _,
+        knowledge_config,
+        _,
+        workspace_dir,
+        _,
+    ) = await _resolve_knowledge_request_context(request)
     _ensure_knowledge_enabled_flag(knowledge_config.enabled)
     if not bool(getattr(knowledge_config, "memify_enabled", False)):
         raise HTTPException(status_code=400, detail="MEMIFY_DISABLED")
@@ -1708,7 +2055,13 @@ async def compare_quantization_versions(
     snapshot_b: str = Query(...),
     stage: str = Query(default="l2"),
 ):
-    _, knowledge_config, _, workspace_dir, _ = await _resolve_knowledge_request_context(request)
+    (
+        _,
+        knowledge_config,
+        _,
+        workspace_dir,
+        _,
+    ) = await _resolve_knowledge_request_context(request)
     _ensure_knowledge_enabled_flag(knowledge_config.enabled)
     normalized_stage = _normalize_quant_stage(stage)
     if not bool(getattr(knowledge_config, "memify_enabled", False)):
@@ -1734,7 +2087,13 @@ async def compare_quantization_sources(
     stage: str = Query(default="l1"),
     snapshot_id: str | None = Query(default=None),
 ):
-    _, knowledge_config, _, workspace_dir, _ = await _resolve_knowledge_request_context(request)
+    (
+        _,
+        knowledge_config,
+        _,
+        workspace_dir,
+        _,
+    ) = await _resolve_knowledge_request_context(request)
     _ensure_knowledge_enabled_flag(knowledge_config.enabled)
     normalized_stage = _normalize_quant_stage(stage)
     if not bool(getattr(knowledge_config, "memify_enabled", False)):
@@ -1766,12 +2125,21 @@ async def query_knowledge_graph(
     top_k: int = Query(default=10, ge=1),
     timeout_sec: int = Query(default=20, ge=1, le=120),
 ):
-    config, knowledge_config, _, workspace_dir, _ = await _resolve_knowledge_request_context(request)
+    (
+        config,
+        knowledge_config,
+        _,
+        workspace_dir,
+        _,
+    ) = await _resolve_knowledge_request_context(request)
     _ensure_knowledge_enabled_flag(knowledge_config.enabled)
 
     query_text = (q or "").strip()
     if not query_text:
-        raise HTTPException(status_code=400, detail="GRAPH_QUERY_TEXT_REQUIRED")
+        raise HTTPException(
+            status_code=400,
+            detail="GRAPH_QUERY_TEXT_REQUIRED",
+        )
 
     query_mode = (mode or "template").strip().lower()
     if query_mode not in {"template", "cypher"}:
@@ -1779,7 +2147,7 @@ async def query_knowledge_graph(
 
     requested_output_mode = (output_mode or "").strip().lower()
     graph_query_enabled = bool(
-        getattr(knowledge_config, "graph_query_enabled", False)
+        getattr(knowledge_config, "graph_query_enabled", False),
     )
     effective_output_mode = requested_output_mode or None
     downgraded_to_fast = False
@@ -1789,23 +2157,30 @@ async def query_knowledge_graph(
             # Keep template queries available on cold-start projects by
             # forcing fast preview mode when graph query is disabled.
             effective_output_mode = "fast"
-            downgraded_to_fast = (
-                requested_output_mode not in {"", "fast"}
-            )
+            downgraded_to_fast = requested_output_mode not in {"", "fast"}
         else:
             raise HTTPException(status_code=400, detail="GRAPH_QUERY_DISABLED")
 
-    if query_mode == "cypher" and not bool(getattr(knowledge_config, "allow_cypher_query", False)):
+    if query_mode == "cypher" and not bool(
+        getattr(knowledge_config, "allow_cypher_query", False),
+    ):
         raise HTTPException(status_code=400, detail="GRAPH_CYPHER_DISABLED")
 
     normalized_scope_type = (scope_type or "").strip().lower()
-    if normalized_scope_type and normalized_scope_type not in {"agent", "project"}:
+    if normalized_scope_type and normalized_scope_type not in {
+        "agent",
+        "project",
+    }:
         raise HTTPException(status_code=400, detail="INVALID_SCOPE_TYPE")
     normalized_scope_id = (scope_id or "").strip()
 
-    scope_items = [item for item in (dataset_scope or "").split(",") if item.strip()]
+    scope_items = [
+        item for item in (dataset_scope or "").split(",") if item.strip()
+    ]
     project_scope_items = [
-        item.strip() for item in (project_scope or "").split(",") if item.strip()
+        item.strip()
+        for item in (project_scope or "").split(",")
+        if item.strip()
     ]
     try:
         graph_ops = _graph_ops_for_workspace(
@@ -1851,7 +2226,9 @@ async def query_knowledge_graph(
 @router.get("/history-backfill/status")
 async def get_history_backfill_status(request: Request):
     """Get history backfill status for knowledge enable flow and CTA display."""
-    _, _, _, workspace_dir, _ = await _resolve_knowledge_request_context(request)
+    _, _, _, workspace_dir, _ = await _resolve_knowledge_request_context(
+        request,
+    )
     manager = _manager_for_workspace(
         workspace_dir,
         project_id=_resolve_project_id(request),
@@ -1861,7 +2238,9 @@ async def get_history_backfill_status(request: Request):
 
 @router.get("/tasks/snapshot")
 async def get_knowledge_tasks_snapshot(request: Request):
-    _, _, _, workspace_dir, _ = await _resolve_knowledge_request_context(request)
+    _, _, _, workspace_dir, _ = await _resolve_knowledge_request_context(
+        request,
+    )
     return await asyncio.to_thread(
         _collect_knowledge_tasks_snapshot,
         workspace_dir,
@@ -1885,12 +2264,19 @@ async def run_knowledge_nlp_task(
     has_text = bool(text)
     has_texts = isinstance(texts_raw, list) and len(texts_raw) > 0
     has_tokens = isinstance(tokens_raw, list) and len(tokens_raw) > 0
-    has_tokens_batch = isinstance(tokens_batch_raw, list) and len(tokens_batch_raw) > 0
+    has_tokens_batch = (
+        isinstance(tokens_batch_raw, list) and len(tokens_batch_raw) > 0
+    )
     if not (has_text or has_texts or has_tokens or has_tokens_batch):
-        raise HTTPException(status_code=422, detail="text, texts, tokens or tokens_batch is required")
+        raise HTTPException(
+            status_code=422,
+            detail="text, texts, tokens or tokens_batch is required",
+        )
 
     request_id_raw = payload.get("request_id")
-    request_id = str(request_id_raw).strip() if request_id_raw is not None else None
+    request_id = (
+        str(request_id_raw).strip() if request_id_raw is not None else None
+    )
 
     try:
         from .knowledge_hanlp_tasks import (
@@ -1919,7 +2305,13 @@ async def run_knowledge_nlp_task(
 @router.post("/history-backfill/run")
 async def run_history_backfill_now(request: Request):
     """Run history backfill immediately regardless of runtime auto-backfill toggle."""
-    config, knowledge_config, running, workspace_dir, _ = await _resolve_knowledge_request_context(request)
+    (
+        config,
+        knowledge_config,
+        running,
+        workspace_dir,
+        _,
+    ) = await _resolve_knowledge_request_context(request)
     _ensure_knowledge_enabled_flag(knowledge_config.enabled)
     manager = _manager_for_workspace(
         workspace_dir,
@@ -1953,7 +2345,13 @@ async def get_memify_job_status(job_id: str, request: Request):
     if not normalized_job_id:
         raise HTTPException(status_code=400, detail="MEMIFY_JOB_ID_REQUIRED")
 
-    config, knowledge_config, _, workspace_dir, _ = await _resolve_knowledge_request_context(request)
+    (
+        config,
+        knowledge_config,
+        _,
+        workspace_dir,
+        _,
+    ) = await _resolve_knowledge_request_context(request)
     _ensure_knowledge_enabled_flag(knowledge_config.enabled)
     if not knowledge_config.enabled:
         raise HTTPException(status_code=400, detail="KNOWLEDGE_DISABLED")
@@ -1964,7 +2362,10 @@ async def get_memify_job_status(job_id: str, request: Request):
         workspace_dir,
         project_id=_resolve_project_id(request),
     )
-    payload = await asyncio.to_thread(manager.get_memify_status, normalized_job_id)
+    payload = await asyncio.to_thread(
+        manager.get_memify_status,
+        normalized_job_id,
+    )
     if payload is None:
         raise HTTPException(status_code=404, detail="MEMIFY_JOB_NOT_FOUND")
     return payload
@@ -1977,7 +2378,13 @@ async def run_quality_loop(
     dry_run: bool = Body(default=False),
     dataset_scope: list[str] | None = Body(default=None),
 ):
-    config, knowledge_config, _, workspace_dir, _ = await _resolve_knowledge_request_context(request)
+    (
+        config,
+        knowledge_config,
+        _,
+        workspace_dir,
+        _,
+    ) = await _resolve_knowledge_request_context(request)
     _ensure_knowledge_enabled_flag(knowledge_config.enabled)
     if not bool(getattr(knowledge_config, "memify_enabled", False)):
         raise HTTPException(status_code=400, detail="MEMIFY_DISABLED")
@@ -2002,7 +2409,9 @@ async def list_quality_loop_jobs(
     active_only: bool = Query(default=False),
     limit: int = Query(default=10, ge=1, le=50),
 ):
-    _, _, _, workspace_dir, _ = await _resolve_knowledge_request_context(request)
+    _, _, _, workspace_dir, _ = await _resolve_knowledge_request_context(
+        request,
+    )
     manager = _graph_ops_for_workspace(
         workspace_dir,
         project_id=_resolve_project_id(request),
@@ -2022,17 +2431,32 @@ async def list_quality_loop_jobs(
 async def get_quality_loop_job_status(job_id: str, request: Request):
     normalized_job_id = (job_id or "").strip()
     if not normalized_job_id:
-        raise HTTPException(status_code=400, detail="QUALITY_LOOP_JOB_ID_REQUIRED")
+        raise HTTPException(
+            status_code=400,
+            detail="QUALITY_LOOP_JOB_ID_REQUIRED",
+        )
 
-    _, knowledge_config, _, workspace_dir, _ = await _resolve_knowledge_request_context(request)
+    (
+        _,
+        knowledge_config,
+        _,
+        workspace_dir,
+        _,
+    ) = await _resolve_knowledge_request_context(request)
     _ensure_knowledge_enabled_flag(knowledge_config.enabled)
     manager = _graph_ops_for_workspace(
         workspace_dir,
         project_id=_resolve_project_id(request),
     )
-    payload = await asyncio.to_thread(manager.get_quality_loop_status, normalized_job_id)
+    payload = await asyncio.to_thread(
+        manager.get_quality_loop_status,
+        normalized_job_id,
+    )
     if payload is None:
-        raise HTTPException(status_code=404, detail="QUALITY_LOOP_JOB_NOT_FOUND")
+        raise HTTPException(
+            status_code=404,
+            detail="QUALITY_LOOP_JOB_NOT_FOUND",
+        )
     return payload
 
 
@@ -2046,7 +2470,13 @@ async def start_memify_job(
     project_id: str | None = Body(default=None),
 ):
     """Start a memify enrichment job asynchronously."""
-    _, knowledge_config, _, workspace_dir, _ = await _resolve_knowledge_request_context(request)
+    (
+        _,
+        knowledge_config,
+        _,
+        workspace_dir,
+        _,
+    ) = await _resolve_knowledge_request_context(request)
     _ensure_knowledge_enabled_flag(knowledge_config.enabled)
     if not bool(getattr(knowledge_config, "memify_enabled", False)):
         raise HTTPException(status_code=400, detail="MEMIFY_DISABLED")
@@ -2078,10 +2508,15 @@ async def start_memify_job(
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
 
-@router.get("/project-pipeline/sources", response_model=ProjectPipelineSourcesResponse)
+@router.get(
+    "/project-pipeline/sources",
+    response_model=ProjectPipelineSourcesResponse,
+)
 async def get_project_pipeline_sources(request: Request):
     """Get manually curated source file paths for project pipeline."""
-    _, _, _, workspace_dir, _ = await _resolve_knowledge_request_context(request)
+    _, _, _, workspace_dir, _ = await _resolve_knowledge_request_context(
+        request,
+    )
     project_id = _resolve_project_id(request)
     if not project_id:
         raise HTTPException(status_code=400, detail="PROJECT_ID_REQUIRED")
@@ -2100,7 +2535,9 @@ async def get_project_pipeline_sources(request: Request):
         for path in manual_source_paths
         if KnowledgeManager.classify_source_path(path) != "ignored"
     ]
-    project_workspace_dir = (Path(workspace_dir) / "projects" / project_id).resolve()
+    project_workspace_dir = (
+        Path(workspace_dir) / "projects" / project_id
+    ).resolve()
     manual_source_items = await asyncio.to_thread(
         _collect_manual_source_items,
         project_workspace_dir=project_workspace_dir,
@@ -2113,20 +2550,33 @@ async def get_project_pipeline_sources(request: Request):
     }
 
 
-@router.put("/project-pipeline/sources", response_model=ProjectPipelineSourcesResponse)
+@router.put(
+    "/project-pipeline/sources",
+    response_model=ProjectPipelineSourcesResponse,
+)
 async def update_project_pipeline_sources(
     request: Request,
     manual_source_paths: list[str] = Body(default_factory=list),
 ):
     """Replace manual source file paths for project pipeline."""
-    _, _, _, workspace_dir, _ = await _resolve_knowledge_request_context(request)
+    _, _, _, workspace_dir, _ = await _resolve_knowledge_request_context(
+        request,
+    )
     project_id = _resolve_project_id(request)
     if not project_id:
         raise HTTPException(status_code=400, detail="PROJECT_ID_REQUIRED")
 
-    project_workspace_dir = (Path(workspace_dir) / "projects" / project_id).resolve()
-    if not project_workspace_dir.exists() or not project_workspace_dir.is_dir():
-        raise HTTPException(status_code=404, detail="PROJECT_WORKSPACE_NOT_FOUND")
+    project_workspace_dir = (
+        Path(workspace_dir) / "projects" / project_id
+    ).resolve()
+    if (
+        not project_workspace_dir.exists()
+        or not project_workspace_dir.is_dir()
+    ):
+        raise HTTPException(
+            status_code=404,
+            detail="PROJECT_WORKSPACE_NOT_FOUND",
+        )
 
     normalized_paths = _normalize_manual_source_paths(manual_source_paths)
     resolved_paths: list[str] = []
@@ -2138,7 +2588,9 @@ async def update_project_pipeline_sources(
             project_id=project_id,
             file_path=path,
         )
-        resolved_paths.append(resolved_file.relative_to(project_workspace_dir).as_posix())
+        resolved_paths.append(
+            resolved_file.relative_to(project_workspace_dir).as_posix(),
+        )
 
     manager = _project_pipeline_for_workspace(
         workspace_dir,
@@ -2162,17 +2614,30 @@ async def update_project_pipeline_sources(
     }
 
 
-@router.get("/project-pipeline/source-candidates", response_model=ProjectPipelineSourceCandidatesResponse)
+@router.get(
+    "/project-pipeline/source-candidates",
+    response_model=ProjectPipelineSourceCandidatesResponse,
+)
 async def get_project_pipeline_source_candidates(request: Request):
     """List auto-discovered project files as candidate sources for manual selection."""
-    _, _, _, workspace_dir, _ = await _resolve_knowledge_request_context(request)
+    _, _, _, workspace_dir, _ = await _resolve_knowledge_request_context(
+        request,
+    )
     project_id = _resolve_project_id(request)
     if not project_id:
         raise HTTPException(status_code=400, detail="PROJECT_ID_REQUIRED")
 
-    project_workspace_dir = (Path(workspace_dir) / "projects" / project_id).resolve()
-    if not project_workspace_dir.exists() or not project_workspace_dir.is_dir():
-        raise HTTPException(status_code=404, detail="PROJECT_WORKSPACE_NOT_FOUND")
+    project_workspace_dir = (
+        Path(workspace_dir) / "projects" / project_id
+    ).resolve()
+    if (
+        not project_workspace_dir.exists()
+        or not project_workspace_dir.is_dir()
+    ):
+        raise HTTPException(
+            status_code=404,
+            detail="PROJECT_WORKSPACE_NOT_FOUND",
+        )
 
     candidates = await asyncio.to_thread(
         _collect_project_source_candidates,
@@ -2184,10 +2649,19 @@ async def get_project_pipeline_source_candidates(request: Request):
     }
 
 
-@router.get("/project-pipeline/status", response_model=ProjectPipelineStatusResponse)
+@router.get(
+    "/project-pipeline/status",
+    response_model=ProjectPipelineStatusResponse,
+)
 async def get_project_pipeline_status(request: Request):
     """Get project-scoped automatic knowledge pipeline status."""
-    config, knowledge_config, running_config, workspace_dir, _ = await _resolve_knowledge_request_context(request)
+    (
+        config,
+        knowledge_config,
+        running_config,
+        workspace_dir,
+        _,
+    ) = await _resolve_knowledge_request_context(request)
     agent_id = resolve_agent_id_for_request(request)
     project_id = _resolve_project_id(request)
     if not project_id:
@@ -2197,11 +2671,17 @@ async def get_project_pipeline_status(request: Request):
         workspace_dir,
         project_id=project_id,
     )
-    project_workspace_dir = (Path(workspace_dir) / "projects" / project_id).resolve()
+    project_workspace_dir = (
+        Path(workspace_dir) / "projects" / project_id
+    ).resolve()
     state_snapshot = await asyncio.to_thread(manager.get_state, project_id)
-    manual_source_paths = _normalize_manual_source_paths(list(state_snapshot.get("manual_source_paths") or []))
+    manual_source_paths = _normalize_manual_source_paths(
+        list(state_snapshot.get("manual_source_paths") or []),
+    )
     execution_context = dict(state_snapshot.get("execution_context") or {})
-    preferred_path = str(execution_context.get("source_file_path") or "").strip()
+    preferred_path = str(
+        execution_context.get("source_file_path") or "",
+    ).strip()
     if preferred_path and preferred_path in manual_source_paths:
         resolved_sources = _resolve_project_manual_source_files(
             workspace_dir=workspace_dir,
@@ -2246,7 +2726,9 @@ async def get_project_pipeline_status(request: Request):
             workspace_dir=workspace_dir,
             project_id=project_id,
             operation_id=str(getattr(resume_event, "operation_id", "") or ""),
-            idempotency_key=str(getattr(resume_event, "idempotency_key", "") or ""),
+            idempotency_key=str(
+                getattr(resume_event, "idempotency_key", "") or "",
+            ),
             deduplicated=bool(getattr(resume_event, "deduplicated", False)),
             action=str(getattr(resume_event, "action", "") or "resume_sync"),
         )
@@ -2260,7 +2742,9 @@ async def get_project_pipeline_status(request: Request):
             project_id=project_id,
             flow_run_id=str(runtime_meta.get("flow_run_id") or ""),
             operation_id=str(getattr(resume_event, "operation_id", "") or ""),
-            idempotency_key=str(getattr(resume_event, "idempotency_key", "") or ""),
+            idempotency_key=str(
+                getattr(resume_event, "idempotency_key", "") or "",
+            ),
             deduplicated=bool(getattr(resume_event, "deduplicated", False)),
         )
     except AttributeError:
@@ -2289,7 +2773,10 @@ async def get_project_pipeline_status(request: Request):
     return payload
 
 
-@router.post("/project-pipeline/run", response_model=ProjectPipelineRunResponse)
+@router.post(
+    "/project-pipeline/run",
+    response_model=ProjectPipelineRunResponse,
+)
 async def run_project_pipeline(
     request: Request,
     trigger: str = Body(default="manual"),
@@ -2304,16 +2791,33 @@ async def run_project_pipeline(
     idempotency_key: str = Body(default=""),
 ):
     """Start project-scoped automatic knowledge pipeline."""
-    config, knowledge_config, running_config, workspace_dir, _ = await _resolve_knowledge_request_context(request)
+    (
+        config,
+        knowledge_config,
+        running_config,
+        workspace_dir,
+        _,
+    ) = await _resolve_knowledge_request_context(request)
     _ensure_knowledge_enabled_flag(knowledge_config.enabled)
     processing_mode_explicit = processing_mode is not None
-    normalized_mode = (processing_mode or "agentic").strip().lower() or "agentic"
+    normalized_mode = (
+        processing_mode or "agentic"
+    ).strip().lower() or "agentic"
     normalized_stage = (quantization_stage or "").strip().lower() or None
     if normalized_mode not in {"fast", "nlp", "agentic"}:
         raise HTTPException(status_code=400, detail="PROCESSING_MODE_INVALID")
-    if normalized_stage is not None and normalized_stage not in {"l1", "l2", "l3"}:
-        raise HTTPException(status_code=400, detail="QUANTIZATION_STAGE_INVALID")
-    if normalized_mode in {"nlp", "agentic"} and not bool(getattr(knowledge_config, "memify_enabled", False)):
+    if normalized_stage is not None and normalized_stage not in {
+        "l1",
+        "l2",
+        "l3",
+    }:
+        raise HTTPException(
+            status_code=400,
+            detail="QUANTIZATION_STAGE_INVALID",
+        )
+    if normalized_mode in {"nlp", "agentic"} and not bool(
+        getattr(knowledge_config, "memify_enabled", False),
+    ):
         raise HTTPException(status_code=400, detail="MEMIFY_DISABLED")
 
     project_id = _resolve_project_id(request)
@@ -2333,9 +2837,17 @@ async def run_project_pipeline(
         normalized_mode = "fast"
         normalized_stage = "l1"
 
-    project_workspace_dir = (Path(workspace_dir) / "projects" / project_id).resolve()
-    if not project_workspace_dir.exists() or not project_workspace_dir.is_dir():
-        raise HTTPException(status_code=404, detail="PROJECT_WORKSPACE_NOT_FOUND")
+    project_workspace_dir = (
+        Path(workspace_dir) / "projects" / project_id
+    ).resolve()
+    if (
+        not project_workspace_dir.exists()
+        or not project_workspace_dir.is_dir()
+    ):
+        raise HTTPException(
+            status_code=404,
+            detail="PROJECT_WORKSPACE_NOT_FOUND",
+        )
 
     manager = _project_pipeline_for_workspace(
         workspace_dir,
@@ -2354,7 +2866,9 @@ async def run_project_pipeline(
             project_id=project_id,
             file_path=str(source_file_path),
         )
-        resolved_source_file_path = resolved_file.relative_to(project_workspace_dir).as_posix()
+        resolved_source_file_path = resolved_file.relative_to(
+            project_workspace_dir,
+        ).as_posix()
         source = _build_project_file_source_spec(
             project_id=project_id,
             file_path=resolved_file,
@@ -2368,7 +2882,10 @@ async def run_project_pipeline(
             manual_source_paths=manual_source_paths,
         )
         if not resolved_sources:
-            raise HTTPException(status_code=400, detail="PROJECT_PIPELINE_MANUAL_SOURCE_REQUIRED")
+            raise HTTPException(
+                status_code=400,
+                detail="PROJECT_PIPELINE_MANUAL_SOURCE_REQUIRED",
+            )
         resolved_source_file_path, resolved_file = resolved_sources[0]
         source = _build_project_file_source_spec(
             project_id=project_id,
@@ -2424,7 +2941,9 @@ async def run_project_pipeline(
                     project_id=project_id,
                     trigger=(trigger or "manual").strip() or "manual",
                     processing_mode=normalized_mode,
-                    idempotency_key=str(getattr(event, "idempotency_key", "") or ""),
+                    idempotency_key=str(
+                        getattr(event, "idempotency_key", "") or "",
+                    ),
                 )
             except Exception:
                 flow_run_id = ""
@@ -2447,7 +2966,11 @@ async def run_project_pipeline(
                 project_id=project_id,
                 state={
                     "flow_run_id": flow_run_id,
-                    "status": str(payload.get("status") or payload.get("reason") or "pending"),
+                    "status": str(
+                        payload.get("status")
+                        or payload.get("reason")
+                        or "pending",
+                    ),
                 },
             )
         return payload
@@ -2457,14 +2980,19 @@ async def run_project_pipeline(
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
 
-@router.post("/project-pipeline/commands", response_model=ProjectPipelineCommandResponse)
+@router.post(
+    "/project-pipeline/commands",
+    response_model=ProjectPipelineCommandResponse,
+)
 async def command_project_pipeline(
     request: Request,
     command_type: str = Body(default="pause"),
     payload: dict[str, object] | None = Body(default=None),
 ):
     """Issue a control command (pause/resume/cancel) for the bridged flow run."""
-    _, _, _, workspace_dir, _ = await _resolve_knowledge_request_context(request)
+    _, _, _, workspace_dir, _ = await _resolve_knowledge_request_context(
+        request,
+    )
     agent_id = resolve_agent_id_for_request(request)
     project_id = _resolve_project_id(request)
     if not project_id:
@@ -2472,7 +3000,10 @@ async def command_project_pipeline(
 
     normalized_command = str(command_type or "").strip().lower()
     if normalized_command not in {"pause", "resume", "cancel"}:
-        raise HTTPException(status_code=400, detail="PROJECT_PIPELINE_COMMAND_INVALID")
+        raise HTTPException(
+            status_code=400,
+            detail="PROJECT_PIPELINE_COMMAND_INVALID",
+        )
 
     runtime_meta = _get_project_pipeline_runtime_meta(
         workspace_dir=workspace_dir,
@@ -2591,13 +3122,23 @@ async def command_project_pipeline(
         "command_type": normalized_command,
         "run": updated.model_dump(mode="json"),
         "runtime_meta": {
-            "operation_id": str(updated_runtime_meta.get("operation_id") or ""),
-            "idempotency_key": str(updated_runtime_meta.get("idempotency_key") or ""),
+            "operation_id": str(
+                updated_runtime_meta.get("operation_id") or "",
+            ),
+            "idempotency_key": str(
+                updated_runtime_meta.get("idempotency_key") or "",
+            ),
             "last_action": str(updated_runtime_meta.get("last_action") or ""),
-            "recent_control_command": str(updated_runtime_meta.get("recent_control_command") or ""),
-            "control_updated_at": str(updated_runtime_meta.get("control_updated_at") or ""),
+            "recent_control_command": str(
+                updated_runtime_meta.get("recent_control_command") or "",
+            ),
+            "control_updated_at": str(
+                updated_runtime_meta.get("control_updated_at") or "",
+            ),
             "flow_run_id": str(updated_runtime_meta.get("flow_run_id") or ""),
-            "deduplicated": bool(updated_runtime_meta.get("deduplicated", False)),
+            "deduplicated": bool(
+                updated_runtime_meta.get("deduplicated", False),
+            ),
         },
     }
 
@@ -2618,14 +3159,16 @@ async def stream_history_backfill_progress(websocket: WebSocket):
         workspace_dir,
         project_id=_normalize_project_id(
             websocket.query_params.get("project_id")
-            or websocket.headers.get("X-Project-Id")
+            or websocket.headers.get("X-Project-Id"),
         ),
     )
 
     last_fingerprint: str | None = None
     try:
         while True:
-            progress = await asyncio.to_thread(manager.get_history_backfill_progress)
+            progress = await asyncio.to_thread(
+                manager.get_history_backfill_progress,
+            )
             fingerprint = json.dumps(
                 progress,
                 ensure_ascii=False,
@@ -2637,7 +3180,7 @@ async def stream_history_backfill_progress(websocket: WebSocket):
                     {
                         "type": "snapshot",
                         "progress": progress,
-                    }
+                    },
                 )
                 last_fingerprint = fingerprint
             await asyncio.sleep(interval_ms / 1000)
@@ -2658,10 +3201,12 @@ async def stream_project_pipeline(websocket: WebSocket):
 
     project_id = _normalize_project_id(
         websocket.query_params.get("project_id")
-        or websocket.headers.get("X-Project-Id")
+        or websocket.headers.get("X-Project-Id"),
     )
     if not project_id:
-        await websocket.send_json({"type": "error", "detail": "PROJECT_ID_REQUIRED"})
+        await websocket.send_json(
+            {"type": "error", "detail": "PROJECT_ID_REQUIRED"},
+        )
         await websocket.close(code=1008)
         return
 
@@ -2674,7 +3219,10 @@ async def stream_project_pipeline(websocket: WebSocket):
     last_fingerprint: str | None = None
     try:
         while True:
-            snapshot_raw = await asyncio.to_thread(manager.get_state, project_id)
+            snapshot_raw = await asyncio.to_thread(
+                manager.get_state,
+                project_id,
+            )
             snapshot = _project_pipeline_state_with_runtime_meta(
                 workspace_dir=workspace_dir,
                 project_id=project_id,
@@ -2687,7 +3235,9 @@ async def stream_project_pipeline(websocket: WebSocket):
                 default=str,
             )
             if fingerprint != last_fingerprint:
-                await websocket.send_json({"type": "snapshot", "state": snapshot})
+                await websocket.send_json(
+                    {"type": "snapshot", "state": snapshot},
+                )
                 last_fingerprint = fingerprint
             await asyncio.sleep(interval_ms / 1000)
     except WebSocketDisconnect:
@@ -2707,7 +3257,7 @@ async def stream_knowledge_tasks(websocket: WebSocket):
 
     project_id = _normalize_project_id(
         websocket.query_params.get("project_id")
-        or websocket.headers.get("X-Project-Id")
+        or websocket.headers.get("X-Project-Id"),
     )
     _, _, _, workspace_dir = await _resolve_knowledge_ws_context(websocket)
 
@@ -2726,7 +3276,9 @@ async def stream_knowledge_tasks(websocket: WebSocket):
                 default=str,
             )
             if fingerprint != last_fingerprint:
-                await websocket.send_json({"type": "snapshot", "snapshot": snapshot})
+                await websocket.send_json(
+                    {"type": "snapshot", "snapshot": snapshot},
+                )
                 last_fingerprint = fingerprint
             await asyncio.sleep(interval_ms / 1000)
     except WebSocketDisconnect:
@@ -2735,7 +3287,9 @@ async def stream_knowledge_tasks(websocket: WebSocket):
 
 @router.get("/backup")
 async def backup_knowledge(request: Request):
-    _, _, _, workspace_dir, _ = await _resolve_knowledge_request_context(request)
+    _, _, _, workspace_dir, _ = await _resolve_knowledge_request_context(
+        request,
+    )
     manager = _manager_for_workspace(
         workspace_dir,
         project_id=_resolve_project_id(request),
@@ -2757,14 +3311,19 @@ async def backup_knowledge(request: Request):
 
 @router.get("/backup/{source_id}")
 async def backup_knowledge_source(source_id: str, request: Request):
-    _, _, _, workspace_dir, _ = await _resolve_knowledge_request_context(request)
+    _, _, _, workspace_dir, _ = await _resolve_knowledge_request_context(
+        request,
+    )
     manager = _manager_for_workspace(
         workspace_dir,
         project_id=_resolve_project_id(request),
     )
     source_files = manager.get_source_storage_files(source_id)
     if not source_files:
-        raise HTTPException(status_code=404, detail="KNOWLEDGE_SOURCE_NOT_FOUND")
+        raise HTTPException(
+            status_code=404,
+            detail="KNOWLEDGE_SOURCE_NOT_FOUND",
+        )
 
     buf = await asyncio.to_thread(_zip_files, manager.root_dir, source_files)
     timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
@@ -2798,7 +3357,9 @@ async def restore_knowledge_backup(
     data = await file.read()
     _validate_zip_data(data)
 
-    config, _, _, workspace_dir, _ = await _resolve_knowledge_request_context(request)
+    config, _, _, workspace_dir, _ = await _resolve_knowledge_request_context(
+        request,
+    )
     manager = _manager_for_workspace(
         workspace_dir,
         project_id=_resolve_project_id(request),

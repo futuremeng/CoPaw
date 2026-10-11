@@ -10,7 +10,9 @@ from fastapi import FastAPI, HTTPException
 from fastapi.testclient import TestClient
 
 from copaw.config.config import Config
-from qwenpaw.knowledge.project_pipeline_manager import build_project_source_spec
+from qwenpaw.knowledge.project_pipeline_manager import (
+    build_project_source_spec,
+)
 from qwenpaw.config.utils import load_config
 from qwenpaw.app.project_realtime_events import (
     collect_project_realtime_changes,
@@ -72,7 +74,9 @@ def _seed_project(workspace_dir: Path) -> str:
         },
     }
     _write_project_frontmatter(
-        project_dir / "PROJECT.md", metadata, "# Demo Project\n"
+        project_dir / "PROJECT.md",
+        metadata,
+        "# Demo Project\n",
     )
     return project_id
 
@@ -113,7 +117,9 @@ def test_create_project_endpoint_uses_workspace_fastpath(
     )
 
     def _unexpected_manager_access(_request):
-        raise AssertionError("create project should not access multi_agent_manager")
+        raise AssertionError(
+            "create project should not access multi_agent_manager",
+        )
 
     monkeypatch.setattr(
         agents_router_module,
@@ -354,7 +360,7 @@ def test_upload_project_file_does_not_trigger_auto_knowledge_sync(
         agents_router_module,
         "_maybe_start_project_auto_knowledge_sync",
         lambda workspace, target_project_id, changed_paths, *, trigger: calls.append(
-            (target_project_id, changed_paths, trigger)
+            (target_project_id, changed_paths, trigger),
         ),
     )
 
@@ -391,7 +397,9 @@ def test_upload_project_file_defaults_to_project_root(tmp_path: Path):
     )
 
     assert uploaded.path == "brief.txt"
-    assert (project_dir / "brief.txt").read_text(encoding="utf-8") == "hello root"
+    assert (project_dir / "brief.txt").read_text(
+        encoding="utf-8",
+    ) == "hello root"
 
 
 def test_upload_project_file_supports_relative_path(tmp_path: Path):
@@ -408,8 +416,10 @@ def test_upload_project_file_supports_relative_path(tmp_path: Path):
     )
 
     assert uploaded.path == "original/batch-01/docs/notes.md"
-    assert (project_dir / "original" / "batch-01" / "docs" / "notes.md").read_text(
-        encoding="utf-8"
+    assert (
+        project_dir / "original" / "batch-01" / "docs" / "notes.md"
+    ).read_text(
+        encoding="utf-8",
     ) == "nested file"
 
 
@@ -441,7 +451,9 @@ def test_upload_project_file_endpoint_uses_workspace_fastpath(
     )
 
     def _unexpected_manager_access(_request):
-        raise AssertionError("project upload should not access multi_agent_manager")
+        raise AssertionError(
+            "project upload should not access multi_agent_manager",
+        )
 
     monkeypatch.setattr(
         agents_router_module,
@@ -531,7 +543,14 @@ def test_delete_project_path_endpoint_accepts_file_and_directory(
     project_artifact_router_client: tuple[TestClient, Path, str],
 ):
     client, workspace_dir, project_id = project_artifact_router_client
-    target_file = workspace_dir / "projects" / project_id / "original" / "tree" / "doc.txt"
+    target_file = (
+        workspace_dir
+        / "projects"
+        / project_id
+        / "original"
+        / "tree"
+        / "doc.txt"
+    )
     target_file.parent.mkdir(parents=True, exist_ok=True)
     target_file.write_text("doc", encoding="utf-8")
 
@@ -553,7 +572,9 @@ def test_delete_project_path_endpoint_accepts_file_and_directory(
     assert dir_payload["success"] is True
     assert dir_payload["path"] == "original/tree"
     assert dir_payload["is_directory"] is True
-    assert not (workspace_dir / "projects" / project_id / "original" / "tree").exists()
+    assert not (
+        workspace_dir / "projects" / project_id / "original" / "tree"
+    ).exists()
 
 
 def test_create_project_directory_supports_create_and_existing(tmp_path: Path):
@@ -586,7 +607,10 @@ def test_move_project_path_supports_file_and_directory(tmp_path: Path):
     project_dir = tmp_path / "projects" / "project-demo"
     (project_dir / "original" / "nested").mkdir(parents=True, exist_ok=True)
     (project_dir / "original" / "a.txt").write_text("alpha", encoding="utf-8")
-    (project_dir / "original" / "nested" / "b.txt").write_text("beta", encoding="utf-8")
+    (project_dir / "original" / "nested" / "b.txt").write_text(
+        "beta",
+        encoding="utf-8",
+    )
 
     file_moved = _move_project_path(
         project_dir,
@@ -651,9 +675,18 @@ def test_create_directory_and_move_path_endpoints(
     assert create_payload["success"] is True
     assert create_payload["path"] == "original/new-folder"
     assert create_payload["existed"] is False
-    assert (workspace_dir / "projects" / project_id / "original" / "new-folder").is_dir()
+    assert (
+        workspace_dir / "projects" / project_id / "original" / "new-folder"
+    ).is_dir()
 
-    source_file = workspace_dir / "projects" / project_id / "original" / "new-folder" / "a.txt"
+    source_file = (
+        workspace_dir
+        / "projects"
+        / project_id
+        / "original"
+        / "new-folder"
+        / "a.txt"
+    )
     source_file.write_text("doc", encoding="utf-8")
 
     move_resp = client.patch(
@@ -671,7 +704,14 @@ def test_create_directory_and_move_path_endpoints(
     assert move_payload["target_path"] == "original/new-folder/b.txt"
     assert move_payload["is_directory"] is False
     assert not source_file.exists()
-    assert (workspace_dir / "projects" / project_id / "original" / "new-folder" / "b.txt").exists()
+    assert (
+        workspace_dir
+        / "projects"
+        / project_id
+        / "original"
+        / "new-folder"
+        / "b.txt"
+    ).exists()
 
 
 def test_upload_project_file_activates_idle_monitoring_and_sync(
@@ -712,7 +752,7 @@ def test_upload_project_file_activates_idle_monitoring_and_sync(
         agents_router_module,
         "_maybe_start_project_auto_knowledge_sync",
         lambda workspace, target_project_id, changed_paths, *, trigger: calls.append(
-            (target_project_id, changed_paths, trigger)
+            (target_project_id, changed_paths, trigger),
         ),
     )
 
@@ -739,9 +779,21 @@ def test_upload_project_file_does_not_auto_sync_chunks(
     config.knowledge.memify_enabled = True
 
     monkeypatch.setattr(agents_router_module, "load_config", lambda: config)
-    monkeypatch.setattr(agents_router_module, "save_config", lambda _config: None)
-    monkeypatch.setattr(agents_router_module, "DEFAULT_PROJECT_PIPELINE_DEBOUNCE_SECONDS", 0)
-    monkeypatch.setattr(agents_router_module, "DEFAULT_PROJECT_PIPELINE_COOLDOWN_SECONDS", 0)
+    monkeypatch.setattr(
+        agents_router_module,
+        "save_config",
+        lambda _config: None,
+    )
+    monkeypatch.setattr(
+        agents_router_module,
+        "DEFAULT_PROJECT_PIPELINE_DEBOUNCE_SECONDS",
+        0,
+    )
+    monkeypatch.setattr(
+        agents_router_module,
+        "DEFAULT_PROJECT_PIPELINE_COOLDOWN_SECONDS",
+        0,
+    )
 
     def run_worker_inline(self, **kwargs):
         self._run_sync_loop(**kwargs)
@@ -806,13 +858,19 @@ def test_list_project_files_endpoint_offloads_to_thread(
         calls.append((func, args))
         return await original_to_thread(func, *args, **kwargs)
 
-    monkeypatch.setattr(agents_router_module.asyncio, "to_thread", fake_to_thread)
+    monkeypatch.setattr(
+        agents_router_module.asyncio,
+        "to_thread",
+        fake_to_thread,
+    )
 
     response = client.get(f"/agents/default/projects/{project_id}/files")
 
     assert response.status_code == 200
     assert calls
-    assert calls[0][0] is agents_router_module._list_project_files_for_workspace
+    assert (
+        calls[0][0] is agents_router_module._list_project_files_for_workspace
+    )
 
 
 def test_list_project_file_tree_endpoint_returns_shallow_nodes(
@@ -825,7 +883,7 @@ def test_list_project_file_tree_endpoint_returns_shallow_nodes(
     (nested_dir / "note.txt").write_text("hello", encoding="utf-8")
 
     root_response = client.get(
-        f"/agents/default/projects/{project_id}/file-tree"
+        f"/agents/default/projects/{project_id}/file-tree",
     )
     assert root_response.status_code == 200
     root_paths = [item["path"] for item in root_response.json()]
@@ -849,7 +907,7 @@ def test_list_project_file_tree_endpoint_returns_shallow_nodes(
             "descendant_file_count": 1,
             "direct_file_count": 1,
             "has_child_directories": False,
-        }
+        },
     ]
 
 
@@ -867,7 +925,7 @@ def test_list_project_file_tree_endpoint_includes_dot_prefixed_directories(
     (nested_hidden_dir / "note.md").write_text("nested", encoding="utf-8")
 
     root_response = client.get(
-        f"/agents/default/projects/{project_id}/file-tree"
+        f"/agents/default/projects/{project_id}/file-tree",
     )
     assert root_response.status_code == 200
     root_paths = [item["path"] for item in root_response.json()]
@@ -896,7 +954,11 @@ def test_list_project_file_tree_endpoint_offloads_to_thread(
         calls.append((func, args))
         return await original_to_thread(func, *args, **kwargs)
 
-    monkeypatch.setattr(agents_router_module.asyncio, "to_thread", fake_to_thread)
+    monkeypatch.setattr(
+        agents_router_module.asyncio,
+        "to_thread",
+        fake_to_thread,
+    )
 
     response = client.get(
         f"/agents/default/projects/{project_id}/file-tree",
@@ -905,7 +967,10 @@ def test_list_project_file_tree_endpoint_offloads_to_thread(
 
     assert response.status_code == 200
     assert calls
-    assert calls[0][0] is agents_router_module._list_project_file_tree_nodes_for_workspace
+    assert (
+        calls[0][0]
+        is agents_router_module._list_project_file_tree_nodes_for_workspace
+    )
 
 
 def test_project_file_summary_endpoint_returns_aggregated_counts(
@@ -917,10 +982,22 @@ def test_project_file_summary_endpoint_returns_aggregated_counts(
     (project_dir / "output").mkdir(parents=True, exist_ok=True)
     (project_dir / ".scripts").mkdir(parents=True, exist_ok=True)
     (project_dir / ".cache").mkdir(parents=True, exist_ok=True)
-    (project_dir / "original" / "brief.md").write_text("brief", encoding="utf-8")
-    (project_dir / "output" / "notes.txt").write_text("notes", encoding="utf-8")
-    (project_dir / ".scripts" / "run.py").write_text("print('ok')", encoding="utf-8")
-    (project_dir / ".cache" / "session.log").write_text("noop", encoding="utf-8")
+    (project_dir / "original" / "brief.md").write_text(
+        "brief",
+        encoding="utf-8",
+    )
+    (project_dir / "output" / "notes.txt").write_text(
+        "notes",
+        encoding="utf-8",
+    )
+    (project_dir / ".scripts" / "run.py").write_text(
+        "print('ok')",
+        encoding="utf-8",
+    )
+    (project_dir / ".cache" / "session.log").write_text(
+        "noop",
+        encoding="utf-8",
+    )
     (project_dir / ".gitkeep").write_text("", encoding="utf-8")
     (project_dir / "AGENTS.md").write_text("# agent", encoding="utf-8")
     record_project_realtime_paths(
@@ -967,13 +1044,20 @@ def test_project_file_summary_endpoint_offloads_to_thread(
         calls.append((func, args))
         return await original_to_thread(func, *args, **kwargs)
 
-    monkeypatch.setattr(agents_router_module.asyncio, "to_thread", fake_to_thread)
+    monkeypatch.setattr(
+        agents_router_module.asyncio,
+        "to_thread",
+        fake_to_thread,
+    )
 
     response = client.get(f"/agents/default/projects/{project_id}/summary")
 
     assert response.status_code == 200
     assert calls
-    assert calls[0][0] is agents_router_module._build_project_file_summary_for_workspace
+    assert (
+        calls[0][0]
+        is agents_router_module._build_project_file_summary_for_workspace
+    )
 
 
 def test_project_file_metadata_endpoint_returns_existing_files_only(
@@ -983,8 +1067,14 @@ def test_project_file_metadata_endpoint_returns_existing_files_only(
     project_dir = workspace_dir / "projects" / project_id
     (project_dir / "original").mkdir(parents=True, exist_ok=True)
     (project_dir / "output").mkdir(parents=True, exist_ok=True)
-    (project_dir / "original" / "brief.md").write_text("brief", encoding="utf-8")
-    (project_dir / "output" / "notes.txt").write_text("notes", encoding="utf-8")
+    (project_dir / "original" / "brief.md").write_text(
+        "brief",
+        encoding="utf-8",
+    )
+    (project_dir / "output" / "notes.txt").write_text(
+        "notes",
+        encoding="utf-8",
+    )
 
     response = client.post(
         f"/agents/default/projects/{project_id}/files/metadata",
@@ -994,7 +1084,7 @@ def test_project_file_metadata_endpoint_returns_existing_files_only(
                 "output/notes.txt",
                 "output/missing.txt",
                 "original/brief.md",
-            ]
+            ],
         },
     )
 
@@ -1018,7 +1108,11 @@ def test_project_file_metadata_endpoint_offloads_to_thread(
         calls.append((func, args))
         return await original_to_thread(func, *args, **kwargs)
 
-    monkeypatch.setattr(agents_router_module.asyncio, "to_thread", fake_to_thread)
+    monkeypatch.setattr(
+        agents_router_module.asyncio,
+        "to_thread",
+        fake_to_thread,
+    )
 
     response = client.post(
         f"/agents/default/projects/{project_id}/files/metadata",
@@ -1027,7 +1121,10 @@ def test_project_file_metadata_endpoint_offloads_to_thread(
 
     assert response.status_code == 200
     assert calls
-    assert calls[0][0] is agents_router_module._get_project_files_metadata_for_workspace
+    assert (
+        calls[0][0]
+        is agents_router_module._get_project_files_metadata_for_workspace
+    )
 
 
 def test_read_project_file_endpoint_offloads_to_thread(
@@ -1047,16 +1144,23 @@ def test_read_project_file_endpoint_offloads_to_thread(
         calls.append((func, args))
         return await original_to_thread(func, *args, **kwargs)
 
-    monkeypatch.setattr(agents_router_module.asyncio, "to_thread", fake_to_thread)
+    monkeypatch.setattr(
+        agents_router_module.asyncio,
+        "to_thread",
+        fake_to_thread,
+    )
 
     response = client.get(
-        f"/agents/default/projects/{project_id}/files/original/notes.md"
+        f"/agents/default/projects/{project_id}/files/original/notes.md",
     )
 
     assert response.status_code == 200
     assert response.json()["content"] == "hello"
     assert calls
-    assert calls[0][0] is agents_router_module._read_project_text_file_for_workspace
+    assert (
+        calls[0][0]
+        is agents_router_module._read_project_text_file_for_workspace
+    )
 
 
 def test_list_project_files_avoids_per_file_resolve(
@@ -1118,10 +1222,7 @@ def test_create_project_uses_builtin_template_fallbacks(
     assert (project_dir / ".pipelines" / "templates" / "README.md").exists()
     assert (project_dir / ".pipelines" / "runs" / "README.md").exists()
     assert (
-        project_dir
-        / ".skills"
-        / "project-artifact-governor"
-        / "SKILL.md"
+        project_dir / ".skills" / "project-artifact-governor" / "SKILL.md"
     ).exists()
 
     latest_event_id, changed_paths = collect_project_realtime_changes(
@@ -1162,7 +1263,7 @@ def test_load_project_template_text_supports_legacy_hidden_paths(
     caplog.clear()
     with caplog.at_level("WARNING"):
         content = agents_router_module._load_project_template_text(
-            "project/.scripts/README.md"
+            "project/.scripts/README.md",
         )
 
     assert content == "# scripts directory\n"
@@ -1194,10 +1295,16 @@ def test_clone_project_records_realtime_event(
     monkeypatch: pytest.MonkeyPatch,
 ):
     client, workspace_dir, project_id = project_artifact_router_client
-    source_summary = _load_project_summary(workspace_dir / "projects" / project_id)
+    source_summary = _load_project_summary(
+        workspace_dir / "projects" / project_id,
+    )
     assert source_summary is not None
     clone_created_ts = 1_800_000_000
-    monkeypatch.setattr(agents_router_module.time, "time", lambda: clone_created_ts)
+    monkeypatch.setattr(
+        agents_router_module.time,
+        "time",
+        lambda: clone_created_ts,
+    )
 
     response = client.post(
         f"/agents/default/projects/{project_id}/clone",
@@ -1221,16 +1328,24 @@ def test_clone_project_records_realtime_event(
     assert ".skills/quick_start.md" in changed_paths
     assert (cloned_project_dir / ".skills" / "quick_start.md").exists()
     assert cloned_summary is not None
-    assert cloned_summary.created_time == agents_router_module._format_iso_time(
-        clone_created_ts,
+    assert (
+        cloned_summary.created_time
+        == agents_router_module._format_iso_time(
+            clone_created_ts,
+        )
     )
     assert cloned_summary.created_time != source_summary.created_time
 
     cloned_metadata_file = cloned_project_dir / "PROJECT.md"
-    cloned_metadata, _ = agents_router_module._read_project_frontmatter_with_body(
+    (
+        cloned_metadata,
+        _,
+    ) = agents_router_module._read_project_frontmatter_with_body(
         cloned_metadata_file,
     )
-    assert cloned_metadata.get("workspacePath") == str(cloned_project_dir.resolve())
+    assert cloned_metadata.get("workspacePath") == str(
+        cloned_project_dir.resolve(),
+    )
 
 
 def test_load_project_summary_falls_back_when_created_time_missing(
@@ -1243,7 +1358,11 @@ def test_load_project_summary_falls_back_when_created_time_missing(
         metadata_file,
     )
     metadata.pop("created_time", None)
-    agents_router_module._write_project_frontmatter(metadata_file, metadata, body)
+    agents_router_module._write_project_frontmatter(
+        metadata_file,
+        metadata,
+        body,
+    )
 
     summary = _load_project_summary(project_dir)
 
@@ -1307,7 +1426,12 @@ def test_distill_draft_can_target_specific_run_id(
     client, workspace_dir, project_id = project_artifact_router_client
 
     run_a_dir = (
-        workspace_dir / "projects" / project_id / ".pipelines" / "runs" / "run-a"
+        workspace_dir
+        / "projects"
+        / project_id
+        / ".pipelines"
+        / "runs"
+        / "run-a"
     )
     run_a_dir.mkdir(parents=True, exist_ok=True)
     (run_a_dir / "run_manifest.json").write_text(
@@ -1321,7 +1445,12 @@ def test_distill_draft_can_target_specific_run_id(
     )
 
     run_b_dir = (
-        workspace_dir / "projects" / project_id / ".pipelines" / "runs" / "run-b"
+        workspace_dir
+        / "projects"
+        / project_id
+        / ".pipelines"
+        / "runs"
+        / "run-b"
     )
     run_b_dir.mkdir(parents=True, exist_ok=True)
     (run_b_dir / "run_manifest.json").write_text(

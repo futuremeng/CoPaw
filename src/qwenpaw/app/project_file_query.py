@@ -12,7 +12,13 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Literal
 
-StageValue = Literal["original", "intermediate", "artifact", "builtin", "other"]
+StageValue = Literal[
+    "original",
+    "intermediate",
+    "artifact",
+    "builtin",
+    "other",
+]
 ContentTypeValue = Literal["markdown", "text", "script", "other"]
 SortByValue = Literal["path", "modified_time", "size"]
 SortOrderValue = Literal["asc", "desc"]
@@ -126,8 +132,7 @@ def classify_stage(rel_path: str, *, builtin: bool) -> StageValue:
     if normalized == "original" or normalized.startswith("original/"):
         return "original"
     if any(
-        normalized.startswith(f"{prefix}/")
-        for prefix in INTERMEDIATE_PREFIXES
+        normalized.startswith(f"{prefix}/") for prefix in INTERMEDIATE_PREFIXES
     ):
         return "intermediate"
     if normalized == "output" or normalized.startswith("output/"):
@@ -166,7 +171,9 @@ def classify_project_file(
         filename=absolute_path.name,
         path=rel_path,
         size=int(stat.st_size),
-        modified_time=datetime.fromtimestamp(stat.st_mtime).isoformat(timespec="seconds"),
+        modified_time=datetime.fromtimestamp(stat.st_mtime).isoformat(
+            timespec="seconds",
+        ),
         stage=stage,
         content_type=content_type,
         builtin=builtin,
@@ -220,7 +227,9 @@ def _matches_filters(
         return False
     if content_types and record.content_type not in content_types:
         return False
-    if path_prefix and not normalize_path_lower(record.path).startswith(path_prefix):
+    if path_prefix and not normalize_path_lower(record.path).startswith(
+        path_prefix,
+    ):
         return False
     if search and search not in normalize_path_lower(record.path):
         return False
@@ -230,9 +239,17 @@ def _matches_filters(
         return False
 
     modified_time = _parse_iso(record.modified_time)
-    if modified_after is not None and modified_time is not None and modified_time < modified_after:
+    if (
+        modified_after is not None
+        and modified_time is not None
+        and modified_time < modified_after
+    ):
         return False
-    if modified_before is not None and modified_time is not None and modified_time > modified_before:
+    if (
+        modified_before is not None
+        and modified_time is not None
+        and modified_time > modified_before
+    ):
         return False
     return True
 
@@ -245,11 +262,18 @@ def _sort_records(
 ) -> list[ProjectFileRecord]:
     reverse = sort_order == "desc"
     if sort_by == "size":
-        return sorted(records, key=lambda item: (item.size, item.path.lower()), reverse=reverse)
+        return sorted(
+            records,
+            key=lambda item: (item.size, item.path.lower()),
+            reverse=reverse,
+        )
     if sort_by == "modified_time":
         return sorted(
             records,
-            key=lambda item: (_parse_iso(item.modified_time) or datetime.min, item.path.lower()),
+            key=lambda item: (
+                _parse_iso(item.modified_time) or datetime.min,
+                item.path.lower(),
+            ),
             reverse=reverse,
         )
     return sorted(records, key=lambda item: item.path.lower(), reverse=reverse)
@@ -277,8 +301,16 @@ def query_project_file_records(
     normalized_search = str(search or "").strip().lower()
     normalized_prefix = normalize_path_lower(path_prefix).strip("/")
     if normalized_prefix:
-        normalized_prefix = f"{normalized_prefix}/" if not normalized_prefix.endswith("/") else normalized_prefix
-    stage_set = {str(item or "").strip().lower() for item in (stages or []) if str(item or "").strip()}
+        normalized_prefix = (
+            f"{normalized_prefix}/"
+            if not normalized_prefix.endswith("/")
+            else normalized_prefix
+        )
+    stage_set = {
+        str(item or "").strip().lower()
+        for item in (stages or [])
+        if str(item or "").strip()
+    }
     content_type_set = {
         str(item or "").strip().lower()
         for item in (content_types or [])
@@ -305,7 +337,11 @@ def query_project_file_records(
         )
     ]
 
-    sorted_records = _sort_records(filtered, sort_by=sort_by, sort_order=sort_order)
+    sorted_records = _sort_records(
+        filtered,
+        sort_by=sort_by,
+        sort_order=sort_order,
+    )
     safe_offset = max(0, int(offset))
     safe_limit = max(1, min(1000, int(limit)))
     items = sorted_records[safe_offset : safe_offset + safe_limit]
@@ -327,7 +363,9 @@ def query_project_file_records(
     ignored_count = 0
     for record in filtered:
         stage_counts[record.stage] = stage_counts.get(record.stage, 0) + 1
-        content_type_counts[record.content_type] = content_type_counts.get(record.content_type, 0) + 1
+        content_type_counts[record.content_type] = (
+            content_type_counts.get(record.content_type, 0) + 1
+        )
         if record.builtin:
             builtin_count += 1
         if record.ignored:

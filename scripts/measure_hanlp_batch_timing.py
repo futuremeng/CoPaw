@@ -29,7 +29,11 @@ def _payload_for_task(task_key: str) -> dict[str, object]:
     }
 
 
-def _measure_task(client: TestClient, task_key: str, rounds: int = 3) -> dict[str, object]:
+def _measure_task(
+    client: TestClient,
+    task_key: str,
+    rounds: int = 3,
+) -> dict[str, object]:
     timings: list[float] = []
     states: list[dict[str, object]] = []
     payload = _payload_for_task(task_key)
@@ -42,7 +46,10 @@ def _measure_task(client: TestClient, task_key: str, rounds: int = 3) -> dict[st
         try:
             state = response.json()
         except Exception:
-            state = {"error": "invalid-json", "status_code": response.status_code}
+            state = {
+                "error": "invalid-json",
+                "status_code": response.status_code,
+            }
         states.append(
             {
                 "round": index + 1,
@@ -51,7 +58,7 @@ def _measure_task(client: TestClient, task_key: str, rounds: int = 3) -> dict[st
                 "status": state.get("status"),
                 "reason_code": state.get("reason_code"),
                 "duration_ms": state.get("duration_ms"),
-            }
+            },
         )
     return {
         "task_key": task_key,
@@ -78,9 +85,15 @@ def main() -> None:
     }
 
     with TestClient(app) as client:
-        result["results"] = [_measure_task(client, task_key, rounds=rounds) for task_key in DEFAULT_TASKS]
+        result["results"] = [
+            _measure_task(client, task_key, rounds=rounds)
+            for task_key in DEFAULT_TASKS
+        ]
 
-    out_path.write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
+    out_path.write_text(
+        json.dumps(result, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
     print(str(out_path))
 
 

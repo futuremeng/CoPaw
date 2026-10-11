@@ -5,7 +5,9 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from copaw.config.config import Config, KnowledgeSourceSpec
-from qwenpaw.knowledge.project_pipeline_manager import ProjectKnowledgePipelineManager
+from qwenpaw.knowledge.project_pipeline_manager import (
+    ProjectKnowledgePipelineManager,
+)
 
 
 def _build_source(project_id: str, project_dir: Path) -> KnowledgeSourceSpec:
@@ -23,7 +25,10 @@ def _build_source(project_id: str, project_dir: Path) -> KnowledgeSourceSpec:
     )
 
 
-def test_project_pipeline_queues_until_debounce_window(tmp_path: Path, monkeypatch):
+def test_project_pipeline_queues_until_debounce_window(
+    tmp_path: Path,
+    monkeypatch,
+):
     project_id = "project-a"
     project_dir = tmp_path / "projects" / project_id
     project_dir.mkdir(parents=True, exist_ok=True)
@@ -66,14 +71,20 @@ def test_project_pipeline_queues_until_debounce_window(tmp_path: Path, monkeypat
     assert result["reason"] == "QUEUED"
     assert state["status"] == "queued"
     assert state["current_stage"] == "debouncing"
-    assert "Semantic engine unavailable: HanLP sidecar is not configured." in state["stage_message"]
+    assert (
+        "Semantic engine unavailable: HanLP sidecar is not configured."
+        in state["stage_message"]
+    )
     assert "original/a.md" in state["changed_paths"]
     assert state["scheduled_for"]
     assert len(scheduled) == 1
     assert not started
 
 
-def test_project_pipeline_queues_until_cooldown_expires(tmp_path: Path, monkeypatch):
+def test_project_pipeline_queues_until_cooldown_expires(
+    tmp_path: Path,
+    monkeypatch,
+):
     project_id = "project-b"
     project_dir = tmp_path / "projects" / project_id
     project_dir.mkdir(parents=True, exist_ok=True)
@@ -125,7 +136,10 @@ def test_project_pipeline_queues_until_cooldown_expires(tmp_path: Path, monkeypa
     assert not started
 
 
-def test_project_pipeline_queues_follow_up_after_active_run(tmp_path: Path, monkeypatch):
+def test_project_pipeline_queues_follow_up_after_active_run(
+    tmp_path: Path,
+    monkeypatch,
+):
     project_id = "project-c"
     project_dir = tmp_path / "projects" / project_id
     project_dir.mkdir(parents=True, exist_ok=True)
@@ -146,7 +160,7 @@ def test_project_pipeline_queues_follow_up_after_active_run(tmp_path: Path, monk
             "debounce_seconds": 4,
             "cooldown_seconds": 0,
             "last_change_at": datetime.now(timezone.utc).isoformat(),
-        }
+        },
     )
     manager._save_state(state)
 
@@ -192,7 +206,10 @@ def test_project_pipeline_queues_follow_up_after_active_run(tmp_path: Path, monk
     assert not restarted
 
 
-def test_project_pipeline_recovers_stale_active_state_and_restarts(tmp_path: Path, monkeypatch):
+def test_project_pipeline_recovers_stale_active_state_and_restarts(
+    tmp_path: Path,
+    monkeypatch,
+):
     project_id = "project-d"
     project_dir = tmp_path / "projects" / project_id
     project_dir.mkdir(parents=True, exist_ok=True)
@@ -203,7 +220,9 @@ def test_project_pipeline_recovers_stale_active_state_and_restarts(tmp_path: Pat
     config = Config().knowledge
     source = _build_source(project_id, project_dir)
 
-    stale_time = (datetime.now(timezone.utc) - timedelta(seconds=300)).isoformat()
+    stale_time = (
+        datetime.now(timezone.utc) - timedelta(seconds=300)
+    ).isoformat()
     state = manager.get_state(project_id)
     state.update(
         {
@@ -213,7 +232,7 @@ def test_project_pipeline_recovers_stale_active_state_and_restarts(tmp_path: Pat
             "updated_at": stale_time,
             "last_started_at": stale_time,
             "last_error": "",
-        }
+        },
     )
     manager.state_path.parent.mkdir(parents=True, exist_ok=True)
     manager.state_path.write_text(json.dumps(state), encoding="utf-8")
@@ -244,7 +263,10 @@ def test_project_pipeline_recovers_stale_active_state_and_restarts(tmp_path: Pat
     assert started
 
 
-def test_project_pipeline_resume_if_needed_restarts_resumable_state(tmp_path: Path, monkeypatch):
+def test_project_pipeline_resume_if_needed_restarts_resumable_state(
+    tmp_path: Path,
+    monkeypatch,
+):
     project_id = "project-resume"
     project_dir = tmp_path / "projects" / project_id
     project_dir.mkdir(parents=True, exist_ok=True)
@@ -268,7 +290,7 @@ def test_project_pipeline_resume_if_needed_restarts_resumable_state(tmp_path: Pa
             "latest_requested_mode": "nlp",
             "dirty_after_run": True,
             "pending_changed_paths": ["original/a.md"],
-        }
+        },
     )
     manager._save_state(state)
 
@@ -278,7 +300,11 @@ def test_project_pipeline_resume_if_needed_restarts_resumable_state(tmp_path: Pa
     )
 
     started: list[dict] = []
-    monkeypatch.setattr(resumed_manager, "_start_worker", lambda **kwargs: started.append(kwargs))
+    monkeypatch.setattr(
+        resumed_manager,
+        "_start_worker",
+        lambda **kwargs: started.append(kwargs),
+    )
 
     result = resumed_manager.resume_sync_if_needed(
         project_id=project_id,
@@ -298,7 +324,10 @@ def test_project_pipeline_resume_if_needed_restarts_resumable_state(tmp_path: Pa
     assert started[0]["processing_mode"] == "nlp"
 
 
-def test_project_pipeline_auto_triggers_quality_loop_after_memify_success(tmp_path: Path, monkeypatch):
+def test_project_pipeline_auto_triggers_quality_loop_after_memify_success(
+    tmp_path: Path,
+    monkeypatch,
+):
     project_id = "project-e"
     project_dir = tmp_path / "projects" / project_id
     project_dir.mkdir(parents=True, exist_ok=True)
@@ -314,7 +343,8 @@ def test_project_pipeline_auto_triggers_quality_loop_after_memify_success(tmp_pa
 
     monkeypatch.setattr(
         "qwenpaw.app.knowledge_workflow.KnowledgeWorkflowOrchestrator.run",
-        lambda self, **kwargs: orchestrator_calls.append(kwargs) or {
+        lambda self, **kwargs: orchestrator_calls.append(kwargs)
+        or {
             "run_id": "run-quality-1",
             "run_status": "succeeded",
             "template_id": "builtin-knowledge-processing-v1",
@@ -367,14 +397,20 @@ def test_check_needs_reindex_true_when_no_recorded_fingerprint(tmp_path: Path):
     config = Config().knowledge
 
     # No completed run yet: recorded fingerprint is empty.
-    assert manager.check_needs_reindex(
-        project_id=project_id,
-        config=config,
-        running_config=None,
-    ) is True
+    assert (
+        manager.check_needs_reindex(
+            project_id=project_id,
+            config=config,
+            running_config=None,
+        )
+        is True
+    )
 
 
-def test_check_needs_reindex_false_after_fingerprint_recorded(tmp_path: Path, monkeypatch):
+def test_check_needs_reindex_false_after_fingerprint_recorded(
+    tmp_path: Path,
+    monkeypatch,
+):
     project_id = "project-g"
     project_dir = tmp_path / "projects" / project_id
     project_dir.mkdir(parents=True, exist_ok=True)
@@ -406,14 +442,19 @@ def test_check_needs_reindex_false_after_fingerprint_recorded(tmp_path: Path, mo
         source=source,
     )
 
-    assert manager.check_needs_reindex(
-        project_id=project_id,
-        config=config,
-        running_config=None,
-    ) is False
+    assert (
+        manager.check_needs_reindex(
+            project_id=project_id,
+            config=config,
+            running_config=None,
+        )
+        is False
+    )
 
 
-def test_processing_mode_overrides_take_precedence_during_active_run(tmp_path: Path):
+def test_processing_mode_overrides_take_precedence_during_active_run(
+    tmp_path: Path,
+):
     project_id = "project-h"
     project_dir = tmp_path / "projects" / project_id
     project_dir.mkdir(parents=True, exist_ok=True)
@@ -450,7 +491,7 @@ def test_processing_mode_overrides_take_precedence_during_active_run(tmp_path: P
                     "stage": "Waiting for review stage",
                 },
             },
-        }
+        },
     )
     manager._save_state(state)
 
@@ -468,19 +509,30 @@ def test_processing_mode_overrides_take_precedence_during_active_run(tmp_path: P
     assert hydrated["global_metrics"]["document_count"] == 0
 
 
-def test_project_pipeline_state_exposes_document_graphify_artifacts(tmp_path: Path):
+def test_project_pipeline_state_exposes_document_graphify_artifacts(
+    tmp_path: Path,
+):
     project_id = "project-h2"
     manager = ProjectKnowledgePipelineManager(
         tmp_path,
         knowledge_dirname=f"projects/{project_id}/.knowledge",
     )
 
-    graphify_dir = tmp_path / "projects" / project_id / ".knowledge" / "graphify"
+    graphify_dir = (
+        tmp_path / "projects" / project_id / ".knowledge" / "graphify"
+    )
     graphify_dir.mkdir(parents=True, exist_ok=True)
     manifest_path = graphify_dir / "manifest.json"
     manifest_path.write_text("{}", encoding="utf-8")
 
-    graph_path = tmp_path / "projects" / project_id / ".knowledge" / "graphify-out" / "graph.json"
+    graph_path = (
+        tmp_path
+        / "projects"
+        / project_id
+        / ".knowledge"
+        / "graphify-out"
+        / "graph.json"
+    )
     graph_path.parent.mkdir(parents=True, exist_ok=True)
     graph_path.write_text("{}", encoding="utf-8")
 
@@ -499,7 +551,7 @@ def test_project_pipeline_state_exposes_document_graphify_artifacts(tmp_path: Pa
                     "document_graph_count": 2,
                 },
             },
-        }
+        },
     )
     manager._save_state(state)
 
@@ -512,14 +564,18 @@ def test_project_pipeline_state_exposes_document_graphify_artifacts(tmp_path: Pa
     assert "Document graphify payloads: 2" in nlp_output["summary_lines"]
 
 
-def test_project_pipeline_state_recovers_document_graphify_artifacts_from_graph_path(tmp_path: Path):
+def test_project_pipeline_state_recovers_document_graphify_artifacts_from_graph_path(
+    tmp_path: Path,
+):
     project_id = "project-h3"
     manager = ProjectKnowledgePipelineManager(
         tmp_path,
         knowledge_dirname=f"projects/{project_id}/.knowledge",
     )
 
-    graphify_dir = tmp_path / "projects" / project_id / ".knowledge" / "graphify"
+    graphify_dir = (
+        tmp_path / "projects" / project_id / ".knowledge" / "graphify"
+    )
     graphify_dir.mkdir(parents=True, exist_ok=True)
     manifest_path = graphify_dir / "manifest.json"
     manifest_path.write_text(
@@ -529,16 +585,25 @@ def test_project_pipeline_state_recovers_document_graphify_artifacts_from_graph_
                 "document_count": 1,
                 "documents": [
                     {
-                        "document_path": str(tmp_path / "projects" / project_id / "chapter.md"),
+                        "document_path": str(
+                            tmp_path / "projects" / project_id / "chapter.md",
+                        ),
                         "payload_relative_path": "graphify/chapter.graphify.json",
-                    }
+                    },
                 ],
-            }
+            },
         ),
         encoding="utf-8",
     )
 
-    graph_path = tmp_path / "projects" / project_id / ".knowledge" / "graphify-out" / "graph.json"
+    graph_path = (
+        tmp_path
+        / "projects"
+        / project_id
+        / ".knowledge"
+        / "graphify-out"
+        / "graph.json"
+    )
     graph_path.parent.mkdir(parents=True, exist_ok=True)
     graph_path.write_text("{}", encoding="utf-8")
 
@@ -554,7 +619,7 @@ def test_project_pipeline_state_recovers_document_graphify_artifacts_from_graph_
                     "graph_path": str(graph_path),
                 },
             },
-        }
+        },
     )
     manager._save_state(state)
 
@@ -567,22 +632,39 @@ def test_project_pipeline_state_recovers_document_graphify_artifacts_from_graph_
     assert "Document graphify payloads: 1" in nlp_output["summary_lines"]
 
 
-def test_project_pipeline_state_ignores_empty_document_graph_manifest(tmp_path: Path):
+def test_project_pipeline_state_ignores_empty_document_graph_manifest(
+    tmp_path: Path,
+):
     project_id = "project-h4"
     manager = ProjectKnowledgePipelineManager(
         tmp_path,
         knowledge_dirname=f"projects/{project_id}/.knowledge",
     )
 
-    graphify_dir = tmp_path / "projects" / project_id / ".knowledge" / "graphify"
+    graphify_dir = (
+        tmp_path / "projects" / project_id / ".knowledge" / "graphify"
+    )
     graphify_dir.mkdir(parents=True, exist_ok=True)
     manifest_path = graphify_dir / "manifest.json"
     manifest_path.write_text(
-        json.dumps({"artifact": "graphify_manifest", "document_count": 0, "documents": []}),
+        json.dumps(
+            {
+                "artifact": "graphify_manifest",
+                "document_count": 0,
+                "documents": [],
+            },
+        ),
         encoding="utf-8",
     )
 
-    graph_path = tmp_path / "projects" / project_id / ".knowledge" / "graphify-out" / "graph.json"
+    graph_path = (
+        tmp_path
+        / "projects"
+        / project_id
+        / ".knowledge"
+        / "graphify-out"
+        / "graph.json"
+    )
     graph_path.parent.mkdir(parents=True, exist_ok=True)
     graph_path.write_text("{}", encoding="utf-8")
 
@@ -596,7 +678,7 @@ def test_project_pipeline_state_ignores_empty_document_graph_manifest(tmp_path: 
                     "document_graph_count": 0,
                 },
             },
-        }
+        },
     )
     manager._save_state(state)
 
@@ -608,7 +690,9 @@ def test_project_pipeline_state_ignores_empty_document_graph_manifest(tmp_path: 
     assert "Document graphify payloads: 0" in nlp_output["summary_lines"]
 
 
-def test_project_pipeline_mode_metrics_agentic_evidence_paths_fallback_to_quality_artifacts(tmp_path: Path):
+def test_project_pipeline_mode_metrics_agentic_evidence_paths_fallback_to_quality_artifacts(
+    tmp_path: Path,
+):
     project_id = "project-agentic-evidence-fallback"
     manager = ProjectKnowledgePipelineManager(
         tmp_path,
@@ -649,8 +733,8 @@ def test_project_pipeline_mode_metrics_agentic_evidence_paths_fallback_to_qualit
                         "entity_count": 17,
                         "relation_count": 26,
                         "quality_score": 0.88,
-                    }
-                }
+                    },
+                },
             ],
         },
         "pipeline_run": {
@@ -671,7 +755,9 @@ def test_project_pipeline_mode_metrics_agentic_evidence_paths_fallback_to_qualit
     assert "quality_report" in artifact_kinds
     assert "enriched_graph" in artifact_kinds
     assert "graph" in artifact_kinds
-    assert evidence_paths["quality_score"].endswith("enrichment_quality_report.json")
+    assert evidence_paths["quality_score"].endswith(
+        "enrichment_quality_report.json",
+    )
     assert evidence_paths["audit_status"]
     assert evidence_paths["audit_focus"]
     assert evidence_paths["audit_round"]
@@ -684,7 +770,10 @@ def test_project_pipeline_mode_metrics_agentic_evidence_paths_fallback_to_qualit
     assert evidence_bundles["enhancement_delta"]["formula"]
 
 
-def test_project_pipeline_document_count_evidence_bundle_uses_source_samples(tmp_path: Path, monkeypatch):
+def test_project_pipeline_document_count_evidence_bundle_uses_source_samples(
+    tmp_path: Path,
+    monkeypatch,
+):
     project_id = "project-document-evidence-samples"
     manager = ProjectKnowledgePipelineManager(
         tmp_path,
@@ -725,16 +814,31 @@ def test_project_pipeline_document_count_evidence_bundle_uses_source_samples(tmp
 
     assert document_bundle["metric_key"] == "document_count"
     assert document_bundle["metric_kind"] == "aggregate"
-    assert document_bundle["sample_source_paths"] == [".agent/AGENTS.md", "docs/spec.md"]
-    assert document_bundle["artifact_paths"] == [".agent/AGENTS.md", "docs/spec.md"]
+    assert document_bundle["sample_source_paths"] == [
+        ".agent/AGENTS.md",
+        "docs/spec.md",
+    ]
+    assert document_bundle["artifact_paths"] == [
+        ".agent/AGENTS.md",
+        "docs/spec.md",
+    ]
 
     token_bundle = nlp_bundles["tokenize_token_count"]
     assert token_bundle["metric_key"] == "tokenize_token_count"
-    assert token_bundle["sample_source_paths"] == [".agent/AGENTS.md", "docs/spec.md"]
-    assert token_bundle["artifact_paths"] == [".agent/AGENTS.md", "docs/spec.md"]
+    assert token_bundle["sample_source_paths"] == [
+        ".agent/AGENTS.md",
+        "docs/spec.md",
+    ]
+    assert token_bundle["artifact_paths"] == [
+        ".agent/AGENTS.md",
+        "docs/spec.md",
+    ]
 
 
-def test_project_pipeline_tokenize_line_evidence_prefers_interlinear_path(tmp_path: Path, monkeypatch):
+def test_project_pipeline_tokenize_line_evidence_prefers_interlinear_path(
+    tmp_path: Path,
+    monkeypatch,
+):
     project_id = "project-tokenize-line-evidence"
     manager = ProjectKnowledgePipelineManager(
         tmp_path,
@@ -742,12 +846,16 @@ def test_project_pipeline_tokenize_line_evidence_prefers_interlinear_path(tmp_pa
     )
 
     source_id = f"project-{project_id}-workspace"
-    source_ref = type("SourceRef", (), {
-        "id": source_id,
-        "project_id": project_id,
-        "location": "",
-        "name": source_id,
-    })()
+    source_ref = type(
+        "SourceRef",
+        (),
+        {
+            "id": source_id,
+            "project_id": project_id,
+            "location": "",
+            "name": source_id,
+        },
+    )()
 
     monkeypatch.setattr(
         manager._knowledge_manager,
@@ -796,10 +904,15 @@ def test_project_pipeline_tokenize_line_evidence_prefers_interlinear_path(tmp_pa
 
     hydrated = manager.get_state(project_id)
     by_source_nlp = hydrated["mode_metrics_by_source"][source_id]["nlp"]
-    assert by_source_nlp["evidence_paths"]["tokenize_line_count"].endswith(f"interlinear/{project_id}.txt")
+    assert by_source_nlp["evidence_paths"]["tokenize_line_count"].endswith(
+        f"interlinear/{project_id}.txt",
+    )
 
 
-def test_project_pipeline_tokenize_token_evidence_prefers_structured_path(tmp_path: Path, monkeypatch):
+def test_project_pipeline_tokenize_token_evidence_prefers_structured_path(
+    tmp_path: Path,
+    monkeypatch,
+):
     project_id = "project-tokenize-token-evidence"
     manager = ProjectKnowledgePipelineManager(
         tmp_path,
@@ -807,12 +920,16 @@ def test_project_pipeline_tokenize_token_evidence_prefers_structured_path(tmp_pa
     )
 
     source_id = f"project-{project_id}-workspace"
-    source_ref = type("SourceRef", (), {
-        "id": source_id,
-        "project_id": project_id,
-        "location": "",
-        "name": source_id,
-    })()
+    source_ref = type(
+        "SourceRef",
+        (),
+        {
+            "id": source_id,
+            "project_id": project_id,
+            "location": "",
+            "name": source_id,
+        },
+    )()
 
     monkeypatch.setattr(
         manager._knowledge_manager,
@@ -860,10 +977,14 @@ def test_project_pipeline_tokenize_token_evidence_prefers_structured_path(tmp_pa
 
     hydrated = manager.get_state(project_id)
     by_source_nlp = hydrated["mode_metrics_by_source"][source_id]["nlp"]
-    assert by_source_nlp["evidence_paths"]["tokenize_token_count"].endswith(f"tokenize/{project_id}.md.0.tokenize.line-stats.json")
+    assert by_source_nlp["evidence_paths"]["tokenize_token_count"].endswith(
+        f"tokenize/{project_id}.md.0.tokenize.line-stats.json",
+    )
 
 
-def test_project_pipeline_state_exposes_idle_semantic_engine_before_source_ready(tmp_path: Path):
+def test_project_pipeline_state_exposes_idle_semantic_engine_before_source_ready(
+    tmp_path: Path,
+):
     project_id = "project-i"
     manager = ProjectKnowledgePipelineManager(
         tmp_path,
@@ -875,10 +996,16 @@ def test_project_pipeline_state_exposes_idle_semantic_engine_before_source_ready
     assert state["semantic_engine"]["engine"] == "hanlp"
     assert state["semantic_engine"]["status"] == "idle"
     assert state["semantic_engine"]["reason_code"] == "SOURCE_NOT_READY"
-    assert state["semantic_engine"]["summary"] == "Semantic engine waiting for project source preparation."
+    assert (
+        state["semantic_engine"]["summary"]
+        == "Semantic engine waiting for project source preparation."
+    )
 
 
-def test_project_pipeline_state_mirrors_semantic_engine_after_source_selected(tmp_path: Path, monkeypatch):
+def test_project_pipeline_state_mirrors_semantic_engine_after_source_selected(
+    tmp_path: Path,
+    monkeypatch,
+):
     project_id = "project-j"
     manager = ProjectKnowledgePipelineManager(
         tmp_path,
@@ -904,11 +1031,19 @@ def test_project_pipeline_state_mirrors_semantic_engine_after_source_selected(tm
     hydrated = manager.get_state(project_id)
 
     assert hydrated["semantic_engine"]["status"] == "error"
-    assert hydrated["semantic_engine"]["reason_code"] == "HANLP_TOKENIZE_FAILED"
-    assert hydrated["semantic_engine"]["summary"] == "Semantic engine error: HanLP tokenization failed"
+    assert (
+        hydrated["semantic_engine"]["reason_code"] == "HANLP_TOKENIZE_FAILED"
+    )
+    assert (
+        hydrated["semantic_engine"]["summary"]
+        == "Semantic engine error: HanLP tokenization failed"
+    )
 
 
-def test_project_pipeline_stage_message_merges_semantic_summary(tmp_path: Path, monkeypatch):
+def test_project_pipeline_stage_message_merges_semantic_summary(
+    tmp_path: Path,
+    monkeypatch,
+):
     project_id = "project-k"
     manager = ProjectKnowledgePipelineManager(
         tmp_path,
@@ -939,7 +1074,10 @@ def test_project_pipeline_stage_message_merges_semantic_summary(tmp_path: Path, 
     )
 
 
-def test_project_pipeline_pending_stage_message_includes_semantic_reason_code(tmp_path: Path, monkeypatch):
+def test_project_pipeline_pending_stage_message_includes_semantic_reason_code(
+    tmp_path: Path,
+    monkeypatch,
+):
     project_id = "project-k-reason"
     manager = ProjectKnowledgePipelineManager(
         tmp_path,
@@ -970,7 +1108,10 @@ def test_project_pipeline_pending_stage_message_includes_semantic_reason_code(tm
     assert "reason_code=HANLP_IMPORT_UNAVAILABLE" in hydrated["stage_message"]
 
 
-def test_project_pipeline_processing_modes_block_when_semantic_engine_unavailable(tmp_path: Path, monkeypatch):
+def test_project_pipeline_processing_modes_block_when_semantic_engine_unavailable(
+    tmp_path: Path,
+    monkeypatch,
+):
     project_id = "project-l"
     manager = ProjectKnowledgePipelineManager(
         tmp_path,
@@ -993,7 +1134,11 @@ def test_project_pipeline_processing_modes_block_when_semantic_engine_unavailabl
     state["last_result"] = {
         "index": {"document_count": 1, "chunk_count": 4},
         "memify": {"node_count": 12, "relation_count": 18},
-        "pipeline_run": {"status": "succeeded", "mode": "agentic", "run_id": "run-blocked"},
+        "pipeline_run": {
+            "status": "succeeded",
+            "mode": "agentic",
+            "run_id": "run-blocked",
+        },
     }
     state["semantic_engine"] = {}
     manager._save_state(state)
@@ -1008,16 +1153,24 @@ def test_project_pipeline_processing_modes_block_when_semantic_engine_unavailabl
     assert modes["agentic"]["status"] == "blocked"
     assert modes["agentic"]["available"] is False
     assert hydrated["output_resolution"]["available_modes"] == []
-    assert hydrated["output_resolution"]["reason_code"] == "SEMANTIC_ENGINE_UNAVAILABLE"
+    assert (
+        hydrated["output_resolution"]["reason_code"]
+        == "SEMANTIC_ENGINE_UNAVAILABLE"
+    )
     assert hydrated["output_scheduler"]["ready_modes"] == ["fast"]
     assert hydrated["nlp_progress"]["mode"] == "nlp"
     assert hydrated["nlp_progress"]["status"] == "blocked"
-    assert hydrated["nlp_progress"]["stages"]["tokenize"]["status"] == "pending"
+    assert (
+        hydrated["nlp_progress"]["stages"]["tokenize"]["status"] == "pending"
+    )
     assert hydrated["nlp_progress"]["stages"]["ner"]["status"] == "pending"
     assert hydrated["nlp_progress"]["stages"]["syntax"]["status"] == "pending"
 
 
-def test_project_pipeline_agentic_mode_does_not_reuse_memify_counts_while_pending(tmp_path: Path, monkeypatch):
+def test_project_pipeline_agentic_mode_does_not_reuse_memify_counts_while_pending(
+    tmp_path: Path,
+    monkeypatch,
+):
     project_id = "project-agentic-pending"
     manager = ProjectKnowledgePipelineManager(
         tmp_path,
@@ -1045,7 +1198,11 @@ def test_project_pipeline_agentic_mode_does_not_reuse_memify_counts_while_pendin
             "syntax_relation_count": 9,
         },
         "memify": {"node_count": 12, "relation_count": 18},
-        "pipeline_run": {"status": "pending", "mode": "agentic", "run_id": "run-pending"},
+        "pipeline_run": {
+            "status": "pending",
+            "mode": "agentic",
+            "run_id": "run-pending",
+        },
     }
     state["semantic_engine"] = {}
     manager._save_state(state)
@@ -1062,7 +1219,10 @@ def test_project_pipeline_agentic_mode_does_not_reuse_memify_counts_while_pendin
     assert modes["agentic"]["quality_score"] is None
 
 
-def test_project_pipeline_agentic_mode_prefers_quality_snapshot_metrics(tmp_path: Path, monkeypatch):
+def test_project_pipeline_agentic_mode_prefers_quality_snapshot_metrics(
+    tmp_path: Path,
+    monkeypatch,
+):
     project_id = "project-agentic-final"
     manager = ProjectKnowledgePipelineManager(
         tmp_path,
@@ -1098,11 +1258,15 @@ def test_project_pipeline_agentic_mode_prefers_quality_snapshot_metrics(tmp_path
                         "entity_count": 14,
                         "relation_count": 22,
                         "quality_score": 0.91,
-                    }
-                }
+                    },
+                },
             ],
         },
-        "pipeline_run": {"status": "succeeded", "mode": "agentic", "run_id": "run-final"},
+        "pipeline_run": {
+            "status": "succeeded",
+            "mode": "agentic",
+            "run_id": "run-final",
+        },
     }
     state["semantic_engine"] = {}
     manager._save_state(state)
@@ -1121,7 +1285,10 @@ def test_project_pipeline_agentic_mode_prefers_quality_snapshot_metrics(tmp_path
     assert hydrated["output_resolution"]["available_modes"] == ["agentic"]
 
 
-def test_project_pipeline_global_metrics_merge_live_source_status(tmp_path: Path, monkeypatch):
+def test_project_pipeline_global_metrics_merge_live_source_status(
+    tmp_path: Path,
+    monkeypatch,
+):
     project_id = "project-global-metrics"
     manager = ProjectKnowledgePipelineManager(
         tmp_path,
@@ -1175,7 +1342,10 @@ def test_project_pipeline_global_metrics_merge_live_source_status(tmp_path: Path
     assert global_metrics["token_count"] == 66
     assert global_metrics["metrics_source"] == "project_pipeline_l1_raw"
     assert global_metrics["source_id"] == f"project-{project_id}-workspace"
-    assert global_metrics["source_stats_updated_at"] == "2026-04-28T10:00:00+00:00"
+    assert (
+        global_metrics["source_stats_updated_at"]
+        == "2026-04-28T10:00:00+00:00"
+    )
     assert global_metrics["metrics_updated_at"]
     assert nlp_metrics["ner_ready_chunk_count"] == 2
     assert nlp_metrics["ner_entity_count"] == 8

@@ -38,8 +38,7 @@ def test_ensure_schema_creates_catalog_tables(tmp_path):
 
     with duckdb.connect(str(catalog.database_path), read_only=True) as conn:
         table_names = {
-            row[0]
-            for row in conn.execute("SHOW TABLES").fetchall()
+            row[0] for row in conn.execute("SHOW TABLES").fetchall()
         }
 
     assert "catalog_meta" in table_names

@@ -29,7 +29,9 @@ def test_build_ebook_screenshot_template_is_parameterized() -> None:
         "page_prefix",
         "wait_after_flip_ms",
     ]
-    capture_step = next(step for step in template.steps if step.id == "capture_pages")
+    capture_step = next(
+        step for step in template.steps if step.id == "capture_pages"
+    )
     assert capture_step.kind == "flow.loop"
     assert capture_step.loop is not None
     assert capture_step.loop.actions[0]["kind"] == "browser.screenshot"

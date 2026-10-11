@@ -78,7 +78,11 @@ class RpaTemplateSpec(BaseModel):
     name: str
     version: str = "0.1.0"
     description: str = ""
-    execution_mode: Literal["deterministic", "healing", "manual"] = "deterministic"
+    execution_mode: Literal[
+        "deterministic",
+        "healing",
+        "manual",
+    ] = "deterministic"
     entrypoint: str = "rpa-workbench"
     builtin_kind: str | None = "rpa"
     target_kind: str = "browser"
@@ -103,10 +107,16 @@ def _normalize_step_text(value: str) -> str:
     return str(value or "").strip()
 
 
-def _extract_loop_from_inputs(inputs: dict[str, Any]) -> tuple[dict[str, Any], RpaLoopSpec | None]:
+def _extract_loop_from_inputs(
+    inputs: dict[str, Any],
+) -> tuple[dict[str, Any], RpaLoopSpec | None]:
     loop_raw = inputs.get(_PIPELINE_LOOP_INPUT_KEY)
     if isinstance(loop_raw, dict):
-        next_inputs = {key: value for key, value in inputs.items() if key != _PIPELINE_LOOP_INPUT_KEY}
+        next_inputs = {
+            key: value
+            for key, value in inputs.items()
+            if key != _PIPELINE_LOOP_INPUT_KEY
+        }
         return next_inputs, RpaLoopSpec.model_validate(loop_raw)
     return dict(inputs), None
 
@@ -132,20 +142,32 @@ def _normalize_pipeline_step_kind(rpa_kind: str) -> str:
     return "task"
 
 
-def _embed_loop_in_inputs(inputs: dict[str, Any], loop: RpaLoopSpec | None) -> dict[str, Any]:
+def _embed_loop_in_inputs(
+    inputs: dict[str, Any],
+    loop: RpaLoopSpec | None,
+) -> dict[str, Any]:
     payload = dict(inputs)
     if loop is not None:
-        payload[_PIPELINE_LOOP_INPUT_KEY] = loop.model_dump(mode="json", exclude_none=True)
+        payload[_PIPELINE_LOOP_INPUT_KEY] = loop.model_dump(
+            mode="json",
+            exclude_none=True,
+        )
     return payload
 
 
-def _embed_rpa_kind_in_inputs(inputs: dict[str, Any], kind: str) -> dict[str, Any]:
+def _embed_rpa_kind_in_inputs(
+    inputs: dict[str, Any],
+    kind: str,
+) -> dict[str, Any]:
     payload = dict(inputs)
     payload[_PIPELINE_RPA_KIND_INPUT_KEY] = kind
     return payload
 
 
-def _extract_rpa_kind_from_inputs(inputs: dict[str, Any], fallback_kind: str) -> tuple[dict[str, Any], str]:
+def _extract_rpa_kind_from_inputs(
+    inputs: dict[str, Any],
+    fallback_kind: str,
+) -> tuple[dict[str, Any], str]:
     raw_kind = inputs.get(_PIPELINE_RPA_KIND_INPUT_KEY)
     if isinstance(raw_kind, str) and raw_kind.strip():
         next_inputs = {
@@ -159,7 +181,10 @@ def _extract_rpa_kind_from_inputs(inputs: dict[str, Any], fallback_kind: str) ->
 
 def rpa_template_to_pipeline_template(template: RpaTemplateSpec):
     """Convert an RPA template into the existing pipeline template model."""
-    from ..app.routers.agents_pipeline_core import PipelineTemplateInfo, PipelineTemplateStep
+    from ..app.routers.agents_pipeline_core import (
+        PipelineTemplateInfo,
+        PipelineTemplateStep,
+    )
 
     return PipelineTemplateInfo(
         id=template.id,
@@ -417,7 +442,9 @@ def write_rpa_template_package(
     return output_path
 
 
-def load_rpa_template_package(source: str | Path | dict[str, Any] | RpaTemplatePackage) -> RpaTemplatePackage:
+def load_rpa_template_package(
+    source: str | Path | dict[str, Any] | RpaTemplatePackage,
+) -> RpaTemplatePackage:
     """Load a template package from a dict, JSON string, or file path."""
     if isinstance(source, RpaTemplatePackage):
         return source

@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 from __future__ import annotations
 
 import json
@@ -14,7 +15,12 @@ CONSOLE_SRC = REPO_ROOT / "console" / "src"
 # so the switcher file alone no longer holds the `key: "<lang>"` literals.  Scan
 # both; a language that appears in neither counts as unregistered.
 SWITCHER_SOURCES = (
-    REPO_ROOT / "console" / "src" / "components" / "LanguageSwitcher" / "index.tsx",
+    REPO_ROOT
+    / "console"
+    / "src"
+    / "components"
+    / "LanguageSwitcher"
+    / "index.tsx",
     REPO_ROOT / "console" / "src" / "constants" / "languageList.tsx",
 )
 LANGS = ("en", "zh", "ja", "ru", "pt-BR", "id")
@@ -39,17 +45,19 @@ errors: list[str] = []
 for lang in LANGS:
     base_path = CONSOLE_LOCALES / f"{lang}.json"
     if not base_path.exists():
-        errors.append(f"missing base locale: {base_path.relative_to(REPO_ROOT)}")
+        errors.append(
+            f"missing base locale: {base_path.relative_to(REPO_ROOT)}",
+        )
         continue
 
     base = load_json(base_path)
     if "pipelines" in base:
         errors.append(
-            f"base locale still contains top-level pipelines block: {base_path.relative_to(REPO_ROOT)}"
+            f"base locale still contains top-level pipelines block: {base_path.relative_to(REPO_ROOT)}",
         )
     if "copaw" in base:
         errors.append(
-            f"base locale should not contain top-level copaw block: {base_path.relative_to(REPO_ROOT)}"
+            f"base locale should not contain top-level copaw block: {base_path.relative_to(REPO_ROOT)}",
         )
 
     projects_path = CONSOLE_LOCALES / "copaw" / "projects" / f"{lang}.json"
@@ -69,13 +77,15 @@ for lang in LANGS:
             # exist must still carry content: an empty carrier is the same debt
             # wearing a hat.
             if lang in ("en", "zh"):
-                errors.append(f"missing split locale: {split_path.relative_to(REPO_ROOT)}")
+                errors.append(
+                    f"missing split locale: {split_path.relative_to(REPO_ROOT)}",
+                )
             continue
         payload = load_json(split_path)
         node = nested_get(payload, *pointer)
         if not isinstance(node, dict) or not node:
             errors.append(
-                f"split locale node is empty: {split_path.relative_to(REPO_ROOT)} -> {'.'.join(pointer)}"
+                f"split locale node is empty: {split_path.relative_to(REPO_ROOT)} -> {'.'.join(pointer)}",
             )
 
 switcher_keys: set[str] = set()
@@ -83,18 +93,20 @@ present_sources = [path for path in SWITCHER_SOURCES if path.exists()]
 if present_sources:
     for path in present_sources:
         switcher_keys |= set(
-            re.findall(r'key:\s*"([^"]+)"', path.read_text(encoding="utf-8"))
+            re.findall(r'key:\s*"([^"]+)"', path.read_text(encoding="utf-8")),
         )
 else:
     errors.append(
         "missing language switcher: "
-        + ", ".join(str(path.relative_to(REPO_ROOT)) for path in SWITCHER_SOURCES)
+        + ", ".join(
+            str(path.relative_to(REPO_ROOT)) for path in SWITCHER_SOURCES
+        ),
     )
 
 for lang in LANGS:
     if lang not in switcher_keys:
         errors.append(
-            f"locale bundle {lang}.json ships but has no entry in the language switcher"
+            f"locale bundle {lang}.json ships but has no entry in the language switcher",
         )
 
 # `projects`, `pipelines`, `rpa`, `workbench` are copaw-prefixed groups; the
@@ -121,7 +133,7 @@ OVERLAY_GROUPS = (
 # them, so restricting the roots keeps the scan from treating cache keys as copy.
 LITERAL_KEY_RE = re.compile(
     r'["\']((?:copaw\.(?:projects|pipelines|rpa|workbench)|projects|knowledge)'
-    r'\.[A-Za-z0-9_.]+?)["\']'
+    r'\.[A-Za-z0-9_.]+?)["\']',
 )
 
 # Conflict-surface knife 72 (judgment 52): copy ownership follows the author of
@@ -172,9 +184,9 @@ UPSTREAM_OWNED_KEYS = {
     "voiceTranscription.loadFailed": "read from upstream's own settings line",
 }
 
-CALL_RE = re.compile(r'(?<![A-Za-z0-9_$])(?:[A-Za-z0-9_]+\.)?t\(')
+CALL_RE = re.compile(r"(?<![A-Za-z0-9_$])(?:[A-Za-z0-9_]+\.)?t\(")
 DESCRIPTOR_RE = re.compile(
-    r'(?:i18nKey|labelI18nKey)\s*:\s*["\']([A-Za-z][A-Za-z0-9_]*(?:\.[A-Za-z0-9_]+)+)["\']'
+    r'(?:i18nKey|labelI18nKey)\s*:\s*["\']([A-Za-z][A-Za-z0-9_]*(?:\.[A-Za-z0-9_]+)+)["\']',
 )
 KEYISH_RE = re.compile(r"^[a-z][A-Za-z0-9_]*(?:\.[A-Za-z0-9_]+)+$")
 STRING_ARG_RE = re.compile(r'^["\']([^"\']+)["\']$')
@@ -280,7 +292,7 @@ def call_site_keys(path: Path) -> set[str]:
         end = _matching_paren(text, match.end())
         if end is None:
             continue
-        first = _first_argument(text[match.end():end])
+        first = _first_argument(text[match.end() : end])
         literal = STRING_ARG_RE.match(first)
         if literal and KEYISH_RE.match(literal.group(1)):
             found.add(literal.group(1))
@@ -292,7 +304,10 @@ def flatten(node: Any, prefix: str = "") -> set[str]:
         return {
             key
             for child_key, child in node.items()
-            for key in flatten(child, f"{prefix}.{child_key}" if prefix else child_key)
+            for key in flatten(
+                child,
+                f"{prefix}.{child_key}" if prefix else child_key,
+            )
         }
     return {prefix} if prefix else set()
 
@@ -321,7 +336,7 @@ def template_family_roots(path: Path) -> set[str]:
         end = _matching_paren(text, match.end())
         if end is None:
             continue
-        first = _first_argument(text[match.end():end])
+        first = _first_argument(text[match.end() : end])
         if STRING_ARG_RE.match(first):
             continue
         template = TEMPLATE_ROOT_RE.match(first)
@@ -330,7 +345,9 @@ def template_family_roots(path: Path) -> set[str]:
     return roots
 
 
-def production_translation_keys() -> tuple[dict[str, list[str]], dict[str, list[str]]]:
+def production_translation_keys() -> (
+    tuple[dict[str, list[str]], dict[str, list[str]]]
+):
     found: dict[str, list[str]] = {}
     families: dict[str, list[str]] = {}
     for dirpath, dirnames, filenames in os.walk(CONSOLE_SRC):
@@ -340,7 +357,10 @@ def production_translation_keys() -> tuple[dict[str, list[str]], dict[str, list[
                 continue
             path = Path(dirpath) / filename
             rel = path.relative_to(CONSOLE_SRC)
-            if ".test." in filename or rel.as_posix() == "locales/copaw/register.ts":
+            if (
+                ".test." in filename
+                or rel.as_posix() == "locales/copaw/register.ts"
+            ):
                 continue
             text = path.read_text(encoding="utf-8")
             for key in call_site_keys(path):
@@ -362,7 +382,7 @@ for lang in ("en", "zh"):
             sites = ", ".join(sorted(set(call_sites[key])))
             errors.append(
                 f"translation key {key} is read by production code but missing from the "
-                f"{lang} bundle (sites: {sites})"
+                f"{lang} bundle (sites: {sites})",
             )
 
 en_overlay = overlay_keys("en")
@@ -378,7 +398,7 @@ for lang in ("en", "zh"):
             sites = ", ".join(sorted(set(template_families[root])))
             errors.append(
                 f"template key family {root}.* is read by production code but has no "
-                f"leaf in the {lang} bundle (sites: {sites})"
+                f"leaf in the {lang} bundle (sites: {sites})",
             )
 for key in sorted(en_overlay - zh_overlay):
     errors.append(f"copaw overlay key exists in en but not zh: {key}")
@@ -420,7 +440,7 @@ for group in OVERLAY_GROUPS:
         for key in sorted(group_keys(group, lang) - english):
             errors.append(
                 f"copaw overlay group {group} ships {key} in {lang} but en has no such "
-                f"leaf; a key the en overlay does not carry is unreachable copy"
+                f"leaf; a key the en overlay does not carry is unreachable copy",
             )
 
 # Same blindness, other direction: a leaf whose text byte-equals the en leaf is
@@ -436,7 +456,7 @@ for group in OVERLAY_GROUPS:
             if isinstance(value, str) and english.get(key) == value:
                 errors.append(
                     f"copaw overlay group {group} ships {key} in {lang} as a verbatim "
-                    f"copy of the en leaf; secondary-language copy must be translated"
+                    f"copy of the en leaf; secondary-language copy must be translated",
                 )
 
 
@@ -445,7 +465,11 @@ def bare_overlay_keys(lang: str) -> set[str]:
     for group in OVERLAY_GROUPS:
         path = CONSOLE_LOCALES / "copaw" / group / f"{lang}.json"
         if path.exists():
-            keys |= {k for k in flatten(load_json(path)) if not k.startswith("copaw.")}
+            keys |= {
+                k
+                for k in flatten(load_json(path))
+                if not k.startswith("copaw.")
+            }
     return keys
 
 
@@ -460,7 +484,7 @@ for lang in ("en", "zh"):
     for key in sorted(shadowed):
         errors.append(
             f"copaw overlay key {key} shadows the same path in the upstream base locale "
-            f"({lang}.json); overlay copy must stay additive"
+            f"({lang}.json); overlay copy must stay additive",
         )
 
 if errors:
@@ -468,12 +492,14 @@ if errors:
         print(f"ERROR: {item}")
     sys.exit(1)
 
-gated_families = sorted(root for root in template_families if root not in TEMPLATE_ROOT_EXEMPTIONS)
+gated_families = sorted(
+    root for root in template_families if root not in TEMPLATE_ROOT_EXEMPTIONS
+)
 
 print(
     "CoPaw locale split check passed "
     f"({len(gated)} production gated keys, {len(gated_families)} template key families gated, "
     f"{len(template_families) - len(gated_families)} template families exempted, "
     f"{len(en_overlay)} overlay keys en/zh, "
-    f"{len(exempted)} upstream-owned keys exempted)"
+    f"{len(exempted)} upstream-owned keys exempted)",
 )

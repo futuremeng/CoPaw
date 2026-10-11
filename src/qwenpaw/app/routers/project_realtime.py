@@ -109,7 +109,10 @@ def _build_file_tree_signal(
     text_like_files = 0
     recently_updated_files = 0
 
-    for path in sorted(project_dir.rglob("*"), key=lambda item: item.as_posix().lower()):
+    for path in sorted(
+        project_dir.rglob("*"),
+        key=lambda item: item.as_posix().lower(),
+    ):
         try:
             if not path.is_file():
                 continue
@@ -134,10 +137,9 @@ def _build_file_tree_signal(
             visible_files += 1
             if agents_router_impl._is_original_project_metric_file(rel):
                 original_files += 1
-            elif (
-                agents_router_impl._is_intermediate_project_metric_file(rel)
-                or agents_router_impl._is_artifact_project_metric_file(rel)
-            ):
+            elif agents_router_impl._is_intermediate_project_metric_file(
+                rel,
+            ) or agents_router_impl._is_artifact_project_metric_file(rel):
                 derived_files += 1
 
         if extension in agents_router_impl._PROJECT_KNOWLEDGE_EXTENSIONS:
@@ -151,7 +153,7 @@ def _build_file_tree_signal(
 
     signal = {
         "fingerprint": _hash_entries(
-            [f"{path}:{fingerprint}" for path, fingerprint in entries.items()]
+            [f"{path}:{fingerprint}" for path, fingerprint in entries.items()],
         ),
         "file_count": file_count,
         "latest_mtime_ns": latest_mtime_ns,
@@ -179,7 +181,10 @@ def _build_pipeline_signal(
     latest_mtime_ns = 0
 
     if runs_dir.exists() and runs_dir.is_dir():
-        for path in sorted(runs_dir.rglob("*.json"), key=lambda item: item.as_posix().lower()):
+        for path in sorted(
+            runs_dir.rglob("*.json"),
+            key=lambda item: item.as_posix().lower(),
+        ):
             try:
                 if not path.is_file():
                     continue
@@ -195,7 +200,7 @@ def _build_pipeline_signal(
 
     signal = {
         "fingerprint": _hash_entries(
-            [f"{path}:{fingerprint}" for path, fingerprint in entries.items()]
+            [f"{path}:{fingerprint}" for path, fingerprint in entries.items()],
         ),
         "run_count": run_count,
         "latest_mtime_ns": latest_mtime_ns,
@@ -221,7 +226,7 @@ def _build_project_realtime_snapshot(
             [
                 file_tree_signal["fingerprint"],
                 pipeline_signal["fingerprint"],
-            ]
+            ],
         ),
         "file_tree_entries": file_tree_entries,
         "pipeline_entries": pipeline_entries,
@@ -252,7 +257,7 @@ async def stream_project_realtime(
     manager = getattr(websocket.app.state, "multi_agent_manager", None)
     if manager is None:
         await websocket.send_json(
-            {"type": "error", "detail": "MultiAgentManager not initialized"}
+            {"type": "error", "detail": "MultiAgentManager not initialized"},
         )
         await websocket.close(code=1011)
         return
@@ -285,7 +290,10 @@ async def stream_project_realtime(
                 project_dir,
                 projectId,
             )
-            explicit_event_id, explicit_changed_paths = await asyncio.to_thread(
+            (
+                explicit_event_id,
+                explicit_changed_paths,
+            ) = await asyncio.to_thread(
                 collect_project_realtime_changes,
                 project_dir,
                 projectId,
@@ -302,9 +310,15 @@ async def stream_project_realtime(
                 changed_paths_truncated = False
                 changed_count = 0
             else:
-                fingerprint_changed = current_fingerprint != previous_state["fingerprint"]
-                explicit_event_changed = explicit_event_id > last_explicit_event_id
-                should_emit_snapshot = fingerprint_changed or explicit_event_changed
+                fingerprint_changed = (
+                    current_fingerprint != previous_state["fingerprint"]
+                )
+                explicit_event_changed = (
+                    explicit_event_id > last_explicit_event_id
+                )
+                should_emit_snapshot = (
+                    fingerprint_changed or explicit_event_changed
+                )
                 if should_emit_snapshot:
                     file_tree_changed: list[str] = []
                     pipeline_changed: list[str] = []
@@ -320,11 +334,17 @@ async def stream_project_realtime(
                     if explicit_event_changed and not fingerprint_changed:
                         reason = "explicit_event"
                     all_changed_paths = sorted(
-                        set(file_tree_changed + pipeline_changed + explicit_changed_paths)
+                        set(
+                            file_tree_changed
+                            + pipeline_changed
+                            + explicit_changed_paths,
+                        ),
                     )
                     changed_paths = all_changed_paths[:_MAX_CHANGED_PATHS]
                     changed_dirs = _build_changed_dirs(all_changed_paths)
-                    changed_paths_truncated = len(all_changed_paths) > _MAX_CHANGED_PATHS
+                    changed_paths_truncated = (
+                        len(all_changed_paths) > _MAX_CHANGED_PATHS
+                    )
                     changed_count = len(all_changed_paths)
                 else:
                     changed_dirs = []
@@ -344,7 +364,7 @@ async def stream_project_realtime(
                         "changed_paths_truncated": changed_paths_truncated,
                         "changed_count": changed_count,
                         "snapshot": current_state["snapshot"],
-                    }
+                    },
                 )
                 last_emit_at = loop.time()
             elif (loop.time() - last_emit_at) * 1000 >= heartbeat_ms:
@@ -355,7 +375,7 @@ async def stream_project_realtime(
                         "event_id": event_id,
                         "project_id": projectId,
                         "generated_at": datetime.now(timezone.utc).isoformat(),
-                    }
+                    },
                 )
                 last_emit_at = loop.time()
 

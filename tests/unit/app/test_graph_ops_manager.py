@@ -10,7 +10,9 @@ import pytest
 
 from copaw.config.config import Config, GraphifyConfig, KnowledgeSourceSpec
 from copaw.knowledge import GraphOpsManager, KnowledgeManager
-from qwenpaw.knowledge.enrichment_pipeline import run_system_knowledge_enrichment
+from qwenpaw.knowledge.enrichment_pipeline import (
+    run_system_knowledge_enrichment,
+)
 from qwenpaw.knowledge.graphify_provider import GraphifyNotConfiguredError
 from tests.fixtures.knowledge_config import make_knowledge_config
 
@@ -30,7 +32,12 @@ def _build_graphify_text_source() -> KnowledgeSourceSpec:
 
 
 def _write_graph_json(path, nodes, edges):
-    data = {"directed": False, "multigraph": False, "nodes": nodes, "links": edges}
+    data = {
+        "directed": False,
+        "multigraph": False,
+        "nodes": nodes,
+        "links": edges,
+    }
     path.write_text(json.dumps(data), encoding="utf-8")
 
 
@@ -51,7 +58,7 @@ def _await_terminal_memify_status(
     if last_job is None:
         raise AssertionError(f"memify job {job_id} not found")
     raise AssertionError(
-        f"memify job {job_id} did not reach terminal status, got {last_job.get('status')}"
+        f"memify job {job_id} did not reach terminal status, got {last_job.get('status')}",
     )
 
 
@@ -72,7 +79,7 @@ def _await_terminal_quality_status(
     if last_job is None:
         raise AssertionError(f"quality job {job_id} not found")
     raise AssertionError(
-        f"quality job {job_id} did not reach terminal status, got {last_job.get('status')}"
+        f"quality job {job_id} did not reach terminal status, got {last_job.get('status')}",
     )
 
 
@@ -87,16 +94,29 @@ def test_graph_query_graphify_with_real_provider(tmp_path):
     _write_graph_json(
         graph_json,
         nodes=[
-            {"id": "n1", "label": "AgentRunner_graphtool", "source_file": "runner.py"},
+            {
+                "id": "n1",
+                "label": "AgentRunner_graphtool",
+                "source_file": "runner.py",
+            },
             {"id": "n2", "label": "ToolDispatcher", "source_file": "tools.py"},
         ],
-        edges=[{"source": "n1", "target": "n2", "relation": "calls", "confidence": "EXTRACTED"}],
+        edges=[
+            {
+                "source": "n1",
+                "target": "n2",
+                "relation": "calls",
+                "confidence": "EXTRACTED",
+            },
+        ],
     )
     knowledge_config = make_knowledge_config()
     knowledge_config.enabled = True
     knowledge_config.engine = "graphify"
     knowledge_config.graphify.graph_path = str(graph_json)
-    knowledge_config.graphify.fallback_to_local = False  # surface errors explicitly
+    knowledge_config.graphify.fallback_to_local = (
+        False  # surface errors explicitly
+    )
 
     graph_ops = GraphOpsManager(tmp_path)
     result = graph_ops.graph_query(
@@ -135,7 +155,9 @@ def test_graph_query_graphify_fallback_when_not_configured(tmp_path):
     manager.index_source(
         source,
         knowledge_config,
-        SimpleNamespace(knowledge_chunk_size=knowledge_config.index.chunk_size),
+        SimpleNamespace(
+            knowledge_chunk_size=knowledge_config.index.chunk_size,
+        ),
     )
 
     graph_ops = GraphOpsManager(tmp_path)
@@ -185,7 +207,9 @@ def test_graph_query_graphify_fallback_on_runtime_error(tmp_path):
     knowledge_config = make_knowledge_config()
     knowledge_config.enabled = True
     knowledge_config.engine = "graphify"
-    knowledge_config.graphify.graph_path = str(tmp_path / "ghost.json")  # file will exist but is corrupt
+    knowledge_config.graphify.graph_path = str(
+        tmp_path / "ghost.json",
+    )  # file will exist but is corrupt
     knowledge_config.graphify.fallback_to_local = True
 
     # Write a corrupt graph.json to trigger GraphifyLoadError
@@ -197,7 +221,9 @@ def test_graph_query_graphify_fallback_on_runtime_error(tmp_path):
     manager.index_source(
         source,
         knowledge_config,
-        SimpleNamespace(knowledge_chunk_size=knowledge_config.index.chunk_size),
+        SimpleNamespace(
+            knowledge_chunk_size=knowledge_config.index.chunk_size,
+        ),
     )
 
     graph_ops = GraphOpsManager(tmp_path)
@@ -314,7 +340,9 @@ def test_local_memify_builds_queryable_graph(tmp_path):
     manager.index_source(
         source,
         knowledge_config,
-        SimpleNamespace(knowledge_chunk_size=knowledge_config.index.chunk_size),
+        SimpleNamespace(
+            knowledge_chunk_size=knowledge_config.index.chunk_size,
+        ),
     )
 
     graph_ops = GraphOpsManager(tmp_path)
@@ -347,7 +375,9 @@ def test_local_memify_builds_queryable_graph(tmp_path):
     assert len(result.records) >= 1
 
 
-def test_local_memify_emits_path_time_and_version_relations_from_chunk_ner(tmp_path):
+def test_local_memify_emits_path_time_and_version_relations_from_chunk_ner(
+    tmp_path,
+):
     knowledge_config = make_knowledge_config()
     knowledge_config.enabled = True
     knowledge_config.engine = "local_lexical"
@@ -355,7 +385,10 @@ def test_local_memify_emits_path_time_and_version_relations_from_chunk_ner(tmp_p
     project_root = tmp_path / "project-graph-ner"
     docs_dir = project_root / "docs"
     docs_dir.mkdir(parents=True, exist_ok=True)
-    (docs_dir / "note.md").write_text("AgentRunner uses ToolDispatcher.", encoding="utf-8")
+    (docs_dir / "note.md").write_text(
+        "AgentRunner uses ToolDispatcher.",
+        encoding="utf-8",
+    )
 
     source = KnowledgeSourceSpec(
         id="local-graph-ner-source",
@@ -377,7 +410,11 @@ def test_local_memify_emits_path_time_and_version_relations_from_chunk_ner(tmp_p
         "reason_code": "HANLP_READY",
         "reason": "HanLP semantic engine is ready.",
     }
-    with patch.object(manager._semantic_runtime, "probe", return_value=ready_state), patch.object(
+    with patch.object(
+        manager._semantic_runtime,
+        "probe",
+        return_value=ready_state,
+    ), patch.object(
         manager._semantic_runtime,
         "tokenize",
         return_value=(
@@ -388,7 +425,9 @@ def test_local_memify_emits_path_time_and_version_relations_from_chunk_ner(tmp_p
         manager.index_source(
             source,
             knowledge_config,
-            SimpleNamespace(knowledge_chunk_size=knowledge_config.index.chunk_size),
+            SimpleNamespace(
+                knowledge_chunk_size=knowledge_config.index.chunk_size,
+            ),
         )
 
     graph_ops = GraphOpsManager(tmp_path)
@@ -421,7 +460,9 @@ def test_local_memify_emits_path_time_and_version_relations_from_chunk_ner(tmp_p
     assert any(record.get("version_id") for record in result.records)
 
 
-def test_local_graph_query_supports_path_time_filter_sort_and_aggregate(tmp_path):
+def test_local_graph_query_supports_path_time_filter_sort_and_aggregate(
+    tmp_path,
+):
     knowledge_config = make_knowledge_config()
     knowledge_config.enabled = True
     knowledge_config.engine = "local_lexical"
@@ -452,7 +493,11 @@ def test_local_graph_query_supports_path_time_filter_sort_and_aggregate(tmp_path
         "reason_code": "HANLP_READY",
         "reason": "HanLP semantic engine is ready.",
     }
-    with patch.object(manager._semantic_runtime, "probe", return_value=ready_state), patch.object(
+    with patch.object(
+        manager._semantic_runtime,
+        "probe",
+        return_value=ready_state,
+    ), patch.object(
         manager._semantic_runtime,
         "tokenize",
         return_value=(
@@ -463,14 +508,21 @@ def test_local_graph_query_supports_path_time_filter_sort_and_aggregate(tmp_path
         manager.index_source(
             source,
             knowledge_config,
-            SimpleNamespace(knowledge_chunk_size=knowledge_config.index.chunk_size),
+            SimpleNamespace(
+                knowledge_chunk_size=knowledge_config.index.chunk_size,
+            ),
         )
         time.sleep(0.02)
-        note_path.write_text("AgentRunner uses ToolDispatcher and KnowledgeGraph.", encoding="utf-8")
+        note_path.write_text(
+            "AgentRunner uses ToolDispatcher and KnowledgeGraph.",
+            encoding="utf-8",
+        )
         manager.index_source(
             source,
             knowledge_config,
-            SimpleNamespace(knowledge_chunk_size=knowledge_config.index.chunk_size),
+            SimpleNamespace(
+                knowledge_chunk_size=knowledge_config.index.chunk_size,
+            ),
         )
 
     graph_ops = GraphOpsManager(tmp_path)
@@ -495,8 +547,14 @@ def test_local_graph_query_supports_path_time_filter_sort_and_aggregate(tmp_path
     )
 
     assert len(all_versions.records) >= 2
-    assert all(str(record.get("document_path") or "").endswith("docs/note.md") for record in all_versions.records)
-    assert all_versions.records[0]["snapshot_at"] >= all_versions.records[-1]["snapshot_at"]
+    assert all(
+        str(record.get("document_path") or "").endswith("docs/note.md")
+        for record in all_versions.records
+    )
+    assert (
+        all_versions.records[0]["snapshot_at"]
+        >= all_versions.records[-1]["snapshot_at"]
+    )
 
     latest_snapshot_at = all_versions.records[0]["snapshot_at"]
     latest_version_id = all_versions.records[0]["version_id"]
@@ -512,8 +570,14 @@ def test_local_graph_query_supports_path_time_filter_sort_and_aggregate(tmp_path
     )
 
     assert latest_only.records
-    assert all(record.get("snapshot_at") == latest_snapshot_at for record in latest_only.records)
-    assert all(record.get("version_id") == latest_version_id for record in latest_only.records)
+    assert all(
+        record.get("snapshot_at") == latest_snapshot_at
+        for record in latest_only.records
+    )
+    assert all(
+        record.get("version_id") == latest_version_id
+        for record in latest_only.records
+    )
 
     aggregated = graph_ops.graph_query(
         config=knowledge_config,
@@ -528,7 +592,9 @@ def test_local_graph_query_supports_path_time_filter_sort_and_aggregate(tmp_path
 
     assert len(aggregated.records) == 1
     assert aggregated.records[0].get("aggregate_group") == "path"
-    assert str(aggregated.records[0].get("aggregate_key") or "").endswith("docs/note.md")
+    assert str(aggregated.records[0].get("aggregate_key") or "").endswith(
+        "docs/note.md",
+    )
     assert int(aggregated.records[0].get("aggregate_count") or 0) >= 2
 
 
@@ -541,7 +607,10 @@ def test_local_graph_query_filters_latest_version_and_sorts_by_time(tmp_path):
     docs_dir = project_root / "docs"
     docs_dir.mkdir(parents=True, exist_ok=True)
     note_path = docs_dir / "note.md"
-    note_path.write_text("AgentRunner uses ToolDispatcher and FileSearch.", encoding="utf-8")
+    note_path.write_text(
+        "AgentRunner uses ToolDispatcher and FileSearch.",
+        encoding="utf-8",
+    )
 
     source = KnowledgeSourceSpec(
         id="local-graph-filter-source",
@@ -563,7 +632,11 @@ def test_local_graph_query_filters_latest_version_and_sorts_by_time(tmp_path):
         "reason_code": "HANLP_READY",
         "reason": "HanLP semantic engine is ready.",
     }
-    with patch.object(manager._semantic_runtime, "probe", return_value=ready_state), patch.object(
+    with patch.object(
+        manager._semantic_runtime,
+        "probe",
+        return_value=ready_state,
+    ), patch.object(
         manager._semantic_runtime,
         "tokenize",
         return_value=(
@@ -574,14 +647,21 @@ def test_local_graph_query_filters_latest_version_and_sorts_by_time(tmp_path):
         manager.index_source(
             source,
             knowledge_config,
-            SimpleNamespace(knowledge_chunk_size=knowledge_config.index.chunk_size),
+            SimpleNamespace(
+                knowledge_chunk_size=knowledge_config.index.chunk_size,
+            ),
         )
         time.sleep(0.01)
-        note_path.write_text("AgentRunner uses ToolDispatcher and KnowledgeGraph.", encoding="utf-8")
+        note_path.write_text(
+            "AgentRunner uses ToolDispatcher and KnowledgeGraph.",
+            encoding="utf-8",
+        )
         manager.index_source(
             source,
             knowledge_config,
-            SimpleNamespace(knowledge_chunk_size=knowledge_config.index.chunk_size),
+            SimpleNamespace(
+                knowledge_chunk_size=knowledge_config.index.chunk_size,
+            ),
         )
 
     graph_ops = GraphOpsManager(tmp_path)
@@ -602,10 +682,15 @@ def test_local_graph_query_filters_latest_version_and_sorts_by_time(tmp_path):
         top_k=20,
         timeout_sec=30,
     )
-    timestamps = [record.get("snapshot_at") for record in sorted_result.records]
+    timestamps = [
+        record.get("snapshot_at") for record in sorted_result.records
+    ]
 
     assert len(sorted_result.records) >= 2
-    assert all(str(record.get("document_path") or "").endswith("docs/note.md") for record in sorted_result.records)
+    assert all(
+        str(record.get("document_path") or "").endswith("docs/note.md")
+        for record in sorted_result.records
+    )
     assert timestamps == sorted(timestamps, reverse=True)
 
     latest_result = graph_ops.graph_query(
@@ -618,7 +703,9 @@ def test_local_graph_query_filters_latest_version_and_sorts_by_time(tmp_path):
         top_k=20,
         timeout_sec=30,
     )
-    latest_versions = {record.get("version_id") for record in latest_result.records}
+    latest_versions = {
+        record.get("version_id") for record in latest_result.records
+    }
 
     assert len(latest_result.records) >= 1
     assert len(latest_versions) == 1
@@ -649,7 +736,9 @@ def test_local_graph_query_aggregates_by_path(tmp_path):
     manager.index_source(
         source,
         knowledge_config,
-        SimpleNamespace(knowledge_chunk_size=knowledge_config.index.chunk_size),
+        SimpleNamespace(
+            knowledge_chunk_size=knowledge_config.index.chunk_size,
+        ),
     )
 
     graph_ops = GraphOpsManager(tmp_path)
@@ -702,7 +791,9 @@ def test_local_memify_runs_enrichment_pipeline_and_query_prefers_l2(tmp_path):
     manager.index_source(
         source,
         knowledge_config,
-        SimpleNamespace(knowledge_chunk_size=knowledge_config.index.chunk_size),
+        SimpleNamespace(
+            knowledge_chunk_size=knowledge_config.index.chunk_size,
+        ),
     )
 
     graph_ops = GraphOpsManager(tmp_path)
@@ -759,7 +850,9 @@ def test_graph_query_respects_preferred_output_mode_for_local_engine(tmp_path):
     manager.index_source(
         source,
         knowledge_config,
-        SimpleNamespace(knowledge_chunk_size=knowledge_config.index.chunk_size),
+        SimpleNamespace(
+            knowledge_chunk_size=knowledge_config.index.chunk_size,
+        ),
     )
 
     graph_ops = GraphOpsManager(tmp_path)
@@ -803,7 +896,10 @@ def test_graph_query_respects_preferred_output_mode_for_local_engine(tmp_path):
     assert str(fast_result.records[0].get("evidence_ref") or "")
 
 
-def test_graph_query_fast_preview_includes_relation_and_evidence_metadata(tmp_path, monkeypatch):
+def test_graph_query_fast_preview_includes_relation_and_evidence_metadata(
+    tmp_path,
+    monkeypatch,
+):
     knowledge_config = make_knowledge_config()
     knowledge_config.enabled = True
     knowledge_config.engine = "local_lexical"
@@ -839,7 +935,7 @@ def test_graph_query_fast_preview_includes_relation_and_evidence_metadata(tmp_pa
                     "scope_type": "agent",
                     "scope_id": "demo-agent",
                     "scope_priority": 100,
-                }
+                },
             ],
         },
     )
@@ -901,7 +997,13 @@ def test_graphify_query_prefers_enriched_graph_when_enabled(tmp_path):
     graph_ops.enriched_graph_path.parent.mkdir(parents=True, exist_ok=True)
     _write_graph_json(
         graph_ops.enriched_graph_path,
-        nodes=[{"id": "n2", "label": "EnrichedNode", "source_file": "enriched.md"}],
+        nodes=[
+            {
+                "id": "n2",
+                "label": "EnrichedNode",
+                "source_file": "enriched.md",
+            },
+        ],
         edges=[],
     )
 
@@ -921,12 +1023,15 @@ def test_graphify_query_prefers_enriched_graph_when_enabled(tmp_path):
                 "source_type": "graph",
                 "document_path": "enriched.md",
                 "document_title": "enriched",
-            }
+            },
         ]
 
     # D-16 moved the implementation to qwenpaw; patching the copaw alias shell
     # leaves the module's own reference untouched, so the fake would never run.
-    with patch("qwenpaw.knowledge.graph_ops.graphify_query", _fake_graphify_query):
+    with patch(
+        "qwenpaw.knowledge.graph_ops.graphify_query",
+        _fake_graphify_query,
+    ):
         result = graph_ops.graph_query(
             config=knowledge_config,
             query_mode="template",
@@ -941,7 +1046,9 @@ def test_graphify_query_prefers_enriched_graph_when_enabled(tmp_path):
     assert called_graph_path == str(graph_ops.enriched_graph_path)
     assert result.provenance.get("engine") == "graphify"
     assert result.provenance.get("layer") == "l2_enriched"
-    assert result.provenance.get("graph_path") == str(graph_ops.enriched_graph_path)
+    assert result.provenance.get("graph_path") == str(
+        graph_ops.enriched_graph_path,
+    )
     assert len(result.records) == 1
 
 
@@ -967,7 +1074,9 @@ def test_run_memify_job_exposes_enrichment_fields(tmp_path):
     manager.index_source(
         source,
         knowledge_config,
-        SimpleNamespace(knowledge_chunk_size=knowledge_config.index.chunk_size),
+        SimpleNamespace(
+            knowledge_chunk_size=knowledge_config.index.chunk_size,
+        ),
     )
 
     graph_ops = GraphOpsManager(tmp_path)
@@ -988,7 +1097,9 @@ def test_run_memify_job_exposes_enrichment_fields(tmp_path):
     assert isinstance(job.get("enrichment_metrics"), dict)
 
 
-def test_maybe_start_quality_self_drive_skips_when_quality_target_met(tmp_path):
+def test_maybe_start_quality_self_drive_skips_when_quality_target_met(
+    tmp_path,
+):
     knowledge_config = make_knowledge_config()
     knowledge_config.enabled = True
     knowledge_config.memify_enabled = True
@@ -1044,7 +1155,7 @@ def test_pick_latest_memify_result_respects_dataset_scope(tmp_path):
                 "dataset_scope": ["project-b-workspace"],
                 "updated_at": "2026-04-13T11:00:00+00:00",
             },
-        }
+        },
     )
 
     picked = graph_ops._pick_latest_memify_result(  # pylint: disable=protected-access
@@ -1083,8 +1194,8 @@ def test_quality_loop_persists_reflection_artifacts(tmp_path):
                     "low_confidence_edges": 8,
                     "missing_evidence_edges": 0,
                 },
-            }
-        }
+            },
+        },
     )
 
     with patch.object(
@@ -1117,7 +1228,11 @@ def test_quality_loop_persists_reflection_artifacts(tmp_path):
         )
 
     assert response["accepted"] is True
-    status = _await_terminal_quality_status(graph_ops, response["job_id"], timeout_sec=5.0)
+    status = _await_terminal_quality_status(
+        graph_ops,
+        response["job_id"],
+        timeout_sec=5.0,
+    )
     assert status["status"] == "succeeded"
     artifacts = status.get("reflection_artifacts") or {}
     assert artifacts.get("lessons_path")
@@ -1161,8 +1276,8 @@ def test_quality_loop_stops_when_agent_gate_requires_review(tmp_path):
                     "low_confidence_edges": 8,
                     "missing_evidence_edges": 0,
                 },
-            }
-        }
+            },
+        },
     )
 
     with patch.object(
@@ -1202,7 +1317,11 @@ def test_quality_loop_stops_when_agent_gate_requires_review(tmp_path):
             max_rounds=2,
             dry_run=False,
         )
-        status = _await_terminal_quality_status(graph_ops, response["job_id"], timeout_sec=5.0)
+        status = _await_terminal_quality_status(
+            graph_ops,
+            response["job_id"],
+            timeout_sec=5.0,
+        )
 
     assert response["accepted"] is True
     assert status["status"] == "succeeded"
@@ -1240,7 +1359,7 @@ def test_enrichment_policy_prunes_low_confidence_edges(tmp_path):
                         "document_title": "Doc",
                     },
                 ],
-            }
+            },
         ),
         encoding="utf-8",
     )

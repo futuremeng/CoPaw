@@ -74,7 +74,9 @@ def _render_pos_text(
                 continue
             token_text = str(token.get("text") or "")
             pos_tag = str(token.get("pos") or "")
-            token_labels.append(f"{token_text}/{pos_tag}" if pos_tag else token_text)
+            token_labels.append(
+                f"{token_text}/{pos_tag}" if pos_tag else token_text,
+            )
         lines.append("")
         lines.append(f"[Line {line.get('line_index')}] {line_text}")
         lines.append(f"tokens={' | '.join(token_labels)}")
@@ -94,7 +96,11 @@ def write_chunk_pos_artifacts(
     previous_manifest_paths = manager._load_source_pos_manifest(source.id)
     current_pos_paths: set[str] = set()
     raw_chunks = payload.get("chunks") or []
-    chunks = [item for item in raw_chunks if isinstance(item, dict)] if isinstance(raw_chunks, list) else []
+    chunks = (
+        [item for item in raw_chunks if isinstance(item, dict)]
+        if isinstance(raw_chunks, list)
+        else []
+    )
     chunk_groups = manager._group_chunks_for_ner(chunks)
     total_documents = len(chunk_groups)
     pos_ready_so_far = 0
@@ -107,9 +113,14 @@ def write_chunk_pos_artifacts(
     for index, group in enumerate(chunk_groups, start=1):
         representative = group[0]
 
-        if all(manager._chunk_stage_ready_for_resume(chunk, stage="pos") for chunk in group):
+        if all(
+            manager._chunk_stage_ready_for_resume(chunk, stage="pos")
+            for chunk in group
+        ):
             for chunk in group:
-                current_pos_paths.update(manager._chunk_stage_paths(chunk, stage="pos"))
+                current_pos_paths.update(
+                    manager._chunk_stage_paths(chunk, stage="pos"),
+                )
             pos_ready_so_far += 1
             pos_line_so_far += max(
                 max(0, _safe_count_int(chunk.get("pos_line_count") or 0))
@@ -124,7 +135,9 @@ def write_chunk_pos_artifacts(
                 for chunk in group
             )
             for chunk in group:
-                raw_pos_tag_types = chunk.get("pos_tag_types") or chunk.get("syntax_pos_tag_types")
+                raw_pos_tag_types = chunk.get("pos_tag_types") or chunk.get(
+                    "syntax_pos_tag_types",
+                )
                 if not isinstance(raw_pos_tag_types, list):
                     continue
                 for item in raw_pos_tag_types:
@@ -144,9 +157,11 @@ def write_chunk_pos_artifacts(
                             "pos_count": pos_count_so_far,
                             "pos_tag_type_count": len(pos_tag_types_so_far),
                             "syntax_pos_count": pos_count_so_far,
-                            "syntax_pos_tag_type_count": len(pos_tag_types_so_far),
+                            "syntax_pos_tag_type_count": len(
+                                pos_tag_types_so_far,
+                            ),
                         },
-                    }
+                    },
                 )
             continue
 
@@ -165,9 +180,19 @@ def write_chunk_pos_artifacts(
             chunk.pop("pos_structured_path", None)
             chunk.pop("pos_line_stats_path", None)
 
-        tokenize_relative_path = str(representative.get("tokenize_structured_path") or "").strip()
-        tokenize_payload = _load_json_payload(manager.root_dir / tokenize_relative_path) if tokenize_relative_path else None
-        line_entries = tokenize_payload.get("lines") if isinstance(tokenize_payload, dict) else []
+        tokenize_relative_path = str(
+            representative.get("tokenize_structured_path") or "",
+        ).strip()
+        tokenize_payload = (
+            _load_json_payload(manager.root_dir / tokenize_relative_path)
+            if tokenize_relative_path
+            else None
+        )
+        line_entries = (
+            tokenize_payload.get("lines")
+            if isinstance(tokenize_payload, dict)
+            else []
+        )
         if not isinstance(line_entries, list) or not line_entries:
             if progress_callback is not None:
                 progress_callback(
@@ -182,9 +207,11 @@ def write_chunk_pos_artifacts(
                             "pos_count": pos_count_so_far,
                             "pos_tag_type_count": len(pos_tag_types_so_far),
                             "syntax_pos_count": pos_count_so_far,
-                            "syntax_pos_tag_type_count": len(pos_tag_types_so_far),
+                            "syntax_pos_tag_type_count": len(
+                                pos_tag_types_so_far,
+                            ),
                         },
-                    }
+                    },
                 )
             continue
 
@@ -193,9 +220,16 @@ def write_chunk_pos_artifacts(
         for fallback_index, line_entry in enumerate(line_entries, start=1):
             if not isinstance(line_entry, dict):
                 continue
-            line_index = _safe_count_int(line_entry.get("line_index") or fallback_index) or fallback_index
+            line_index = (
+                _safe_count_int(line_entry.get("line_index") or fallback_index)
+                or fallback_index
+            )
             text = str(line_entry.get("text") or "")
-            token_rows = [dict(token) for token in (line_entry.get("tokens") or []) if isinstance(token, dict)]
+            token_rows = [
+                dict(token)
+                for token in (line_entry.get("tokens") or [])
+                if isinstance(token, dict)
+            ]
             line_row = {
                 "line_index": line_index,
                 "text": text,
@@ -207,38 +241,86 @@ def write_chunk_pos_artifacts(
             line_rows.append(line_row)
             token_texts = _token_texts_from_line(line_entry)
             if token_texts:
-                pending_batches.append({"line_row": line_row, "token_texts": token_texts, "token_rows": token_rows})
+                pending_batches.append(
+                    {
+                        "line_row": line_row,
+                        "token_texts": token_texts,
+                        "token_rows": token_rows,
+                    },
+                )
 
         status = "ready" if config is not None else "unavailable"
-        reason_code = "HANLP_POS_READY" if config is not None else "NLP_ENGINE_UNAVAILABLE"
-        reason = "HanLP POS tagging completed successfully." if config is not None else "NLP semantic engine is not configured."
+        reason_code = (
+            "HANLP_POS_READY"
+            if config is not None
+            else "NLP_ENGINE_UNAVAILABLE"
+        )
+        reason = (
+            "HanLP POS tagging completed successfully."
+            if config is not None
+            else "NLP semantic engine is not configured."
+        )
 
         if config is not None and pending_batches:
             batch_size = 5
             for batch_start in range(0, len(pending_batches), batch_size):
-                batch_items = pending_batches[batch_start:batch_start + batch_size]
-                batch_tokens = [list(item["token_texts"]) for item in batch_items]
-                raw_items, state = manager._semantic_runtime.run_task_tokenized_batch("pos_ctb", batch_tokens, config)
+                batch_items = pending_batches[
+                    batch_start : batch_start + batch_size
+                ]
+                batch_tokens = [
+                    list(item["token_texts"]) for item in batch_items
+                ]
+                (
+                    raw_items,
+                    state,
+                ) = manager._semantic_runtime.run_task_tokenized_batch(
+                    "pos_ctb",
+                    batch_tokens,
+                    config,
+                )
                 manager._remember_semantic_engine_state(state)
-                batch_ready = str(state.get("status") or "").strip().lower() == "ready"
+                batch_ready = (
+                    str(state.get("status") or "").strip().lower() == "ready"
+                )
                 if not batch_ready:
                     status = str(state.get("status") or "degraded")
-                    reason_code = str(state.get("reason_code") or "HANLP_POS_FAILED")
-                    reason = str(state.get("reason") or "HanLP POS tagging failed.")
-                raw_items_list = raw_items if isinstance(raw_items, list) else []
+                    reason_code = str(
+                        state.get("reason_code") or "HANLP_POS_FAILED",
+                    )
+                    reason = str(
+                        state.get("reason") or "HanLP POS tagging failed.",
+                    )
+                raw_items_list = (
+                    raw_items if isinstance(raw_items, list) else []
+                )
                 for item_index, item in enumerate(batch_items):
                     line_row = item["line_row"]
                     token_rows = item["token_rows"]
-                    raw_item = raw_items_list[item_index] if item_index < len(raw_items_list) else []
-                    pos_rows = manager._normalize_hanlp_pos_tags(raw_item, tokens=token_rows) if batch_ready else []
+                    raw_item = (
+                        raw_items_list[item_index]
+                        if item_index < len(raw_items_list)
+                        else []
+                    )
+                    pos_rows = (
+                        manager._normalize_hanlp_pos_tags(
+                            raw_item,
+                            tokens=token_rows,
+                        )
+                        if batch_ready
+                        else []
+                    )
                     pos_lookup = {
-                        int(row.get("token_index") or 0): str(row.get("pos") or "")
+                        int(row.get("token_index") or 0): str(
+                            row.get("pos") or "",
+                        )
                         for row in pos_rows
                         if isinstance(row, dict)
                     }
                     tagged_tokens: list[dict[str, Any]] = []
                     for token in token_rows:
-                        token_index = _safe_count_int(token.get("token_index") or 0)
+                        token_index = _safe_count_int(
+                            token.get("token_index") or 0,
+                        )
                         token_text = str(token.get("text") or "")
                         pos_tag = pos_lookup.get(token_index, "")
                         tagged_token = dict(token)
@@ -248,21 +330,45 @@ def write_chunk_pos_artifacts(
                             pos_tag_types_so_far.add(pos_tag)
                     line_row["tokens"] = tagged_tokens
                     line_row["pos_tags"] = pos_rows
-                    line_row["pos_count"] = len([row for row in pos_rows if str(row.get("pos") or "").strip()])
+                    line_row["pos_count"] = len(
+                        [
+                            row
+                            for row in pos_rows
+                            if str(row.get("pos") or "").strip()
+                        ],
+                    )
 
         pos_line_count = len(line_rows)
-        pos_token_count = sum(_safe_count_int(line.get("token_count") or 0) for line in line_rows)
-        pos_count = sum(_safe_count_int(line.get("pos_count") or 0) for line in line_rows)
+        pos_token_count = sum(
+            _safe_count_int(line.get("token_count") or 0) for line in line_rows
+        )
+        pos_count = sum(
+            _safe_count_int(line.get("pos_count") or 0) for line in line_rows
+        )
         pos_tag_types = sorted(pos_tag_types_so_far)
         pos_tag_type_count = len(pos_tag_types)
 
-        pos_relative_path = manager._build_pos_relative_path(str(representative.get("chunk_path") or ""))
-        pos_structured_relative_path = manager._build_pos_structured_relative_path(str(representative.get("chunk_path") or ""))
-        pos_line_stats_relative_path = manager._build_pos_line_stats_relative_path(str(representative.get("chunk_path") or ""))
+        pos_relative_path = manager._build_pos_relative_path(
+            str(representative.get("chunk_path") or ""),
+        )
+        pos_structured_relative_path = (
+            manager._build_pos_structured_relative_path(
+                str(representative.get("chunk_path") or ""),
+            )
+        )
+        pos_line_stats_relative_path = (
+            manager._build_pos_line_stats_relative_path(
+                str(representative.get("chunk_path") or ""),
+            )
+        )
 
         pos_file_path = manager.root_dir / pos_relative_path
-        pos_structured_file_path = manager.root_dir / pos_structured_relative_path
-        pos_line_stats_file_path = manager.root_dir / pos_line_stats_relative_path
+        pos_structured_file_path = (
+            manager.root_dir / pos_structured_relative_path
+        )
+        pos_line_stats_file_path = (
+            manager.root_dir / pos_line_stats_relative_path
+        )
         pos_file_path.parent.mkdir(parents=True, exist_ok=True)
         pos_file_path.write_text(
             _render_pos_text(
@@ -271,14 +377,26 @@ def write_chunk_pos_artifacts(
                 {
                     "artifact": "pos_structured",
                     "format_version": pos_format_version,
-                    "document_path": str(representative.get("document_path") or ""),
-                    "document_title": str(representative.get("document_title") or ""),
+                    "document_path": str(
+                        representative.get("document_path") or "",
+                    ),
+                    "document_title": str(
+                        representative.get("document_title") or "",
+                    ),
                     "chunk_id": str(representative.get("chunk_id") or ""),
                     "chunk_path": str(representative.get("chunk_path") or ""),
                     "version_id": manager._chunk_version_id(representative),
-                    "snapshot_at": str(representative.get("snapshot_at") or ""),
-                    "source_text": str(tokenize_payload.get("source_text") or "") if isinstance(tokenize_payload, dict) else "",
-                    "input_text": str(tokenize_payload.get("input_text") or "") if isinstance(tokenize_payload, dict) else "",
+                    "snapshot_at": str(
+                        representative.get("snapshot_at") or "",
+                    ),
+                    "source_text": str(
+                        tokenize_payload.get("source_text") or "",
+                    )
+                    if isinstance(tokenize_payload, dict)
+                    else "",
+                    "input_text": str(tokenize_payload.get("input_text") or "")
+                    if isinstance(tokenize_payload, dict)
+                    else "",
                     "tokenize_structured_path": tokenize_relative_path,
                     "pos_input_mode": "tokenized_only",
                     "line_count": pos_line_count,
@@ -297,14 +415,26 @@ def write_chunk_pos_artifacts(
                 {
                     "artifact": "pos_structured",
                     "format_version": pos_format_version,
-                    "document_path": str(representative.get("document_path") or ""),
-                    "document_title": str(representative.get("document_title") or ""),
+                    "document_path": str(
+                        representative.get("document_path") or "",
+                    ),
+                    "document_title": str(
+                        representative.get("document_title") or "",
+                    ),
                     "chunk_id": str(representative.get("chunk_id") or ""),
                     "chunk_path": str(representative.get("chunk_path") or ""),
                     "version_id": manager._chunk_version_id(representative),
-                    "snapshot_at": str(representative.get("snapshot_at") or ""),
-                    "source_text": str(tokenize_payload.get("source_text") or "") if isinstance(tokenize_payload, dict) else "",
-                    "input_text": str(tokenize_payload.get("input_text") or "") if isinstance(tokenize_payload, dict) else "",
+                    "snapshot_at": str(
+                        representative.get("snapshot_at") or "",
+                    ),
+                    "source_text": str(
+                        tokenize_payload.get("source_text") or "",
+                    )
+                    if isinstance(tokenize_payload, dict)
+                    else "",
+                    "input_text": str(tokenize_payload.get("input_text") or "")
+                    if isinstance(tokenize_payload, dict)
+                    else "",
                     "tokenize_structured_path": tokenize_relative_path,
                     "pos_input_mode": "tokenized_only",
                     "line_count": pos_line_count,
@@ -330,7 +460,9 @@ def write_chunk_pos_artifacts(
                 {
                     "artifact": "pos_line_stats",
                     "format_version": pos_format_version,
-                    "document_path": str(representative.get("document_path") or ""),
+                    "document_path": str(
+                        representative.get("document_path") or "",
+                    ),
                     "chunk_id": str(representative.get("chunk_id") or ""),
                     "chunk_path": str(representative.get("chunk_path") or ""),
                     "version_id": manager._chunk_version_id(representative),
@@ -365,8 +497,12 @@ def write_chunk_pos_artifacts(
             chunk["pos_tag_type_count"] = pos_tag_type_count
             chunk["pos_tag_types"] = pos_tag_types
             chunk["pos_path"] = pos_relative_path.as_posix()
-            chunk["pos_structured_path"] = pos_structured_relative_path.as_posix()
-            chunk["pos_line_stats_path"] = pos_line_stats_relative_path.as_posix()
+            chunk[
+                "pos_structured_path"
+            ] = pos_structured_relative_path.as_posix()
+            chunk[
+                "pos_line_stats_path"
+            ] = pos_line_stats_relative_path.as_posix()
             chunk["syntax_pos_count"] = pos_count
             chunk["syntax_pos_tag_type_count"] = pos_tag_type_count
             chunk["syntax_pos_tag_types"] = pos_tag_types
@@ -411,7 +547,7 @@ def write_chunk_pos_artifacts(
                         "syntax_pos_count": pos_count_so_far,
                         "syntax_pos_tag_type_count": len(pos_tag_types_so_far),
                     },
-                }
+                },
             )
 
     stale_pos_paths = previous_manifest_paths - current_pos_paths

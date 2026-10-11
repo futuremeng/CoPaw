@@ -12,7 +12,9 @@ import pytest
 
 
 def _memory_descriptor(ws):
-    return ws._service_manager.descriptors["memory_manager"]  # pylint: disable=W0212
+    return ws._service_manager.descriptors[
+        "memory_manager"
+    ]  # pylint: disable=W0212
 
 
 class _Running:
@@ -47,10 +49,9 @@ def test_every_registered_backend_resolves(workspace):
     assert names
     for name in names:
         workspace._config = _Config(name)  # pylint: disable=W0212
-        assert (
-            _memory_descriptor(workspace).service_class(workspace)
-            is memory_registry.get(name)
-        )
+        assert _memory_descriptor(workspace).service_class(
+            workspace,
+        ) is memory_registry.get(name)
 
 
 def test_remelight_backend_resolves(workspace):
@@ -58,9 +59,12 @@ def test_remelight_backend_resolves(workspace):
         ReMeLightMemoryManager,
     )
 
-    assert _memory_descriptor(workspace).service_class(
-        workspace
-    ) is ReMeLightMemoryManager
+    assert (
+        _memory_descriptor(workspace).service_class(
+            workspace,
+        )
+        is ReMeLightMemoryManager
+    )
 
 
 def test_unknown_backend_falls_back_instead_of_raising(workspace):
@@ -70,7 +74,6 @@ def test_unknown_backend_falls_back_instead_of_raising(workspace):
     workspace._config = _Config("no-such-backend")  # pylint: disable=W0212
     cls = _memory_descriptor(workspace).service_class(workspace)
     registered = {
-        memory_registry.get(name)
-        for name in memory_registry.list_registered()
+        memory_registry.get(name) for name in memory_registry.list_registered()
     }
     assert cls in registered

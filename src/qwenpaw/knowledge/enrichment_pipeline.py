@@ -42,8 +42,14 @@ _RELATION_NORMALIZATION_MAP = {
     "uses": "uses",
 }
 
+
 def _now_iso() -> str:
-    return datetime.now(UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+    return (
+        datetime.now(UTC)
+        .replace(microsecond=0)
+        .isoformat()
+        .replace("+00:00", "Z")
+    )
 
 
 def _normalize_relation(raw_relation: str) -> str:
@@ -133,7 +139,10 @@ def run_system_knowledge_enrichment(
         canonical = _canonical_key(node.get("label"))
         if canonical:
             canonicalized_nodes += 1
-        if canonical and canonical != str(node.get("label") or "").strip().lower():
+        if (
+            canonical
+            and canonical != str(node.get("label") or "").strip().lower()
+        ):
             canonical_rewritten_nodes += 1
         node["canonical_key"] = canonical
         node["canonical_label"] = str(node.get("label") or "").strip()
@@ -162,7 +171,9 @@ def run_system_knowledge_enrichment(
             "source_id": str(edge.get("source_id") or "").strip(),
         }
         edge["evidence"] = evidence
-        has_evidence = bool(evidence["document_path"] or evidence["document_title"])
+        has_evidence = bool(
+            evidence["document_path"] or evidence["document_title"],
+        )
         if not has_evidence:
             missing_evidence_edges += 1
 

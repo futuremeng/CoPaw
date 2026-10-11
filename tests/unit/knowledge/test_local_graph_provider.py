@@ -4,7 +4,10 @@ import json
 from pathlib import Path
 
 from copaw.config.config import Config, KnowledgeSourceSpec
-from copaw.knowledge.local_graph_provider import persist_local_graph, query_local_graph
+from copaw.knowledge.local_graph_provider import (
+    persist_local_graph,
+    query_local_graph,
+)
 from copaw.knowledge.manager import KnowledgeManager
 from tests.fixtures.knowledge_config import make_knowledge_config
 
@@ -12,7 +15,10 @@ from tests.fixtures.knowledge_config import make_knowledge_config
 def test_local_graph_filters_hidden_docs_and_noise_entities(tmp_path: Path):
     project_root = tmp_path / "project"
     project_root.mkdir(parents=True, exist_ok=True)
-    (project_root / ".DS_Store").write_text("binary-like-noise", encoding="utf-8")
+    (project_root / ".DS_Store").write_text(
+        "binary-like-noise",
+        encoding="utf-8",
+    )
     (project_root / "PROJECT.md").write_text(
         "术语发现 preferred_workspace_chat_id adf21727-eaa0-4c8f-91ec-2d4e379bb569\n"
         "ToolDispatcher 协同 FileSearch 处理术语冲突。\n"
@@ -39,7 +45,9 @@ def test_local_graph_filters_hidden_docs_and_noise_entities(tmp_path: Path):
     graph_path = tmp_path / "knowledge" / "graphify-out" / "graph.json"
     result = persist_local_graph(manager, config, [source.id], graph_path)
     payload = json.loads(graph_path.read_text(encoding="utf-8"))
-    labels = {str(node.get("label") or "") for node in payload.get("nodes") or []}
+    labels = {
+        str(node.get("label") or "") for node in payload.get("nodes") or []
+    }
 
     assert result["relation_count"] > 0
     assert ".DS_Store" not in labels
@@ -49,7 +57,7 @@ def test_local_graph_filters_hidden_docs_and_noise_entities(tmp_path: Path):
     assert "merged_terms_v2.tsv.json" not in labels
     assert "project-rxpwrp" not in labels
     assert "normalized_term" not in labels
-    # Note: "template", "status", "completed", "true", "name", "description", "data", 
+    # Note: "template", "status", "completed", "true", "name", "description", "data",
     # "当前", "说明" are now kept as entities after stop-word list optimization
     # for better coverage (optimization in local_graph_provider.py)
     assert "tooldispatcher" in labels
@@ -91,7 +99,9 @@ def test_local_graph_strips_frontmatter_and_key_value_noise(tmp_path: Path):
     graph_path = tmp_path / "knowledge" / "graphify-out" / "graph.json"
     persist_local_graph(manager, config, [source.id], graph_path)
     payload = json.loads(graph_path.read_text(encoding="utf-8"))
-    labels = {str(node.get("label") or "") for node in payload.get("nodes") or []}
+    labels = {
+        str(node.get("label") or "") for node in payload.get("nodes") or []
+    }
 
     assert "name" not in labels
     assert "status" not in labels
@@ -133,7 +143,9 @@ def test_local_graph_skips_code_files(tmp_path: Path):
     graph_path = tmp_path / "knowledge" / "graphify-out" / "graph.json"
     result = persist_local_graph(manager, config, [source.id], graph_path)
     payload = json.loads(graph_path.read_text(encoding="utf-8"))
-    labels = {str(node.get("label") or "") for node in payload.get("nodes") or []}
+    labels = {
+        str(node.get("label") or "") for node in payload.get("nodes") or []
+    }
 
     assert result["document_count"] == 1
     assert "filename" not in labels
@@ -171,7 +183,9 @@ def test_local_graph_ignores_title_only_generic_entities(tmp_path: Path):
     graph_path = tmp_path / "knowledge" / "graphify-out" / "graph.json"
     persist_local_graph(manager, config, [source.id], graph_path)
     payload = json.loads(graph_path.read_text(encoding="utf-8"))
-    labels = {str(node.get("label") or "") for node in payload.get("nodes") or []}
+    labels = {
+        str(node.get("label") or "") for node in payload.get("nodes") or []
+    }
 
     assert "dashboard" not in labels
     assert "pipeline" not in labels
@@ -213,7 +227,9 @@ def test_local_graph_keeps_high_signal_title_entities(tmp_path: Path):
     graph_path = tmp_path / "knowledge" / "graphify-out" / "graph.json"
     persist_local_graph(manager, config, [source.id], graph_path)
     payload = json.loads(graph_path.read_text(encoding="utf-8"))
-    labels = {str(node.get("label") or "") for node in payload.get("nodes") or []}
+    labels = {
+        str(node.get("label") or "") for node in payload.get("nodes") or []
+    }
 
     assert "tooldispatcher" in labels
 
@@ -222,9 +238,7 @@ def test_local_graph_filters_worklog_explanatory_terms(tmp_path: Path):
     project_root = tmp_path / "project"
     project_root.mkdir(parents=True, exist_ok=True)
     (project_root / "WORKING.md").write_text(
-        "## 项目状态\n"
-        "生成报告，包含路径与大小信息，统一使用分隔符。\n"
-        "现代液压气动 与 金属材料 术语对齐完成。\n",
+        "## 项目状态\n" "生成报告，包含路径与大小信息，统一使用分隔符。\n" "现代液压气动 与 金属材料 术语对齐完成。\n",
         encoding="utf-8",
     )
 
@@ -247,7 +261,9 @@ def test_local_graph_filters_worklog_explanatory_terms(tmp_path: Path):
     graph_path = tmp_path / "knowledge" / "graphify-out" / "graph.json"
     persist_local_graph(manager, config, [source.id], graph_path)
     payload = json.loads(graph_path.read_text(encoding="utf-8"))
-    labels = {str(node.get("label") or "") for node in payload.get("nodes") or []}
+    labels = {
+        str(node.get("label") or "") for node in payload.get("nodes") or []
+    }
 
     # Note: Stop-word list was optimized to improve entity coverage.
     # Some previous stop words are now kept as valid entities.
@@ -278,7 +294,9 @@ def test_local_graph_filters_worklog_explanatory_terms(tmp_path: Path):
     assert "金属材料" in labels
 
 
-def test_local_graph_allows_documents_under_hidden_parent_directories(tmp_path: Path):
+def test_local_graph_allows_documents_under_hidden_parent_directories(
+    tmp_path: Path,
+):
     hidden_root = tmp_path / ".copaw" / "projects" / "demo"
     hidden_root.mkdir(parents=True, exist_ok=True)
     (hidden_root / "visible.md").write_text(
@@ -347,15 +365,17 @@ def test_local_graph_emits_sentence_entity_stats(tmp_path: Path):
     assert len(sentence_stats) >= 2
     assert all("entity_count_total" in item for item in sentence_stats)
     assert all("entity_char_ratio" in item for item in sentence_stats)
-    assert all(0 <= float(item.get("entity_char_ratio") or 0) <= 1 for item in sentence_stats)
+    assert all(
+        0 <= float(item.get("entity_char_ratio") or 0) <= 1
+        for item in sentence_stats
+    )
 
 
 def test_local_graph_emits_relation_candidates_from_syntax(tmp_path: Path):
     project_root = tmp_path / "project"
     project_root.mkdir(parents=True, exist_ok=True)
     (project_root / "relations.md").write_text(
-        "ToolDispatcher 调用 FileSearch。\n"
-        "FileSearch 处理 KnowledgeGraph。\n",
+        "ToolDispatcher 调用 FileSearch。\n" "FileSearch 处理 KnowledgeGraph。\n",
         encoding="utf-8",
     )
 
@@ -395,7 +415,9 @@ def test_local_graph_emits_relation_candidates_from_syntax(tmp_path: Path):
     )
 
 
-def test_local_graph_emits_document_level_graphify_before_project_graph(tmp_path: Path):
+def test_local_graph_emits_document_level_graphify_before_project_graph(
+    tmp_path: Path,
+):
     project_root = tmp_path / "project"
     project_root.mkdir(parents=True, exist_ok=True)
     (project_root / "chapter.md").write_text(
@@ -433,8 +455,14 @@ def test_local_graph_emits_document_level_graphify_before_project_graph(tmp_path
     assert manifest["document_count"] == 1
     assert len(manifest["documents"]) == 1
 
-    document_payload_path = tmp_path / "knowledge" / manifest["documents"][0]["payload_relative_path"]
-    document_payload = json.loads(document_payload_path.read_text(encoding="utf-8"))
+    document_payload_path = (
+        tmp_path
+        / "knowledge"
+        / manifest["documents"][0]["payload_relative_path"]
+    )
+    document_payload = json.loads(
+        document_payload_path.read_text(encoding="utf-8"),
+    )
 
     assert document_payload["artifact"] == "document_graphify"
     assert document_payload["document_path"].endswith("chapter.md")
@@ -444,13 +472,16 @@ def test_local_graph_emits_document_level_graphify_before_project_graph(tmp_path
 
     project_payload = json.loads(graph_path.read_text(encoding="utf-8"))
     document_nodes = [
-        node for node in (project_payload.get("nodes") or [])
+        node
+        for node in (project_payload.get("nodes") or [])
         if isinstance(node, dict) and node.get("node_type") == "document"
     ]
     assert len(document_nodes) == 1
 
 
-def test_local_graph_all_records_query_returns_full_relation_set(tmp_path: Path):
+def test_local_graph_all_records_query_returns_full_relation_set(
+    tmp_path: Path,
+):
     project_root = tmp_path / "project"
     project_root.mkdir(parents=True, exist_ok=True)
     (project_root / "chapter.md").write_text(
@@ -483,7 +514,9 @@ def test_local_graph_all_records_query_returns_full_relation_set(tmp_path: Path)
 
     assert result["relation_count"] > 0
     assert len(records) == result["relation_count"]
-    assert any(record.get("predicate") == "co_occurs_with" for record in records)
+    assert any(
+        record.get("predicate") == "co_occurs_with" for record in records
+    )
 
 
 def test_local_graph_empty_documents_cleanup_graphify_manifest(tmp_path: Path):
@@ -495,7 +528,14 @@ def test_local_graph_empty_documents_cleanup_graphify_manifest(tmp_path: Path):
     graphify_dir.mkdir(parents=True, exist_ok=True)
     stale_manifest = graphify_dir / "manifest.json"
     stale_manifest.write_text(
-        json.dumps({"artifact": "graphify_manifest", "document_count": 0, "documents": []}, ensure_ascii=False),
+        json.dumps(
+            {
+                "artifact": "graphify_manifest",
+                "document_count": 0,
+                "documents": [],
+            },
+            ensure_ascii=False,
+        ),
         encoding="utf-8",
     )
 

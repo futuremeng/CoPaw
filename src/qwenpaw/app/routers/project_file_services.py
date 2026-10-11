@@ -74,7 +74,10 @@ def create_project_directory_for_workspace(
     monitoring_active: str,
 ) -> dict[str, object]:
     project_dir = resolve_project_dir(workspace_dir, project_id)
-    created = project_file_ops.create_project_directory(project_dir, directory_path)
+    created = project_file_ops.create_project_directory(
+        project_dir,
+        directory_path,
+    )
     update_monitoring_state(project_dir, monitoring_active)
     record_realtime_paths(
         str(workspace_dir),

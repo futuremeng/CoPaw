@@ -31,7 +31,9 @@ from qwenpaw.app.routers.agents_pipeline_core import (
 )
 
 
-def _build_template(template_id: str = "demo-pipeline") -> PipelineTemplateInfo:
+def _build_template(
+    template_id: str = "demo-pipeline",
+) -> PipelineTemplateInfo:
     return PipelineTemplateInfo(
         id=template_id,
         name="Demo Pipeline",
@@ -57,7 +59,9 @@ def _build_template(template_id: str = "demo-pipeline") -> PipelineTemplateInfo:
 
 
 def _read_template_json(workspace_dir: Path, template_id: str) -> dict:
-    json_path = workspace_dir / "pipelines" / "templates" / f"{template_id}.json"
+    json_path = (
+        workspace_dir / "pipelines" / "templates" / f"{template_id}.json"
+    )
     return json.loads(json_path.read_text(encoding="utf-8"))
 
 
@@ -107,7 +111,10 @@ def test_save_template_detects_revision_conflict(tmp_path: Path):
 
 
 def test_save_template_validation_failure_keeps_previous_json(tmp_path: Path):
-    initial = _save_agent_pipeline_template_with_md(tmp_path, _build_template())
+    initial = _save_agent_pipeline_template_with_md(
+        tmp_path,
+        _build_template(),
+    )
     before_doc = _read_template_json(tmp_path, initial.id)
 
     md_path = _pipeline_md_path(tmp_path, initial.id)
@@ -142,11 +149,17 @@ def test_save_template_validation_failure_keeps_previous_json(tmp_path: Path):
 
 
 def test_save_template_rejects_non_semver_version_in_markdown(tmp_path: Path):
-    initial = _save_agent_pipeline_template_with_md(tmp_path, _build_template())
+    initial = _save_agent_pipeline_template_with_md(
+        tmp_path,
+        _build_template(),
+    )
 
     md_path = _pipeline_md_path(tmp_path, initial.id)
     content = md_path.read_text(encoding="utf-8")
-    md_path.write_text(content.replace("version: 0.1.0", "version: v1", 1), encoding="utf-8")
+    md_path.write_text(
+        content.replace("version: 0.1.0", "version: v1", 1),
+        encoding="utf-8",
+    )
 
     with pytest.raises(HTTPException) as exc_info:
         _save_agent_pipeline_template_with_md(
@@ -159,10 +172,14 @@ def test_save_template_rejects_non_semver_version_in_markdown(tmp_path: Path):
     detail = exc_info.value.detail
     assert isinstance(detail, dict)
     errors = detail.get("errors") or []
-    assert any(item.get("error_code") == "pipeline_version_invalid" for item in errors)
+    assert any(
+        item.get("error_code") == "pipeline_version_invalid" for item in errors
+    )
 
 
-def test_list_platform_flow_templates_includes_builtin_project_knowledge_template(tmp_path: Path):
+def test_list_platform_flow_templates_includes_builtin_project_knowledge_template(
+    tmp_path: Path,
+):
     templates = _list_platform_flow_templates(tmp_path)
 
     ids = {item.id for item in templates}
@@ -170,7 +187,9 @@ def test_list_platform_flow_templates_includes_builtin_project_knowledge_templat
     assert "agent-knowledge-aggregation-v1" in ids
 
     project_knowledge = next(
-        item for item in templates if item.id == "builtin-knowledge-processing-v1"
+        item
+        for item in templates
+        if item.id == "builtin-knowledge-processing-v1"
     )
     assert [step.id for step in project_knowledge.steps] == [
         "snapshot_raw",
@@ -191,16 +210,35 @@ def test_parse_builtin_project_template_enforces_canonical_steps_even_if_local_d
         "description": "drifted",
         "steps": [
             {"id": "snapshot_raw", "name": "Raw Snapshot", "kind": "ingest"},
-            {"id": "build_chunks", "name": "Build Chunks", "kind": "transform"},
+            {
+                "id": "build_chunks",
+                "name": "Build Chunks",
+                "kind": "transform",
+            },
             # Legacy nodes should be dropped by canonical enforcement.
             {"id": "source_scan", "name": "Source Scan", "kind": "analysis"},
-            {"id": "file_analysis", "name": "File Analysis", "kind": "analysis"},
-            {"id": "domain_graph_build", "name": "Domain Graph Build", "kind": "analysis"},
-            {"id": "quality_review", "name": "Quality Review", "kind": "review"},
+            {
+                "id": "file_analysis",
+                "name": "File Analysis",
+                "kind": "analysis",
+            },
+            {
+                "id": "domain_graph_build",
+                "name": "Domain Graph Build",
+                "kind": "analysis",
+            },
+            {
+                "id": "quality_review",
+                "name": "Quality Review",
+                "kind": "review",
+            },
         ],
     }
 
-    parsed = _parse_pipeline_template_doc(drifted_doc, fallback_id="builtin-knowledge-processing-v1")
+    parsed = _parse_pipeline_template_doc(
+        drifted_doc,
+        fallback_id="builtin-knowledge-processing-v1",
+    )
 
     assert parsed is not None
     assert [step.id for step in parsed.steps] == [
@@ -334,7 +372,9 @@ def test_append_collab_event_uses_canonical_event_and_observability_fields():
     assert event.metrics.get("legacy_event") == "run.started"
 
 
-def test_execute_project_pipeline_run_emits_standardized_events(tmp_path: Path):
+def test_execute_project_pipeline_run_emits_standardized_events(
+    tmp_path: Path,
+):
     project_dir = tmp_path / "project-a"
     project_dir.mkdir(parents=True, exist_ok=True)
     data_dir = project_dir / "output"
@@ -402,27 +442,61 @@ def test_execute_project_pipeline_run_emits_standardized_events(tmp_path: Path):
     assert observability.stage
 
 
-def test_create_project_knowledge_pipeline_run_triggers_sync_helper(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+def test_create_project_knowledge_pipeline_run_triggers_sync_helper(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
     project_id = "project-knowledge"
     project_dir = tmp_path / "projects" / project_id
     project_dir.mkdir(parents=True, exist_ok=True)
 
     # Seed minimal knowledge artifacts so 7 canonical steps can collect outputs.
-    for _step in ("snapshot_raw", "build_chunks", "build_interlinear", "tokenize",
-                   "pos_tagging", "syntax_parse", "semantic_role_labeling"):
+    for _step in (
+        "snapshot_raw",
+        "build_chunks",
+        "build_interlinear",
+        "tokenize",
+        "pos_tagging",
+        "syntax_parse",
+        "semantic_role_labeling",
+    ):
         _sdir = project_dir / ".knowledge" / "stats" / _step
         _sdir.mkdir(parents=True, exist_ok=True)
         (_sdir / "latest.json").write_text("{}\n", encoding="utf-8")
-    (project_dir / ".knowledge" / "sources" / "project-source").mkdir(parents=True, exist_ok=True)
-    (project_dir / ".knowledge" / "sources" / "project-source" / "index.json").write_text("{}\n", encoding="utf-8")
-    (project_dir / ".knowledge" / "graphify-out").mkdir(parents=True, exist_ok=True)
-    (project_dir / ".knowledge" / "graphify-out" / "graph.json").write_text("{}\n", encoding="utf-8")
-    (project_dir / ".knowledge" / "graphify-out" / "graph.enriched.json").write_text("{}\n", encoding="utf-8")
-    (project_dir / ".knowledge" / "graphify-out" / "enrichment-quality-report.json").write_text("{}\n", encoding="utf-8")
+    (project_dir / ".knowledge" / "sources" / "project-source").mkdir(
+        parents=True,
+        exist_ok=True,
+    )
+    (
+        project_dir
+        / ".knowledge"
+        / "sources"
+        / "project-source"
+        / "index.json"
+    ).write_text("{}\n", encoding="utf-8")
+    (project_dir / ".knowledge" / "graphify-out").mkdir(
+        parents=True,
+        exist_ok=True,
+    )
+    (project_dir / ".knowledge" / "graphify-out" / "graph.json").write_text(
+        "{}\n",
+        encoding="utf-8",
+    )
+    (
+        project_dir / ".knowledge" / "graphify-out" / "graph.enriched.json"
+    ).write_text("{}\n", encoding="utf-8")
+    (
+        project_dir
+        / ".knowledge"
+        / "graphify-out"
+        / "enrichment-quality-report.json"
+    ).write_text("{}\n", encoding="utf-8")
 
     platform_templates = _list_platform_flow_templates(tmp_path)
     project_knowledge_template = next(
-        item for item in platform_templates if item.id == "builtin-knowledge-processing-v1"
+        item
+        for item in platform_templates
+        if item.id == "builtin-knowledge-processing-v1"
     )
     _import_platform_template_to_project(
         project_id,
@@ -433,7 +507,12 @@ def test_create_project_knowledge_pipeline_run_triggers_sync_helper(tmp_path: Pa
 
     called: dict[str, object] = {}
 
-    def _fake_sync_helper(*, project_id: str, project_dir: Path, parameters: dict[str, object]):
+    def _fake_sync_helper(
+        *,
+        project_id: str,
+        project_dir: Path,
+        parameters: dict[str, object],
+    ):
         called["project_id"] = project_id
         called["project_dir"] = project_dir
         called["parameters"] = dict(parameters)
@@ -488,6 +567,7 @@ def test_status_transition_guards_reject_invalid_transitions():
     with pytest.raises(ValueError):
         _transition_step_status("succeeded", "running")
 
+
 def test_build_run_observability_aggregates_rpa_metrics():
     run = PipelineRunDetail(
         id="run-rpa-obs",
@@ -536,7 +616,11 @@ def test_build_run_observability_aggregates_rpa_metrics():
     assert observability.rpa_action_count_by_kind["browser.open"] == 1
     assert observability.rpa_action_count_by_kind["browser.screenshot"] == 2
 
-def test_apply_real_step_results_rpa_runtime_branch(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+
+def test_apply_real_step_results_rpa_runtime_branch(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
     project_dir = tmp_path / "project-rpa"
     project_dir.mkdir(parents=True, exist_ok=True)
 
@@ -569,7 +653,7 @@ def test_apply_real_step_results_rpa_runtime_branch(tmp_path: Path, monkeypatch:
                     {
                         "kind": "browser.screenshot",
                         "path": "{{screenshot_dir}}/{{page_prefix}}-{{page_index:03d}}.png",
-                    }
+                    },
                 ],
             },
         },

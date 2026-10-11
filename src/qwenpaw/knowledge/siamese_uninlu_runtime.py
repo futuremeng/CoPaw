@@ -51,7 +51,7 @@ _SIAMESE_METHODS: dict[str, dict[str, Any]] = {
             "人物": {
                 "组织": None,
                 "职位": None,
-            }
+            },
         },
     },
     "event_extraction": {
@@ -63,7 +63,7 @@ _SIAMESE_METHODS: dict[str, dict[str, Any]] = {
                 "地点": None,
                 "发布方": None,
                 "产品": None,
-            }
+            },
         },
     },
     "aspect_sentiment_extraction": {
@@ -74,7 +74,7 @@ _SIAMESE_METHODS: dict[str, dict[str, Any]] = {
                 "正向情感(情感词)": None,
                 "负向情感(情感词)": None,
                 "中性情感(情感词)": None,
-            }
+            },
         },
     },
     "coreference_resolution": {
@@ -142,7 +142,7 @@ class SiameseUniNLURuntime:
                     "description": str(meta.get("description") or ""),
                     "input_mode": "text",
                     "route_path": f"/api/nlp/siamese/tasks/{task_key}/run",
-                }
+                },
             )
         return items
 
@@ -157,19 +157,32 @@ class SiameseUniNLURuntime:
         nlp_cfg = cls._nlp_config(config)
         enabled = getattr(nlp_cfg, "siamese_sidecar_enabled", None)
         if enabled is None:
-            provider = str(getattr(nlp_cfg, "provider", "") or "").strip().lower()
+            provider = (
+                str(getattr(nlp_cfg, "provider", "") or "").strip().lower()
+            )
             return provider == "siamese_uninlu"
         return bool(enabled)
 
     @classmethod
     def _model_id(cls, config: Any) -> str:
         nlp_cfg = cls._nlp_config(config)
-        return str(getattr(nlp_cfg, "siamese_model_id", "") or _DEFAULT_MODEL_ID).strip() or _DEFAULT_MODEL_ID
+        return (
+            str(
+                getattr(nlp_cfg, "siamese_model_id", "") or _DEFAULT_MODEL_ID,
+            ).strip()
+            or _DEFAULT_MODEL_ID
+        )
 
     @classmethod
     def _model_revision(cls, config: Any) -> str:
         nlp_cfg = cls._nlp_config(config)
-        return str(getattr(nlp_cfg, "siamese_model_revision", "") or _DEFAULT_MODEL_REVISION).strip() or _DEFAULT_MODEL_REVISION
+        return (
+            str(
+                getattr(nlp_cfg, "siamese_model_revision", "")
+                or _DEFAULT_MODEL_REVISION,
+            ).strip()
+            or _DEFAULT_MODEL_REVISION
+        )
 
     @classmethod
     def _load_model(cls, config: Any):
@@ -275,12 +288,20 @@ class SiameseUniNLURuntime:
                 try:
                     parsed = json.loads(raw)
                     if isinstance(parsed, list):
-                        return _labels_as_schema([str(item).strip() for item in parsed if str(item).strip()])
+                        return _labels_as_schema(
+                            [
+                                str(item).strip()
+                                for item in parsed
+                                if str(item).strip()
+                            ],
+                        )
                     return parsed
                 except Exception:
                     return raw
         if isinstance(schema, list):
-            values = [str(item).strip() for item in schema if str(item).strip()]
+            values = [
+                str(item).strip() for item in schema if str(item).strip()
+            ]
             return _labels_as_schema(values)
         if schema is not None:
             return schema
@@ -295,16 +316,24 @@ class SiameseUniNLURuntime:
         return None
 
     @classmethod
-    def _coerce_labels(cls, payload: dict[str, Any], task_key: str) -> list[str]:
+    def _coerce_labels(
+        cls,
+        payload: dict[str, Any],
+        task_key: str,
+    ) -> list[str]:
         labels = payload.get("labels")
         if isinstance(labels, list):
-            values = [str(item).strip() for item in labels if str(item).strip()]
+            values = [
+                str(item).strip() for item in labels if str(item).strip()
+            ]
             if values:
                 return values
         meta = _SIAMESE_METHODS.get(task_key) or {}
         defaults = meta.get("default_labels")
         if isinstance(defaults, list):
-            return [str(item).strip() for item in defaults if str(item).strip()]
+            return [
+                str(item).strip() for item in defaults if str(item).strip()
+            ]
         return []
 
     @classmethod
@@ -320,7 +349,11 @@ class SiameseUniNLURuntime:
         if task_key == "text_matching":
             left = text_a or text
             right = text_b
-            return f"{','.join(labels)}|{left}&{right}" if labels else f"{left}&{right}"
+            return (
+                f"{','.join(labels)}|{left}&{right}"
+                if labels
+                else f"{left}&{right}"
+            )
 
         if task_key == "natural_language_inference":
             premise = text_a or context
@@ -331,7 +364,9 @@ class SiameseUniNLURuntime:
         if task_key == "reading_comprehension_choice":
             options = []
             if isinstance(choices, list):
-                options = [str(item).strip() for item in choices if str(item).strip()]
+                options = [
+                    str(item).strip() for item in choices if str(item).strip()
+                ]
             if not options:
                 options = labels
             option_text = ",".join(options)
@@ -348,7 +383,12 @@ class SiameseUniNLURuntime:
         return text or context
 
     @classmethod
-    def run_task(cls, config: Any, task_key: str, payload: dict[str, Any]) -> dict[str, Any]:
+    def run_task(
+        cls,
+        config: Any,
+        task_key: str,
+        payload: dict[str, Any],
+    ) -> dict[str, Any]:
         normalized = str(task_key or "").strip().lower()
         if normalized not in _SIAMESE_METHODS:
             return {
@@ -365,8 +405,12 @@ class SiameseUniNLURuntime:
         if str(probe.get("status") or "") != "ready":
             return {
                 "status": str(probe.get("status") or "unavailable"),
-                "reason_code": str(probe.get("reason_code") or "SIAMESE_MODEL_LOAD_FAILED"),
-                "reason": str(probe.get("reason") or "Siamese runtime unavailable."),
+                "reason_code": str(
+                    probe.get("reason_code") or "SIAMESE_MODEL_LOAD_FAILED",
+                ),
+                "reason": str(
+                    probe.get("reason") or "Siamese runtime unavailable.",
+                ),
                 "result": None,
                 "duration_ms": (time.perf_counter() - started) * 1000.0,
                 "resolved_model": cls._model_id(config),
@@ -377,7 +421,9 @@ class SiameseUniNLURuntime:
             schema = cls._coerce_schema(payload, normalized)
             target_python = _resolve_siamese_python_executable(config)
             if not Path(target_python).exists():
-                raise RuntimeError(f"Siamese python executable not found: {target_python}")
+                raise RuntimeError(
+                    f"Siamese python executable not found: {target_python}",
+                )
 
             marker = "__COPAW_SIAMESE_JSON__"
             runner_code = f"""
@@ -440,13 +486,19 @@ print({marker!r} + json.dumps(resp, ensure_ascii=False, default=str))
                     break
 
             if not payload_line:
-                message = (stderr_text or stdout_text or "Siamese task runner returned no payload.").strip()
+                message = (
+                    stderr_text
+                    or stdout_text
+                    or "Siamese task runner returned no payload."
+                ).strip()
                 raise RuntimeError(message)
 
             decoded = json.loads(payload_line)
             if not bool(decoded.get("ok", False)):
                 error_type = str(decoded.get("error_type") or "RuntimeError")
-                error = str(decoded.get("error") or "Siamese task execution failed.")
+                error = str(
+                    decoded.get("error") or "Siamese task execution failed.",
+                )
                 traceback_text = str(decoded.get("traceback") or "").strip()
                 detail = f"{error_type}: {error}"
                 if traceback_text:
@@ -462,7 +514,9 @@ print({marker!r} + json.dumps(resp, ensure_ascii=False, default=str))
                 "duration_ms": elapsed_ms,
                 "resolved_model": cls._model_id(config),
             }
-        except Exception as exc:  # pragma: no cover - runtime environment dependent
+        except (
+            Exception
+        ) as exc:  # pragma: no cover - runtime environment dependent
             elapsed_ms = (time.perf_counter() - started) * 1000.0
             return {
                 "status": "unavailable",
@@ -483,14 +537,22 @@ def initialize_siamese_sidecar(config: Any) -> dict[str, Any]:
         status = str(probe.get("status") or "unavailable")
         reason_code = str(probe.get("reason_code") or "SIAMESE_UNAVAILABLE")
         reason = str(probe.get("reason") or "Siamese sidecar is unavailable.")
-        model_id = str(probe.get("model_id") or getattr(nlp_cfg, "siamese_model_id", "") or _DEFAULT_MODEL_ID)
+        model_id = str(
+            probe.get("model_id")
+            or getattr(nlp_cfg, "siamese_model_id", "")
+            or _DEFAULT_MODEL_ID,
+        )
         return {
             "sidecar": {
                 "status": status,
                 "reason_code": reason_code,
                 "reason": reason,
-                "enabled": bool(getattr(nlp_cfg, "siamese_sidecar_enabled", False)),
-                "python_executable": str(getattr(nlp_cfg, "siamese_python_executable", "") or ""),
+                "enabled": bool(
+                    getattr(nlp_cfg, "siamese_sidecar_enabled", False),
+                ),
+                "python_executable": str(
+                    getattr(nlp_cfg, "siamese_python_executable", "") or "",
+                ),
             },
             "model": {
                 "status": "ready" if status == "ready" else status,
@@ -505,7 +567,9 @@ def initialize_siamese_sidecar(config: Any) -> dict[str, Any]:
     manual_steps: list[str] = []
     changed = False
 
-    target_python = str(getattr(nlp_cfg, "siamese_python_executable", "") or "").strip()
+    target_python = str(
+        getattr(nlp_cfg, "siamese_python_executable", "") or "",
+    ).strip()
     if not target_python or _looks_like_hanlp_venv(target_python):
         # Keep Siamese isolated from HanLP by pinning to its dedicated .venv-senta path.
         target_python = _default_siamese_python_path()
@@ -520,7 +584,7 @@ def initialize_siamese_sidecar(config: Any) -> dict[str, Any]:
                 "ok": True,
                 "output": "Configured Siamese python executable.",
                 "returncode": 0,
-            }
+            },
         )
 
     if not bool(getattr(nlp_cfg, "siamese_sidecar_enabled", False)):
@@ -535,11 +599,13 @@ def initialize_siamese_sidecar(config: Any) -> dict[str, Any]:
                 "ok": True,
                 "output": "Enabled Siamese sidecar in config.",
                 "returncode": 0,
-            }
+            },
         )
 
     status_after = _status_payload()
-    already_available = status_before.get("sidecar", {}).get("status") == "ready"
+    already_available = (
+        status_before.get("sidecar", {}).get("status") == "ready"
+    )
     success = status_after.get("sidecar", {}).get("status") == "ready"
 
     if not success:

@@ -134,7 +134,11 @@ def _parse_python_version(output: str) -> tuple[int, int] | None:
 
 def _python_version_supported(python_executable: str) -> bool:
     result = _run_command(
-        [python_executable, "-c", "import sys; print(f'{sys.version_info[0]}.{sys.version_info[1]}')"],
+        [
+            python_executable,
+            "-c",
+            "import sys; print(f'{sys.version_info[0]}.{sys.version_info[1]}')",
+        ],
     )
     if not result["ok"]:
         return False
@@ -146,7 +150,11 @@ def _python_version_supported(python_executable: str) -> bool:
 
 def _python_version(python_executable: str) -> tuple[int, int] | None:
     result = _run_command(
-        [python_executable, "-c", "import sys; print(f'{sys.version_info[0]}.{sys.version_info[1]}')"],
+        [
+            python_executable,
+            "-c",
+            "import sys; print(f'{sys.version_info[0]}.{sys.version_info[1]}')",
+        ],
     )
     if not result["ok"]:
         return None
@@ -160,7 +168,9 @@ def _is_python_310(python_executable: str) -> bool:
 
 def _python_candidate_executables() -> list[str]:
     candidates = [sys.executable]
-    candidate_names = [f"python{version}" for version in _SUPPORTED_HANLP_PYTHON_VERSIONS]
+    candidate_names = [
+        f"python{version}" for version in _SUPPORTED_HANLP_PYTHON_VERSIONS
+    ]
     candidate_names.extend(["python3", "python"])
 
     for candidate_name in candidate_names:
@@ -239,7 +249,11 @@ def _ensure_uv_available(operations: list[dict]) -> str:
                 operations,
                 name="install-uv",
                 installer="astral",
-                command=[sh_executable, "-c", f"{curl_executable} -LsSf https://astral.sh/uv/install.sh | sh"],
+                command=[
+                    sh_executable,
+                    "-c",
+                    f"{curl_executable} -LsSf https://astral.sh/uv/install.sh | sh",
+                ],
             )
             uv_executable = _find_uv_executable()
             if uv_executable:
@@ -260,7 +274,12 @@ def _create_managed_venv(
             operations,
             name="install-python",
             installer="uv",
-            command=[uv_executable, "python", "install", _SUPPORTED_HANLP_PYTHON_VERSIONS[0]],
+            command=[
+                uv_executable,
+                "python",
+                "install",
+                _SUPPORTED_HANLP_PYTHON_VERSIONS[0],
+            ],
         )
         preferred_python_args = [_SUPPORTED_HANLP_PYTHON_VERSIONS[0]]
         if fallback_python:
@@ -271,7 +290,13 @@ def _create_managed_venv(
                 operations,
                 name="create-venv",
                 installer="uv",
-                command=[uv_executable, "venv", "--python", python_arg, str(venv_dir)],
+                command=[
+                    uv_executable,
+                    "venv",
+                    "--python",
+                    python_arg,
+                    str(venv_dir),
+                ],
             )
             if operation["ok"]:
                 return "uv"
@@ -301,7 +326,14 @@ def _install_hanlp_package(
         install_attempts.append(
             (
                 "uv",
-                [uv_executable, "pip", "install", "--python", str(python_path), "hanlp[full]"],
+                [
+                    uv_executable,
+                    "pip",
+                    "install",
+                    "--python",
+                    str(python_path),
+                    "hanlp[full]",
+                ],
             ),
         )
     install_attempts.append(
@@ -384,7 +416,9 @@ def _runtime_knowledge_config(config):
     nlp_cfg = _nlp_config(config)
     if nlp_cfg is not None:
         model_copy = getattr(nlp_cfg, "model_copy", None)
-        runtime_nlp = model_copy(deep=True) if callable(model_copy) else nlp_cfg
+        runtime_nlp = (
+            model_copy(deep=True) if callable(model_copy) else nlp_cfg
+        )
         setattr(knowledge_cfg, "nlp", runtime_nlp)
     return knowledge_cfg
 
@@ -394,7 +428,11 @@ def _task_specs(config) -> dict[str, object]:
     tasks = getattr(task_matrix, "tasks", None)
     if not isinstance(tasks, dict):
         return {}
-    return {str(task_key): task_cfg for task_key, task_cfg in tasks.items() if str(task_key).strip()}
+    return {
+        str(task_key): task_cfg
+        for task_key, task_cfg in tasks.items()
+        if str(task_key).strip()
+    }
 
 
 def _normalized_model_home(config) -> str:
@@ -429,20 +467,35 @@ def _effective_task_model_id(config, task_key: str, task_cfg) -> str:
     if fallback:
         return fallback
     nlp_cfg = _nlp_config(config)
-    return str(getattr(nlp_cfg, "model_id", "") or "").strip() if nlp_cfg is not None else ""
+    return (
+        str(getattr(nlp_cfg, "model_id", "") or "").strip()
+        if nlp_cfg is not None
+        else ""
+    )
 
 
 def _preload_task_keys(config, scope: str) -> list[str]:
     task_specs = _task_specs(config)
     if scope == "critical":
-        return [task_key for task_key in _CRITICAL_PRELOAD_TASKS if task_key in task_specs]
+        return [
+            task_key
+            for task_key in _CRITICAL_PRELOAD_TASKS
+            if task_key in task_specs
+        ]
 
     task_keys: list[str] = []
     for task_key, task_cfg in task_specs.items():
         if not bool(getattr(task_cfg, "enabled", True)):
             continue
-        normalized = str(task_key or "").strip().replace("/", "_").replace("-", "_")
-        if normalized in {"cor", "coref", "coreference", "coreference_resolution"}:
+        normalized = (
+            str(task_key or "").strip().replace("/", "_").replace("-", "_")
+        )
+        if normalized in {
+            "cor",
+            "coref",
+            "coreference",
+            "coreference_resolution",
+        }:
             continue
         task_keys.append(task_key)
     return sorted(task_keys, key=lambda task_key: str(task_key))
@@ -453,7 +506,9 @@ def _copy_preload_state() -> dict:
         return {
             **_PRELOAD_STATE,
             "model_result": dict(_PRELOAD_STATE.get("model_result") or {}),
-            "preloaded_models": list(_PRELOAD_STATE.get("preloaded_models") or []),
+            "preloaded_models": list(
+                _PRELOAD_STATE.get("preloaded_models") or [],
+            ),
             "task_results": dict(_PRELOAD_STATE.get("task_results") or {}),
         }
 
@@ -533,18 +588,28 @@ def _run_hanlp_preload(force: bool = False) -> None:
     nlp_cfg = _nlp_config(config)
     model_result = {
         "status": str(model_state.get("status") or "unavailable"),
-        "reason_code": str(model_state.get("reason_code") or "HANLP_MODEL_LOAD_FAILED"),
-        "reason": str(model_state.get("reason") or "HanLP model preload failed."),
-        "model_id": str(getattr(nlp_cfg, "model_id", "") or "").strip() if nlp_cfg is not None else "",
+        "reason_code": str(
+            model_state.get("reason_code") or "HANLP_MODEL_LOAD_FAILED",
+        ),
+        "reason": str(
+            model_state.get("reason") or "HanLP model preload failed.",
+        ),
+        "model_id": str(getattr(nlp_cfg, "model_id", "") or "").strip()
+        if nlp_cfg is not None
+        else "",
     }
-    default_model_id = str(getattr(nlp_cfg, "model_id", "") or "").strip() if nlp_cfg is not None else ""
+    default_model_id = (
+        str(getattr(nlp_cfg, "model_id", "") or "").strip()
+        if nlp_cfg is not None
+        else ""
+    )
     if default_model_id:
         preloaded_models.append(
             {
                 "task_key": "tokenize",
                 "model_id": default_model_id,
                 "status": str(model_state.get("status") or "unavailable"),
-            }
+            },
         )
 
     _set_preload_state(
@@ -584,7 +649,11 @@ def _run_hanlp_preload(force: bool = False) -> None:
             preloaded_models=preloaded_models,
             task_results=task_results,
         )
-        _result, task_state = runtime.run_task(task_key, sample_text, runtime_knowledge_cfg)
+        _result, task_state = runtime.run_task(
+            task_key,
+            sample_text,
+            runtime_knowledge_cfg,
+        )
         task_status = str(task_state.get("status") or "unavailable")
         model_ready = model_ready and task_status == "ready"
         if task_status == "ready":
@@ -593,8 +662,12 @@ def _run_hanlp_preload(force: bool = False) -> None:
             failed_tasks += 1
         task_results[task_key] = {
             "status": task_status,
-            "reason_code": str(task_state.get("reason_code") or "HANLP_TASK_LOAD_FAILED"),
-            "reason": str(task_state.get("reason") or "HanLP task preload failed."),
+            "reason_code": str(
+                task_state.get("reason_code") or "HANLP_TASK_LOAD_FAILED",
+            ),
+            "reason": str(
+                task_state.get("reason") or "HanLP task preload failed.",
+            ),
             "model_id": task_model_id,
         }
         preloaded_models.append(
@@ -602,7 +675,7 @@ def _run_hanlp_preload(force: bool = False) -> None:
                 "task_key": task_key,
                 "model_id": task_model_id,
                 "status": task_status,
-            }
+            },
         )
         _set_preload_state(
             enabled=enabled,
@@ -625,7 +698,9 @@ def _run_hanlp_preload(force: bool = False) -> None:
         enabled=enabled,
         scope=scope,
         status="ready" if model_ready else "failed",
-        reason="HanLP preload completed." if model_ready else "HanLP preload completed with failures.",
+        reason="HanLP preload completed."
+        if model_ready
+        else "HanLP preload completed with failures.",
         finished_at=time.time(),
         current_task_key=None,
         current_task_index=total_tasks,
@@ -660,12 +735,18 @@ def _build_task_status(runtime: NLPRuntime, config) -> dict[str, dict]:
     task_states: dict[str, dict] = {}
     for task_key, task_cfg in _task_specs(config).items():
         enabled = bool(getattr(task_cfg, "enabled", True))
-        task_name = str(getattr(task_cfg, "task_name", task_key) or task_key).strip()
+        task_name = str(
+            getattr(task_cfg, "task_name", task_key) or task_key,
+        ).strip()
         task_entry = {
             "enabled": enabled,
             "task_name": task_name,
-            "artifact_key": str(getattr(task_cfg, "artifact_key", task_key) or task_key).strip(),
-            "eval_role": str(getattr(task_cfg, "eval_role", "compare") or "compare").strip(),
+            "artifact_key": str(
+                getattr(task_cfg, "artifact_key", task_key) or task_key,
+            ).strip(),
+            "eval_role": str(
+                getattr(task_cfg, "eval_role", "compare") or "compare",
+            ).strip(),
             "model_id": str(getattr(task_cfg, "model_id", "") or "").strip(),
         }
         if not enabled:
@@ -674,35 +755,50 @@ def _build_task_status(runtime: NLPRuntime, config) -> dict[str, dict]:
                     "status": "disabled",
                     "reason_code": "HANLP_TASK_DISABLED",
                     "reason": "HanLP task is disabled in the task matrix.",
-                }
+                },
             )
         else:
             state = runtime.task_status(task_key, runtime_knowledge_cfg)
             task_entry.update(
                 {
                     "status": state.get("status") or "unavailable",
-                    "reason_code": state.get("reason_code") or "HANLP_TASK_LOAD_FAILED",
-                    "reason": state.get("reason") or "HanLP task is unavailable.",
-                }
+                    "reason_code": state.get("reason_code")
+                    or "HANLP_TASK_LOAD_FAILED",
+                    "reason": state.get("reason")
+                    or "HanLP task is unavailable.",
+                },
             )
         task_states[task_key] = task_entry
     return task_states
 
 
-def _build_task_status_snapshot(config, *, sidecar_state: dict, model_state: dict) -> dict[str, dict]:
+def _build_task_status_snapshot(
+    config,
+    *,
+    sidecar_state: dict,
+    model_state: dict,
+) -> dict[str, dict]:
     """Build a lightweight task matrix snapshot without active runtime probing."""
     task_states: dict[str, dict] = {}
     sidecar_ready = str(sidecar_state.get("status") or "") == "ready"
     model_ready = str(model_state.get("status") or "") == "ready"
     for task_key, task_cfg in _task_specs(config).items():
         enabled = bool(getattr(task_cfg, "enabled", True))
-        task_name = str(getattr(task_cfg, "task_name", task_key) or task_key).strip()
-        normalized_task = str(task_key or "").strip().replace("/", "_").replace("-", "_")
+        task_name = str(
+            getattr(task_cfg, "task_name", task_key) or task_key,
+        ).strip()
+        normalized_task = (
+            str(task_key or "").strip().replace("/", "_").replace("-", "_")
+        )
         task_entry = {
             "enabled": enabled,
             "task_name": task_name,
-            "artifact_key": str(getattr(task_cfg, "artifact_key", task_key) or task_key).strip(),
-            "eval_role": str(getattr(task_cfg, "eval_role", "compare") or "compare").strip(),
+            "artifact_key": str(
+                getattr(task_cfg, "artifact_key", task_key) or task_key,
+            ).strip(),
+            "eval_role": str(
+                getattr(task_cfg, "eval_role", "compare") or "compare",
+            ).strip(),
             "model_id": str(getattr(task_cfg, "model_id", "") or "").strip(),
         }
         if not enabled:
@@ -711,31 +807,48 @@ def _build_task_status_snapshot(config, *, sidecar_state: dict, model_state: dic
                     "status": "disabled",
                     "reason_code": "HANLP_TASK_DISABLED",
                     "reason": "HanLP task is disabled in the task matrix.",
-                }
+                },
             )
-        elif normalized_task in {"cor", "coref", "coreference", "coreference_resolution"}:
+        elif normalized_task in {
+            "cor",
+            "coref",
+            "coreference",
+            "coreference_resolution",
+        }:
             task_entry.update(
                 {
                     "status": "unavailable",
                     "reason_code": "HANLP_COREF_NOT_OPEN_SOURCE",
                     "reason": "HanLP coreference_resolution is not open-source and is disabled in CoPaw runtime.",
-                }
+                },
             )
         elif not sidecar_ready:
             task_entry.update(
                 {
                     "status": "unavailable",
-                    "reason_code": str(sidecar_state.get("reason_code") or "HANLP_SIDECAR_UNCONFIGURED"),
-                    "reason": str(sidecar_state.get("reason") or "HanLP sidecar is not configured."),
-                }
+                    "reason_code": str(
+                        sidecar_state.get("reason_code")
+                        or "HANLP_SIDECAR_UNCONFIGURED",
+                    ),
+                    "reason": str(
+                        sidecar_state.get("reason")
+                        or "HanLP sidecar is not configured.",
+                    ),
+                },
             )
         elif not model_ready:
             task_entry.update(
                 {
                     "status": "unavailable",
-                    "reason_code": str(model_state.get("reason_code") or "HANLP_MODEL_LOAD_FAILED"),
-                    "reason": str(model_state.get("reason") or "HanLP tokenizer model is unavailable."),
-                }
+                    "reason_code": str(
+                        model_state.get("reason_code")
+                        or "HANLP_MODEL_LOAD_FAILED",
+                    ),
+                    "reason": str(
+                        model_state.get("reason")
+                        or "HanLP tokenizer model is unavailable.",
+                    ),
+                },
             )
         else:
             task_entry.update(
@@ -743,7 +856,7 @@ def _build_task_status_snapshot(config, *, sidecar_state: dict, model_state: dic
                     "status": "ready",
                     "reason_code": "HANLP_TASK_READY_UNVERIFIED",
                     "reason": "HanLP task is configured. Run task demo to verify model availability.",
-                }
+                },
             )
         task_states[task_key] = task_entry
     return task_states
@@ -773,12 +886,20 @@ def _build_status(config, *, include_task_status: bool = True) -> dict:
     task_states = (
         _build_task_status(runtime, config)
         if include_task_status
-        else _build_task_status_snapshot(config, sidecar_state=probe_state, model_state=model_state)
+        else _build_task_status_snapshot(
+            config,
+            sidecar_state=probe_state,
+            model_state=model_state,
+        )
     )
     nlp_cfg = _nlp_config(config)
     sidecar_enabled = NLPRuntime._sidecar_enabled(nlp_cfg)
-    python_executable = str(getattr(nlp_cfg, "python_executable", "") or "").strip()
-    python_version_tuple = _python_version(python_executable) if python_executable else None
+    python_executable = str(
+        getattr(nlp_cfg, "python_executable", "") or "",
+    ).strip()
+    python_version_tuple = (
+        _python_version(python_executable) if python_executable else None
+    )
     python_version = (
         f"{python_version_tuple[0]}.{python_version_tuple[1]}"
         if python_version_tuple is not None
@@ -789,22 +910,30 @@ def _build_status(config, *, include_task_status: bool = True) -> dict:
     return {
         "sidecar": {
             "status": probe_state.get("status") or "unavailable",
-            "reason_code": probe_state.get("reason_code") or "HANLP_SIDECAR_UNCONFIGURED",
-            "reason": probe_state.get("reason") or "HanLP sidecar is not configured.",
+            "reason_code": probe_state.get("reason_code")
+            or "HANLP_SIDECAR_UNCONFIGURED",
+            "reason": probe_state.get("reason")
+            or "HanLP sidecar is not configured.",
             "enabled": sidecar_enabled,
-            "provider": str(getattr(nlp_cfg, "provider", "hanlp") or "hanlp").strip(),
+            "provider": str(
+                getattr(nlp_cfg, "provider", "hanlp") or "hanlp",
+            ).strip(),
             "python_executable": python_executable,
             "python_version": python_version,
             "managed": python_executable == managed_python,
             "uv_available": bool(uv_executable),
             "uv_executable": uv_executable,
-            "model_home": str(getattr(nlp_cfg, "model_home", "") or "").strip(),
+            "model_home": str(
+                getattr(nlp_cfg, "model_home", "") or "",
+            ).strip(),
             "model_cache_path": _normalized_model_home(config),
         },
         "model": {
             "status": model_state.get("status") or "unavailable",
-            "reason_code": model_state.get("reason_code") or "HANLP_MODEL_LOAD_FAILED",
-            "reason": model_state.get("reason") or "HanLP tokenizer model is unavailable.",
+            "reason_code": model_state.get("reason_code")
+            or "HANLP_MODEL_LOAD_FAILED",
+            "reason": model_state.get("reason")
+            or "HanLP tokenizer model is unavailable.",
             "model_id": str(getattr(nlp_cfg, "model_id", "") or "").strip(),
         },
         "tasks": task_states,
@@ -812,7 +941,11 @@ def _build_status(config, *, include_task_status: bool = True) -> dict:
     }
 
 
-def get_hanlp_sidecar_status(*, force_refresh: bool = False, include_task_status: bool = True) -> dict:
+def get_hanlp_sidecar_status(
+    *,
+    force_refresh: bool = False,
+    include_task_status: bool = True,
+) -> dict:
     global _STATUS_CACHE  # noqa: PLW0603
     global _STATUS_CACHE_TIME  # noqa: PLW0603
     global _STATUS_SNAPSHOT_CACHE  # noqa: PLW0603
@@ -823,7 +956,10 @@ def get_hanlp_sidecar_status(*, force_refresh: bool = False, include_task_status
     now = time.monotonic()
     with _STATUS_CACHE_LOCK:
         if not force_refresh and include_task_status:
-            if _STATUS_CACHE is not None and (now - _STATUS_CACHE_TIME) < _STATUS_CACHE_TTL_SEC:
+            if (
+                _STATUS_CACHE is not None
+                and (now - _STATUS_CACHE_TIME) < _STATUS_CACHE_TTL_SEC
+            ):
                 return dict(_STATUS_CACHE)
 
         if not force_refresh and not include_task_status:
@@ -831,22 +967,28 @@ def get_hanlp_sidecar_status(*, force_refresh: bool = False, include_task_status
             # in-memory ready snapshot without running runtime probes.
             if (
                 _HANLP_READY_SNAPSHOT is not None
-                and (now - _HANLP_READY_SNAPSHOT_TIME) < _HANLP_READY_SNAPSHOT_TTL_SEC
+                and (now - _HANLP_READY_SNAPSHOT_TIME)
+                < _HANLP_READY_SNAPSHOT_TTL_SEC
             ):
                 return dict(_HANLP_READY_SNAPSHOT)
 
             # Fallback to lightweight snapshot cache.
             if (
                 _STATUS_SNAPSHOT_CACHE is not None
-                and (now - _STATUS_SNAPSHOT_CACHE_TIME) < _STATUS_SNAPSHOT_CACHE_TTL_SEC
+                and (now - _STATUS_SNAPSHOT_CACHE_TIME)
+                < _STATUS_SNAPSHOT_CACHE_TTL_SEC
             ):
                 return dict(_STATUS_SNAPSHOT_CACHE)
 
     config = load_config()
     status = _build_status(config, include_task_status=include_task_status)
 
-    sidecar_ready = str((status.get("sidecar") or {}).get("status") or "") == "ready"
-    model_ready = str((status.get("model") or {}).get("status") or "") == "ready"
+    sidecar_ready = (
+        str((status.get("sidecar") or {}).get("status") or "") == "ready"
+    )
+    model_ready = (
+        str((status.get("model") or {}).get("status") or "") == "ready"
+    )
 
     with _STATUS_CACHE_LOCK:
         # Record cache time after status build; build itself can take seconds.
@@ -930,7 +1072,9 @@ def auto_install_hanlp_sidecar() -> dict:
         _persist_hanlp_runtime_config(
             config,
             python_executable=main_python,
-            model_home=Path(_normalized_model_home(config)) if _normalized_model_home(config).strip() else None,
+            model_home=Path(_normalized_model_home(config))
+            if _normalized_model_home(config).strip()
+            else None,
         )
         _invalidate_cache()
         status_after = get_hanlp_sidecar_status(force_refresh=True)
@@ -1002,7 +1146,11 @@ def auto_install_hanlp_sidecar() -> dict:
             manual_steps=manual_steps,
         )
 
-    _persist_hanlp_runtime_config(config, python_executable=python_path, model_home=home)
+    _persist_hanlp_runtime_config(
+        config,
+        python_executable=python_path,
+        model_home=home,
+    )
     _invalidate_cache()
     status_after = get_hanlp_sidecar_status(force_refresh=True)
     if status_after["sidecar"]["status"] != "ready":
@@ -1033,10 +1181,18 @@ def ensure_hanlp_model() -> dict:
                 "status": "disabled",
                 "reason_code": "HANLP_TASK_DISABLED",
                 "reason": "HanLP task is disabled in the task matrix.",
-                "task_name": str(getattr(task_cfg, "task_name", task_key) or task_key).strip(),
-                "artifact_key": str(getattr(task_cfg, "artifact_key", task_key) or task_key).strip(),
-                "eval_role": str(getattr(task_cfg, "eval_role", "compare") or "compare").strip(),
-                "model_id": str(getattr(task_cfg, "model_id", "") or "").strip(),
+                "task_name": str(
+                    getattr(task_cfg, "task_name", task_key) or task_key,
+                ).strip(),
+                "artifact_key": str(
+                    getattr(task_cfg, "artifact_key", task_key) or task_key,
+                ).strip(),
+                "eval_role": str(
+                    getattr(task_cfg, "eval_role", "compare") or "compare",
+                ).strip(),
+                "model_id": str(
+                    getattr(task_cfg, "model_id", "") or "",
+                ).strip(),
             }
             continue
         task_state = runtime.task_status(task_key, runtime_knowledge_cfg)
@@ -1044,11 +1200,18 @@ def ensure_hanlp_model() -> dict:
         all_enabled_tasks_ready = all_enabled_tasks_ready and task_ready
         task_results[task_key] = {
             "status": task_state.get("status") or "unavailable",
-            "reason_code": task_state.get("reason_code") or "HANLP_TASK_LOAD_FAILED",
+            "reason_code": task_state.get("reason_code")
+            or "HANLP_TASK_LOAD_FAILED",
             "reason": task_state.get("reason") or "HanLP task is unavailable.",
-            "task_name": str(getattr(task_cfg, "task_name", task_key) or task_key).strip(),
-            "artifact_key": str(getattr(task_cfg, "artifact_key", task_key) or task_key).strip(),
-            "eval_role": str(getattr(task_cfg, "eval_role", "compare") or "compare").strip(),
+            "task_name": str(
+                getattr(task_cfg, "task_name", task_key) or task_key,
+            ).strip(),
+            "artifact_key": str(
+                getattr(task_cfg, "artifact_key", task_key) or task_key,
+            ).strip(),
+            "eval_role": str(
+                getattr(task_cfg, "eval_role", "compare") or "compare",
+            ).strip(),
             "model_id": str(getattr(task_cfg, "model_id", "") or "").strip(),
         }
     _invalidate_cache()
@@ -1063,14 +1226,19 @@ def ensure_hanlp_model() -> dict:
             "Verify the configured HanLP task matrix models are available in HANLP_HOME, then retry task verification.",
         )
     return {
-        "success": model_state.get("status") == "ready" and all_enabled_tasks_ready,
+        "success": model_state.get("status") == "ready"
+        and all_enabled_tasks_ready,
         "status_before": status_before,
         "status_after": status_after,
         "model_result": {
             "status": model_state.get("status") or "unavailable",
-            "reason_code": model_state.get("reason_code") or "HANLP_MODEL_LOAD_FAILED",
-            "reason": model_state.get("reason") or "HanLP tokenizer model is unavailable.",
-            "model_id": str(getattr(_nlp_config(config), "model_id", "") or "").strip(),
+            "reason_code": model_state.get("reason_code")
+            or "HANLP_MODEL_LOAD_FAILED",
+            "reason": model_state.get("reason")
+            or "HanLP tokenizer model is unavailable.",
+            "model_id": str(
+                getattr(_nlp_config(config), "model_id", "") or "",
+            ).strip(),
         },
         "task_results": task_results,
         "manual_steps": manual_steps,

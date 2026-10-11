@@ -864,7 +864,7 @@ function renderResultByTask(
             <span>Span</span>
           </div>
           {rows.map((row, index) => (
-            
+
             <button
               type="button"
               key={`ner-row-${index}`}

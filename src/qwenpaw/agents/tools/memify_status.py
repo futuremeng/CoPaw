@@ -38,21 +38,38 @@ async def memify_status(job_id: str) -> ToolResponse:
     normalized_job_id = (job_id or "").strip()
     if not normalized_job_id:
         return ToolResponse(
-            content=[TextBlock(type="text", text="Error: job_id cannot be empty.")],
+            content=[
+                TextBlock(type="text", text="Error: job_id cannot be empty."),
+            ],
         )
 
     config, running, workspace_dir = _resolve_memify_tool_context()
     if not getattr(config, "knowledge", None) or not config.knowledge.enabled:
         return ToolResponse(
-            content=[TextBlock(type="text", text="Error: knowledge is disabled in configuration.")],
+            content=[
+                TextBlock(
+                    type="text",
+                    text="Error: knowledge is disabled in configuration.",
+                ),
+            ],
         )
     if not bool(getattr(running, "knowledge_enabled", True)):
         return ToolResponse(
-            content=[TextBlock(type="text", text="Error: knowledge is disabled in agent runtime configuration.")],
+            content=[
+                TextBlock(
+                    type="text",
+                    text="Error: knowledge is disabled in agent runtime configuration.",
+                ),
+            ],
         )
     if not bool(getattr(config.knowledge, "memify_enabled", False)):
         return ToolResponse(
-            content=[TextBlock(type="text", text="Error: memify is disabled in configuration.")],
+            content=[
+                TextBlock(
+                    type="text",
+                    text="Error: memify is disabled in configuration.",
+                ),
+            ],
         )
 
     try:
@@ -60,12 +77,27 @@ async def memify_status(job_id: str) -> ToolResponse:
         result = manager.get_memify_status(normalized_job_id)
         if result is None:
             return ToolResponse(
-                content=[TextBlock(type="text", text="Error: memify job not found.")],
+                content=[
+                    TextBlock(
+                        type="text",
+                        text="Error: memify job not found.",
+                    ),
+                ],
             )
         return ToolResponse(
-            content=[TextBlock(type="text", text=json.dumps(result, ensure_ascii=False, indent=2))],
+            content=[
+                TextBlock(
+                    type="text",
+                    text=json.dumps(result, ensure_ascii=False, indent=2),
+                ),
+            ],
         )
     except Exception as e:
         return ToolResponse(
-            content=[TextBlock(type="text", text=f"Error: memify status failed due to\n{e}")],
+            content=[
+                TextBlock(
+                    type="text",
+                    text=f"Error: memify status failed due to\n{e}",
+                ),
+            ],
         )

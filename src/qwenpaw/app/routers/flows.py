@@ -75,7 +75,11 @@ async def list_flow_runs(
     ctx=Depends(_get_agent_flow_service),
 ):
     agent_id, service = ctx
-    runs = service.list_runs(agent_id=agent_id, scope_kind=scope_kind, scope_id=scope_id)
+    runs = service.list_runs(
+        agent_id=agent_id,
+        scope_kind=scope_kind,
+        scope_id=scope_id,
+    )
     return [item.model_dump(mode="json") for item in runs]
 
 
@@ -95,7 +99,10 @@ async def create_flow_run(
             idempotency_key=payload.idempotency_key,
         )
     except FlowDefinitionNotFoundError as exc:
-        raise HTTPException(status_code=404, detail=_flow_error_detail(exc)) from exc
+        raise HTTPException(
+            status_code=404,
+            detail=_flow_error_detail(exc),
+        ) from exc
     return run.model_dump(mode="json")
 
 
@@ -114,7 +121,9 @@ async def get_flow_run(run_id: str, ctx=Depends(_get_agent_flow_service)):
     return {
         "run": detail["run"].model_dump(mode="json"),
         "events": [item.model_dump(mode="json") for item in detail["events"]],
-        "commands": [item.model_dump(mode="json") for item in detail["commands"]],
+        "commands": [
+            item.model_dump(mode="json") for item in detail["commands"]
+        ],
     }
 
 
@@ -150,9 +159,15 @@ async def command_flow_run(
         if command is None:
             raise RuntimeError("flow command write failed")
     except FlowRunNotFoundError as exc:
-        raise HTTPException(status_code=404, detail=_flow_error_detail(exc)) from exc
+        raise HTTPException(
+            status_code=404,
+            detail=_flow_error_detail(exc),
+        ) from exc
     except (FlowTransitionNotAllowedError, FlowTransitionConflictError) as exc:
-        raise HTTPException(status_code=409, detail=_flow_error_detail(exc)) from exc
+        raise HTTPException(
+            status_code=409,
+            detail=_flow_error_detail(exc),
+        ) from exc
     except RuntimeError as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 

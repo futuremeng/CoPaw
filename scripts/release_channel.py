@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+# -*- coding: utf-8 -*-
 """Render CoPaw's release-channel fact source for each consumer.
 
     python scripts/release_channel.py --print
@@ -52,7 +53,8 @@ ENV_FIELDS = (
 
 def _loader():
     spec = importlib.util.spec_from_file_location(
-        "_copaw_release_channel", LOADER_MODULE
+        "_copaw_release_channel",
+        LOADER_MODULE,
     )
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
@@ -122,7 +124,10 @@ def main(argv: list[str] | None = None) -> int:
     form.add_argument("--gh-env", action="store_true")
     form.add_argument("--write-ts", action="store_true")
     parser.add_argument(
-        "--out", type=Path, default=GENERATED_TS, help="--write-ts target"
+        "--out",
+        type=Path,
+        default=GENERATED_TS,
+        help="--write-ts target",
     )
     parser.add_argument("--fact-source", type=Path, default=FACT_SOURCE)
     args = parser.parse_args(argv)

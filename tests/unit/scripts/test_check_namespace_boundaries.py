@@ -9,7 +9,10 @@ from pathlib import Path
 def _load_module():
     repo_root = Path(__file__).resolve().parents[3]
     script_path = repo_root / "scripts" / "check_namespace_boundaries.py"
-    spec = importlib.util.spec_from_file_location("check_namespace_boundaries", script_path)
+    spec = importlib.util.spec_from_file_location(
+        "check_namespace_boundaries",
+        script_path,
+    )
     assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
@@ -48,7 +51,9 @@ def test_flow_engine_lives_in_the_engine_package():
     mod = _load_module()
     repo_root = Path(__file__).resolve().parents[3]
     assert "app/flow_engine/" not in mod.ALLOWED_COPAW_ONLY_PREFIXES
-    assert (repo_root / "src" / "qwenpaw" / "app" / "flow_engine" / "__init__.py").is_file()
+    assert (
+        repo_root / "src" / "qwenpaw" / "app" / "flow_engine" / "__init__.py"
+    ).is_file()
     sink_dir = repo_root / "src" / "copaw" / "app" / "flow_engine"
     # A stale, gitignored __pycache__/ from before the sink is not a module.
     assert not list(sink_dir.glob("*.py"))
@@ -63,8 +68,22 @@ def test_copaw_keeps_no_router_level_exceptions():
     registered = mod.ALLOWED_COPAW_ONLY_FILES
     assert registered == {"release_channel.py"}
     assert not [f for f in registered if f.startswith("app/routers/")]
-    assert not (repo_root / "src" / "copaw" / "app" / "routers" / "knowledge_hanlp_tasks.py").exists()
-    assert (repo_root / "src" / "qwenpaw" / "app" / "routers" / "knowledge_hanlp_tasks.py").is_file()
+    assert not (
+        repo_root
+        / "src"
+        / "copaw"
+        / "app"
+        / "routers"
+        / "knowledge_hanlp_tasks.py"
+    ).exists()
+    assert (
+        repo_root
+        / "src"
+        / "qwenpaw"
+        / "app"
+        / "routers"
+        / "knowledge_hanlp_tasks.py"
+    ).is_file()
 
 
 def test_allowed_non_thin_shared_includes_copaw_app_overlay():

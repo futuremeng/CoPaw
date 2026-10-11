@@ -40,7 +40,7 @@ console/.wiki/
 src/qwenpaw/console/dist/
 src/qwenpaw/console/
 
- 
+
 # vite/vitest local cache
 .vite/
 # Docs bundled at build time (copied from website/public/docs/)

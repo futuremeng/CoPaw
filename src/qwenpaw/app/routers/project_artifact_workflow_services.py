@@ -73,7 +73,10 @@ def extract_project_conversation_skill_candidates(
     seen_ids: set[str] = set()
     expected_run_id = str(run_id or "").strip().lower()
 
-    for run_dir in sorted(runs_dir.iterdir(), key=lambda item: item.name.lower()):
+    for run_dir in sorted(
+        runs_dir.iterdir(),
+        key=lambda item: item.name.lower(),
+    ):
         if not run_dir.is_dir():
             continue
         manifest_file = run_dir / "run_manifest.json"
@@ -86,7 +89,9 @@ def extract_project_conversation_skill_candidates(
         if not isinstance(raw_doc, dict):
             continue
 
-        current_run_id = str(raw_doc.get("run_id") or run_dir.name).strip() or run_dir.name
+        current_run_id = (
+            str(raw_doc.get("run_id") or run_dir.name).strip() or run_dir.name
+        )
         if expected_run_id and current_run_id.lower() != expected_run_id:
             continue
         events = raw_doc.get("collaboration_events") or []
@@ -104,7 +109,9 @@ def extract_project_conversation_skill_candidates(
             if not message:
                 continue
 
-            step_id = str(event.get("step_id") or event_name).strip() or event_name
+            step_id = (
+                str(event.get("step_id") or event_name).strip() or event_name
+            )
             artifact_id = safe_artifact_slug(
                 f"{current_run_id}-{step_id}",
                 f"skill-{generate_short_agent_id()}",
@@ -118,7 +125,9 @@ def extract_project_conversation_skill_candidates(
             if len(name_tokens) > 8:
                 name_seed = " ".join(name_tokens[:8])
 
-            rel_manifest_path = manifest_file.resolve().relative_to(project_dir.resolve())
+            rel_manifest_path = manifest_file.resolve().relative_to(
+                project_dir.resolve(),
+            )
             candidates.append(
                 {
                     "id": artifact_id,
@@ -142,7 +151,10 @@ def auto_distill_project_skills_to_draft(
     load_project_summary: LoadProjectSummary,
     read_project_frontmatter_with_body: ReadProjectFrontmatterWithBody,
     parse_project_artifact_profile: ParseProjectArtifactProfile,
-    extract_project_conversation_skill_candidates: Callable[[Path, str | None], list[dict[str, str]]],
+    extract_project_conversation_skill_candidates: Callable[
+        [Path, str | None],
+        list[dict[str, str]],
+    ],
     safe_artifact_slug: SafeArtifactSlug,
     generate_short_agent_id: GenerateShortAgentId,
     read_text_file_with_encoding_fallback: ReadTextFileWithEncodingFallback,
@@ -170,7 +182,10 @@ def auto_distill_project_skills_to_draft(
     skipped_count = 0
 
     if summary.artifact_distill_mode == "conversation_evidence":
-        candidates = extract_project_conversation_skill_candidates(project_dir, run_id)
+        candidates = extract_project_conversation_skill_candidates(
+            project_dir,
+            run_id,
+        )
         for candidate in candidates:
             artifact_id = candidate["id"]
             if artifact_id in existing_ids:
@@ -206,15 +221,22 @@ def auto_distill_project_skills_to_draft(
                 project=summary,
             )
 
-        for md_file in sorted(skills_dir.rglob("*.md"), key=lambda item: item.as_posix()):
+        for md_file in sorted(
+            skills_dir.rglob("*.md"),
+            key=lambda item: item.as_posix(),
+        ):
             if not md_file.is_file():
                 continue
-            rel_path = md_file.resolve().relative_to(project_dir.resolve()).as_posix()
+            rel_path = (
+                md_file.resolve().relative_to(project_dir.resolve()).as_posix()
+            )
             if rel_path.lower().endswith("/skill.md"):
                 skipped_count += 1
                 continue
 
-            artifact_seed = md_file.relative_to(skills_dir).with_suffix("").as_posix()
+            artifact_seed = (
+                md_file.relative_to(skills_dir).with_suffix("").as_posix()
+            )
             artifact_id = safe_artifact_slug(
                 artifact_seed.replace("/", "-"),
                 f"skill-{generate_short_agent_id()}",
@@ -224,9 +246,21 @@ def auto_distill_project_skills_to_draft(
                 continue
 
             raw_text = read_text_file_with_encoding_fallback(md_file)
-            lines = [line.strip() for line in raw_text.splitlines() if line.strip()]
-            heading = next((line.lstrip("#").strip() for line in lines if line.startswith("#")), "")
-            name = heading or md_file.stem.replace("-", " ").replace("_", " ").strip()
+            lines = [
+                line.strip() for line in raw_text.splitlines() if line.strip()
+            ]
+            heading = next(
+                (
+                    line.lstrip("#").strip()
+                    for line in lines
+                    if line.startswith("#")
+                ),
+                "",
+            )
+            name = (
+                heading
+                or md_file.stem.replace("-", " ").replace("_", " ").strip()
+            )
             if not name:
                 name = artifact_id
 
@@ -237,7 +271,10 @@ def auto_distill_project_skills_to_draft(
                 note_lines.append(line)
                 if len(" ".join(note_lines)) >= 240:
                     break
-            distillation_note = " ".join(note_lines).strip() or f"Auto drafted from {rel_path}."
+            distillation_note = (
+                " ".join(note_lines).strip()
+                or f"Auto drafted from {rel_path}."
+            )
 
             profile.skills.append(
                 project_artifact_item_factory(
@@ -260,7 +297,10 @@ def auto_distill_project_skills_to_draft(
 
     normalized_profile = normalize_project_artifact_profile_storage(profile)
     ensure_project_artifact_layout(project_dir)
-    metadata["artifact_profile"] = normalized_profile.model_dump(mode="json", exclude_none=True)
+    metadata["artifact_profile"] = normalized_profile.model_dump(
+        mode="json",
+        exclude_none=True,
+    )
     write_project_frontmatter(metadata_file, metadata, content_body)
 
     updated_summary = load_project_summary(project_dir)
@@ -301,7 +341,14 @@ def confirm_project_skill_stable(
             detail=f"Project '{project_id}' metadata not found",
         )
 
-    skill_item = next((item for item in summary.artifact_profile.skills if item.id == artifact_id), None)
+    skill_item = next(
+        (
+            item
+            for item in summary.artifact_profile.skills
+            if item.id == artifact_id
+        ),
+        None,
+    )
     if skill_item is None:
         raise http_exception_factory(
             status_code=404,
@@ -320,7 +367,10 @@ def confirm_project_skill_stable(
         )
         break
 
-    metadata["artifact_profile"] = normalized_profile.model_dump(mode="json", exclude_none=True)
+    metadata["artifact_profile"] = normalized_profile.model_dump(
+        mode="json",
+        exclude_none=True,
+    )
     write_project_frontmatter(metadata_file, metadata, content_body)
 
     updated_summary = load_project_summary(project_dir)
@@ -330,7 +380,14 @@ def confirm_project_skill_stable(
             detail="Failed to load project after confirming stable",
         )
 
-    confirmed_item = next((item for item in updated_summary.artifact_profile.skills if item.id == artifact_id), None)
+    confirmed_item = next(
+        (
+            item
+            for item in updated_summary.artifact_profile.skills
+            if item.id == artifact_id
+        ),
+        None,
+    )
     if confirmed_item is None:
         raise http_exception_factory(
             status_code=500,
@@ -373,7 +430,14 @@ def promote_project_skill_to_agent(
             detail=f"Project '{project_id}' metadata not found",
         )
 
-    skill_item = next((item for item in summary.artifact_profile.skills if item.id == artifact_id), None)
+    skill_item = next(
+        (
+            item
+            for item in summary.artifact_profile.skills
+            if item.id == artifact_id
+        ),
+        None,
+    )
     if skill_item is None:
         raise http_exception_factory(
             status_code=404,
@@ -412,10 +476,17 @@ def promote_project_skill_to_agent(
         except ValueError:
             source_file = project_dir / ".skills" / f"{skill_item.id}.md"
         if source_file.exists() and source_file.is_file():
-            source_body = source_file.read_text(encoding="utf-8", errors="ignore")
+            source_body = source_file.read_text(
+                encoding="utf-8",
+                errors="ignore",
+            )
 
     target_skill_dir.mkdir(parents=True, exist_ok=True)
-    promoted_md = build_promoted_skill_markdown(skill_item, project_id, source_body)
+    promoted_md = build_promoted_skill_markdown(
+        skill_item,
+        project_id,
+        source_body,
+    )
     target_skill_md.write_text(promoted_md, encoding="utf-8")
 
     if body.enable:
@@ -436,9 +507,15 @@ def promote_project_skill_to_agent(
                 "market_item_id": skill_dir_name,
             },
         )
-        normalized_profile.skills[idx] = normalize_project_artifact_storage(updated_item, "skill")
+        normalized_profile.skills[idx] = normalize_project_artifact_storage(
+            updated_item,
+            "skill",
+        )
         break
-    metadata["artifact_profile"] = normalized_profile.model_dump(mode="json", exclude_none=True)
+    metadata["artifact_profile"] = normalized_profile.model_dump(
+        mode="json",
+        exclude_none=True,
+    )
     write_project_frontmatter(metadata_file, metadata, content_body)
 
     updated_summary = load_project_summary(project_dir)

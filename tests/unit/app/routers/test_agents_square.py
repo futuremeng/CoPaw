@@ -7,7 +7,9 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from qwenpaw.app.project_realtime_events import collect_project_realtime_changes
+from qwenpaw.app.project_realtime_events import (
+    collect_project_realtime_changes,
+)
 from qwenpaw.app.routers import agents as agents_router_module
 from copaw.config.config import (
     AgentProfileConfig,
@@ -20,7 +22,10 @@ from copaw.config.config import (
 
 
 @pytest.fixture
-def agents_square_api_client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> TestClient:
+def agents_square_api_client(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> TestClient:
     square_dir = tmp_path / "agents_square"
     square_dir.mkdir(parents=True, exist_ok=True)
 
@@ -44,7 +49,7 @@ def agents_square_api_client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) ->
                 "trust": "official",
                 "license_hint": "MIT",
                 "pinned": True,
-            }
+            },
         ],
     }
 
@@ -115,7 +120,7 @@ def agents_square_api_client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) ->
                     "default": AgentProfileRef(
                         id="default",
                         workspace_dir=str(tmp_path / "workspaces" / "default"),
-                    )
+                    ),
                 },
             ),
             agents_square=AgentsSquareConfig(
@@ -132,8 +137,8 @@ def agents_square_api_client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) ->
                         trust="official",
                         license_hint="MIT",
                         pinned=True,
-                    )
-                ]
+                    ),
+                ],
             ),
         ),
         "agent_configs": {},
@@ -164,9 +169,21 @@ def agents_square_api_client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) ->
 
     monkeypatch.setattr(agents_router_module, "load_config", fake_load_config)
     monkeypatch.setattr(agents_router_module, "save_config", fake_save_config)
-    monkeypatch.setattr(agents_router_module, "save_agent_config", fake_save_agent_config)
-    monkeypatch.setattr(agents_router_module, "load_agent_config", fake_load_agent_config)
-    monkeypatch.setattr(agents_router_module, "_initialize_agent_workspace", fake_init_workspace)
+    monkeypatch.setattr(
+        agents_router_module,
+        "save_agent_config",
+        fake_save_agent_config,
+    )
+    monkeypatch.setattr(
+        agents_router_module,
+        "load_agent_config",
+        fake_load_agent_config,
+    )
+    monkeypatch.setattr(
+        agents_router_module,
+        "_initialize_agent_workspace",
+        fake_init_workspace,
+    )
     monkeypatch.setattr(agents_router_module, "WORKING_DIR", str(tmp_path))
     monkeypatch.setattr(
         agents_router_module,
@@ -209,7 +226,7 @@ def test_square_items_endpoint_returns_expected_shape(
                     install_url="https://github.com/msitarzewski/agency-agents/blob/main/engineering/frontend.md",
                     tags=["frontend", "react"],
                     extra={"category": "engineering"},
-                )
+                ),
             ],
             [
                 agents_router_module.SourceError(
@@ -217,7 +234,7 @@ def test_square_items_endpoint_returns_expected_shape(
                     code="SOURCE_UNREACHABLE",
                     message="timeout",
                     retryable=True,
-                )
+                ),
             ],
             {
                 "generated_at": 123.0,
@@ -231,7 +248,9 @@ def test_square_items_endpoint_returns_expected_shape(
         ),
     )
 
-    response = agents_square_api_client.get("/agents/square/items?refresh=true")
+    response = agents_square_api_client.get(
+        "/agents/square/items?refresh=true",
+    )
 
     assert response.status_code == 200
     data = response.json()
@@ -251,7 +270,11 @@ def test_agents_square_bundled_defaults_include_expected_sources() -> None:
         "agency-agents",
         "agent-teams",
     ]
-    assert [source.enabled for source in config.sources] == [True, False, False]
+    assert [source.enabled for source in config.sources] == [
+        True,
+        False,
+        False,
+    ]
     assert [source.order for source in config.sources] == [1, 2, 3]
     assert [source.url for source in config.sources] == [
         # _normalize_square_source rewrites every github URL to its .git form.
@@ -320,7 +343,7 @@ def test_square_import_creates_agent_and_writes_import_metadata(
                     install_url="https://github.com/msitarzewski/agency-agents/blob/main/engineering/frontend.md",
                     tags=[],
                     extra={},
-                )
+                ),
             ],
             [],
             {
@@ -339,7 +362,7 @@ def test_square_import_creates_agent_and_writes_import_metadata(
                     "source_url": "https://github.com/msitarzewski/agency-agents/blob/main/engineering/frontend.md",
                     "license": "MIT",
                     "original_agent_id": "frontend-developer",
-                }
+                },
             },
         ),
     )
@@ -364,7 +387,9 @@ def test_square_import_creates_agent_and_writes_import_metadata(
     assert (workspace_dir / "AGENTS.md").exists()
     assert (workspace_dir / "imported_from.json").exists()
 
-    imported_from = json.loads((workspace_dir / "imported_from.json").read_text(encoding="utf-8"))
+    imported_from = json.loads(
+        (workspace_dir / "imported_from.json").read_text(encoding="utf-8"),
+    )
     assert imported_from["source_id"] == "agency-agents"
     assert imported_from["original_agent_id"] == "frontend-developer"
 
@@ -423,7 +448,7 @@ def test_square_import_conflict_then_overwrite(
                     install_url="https://example.com/src",
                     tags=[],
                     extra={},
-                )
+                ),
             ],
             [],
             {
@@ -442,7 +467,7 @@ def test_square_import_conflict_then_overwrite(
                     "source_url": "https://example.com/src",
                     "license": "MIT",
                     "original_agent_id": "frontend-developer",
-                }
+                },
             },
         ),
     )
@@ -469,8 +494,12 @@ def test_square_import_conflict_then_overwrite(
     assert overwrite.status_code == 200
     data = overwrite.json()
     assert data["id"] == "ag1234"
-    assert (existing_workspace / "AGENTS.md").read_text(encoding="utf-8").startswith(
-        "# Updated"
+    assert (
+        (existing_workspace / "AGENTS.md")
+        .read_text(encoding="utf-8")
+        .startswith(
+            "# Updated",
+        )
     )
 
 
@@ -561,7 +590,7 @@ def test_square_import_returns_422_when_content_missing(
                     install_url="https://example.com/src",
                     tags=[],
                     extra={},
-                )
+                ),
             ],
             [],
             {
@@ -580,7 +609,7 @@ def test_square_import_returns_422_when_content_missing(
                     "source_url": "https://example.com/src",
                     "license": "MIT",
                     "original_agent_id": "empty-agent",
-                }
+                },
             },
         ),
     )
@@ -617,7 +646,7 @@ def test_square_import_uses_preferred_name(
                     install_url="https://example.com/src",
                     tags=[],
                     extra={},
-                )
+                ),
             ],
             [],
             {
@@ -636,7 +665,7 @@ def test_square_import_uses_preferred_name(
                     "source_url": "https://example.com/src",
                     "license": "MIT",
                     "original_agent_id": "frontend-developer",
-                }
+                },
             },
         ),
     )
@@ -686,7 +715,7 @@ def test_square_import_bundle_toggles_skip_skills_and_tools(
                     install_url="https://example.com/src",
                     tags=[],
                     extra={},
-                )
+                ),
             ],
             [],
             {
@@ -713,11 +742,11 @@ def test_square_import_bundle_toggles_skip_skills_and_tools(
                         },
                         "skills": {
                             "install_urls": [
-                                "https://lobehub.com/discover/skill/should-not-run"
-                            ]
+                                "https://lobehub.com/discover/skill/should-not-run",
+                            ],
                         },
                         "manifest": {
-                            "tools": ["read_file"]
+                            "tools": ["read_file"],
                         },
                         "workflows": [
                             {
@@ -725,10 +754,10 @@ def test_square_import_bundle_toggles_skip_skills_and_tools(
                                 "name": "Flow A",
                                 "version": "1.0.0",
                                 "content": "# Flow A\n\nDescribe only.",
-                            }
+                            },
                         ],
                     },
-                }
+                },
             },
         ),
     )
@@ -747,7 +776,7 @@ def test_square_import_bundle_toggles_skip_skills_and_tools(
     workspace_dir = Path(payload["workspace_dir"])
 
     imported_from = json.loads(
-        (workspace_dir / "imported_from.json").read_text(encoding="utf-8")
+        (workspace_dir / "imported_from.json").read_text(encoding="utf-8"),
     )
     assert install_calls == []
 
@@ -793,7 +822,7 @@ def test_square_import_bundle_can_skip_flow_descriptions(
                     install_url="https://example.com/src",
                     tags=[],
                     extra={},
-                )
+                ),
             ],
             [],
             {
@@ -822,10 +851,10 @@ def test_square_import_bundle_can_skip_flow_descriptions(
                                 "name": "Flow A",
                                 "version": "1.0.0",
                                 "content": "# Flow A\n\nDescribe only.",
-                            }
+                            },
                         ],
                     },
-                }
+                },
             },
         ),
     )
@@ -843,7 +872,7 @@ def test_square_import_bundle_can_skip_flow_descriptions(
     payload = response.json()
     workspace_dir = Path(payload["workspace_dir"])
     imported_from = json.loads(
-        (workspace_dir / "imported_from.json").read_text(encoding="utf-8")
+        (workspace_dir / "imported_from.json").read_text(encoding="utf-8"),
     )
     activation_summary = json.loads(imported_from["activation_summary"])
 

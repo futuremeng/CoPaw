@@ -29,7 +29,10 @@ from copaw.config.config import SkillMarketSpec
 
 
 @pytest.fixture
-def skills_api_client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> TestClient:
+def skills_api_client(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> TestClient:
     market_dir = tmp_path / "skills_market"
     market_dir.mkdir(parents=True, exist_ok=True)
 
@@ -48,7 +51,7 @@ def skills_api_client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> TestCl
                 "enabled": True,
                 "order": 1,
                 "trust": "community",
-            }
+            },
         ],
     }
     default_payload = {
@@ -66,7 +69,7 @@ def skills_api_client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> TestCl
                 "enabled": True,
                 "order": 1,
                 "trust": "community",
-            }
+            },
         ],
     }
 
@@ -120,7 +123,10 @@ def test_payload_to_market_config_normalizes_owner_repo_url() -> None:
 
     config = _payload_to_market_config(payload)
 
-    assert config.markets[0].url == "https://github.com/futuremeng/editor-skills.git"
+    assert (
+        config.markets[0].url
+        == "https://github.com/futuremeng/editor-skills.git"
+    )
     assert config.cache.ttl_sec == 600
 
 
@@ -149,7 +155,9 @@ def test_payload_to_market_config_rejects_unsafe_index_path() -> None:
     assert "MARKET_INDEX_INVALID" in str(exc.value.detail)
 
 
-def test_extract_market_items_builds_install_url_with_branch_and_path() -> None:
+def test_extract_market_items_builds_install_url_with_branch_and_path() -> (
+    None
+):
     market_payload = SkillsMarketPayload(
         version=1,
         cache={"ttl_sec": 600},
@@ -197,7 +205,9 @@ def test_extract_market_items_builds_install_url_with_branch_and_path() -> None:
     assert items[0].description == "Python 开发技能"
 
 
-def test_extract_market_items_builds_blob_install_url_for_markdown_file() -> None:
+def test_extract_market_items_builds_blob_install_url_for_markdown_file() -> (
+    None
+):
     market_payload = SkillsMarketPayload(
         version=1,
         cache={"ttl_sec": 600},
@@ -414,8 +424,14 @@ def test_validate_market_maps_index_value_error_to_http_400(
     def _raise_index_error(*args, **kwargs):
         raise ValueError("MARKET_INDEX_INVALID: missing skills")
 
-    monkeypatch.setattr("qwenpaw.app.routers.skills._run_git_command", _ok_ls_remote)
-    monkeypatch.setattr("qwenpaw.app.routers.skills._load_market_index", _raise_index_error)
+    monkeypatch.setattr(
+        "qwenpaw.app.routers.skills._run_git_command",
+        _ok_ls_remote,
+    )
+    monkeypatch.setattr(
+        "qwenpaw.app.routers.skills._load_market_index",
+        _raise_index_error,
+    )
 
     with pytest.raises(HTTPException) as exc:
         asyncio.run(validate_market(payload))
@@ -448,8 +464,14 @@ def test_validate_market_maps_market_runtime_error_to_http_502(
     def _raise_unreachable(*args, **kwargs):
         raise RuntimeError("MARKET_UNREACHABLE: clone failed")
 
-    monkeypatch.setattr("qwenpaw.app.routers.skills._run_git_command", _ok_ls_remote)
-    monkeypatch.setattr("qwenpaw.app.routers.skills._load_market_index", _raise_unreachable)
+    monkeypatch.setattr(
+        "qwenpaw.app.routers.skills._run_git_command",
+        _ok_ls_remote,
+    )
+    monkeypatch.setattr(
+        "qwenpaw.app.routers.skills._load_market_index",
+        _raise_unreachable,
+    )
 
     with pytest.raises(HTTPException) as exc:
         asyncio.run(validate_market(payload))
@@ -470,7 +492,10 @@ def test_validate_market_endpoint_returns_normalized_contract(
             stderr="",
         )
 
-    monkeypatch.setattr("qwenpaw.app.routers.skills._run_git_command", _ok_ls_remote)
+    monkeypatch.setattr(
+        "qwenpaw.app.routers.skills._run_git_command",
+        _ok_ls_remote,
+    )
     monkeypatch.setattr(
         "qwenpaw.app.routers.skills._load_market_index",
         lambda *_args, **_kwargs: ({"skills": []}, []),
@@ -493,7 +518,10 @@ def test_validate_market_endpoint_returns_normalized_contract(
     data = response.json()
     assert data["ok"] is True
     assert isinstance(data["warnings"], list)
-    assert data["normalized"]["url"] == "https://github.com/futuremeng/editor-skills.git"
+    assert (
+        data["normalized"]["url"]
+        == "https://github.com/futuremeng/editor-skills.git"
+    )
 
 
 def test_marketplace_endpoint_returns_expected_shape(

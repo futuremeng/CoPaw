@@ -9,7 +9,10 @@ from unittest.mock import patch, MagicMock
 import pytest
 
 from copaw.config.config import Config, KnowledgeSourceSpec
-from copaw.knowledge.manager import KnowledgeManager, process_ner_with_sliding_window
+from copaw.knowledge.manager import (
+    KnowledgeManager,
+    process_ner_with_sliding_window,
+)
 from tests.fixtures.knowledge_config import make_knowledge_config
 
 
@@ -18,9 +21,17 @@ def test_directory_source_skips_internal_knowledge_artifacts(tmp_path: Path):
     project_root.mkdir(parents=True, exist_ok=True)
     (project_root / "notes.md").write_text("project note", encoding="utf-8")
     (project_root / "original").mkdir(parents=True, exist_ok=True)
-    (project_root / "original" / "note.md").write_text("hello world", encoding="utf-8")
-    (project_root / ".knowledge" / "sources" / "demo").mkdir(parents=True, exist_ok=True)
-    (project_root / ".knowledge" / "sources" / "demo" / "content.md").write_text(
+    (project_root / "original" / "note.md").write_text(
+        "hello world",
+        encoding="utf-8",
+    )
+    (project_root / ".knowledge" / "sources" / "demo").mkdir(
+        parents=True,
+        exist_ok=True,
+    )
+    (
+        project_root / ".knowledge" / "sources" / "demo" / "content.md"
+    ).write_text(
         "internal artifact should be ignored",
         encoding="utf-8",
     )
@@ -60,13 +71,21 @@ def test_manager_init_purges_legacy_project_source_dirs(tmp_path: Path):
     assert not legacy_dir.exists()
 
 
-def test_directory_source_skips_hidden_files_and_hidden_directories(tmp_path: Path):
+def test_directory_source_skips_hidden_files_and_hidden_directories(
+    tmp_path: Path,
+):
     project_root = tmp_path / "project"
     project_root.mkdir(parents=True, exist_ok=True)
     (project_root / ".DS_Store").write_text("finder noise", encoding="utf-8")
     (project_root / ".hidden").mkdir(parents=True, exist_ok=True)
-    (project_root / ".hidden" / "secret.md").write_text("hidden content", encoding="utf-8")
-    (project_root / "visible.md").write_text("visible content", encoding="utf-8")
+    (project_root / ".hidden" / "secret.md").write_text(
+        "hidden content",
+        encoding="utf-8",
+    )
+    (project_root / "visible.md").write_text(
+        "visible content",
+        encoding="utf-8",
+    )
 
     config = make_knowledge_config()
     source = KnowledgeSourceSpec(
@@ -92,11 +111,16 @@ def test_directory_source_skips_hidden_files_and_hidden_directories(tmp_path: Pa
     assert paths[0].endswith("visible.md")
 
 
-def test_directory_source_raw_sync_ignores_internal_knowledge_dir(tmp_path: Path):
+def test_directory_source_raw_sync_ignores_internal_knowledge_dir(
+    tmp_path: Path,
+):
     project_root = tmp_path / "project-raw-sync"
     project_root.mkdir(parents=True, exist_ok=True)
     (project_root / "docs").mkdir(parents=True, exist_ok=True)
-    (project_root / "docs" / "note.md").write_text("hello raw sync", encoding="utf-8")
+    (project_root / "docs" / "note.md").write_text(
+        "hello raw sync",
+        encoding="utf-8",
+    )
 
     config = make_knowledge_config()
     source = KnowledgeSourceSpec(
@@ -119,10 +143,14 @@ def test_directory_source_raw_sync_ignores_internal_knowledge_dir(tmp_path: Path
 
     assert len(snapshots) == 1
     assert snapshots[0].read_text(encoding="utf-8") == "hello raw sync"
-    assert not any(path.name == ".knowledge" for path in manager.raw_dir.rglob("*"))
+    assert not any(
+        path.name == ".knowledge" for path in manager.raw_dir.rglob("*")
+    )
 
 
-def test_project_directory_raw_snapshots_strip_redundant_project_prefix(tmp_path: Path):
+def test_project_directory_raw_snapshots_strip_redundant_project_prefix(
+    tmp_path: Path,
+):
     project_root = tmp_path / "project-SYbxke"
     project_root.mkdir(parents=True, exist_ok=True)
     (project_root / "original").mkdir(parents=True, exist_ok=True)
@@ -153,7 +181,7 @@ def test_project_directory_raw_snapshots_strip_redundant_project_prefix(tmp_path
             "text": "hello project raw sync",
             "relative_path": "project-SYbxke/original/note.md",
             "source_path": str(source_file),
-        }
+        },
     ]
 
     documents = manager._prepare_documents_for_indexing(
@@ -167,12 +195,17 @@ def test_project_directory_raw_snapshots_strip_redundant_project_prefix(tmp_path
     assert "project-SYbxke/original" not in snapshot_relative
 
     chunks = manager._chunk_documents(documents, config.index.chunk_size)
-    chunk_relative = manager._build_chunk_relative_path(source, chunks[0]).as_posix()
+    chunk_relative = manager._build_chunk_relative_path(
+        source,
+        chunks[0],
+    ).as_posix()
 
     assert chunk_relative.startswith("chunks/original/note.snapshot_")
 
 
-def test_project_directory_raw_snapshots_write_to_top_level_raw_dir(tmp_path: Path):
+def test_project_directory_raw_snapshots_write_to_top_level_raw_dir(
+    tmp_path: Path,
+):
     project_root = tmp_path / "project-gfc3xo"
     project_root.mkdir(parents=True, exist_ok=True)
     (project_root / "aacid__duxiu_files").mkdir(parents=True, exist_ok=True)
@@ -196,13 +229,19 @@ def test_project_directory_raw_snapshots_write_to_top_level_raw_dir(tmp_path: Pa
     manager = KnowledgeManager(tmp_path)
     manager.index_source(source, config, include_semantic_artifacts=False)
 
-    snapshots = list((manager.raw_dir / "aacid__duxiu_files").glob("260317_002144.snapshot_*.md"))
+    snapshots = list(
+        (manager.raw_dir / "aacid__duxiu_files").glob(
+            "260317_002144.snapshot_*.md",
+        ),
+    )
 
     assert len(snapshots) == 1
     assert not (manager.raw_dir / source.id).exists()
 
 
-def test_project_directory_unchanged_file_reuses_existing_snapshot(tmp_path: Path):
+def test_project_directory_unchanged_file_reuses_existing_snapshot(
+    tmp_path: Path,
+):
     project_root = tmp_path / "project-gfc3xo"
     project_root.mkdir(parents=True, exist_ok=True)
     (project_root / "aacid__duxiu_files").mkdir(parents=True, exist_ok=True)
@@ -227,16 +266,25 @@ def test_project_directory_unchanged_file_reuses_existing_snapshot(tmp_path: Pat
     first = manager.index_source(source, config)
     second = manager.index_source(source, config)
     manifest = json.loads(
-        manager._source_snapshot_manifest_path(source.id).read_text(encoding="utf-8")
+        manager._source_snapshot_manifest_path(source.id).read_text(
+            encoding="utf-8",
+        ),
     )
-    snapshots = list((manager.raw_dir / "aacid__duxiu_files").glob("260317_002144.snapshot_*.md"))
+    snapshots = list(
+        (manager.raw_dir / "aacid__duxiu_files").glob(
+            "260317_002144.snapshot_*.md",
+        ),
+    )
 
     assert first["snapshot_count"] == 1
     assert second["snapshot_count"] == 1
     assert len(manifest["snapshots"]) == 1
 
 
-def test_list_sources_include_semantic_uses_lightweight_preview_only(tmp_path: Path, monkeypatch):
+def test_list_sources_include_semantic_uses_lightweight_preview_only(
+    tmp_path: Path,
+    monkeypatch,
+):
     config = make_knowledge_config()
     source = KnowledgeSourceSpec(
         id="project-project-preview-workspace",
@@ -255,9 +303,15 @@ def test_list_sources_include_semantic_uses_lightweight_preview_only(tmp_path: P
     manager = KnowledgeManager(tmp_path)
 
     def fail_load_index_payload(source_id: str):
-        raise AssertionError(f"list_sources should not load indexed payload for {source_id}")
+        raise AssertionError(
+            f"list_sources should not load indexed payload for {source_id}",
+        )
 
-    monkeypatch.setattr(manager, "_load_index_payload_safe", fail_load_index_payload)
+    monkeypatch.setattr(
+        manager,
+        "_load_index_payload_safe",
+        fail_load_index_payload,
+    )
     monkeypatch.setattr(
         manager,
         "get_semantic_engine_state",
@@ -303,9 +357,13 @@ def test_chunk_documents_split_sentences_and_count(tmp_path: Path):
     first_chunk = chunks[0]
     assert first_chunk.get("sentence_count") == 3
     assert "text" not in first_chunk
-    assert first_chunk.get("chunk_path") == "chunks/sentence-chunk-source.0.txt"
+    assert (
+        first_chunk.get("chunk_path") == "chunks/sentence-chunk-source.0.txt"
+    )
     assert chunk_path.exists()
-    assert chunk_path.read_text(encoding="utf-8") == "第一句。\n第二句!\nThird sentence?"
+    assert (
+        chunk_path.read_text(encoding="utf-8") == "第一句。\n第二句!\nThird sentence?"
+    )
     assert result.get("chunk_count") == 1
     assert result.get("document_count") == 1  # Alias
     assert result.get("sentence_count") == 3
@@ -314,7 +372,9 @@ def test_chunk_documents_split_sentences_and_count(tmp_path: Path):
     assert isinstance(content.get("documents"), list)
 
 
-def test_search_reads_chunk_text_from_chunk_file_when_index_has_no_text(tmp_path: Path):
+def test_search_reads_chunk_text_from_chunk_file_when_index_has_no_text(
+    tmp_path: Path,
+):
     config = make_knowledge_config()
     config.index.chunk_size = 10_000
     source = KnowledgeSourceSpec(
@@ -363,14 +423,27 @@ def test_search_interlinear_hit_includes_line_index_references(tmp_path: Path):
     config.sources = [source]
 
     manager = KnowledgeManager(tmp_path)
-    interlinear_path = manager.root_dir / "interlinear" / "search-interlinear.txt"
+    interlinear_path = (
+        manager.root_dir / "interlinear" / "search-interlinear.txt"
+    )
     interlinear_path.parent.mkdir(parents=True, exist_ok=True)
     interlinear_path.write_text("alpha beta\ngamma delta", encoding="utf-8")
 
-    line_index_path = manager.root_dir / "interlinear" / "search-interlinear.line-index.jsonl"
+    line_index_path = (
+        manager.root_dir
+        / "interlinear"
+        / "search-interlinear.line-index.jsonl"
+    )
     line_index_path.write_text(
-        json.dumps({"line_index": 1, "char_count": 9, "token_count": 2}, ensure_ascii=False) + "\n"
-        + json.dumps({"line_index": 2, "char_count": 10, "token_count": 2}, ensure_ascii=False)
+        json.dumps(
+            {"line_index": 1, "char_count": 9, "token_count": 2},
+            ensure_ascii=False,
+        )
+        + "\n"
+        + json.dumps(
+            {"line_index": 2, "char_count": 10, "token_count": 2},
+            ensure_ascii=False,
+        )
         + "\n",
         encoding="utf-8",
     )
@@ -386,8 +459,8 @@ def test_search_interlinear_hit_includes_line_index_references(tmp_path: Path):
                     "document_path": "search.md",
                     "title": "Search",
                     "line_count": 2,
-                }
-            ]
+                },
+            ],
         }
 
     manager._load_source_interlinear_manifest = fake_manifest  # type: ignore[method-assign]
@@ -432,11 +505,17 @@ def test_search_supports_scope_filters(tmp_path: Path):
 
     agent_interlinear_path = manager.root_dir / "interlinear" / "agent.txt"
     agent_interlinear_path.parent.mkdir(parents=True, exist_ok=True)
-    agent_interlinear_path.write_text("gamma agent scoped content", encoding="utf-8")
+    agent_interlinear_path.write_text(
+        "gamma agent scoped content",
+        encoding="utf-8",
+    )
 
     project_interlinear_path = manager.root_dir / "interlinear" / "project.txt"
     project_interlinear_path.parent.mkdir(parents=True, exist_ok=True)
-    project_interlinear_path.write_text("gamma project scoped content", encoding="utf-8")
+    project_interlinear_path.write_text(
+        "gamma project scoped content",
+        encoding="utf-8",
+    )
 
     def fake_manifest(source_id: str) -> dict[str, object]:
         if source_id == "agent-source":
@@ -447,8 +526,8 @@ def test_search_supports_scope_filters(tmp_path: Path):
                         "document_path": "agent.md",
                         "title": "Agent",
                         "line_no": 1,
-                    }
-                ]
+                    },
+                ],
             }
         if source_id == "project-source":
             return {
@@ -458,8 +537,8 @@ def test_search_supports_scope_filters(tmp_path: Path):
                         "document_path": "project.md",
                         "title": "Project",
                         "line_no": 1,
-                    }
-                ]
+                    },
+                ],
             }
         return {"artifacts": []}
 
@@ -473,7 +552,10 @@ def test_search_supports_scope_filters(tmp_path: Path):
         scope_id="project-demo",
     )
     assert project_result["hits"]
-    assert all(item["source_id"] == "project-source" for item in project_result["hits"])
+    assert all(
+        item["source_id"] == "project-source"
+        for item in project_result["hits"]
+    )
 
     agent_result = manager.search(
         "gamma",
@@ -482,7 +564,9 @@ def test_search_supports_scope_filters(tmp_path: Path):
         scope_type="agent",
     )
     assert agent_result["hits"]
-    assert all(item["source_id"] == "agent-source" for item in agent_result["hits"])
+    assert all(
+        item["source_id"] == "agent-source" for item in agent_result["hits"]
+    )
 
 
 def test_search_skips_unregistered_project_workspace_source(tmp_path: Path):
@@ -527,10 +611,16 @@ def test_search_skips_unregistered_project_workspace_source(tmp_path: Path):
 
     project_interlinear_path = manager.root_dir / "interlinear" / "project.txt"
     project_interlinear_path.parent.mkdir(parents=True, exist_ok=True)
-    project_interlinear_path.write_text("gamma project scoped content", encoding="utf-8")
+    project_interlinear_path.write_text(
+        "gamma project scoped content",
+        encoding="utf-8",
+    )
     agent_interlinear_path = manager.root_dir / "interlinear" / "agent.txt"
     agent_interlinear_path.parent.mkdir(parents=True, exist_ok=True)
-    agent_interlinear_path.write_text("gamma agent scoped content", encoding="utf-8")
+    agent_interlinear_path.write_text(
+        "gamma agent scoped content",
+        encoding="utf-8",
+    )
 
     def fake_manifest(source_id: str) -> dict[str, object]:
         if source_id == "project-project-demo-workspace":
@@ -541,8 +631,8 @@ def test_search_skips_unregistered_project_workspace_source(tmp_path: Path):
                         "document_path": "project.md",
                         "title": "Project",
                         "line_no": 1,
-                    }
-                ]
+                    },
+                ],
             }
         if source_id == "agent-source":
             return {
@@ -552,8 +642,8 @@ def test_search_skips_unregistered_project_workspace_source(tmp_path: Path):
                         "document_path": "agent.md",
                         "title": "Agent",
                         "line_no": 1,
-                    }
-                ]
+                    },
+                ],
             }
         return {"artifacts": []}
 
@@ -561,7 +651,10 @@ def test_search_skips_unregistered_project_workspace_source(tmp_path: Path):
 
     disabled_result = manager.search("gamma", config, limit=10)
     assert disabled_result["hits"]
-    assert all(item["source_id"] != "project-project-demo-workspace" for item in disabled_result["hits"])
+    assert all(
+        item["source_id"] != "project-project-demo-workspace"
+        for item in disabled_result["hits"]
+    )
 
     (project_dir / "PROJECT.md").write_text(
         "---\n"
@@ -573,10 +666,15 @@ def test_search_skips_unregistered_project_workspace_source(tmp_path: Path):
     )
 
     enabled_result = manager.search("gamma", config, limit=10)
-    assert any(item["source_id"] == "project-project-demo-workspace" for item in enabled_result["hits"])
+    assert any(
+        item["source_id"] == "project-project-demo-workspace"
+        for item in enabled_result["hits"]
+    )
 
 
-def test_process_source_candidates_reads_snapshot_text_without_chunk_text(tmp_path: Path):
+def test_process_source_candidates_reads_snapshot_text_without_chunk_text(
+    tmp_path: Path,
+):
     config = make_knowledge_config()
     config.index.chunk_size = 10_000
     docs_dir = tmp_path / "docs"
@@ -605,16 +703,25 @@ def test_process_source_candidates_reads_snapshot_text_without_chunk_text(tmp_pa
             continue
         chunk.pop("text", None)
         chunk["chunk_path"] = ""
-    index_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    index_path.write_text(
+        json.dumps(payload, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
 
     document_path.unlink()
 
     candidates = manager._collect_source_processing_candidates(source, config)
 
-    assert any("第一句。第二句! Third sentence?" in item or "第一句。\n第二句!\nThird sentence?" in item for item in candidates)
+    assert any(
+        "第一句。第二句! Third sentence?" in item
+        or "第一句。\n第二句!\nThird sentence?" in item
+        for item in candidates
+    )
 
 
-def test_directory_source_writes_chunks_under_relative_document_path(tmp_path: Path):
+def test_directory_source_writes_chunks_under_relative_document_path(
+    tmp_path: Path,
+):
     project_root = tmp_path / "project-rel-chunks"
     docs_dir = project_root / "docs"
     docs_dir.mkdir(parents=True, exist_ok=True)
@@ -638,7 +745,7 @@ def test_directory_source_writes_chunks_under_relative_document_path(tmp_path: P
     manager.index_source(source, config)
 
     payload = json.loads(
-        manager._source_index_path(source.id).read_text(encoding="utf-8")
+        manager._source_index_path(source.id).read_text(encoding="utf-8"),
     )
     chunk = payload["chunks"][0]
     chunk_path = manager.root_dir / chunk["chunk_path"]
@@ -651,7 +758,9 @@ def test_directory_source_writes_chunks_under_relative_document_path(tmp_path: P
     assert chunk_path.read_text(encoding="utf-8") == "第一句。\n第二句!"
 
 
-def test_directory_source_reindex_retains_old_snapshots_and_chunks(tmp_path: Path):
+def test_directory_source_reindex_retains_old_snapshots_and_chunks(
+    tmp_path: Path,
+):
     project_root = tmp_path / "project-retain"
     docs_dir = project_root / "docs"
     docs_dir.mkdir(parents=True, exist_ok=True)
@@ -678,9 +787,11 @@ def test_directory_source_reindex_retains_old_snapshots_and_chunks(tmp_path: Pat
     source_file.write_text("beta version", encoding="utf-8")
     manager.index_source(source, config)
 
-    raw_snapshots = sorted((manager.raw_dir / source.id / "docs").glob("README.snapshot_*.md"))
+    raw_snapshots = sorted(
+        (manager.raw_dir / source.id / "docs").glob("README.snapshot_*.md"),
+    )
     payload = json.loads(
-        manager._source_index_path(source.id).read_text(encoding="utf-8")
+        manager._source_index_path(source.id).read_text(encoding="utf-8"),
     )
     chunk_paths = sorted(chunk["chunk_path"] for chunk in payload["chunks"])
 
@@ -690,11 +801,15 @@ def test_directory_source_reindex_retains_old_snapshots_and_chunks(tmp_path: Pat
     assert payload["document_count"] == 1
     assert payload["snapshot_count"] == 2
     assert len(chunk_paths) == 2
-    assert all(path.startswith("chunks/docs/README.snapshot_") for path in chunk_paths)
+    assert all(
+        path.startswith("chunks/docs/README.snapshot_") for path in chunk_paths
+    )
     assert all((manager.root_dir / path).exists() for path in chunk_paths)
 
 
-def test_index_source_defers_semantic_artifacts_when_engine_ready(tmp_path: Path):
+def test_index_source_defers_semantic_artifacts_when_engine_ready(
+    tmp_path: Path,
+):
     config = make_knowledge_config()
     config.index.chunk_size = 10_000
     source = KnowledgeSourceSpec(
@@ -715,18 +830,26 @@ def test_index_source_defers_semantic_artifacts_when_engine_ready(tmp_path: Path
         "reason_code": "HANLP_READY",
         "reason": "HanLP semantic engine is ready.",
     }
-    with patch.object(manager._semantic_runtime, "probe", return_value=ready_state), patch.object(
+    with patch.object(
+        manager._semantic_runtime,
+        "probe",
+        return_value=ready_state,
+    ), patch.object(
         manager._semantic_runtime,
         "tokenize",
         return_value=(
             ["AgentRunner", "ToolDispatcher"],
             ready_state,
         ),
-    ), patch.object(manager, "_resolve_chunk_interlinear_path", return_value=""):
+    ), patch.object(
+        manager,
+        "_resolve_chunk_interlinear_path",
+        return_value="",
+    ):
         manager.index_source(source, config, include_semantic_artifacts=False)
 
     payload = json.loads(
-        manager._source_index_path(source.id).read_text(encoding="utf-8")
+        manager._source_index_path(source.id).read_text(encoding="utf-8"),
     )
     chunk = payload["chunks"][0]
 
@@ -779,7 +902,10 @@ def test_index_source_writes_pos_files_when_pos_batch_ready(tmp_path: Path):
     with patch.object(
         manager._semantic_runtime,
         "tokenize",
-        side_effect=lambda text, _config=None: ([token for token in text.split() if token], ready_state),
+        side_effect=lambda text, _config=None: (
+            [token for token in text.split() if token],
+            ready_state,
+        ),
     ), patch.object(
         manager._semantic_runtime,
         "run_task_tokenized_batch",
@@ -802,9 +928,14 @@ def test_index_source_writes_pos_files_when_pos_batch_ready(tmp_path: Path):
         return_value=([], ready_state),
     ):
         manager.index_source(source, config, include_semantic_artifacts=False)
-        manager.materialize_semantic_artifacts_for_source(source, config=config)
+        manager.materialize_semantic_artifacts_for_source(
+            source,
+            config=config,
+        )
 
-    payload = json.loads(manager._source_index_path(source.id).read_text(encoding="utf-8"))
+    payload = json.loads(
+        manager._source_index_path(source.id).read_text(encoding="utf-8"),
+    )
     chunk = payload["chunks"][0]
     pos_path = manager.root_dir / chunk["pos_path"]
     pos_structured_path = manager.root_dir / chunk["pos_structured_path"]
@@ -818,17 +949,24 @@ def test_index_source_writes_pos_files_when_pos_batch_ready(tmp_path: Path):
     assert pos_structured_path.exists()
     assert pos_line_stats_path.exists()
 
-    pos_structured = json.loads(pos_structured_path.read_text(encoding="utf-8"))
+    pos_structured = json.loads(
+        pos_structured_path.read_text(encoding="utf-8"),
+    )
     assert pos_structured["artifact"] == "pos_structured"
     assert pos_structured["line_count"] == 2
     assert pos_structured["pos_count"] == 4
     assert pos_structured["lines"][0]["tokens"][0]["pos"] == "NN"
 
 
-def test_index_source_directory_ner_requires_interlinear_without_fallback(tmp_path: Path):
+def test_index_source_directory_ner_requires_interlinear_without_fallback(
+    tmp_path: Path,
+):
     project_root = tmp_path / "project-no-interlinear"
     project_root.mkdir(parents=True, exist_ok=True)
-    (project_root / "README.md").write_text("AgentRunner uses ToolDispatcher.", encoding="utf-8")
+    (project_root / "README.md").write_text(
+        "AgentRunner uses ToolDispatcher.",
+        encoding="utf-8",
+    )
 
     config = make_knowledge_config()
     config.index.chunk_size = 10_000
@@ -851,24 +989,37 @@ def test_index_source_directory_ner_requires_interlinear_without_fallback(tmp_pa
         "reason_code": "HANLP_READY",
         "reason": "HanLP semantic engine is ready.",
     }
-    with patch.object(manager._semantic_runtime, "probe", return_value=ready_state), patch.object(
+    with patch.object(
+        manager._semantic_runtime,
+        "probe",
+        return_value=ready_state,
+    ), patch.object(
         manager._semantic_runtime,
         "tokenize",
         return_value=(
             ["AgentRunner", "ToolDispatcher"],
             ready_state,
         ),
-    ), patch.object(manager, "_resolve_chunk_interlinear_path", return_value=""):
+    ), patch.object(
+        manager,
+        "_resolve_chunk_interlinear_path",
+        return_value="",
+    ):
         manager.index_source(source, config)
 
-    payload = json.loads(manager._source_index_path(source.id).read_text(encoding="utf-8"))
+    payload = json.loads(
+        manager._source_index_path(source.id).read_text(encoding="utf-8"),
+    )
     chunk = payload["chunks"][0]
 
     assert chunk["ner_status"] == "unavailable"
     assert chunk["ner_entity_count"] == 0
     assert chunk["ner_input_mode"] == "interlinear_required"
     assert chunk["ner_reason_code"] == "INTERLINEAR_REQUIRED"
-    assert chunk["ner_reason"] == "NER requires interlinear input and fallback is disabled."
+    assert (
+        chunk["ner_reason"]
+        == "NER requires interlinear input and fallback is disabled."
+    )
     assert "ner_path" not in chunk
     assert "ner_structured_path" not in chunk
     assert "ner_annotated_path" not in chunk
@@ -884,7 +1035,10 @@ def test_index_source_directory_ner_requires_interlinear_without_fallback(tmp_pa
     assert chunk["cor_status"] == "unavailable"
     assert chunk["cor_input_mode"] == "interlinear_required"
     assert chunk["cor_reason_code"] == "INTERLINEAR_REQUIRED"
-    assert chunk["cor_reason"] == "COR requires interlinear input and fallback is disabled."
+    assert (
+        chunk["cor_reason"]
+        == "COR requires interlinear input and fallback is disabled."
+    )
     assert "cor_path" not in chunk
     assert "cor_structured_path" not in chunk
     assert "cor_annotated_path" not in chunk
@@ -893,7 +1047,10 @@ def test_index_source_directory_ner_requires_interlinear_without_fallback(tmp_pa
 def test_index_source_project_directory_uses_chunks_input_mode(tmp_path: Path):
     project_root = tmp_path / "project-chunks-input"
     project_root.mkdir(parents=True, exist_ok=True)
-    (project_root / "README.md").write_text("AgentRunner uses ToolDispatcher.", encoding="utf-8")
+    (project_root / "README.md").write_text(
+        "AgentRunner uses ToolDispatcher.",
+        encoding="utf-8",
+    )
 
     config = make_knowledge_config()
     config.index.chunk_size = 10_000
@@ -917,17 +1074,27 @@ def test_index_source_project_directory_uses_chunks_input_mode(tmp_path: Path):
         "reason_code": "HANLP_READY",
         "reason": "HanLP semantic engine is ready.",
     }
-    with patch.object(manager._semantic_runtime, "probe", return_value=ready_state), patch.object(
+    with patch.object(
+        manager._semantic_runtime,
+        "probe",
+        return_value=ready_state,
+    ), patch.object(
         manager._semantic_runtime,
         "tokenize",
         return_value=(
             ["AgentRunner", "ToolDispatcher"],
             ready_state,
         ),
-    ), patch.object(manager, "_resolve_chunk_interlinear_path", return_value=""):
+    ), patch.object(
+        manager,
+        "_resolve_chunk_interlinear_path",
+        return_value="",
+    ):
         manager.index_source(source, config)
 
-    payload = json.loads(manager._source_index_path(source.id).read_text(encoding="utf-8"))
+    payload = json.loads(
+        manager._source_index_path(source.id).read_text(encoding="utf-8"),
+    )
     chunk = payload["chunks"][0]
 
     assert chunk["ner_input_mode"] == "chunks_full_document"
@@ -935,7 +1102,9 @@ def test_index_source_project_directory_uses_chunks_input_mode(tmp_path: Path):
     assert chunk["cor_input_mode"] == "chunks_full_document"
 
 
-def test_index_source_skips_ner_files_when_semantic_unavailable(tmp_path: Path):
+def test_index_source_skips_ner_files_when_semantic_unavailable(
+    tmp_path: Path,
+):
     config = make_knowledge_config()
     config.index.chunk_size = 10_000
     source = KnowledgeSourceSpec(
@@ -956,11 +1125,15 @@ def test_index_source_skips_ner_files_when_semantic_unavailable(tmp_path: Path):
         "reason_code": "HANLP_SIDECAR_UNCONFIGURED",
         "reason": "HanLP sidecar is not configured.",
     }
-    with patch.object(manager._semantic_runtime, "probe", return_value=unavailable_state):
+    with patch.object(
+        manager._semantic_runtime,
+        "probe",
+        return_value=unavailable_state,
+    ):
         result = manager.index_source(source, config)
 
     payload = json.loads(
-        manager._source_index_path(source.id).read_text(encoding="utf-8")
+        manager._source_index_path(source.id).read_text(encoding="utf-8"),
     )
     chunk = payload["chunks"][0]
 
@@ -987,7 +1160,9 @@ def test_index_source_skips_ner_files_when_semantic_unavailable(tmp_path: Path):
     assert (manager.root_dir / chunk["syntax_annotated_path"]).exists()
 
 
-def test_index_source_prefers_hanlp_ner_task_mentions_when_available(tmp_path: Path):
+def test_index_source_prefers_hanlp_ner_task_mentions_when_available(
+    tmp_path: Path,
+):
     config = make_knowledge_config()
     config.index.chunk_size = 10_000
     config.nlp.enabled = True
@@ -1009,7 +1184,11 @@ def test_index_source_prefers_hanlp_ner_task_mentions_when_available(tmp_path: P
         "reason_code": "HANLP_TASK_READY",
         "reason": "HanLP task is ready.",
     }
-    with patch.object(manager._semantic_runtime, "probe", return_value=ready_state), patch.object(
+    with patch.object(
+        manager._semantic_runtime,
+        "probe",
+        return_value=ready_state,
+    ), patch.object(
         manager._semantic_runtime,
         "run_ner",
         return_value=(
@@ -1022,12 +1201,14 @@ def test_index_source_prefers_hanlp_ner_task_mentions_when_available(tmp_path: P
     ), patch.object(
         manager._semantic_runtime,
         "tokenize",
-        side_effect=AssertionError("tokenize should not be used when HanLP NER task succeeds"),
+        side_effect=AssertionError(
+            "tokenize should not be used when HanLP NER task succeeds",
+        ),
     ):
         manager.index_source(source, config)
 
     payload = json.loads(
-        manager._source_index_path(source.id).read_text(encoding="utf-8")
+        manager._source_index_path(source.id).read_text(encoding="utf-8"),
     )
     chunk = payload["chunks"][0]
     ner_path = manager.root_dir / chunk["ner_path"]
@@ -1040,28 +1221,43 @@ def test_index_source_prefers_hanlp_ner_task_mentions_when_available(tmp_path: P
     ner_text = ner_path.read_text(encoding="utf-8")
     assert '<entity type="ORG">微软</entity>' in ner_text
     assert '<entity type="GPE">北京</entity>' in ner_text
-    ner_structured = json.loads(ner_structured_path.read_text(encoding="utf-8"))
-    assert {(item["normalized"], item["label"]) for item in ner_structured["entity_catalog"]} == {
+    ner_structured = json.loads(
+        ner_structured_path.read_text(encoding="utf-8"),
+    )
+    assert {
+        (item["normalized"], item["label"])
+        for item in ner_structured["entity_catalog"]
+    } == {
         ("微软", "ORG"),
         ("北京", "GPE"),
     }
-    assert {(item["normalized"], item["type"]) for item in ner_structured["entity_catalog"]} == {
+    assert {
+        (item["normalized"], item["type"])
+        for item in ner_structured["entity_catalog"]
+    } == {
         ("微软", "ORG"),
         ("北京", "GPE"),
     }
-    assert {(item["normalized"], item["type"]) for item in ner_structured["entity_mentions"]} == {
+    assert {
+        (item["normalized"], item["type"])
+        for item in ner_structured["entity_mentions"]
+    } == {
         ("微软", "ORG"),
         ("北京", "GPE"),
     }
     ner_annotated = ner_annotated_path.read_text(encoding="utf-8")
     assert "[[微软|label=ORG|id=e1|norm=微软|score=1.00]]" in ner_annotated
     assert "[[北京|label=GPE|id=e2|norm=北京|score=1.00]]" in ner_annotated
-    syntax_structured = json.loads(syntax_structured_path.read_text(encoding="utf-8"))
+    syntax_structured = json.loads(
+        syntax_structured_path.read_text(encoding="utf-8"),
+    )
     assert syntax_structured["sentences"][0]["entities"][0]["label"] == "ORG"
     assert syntax_structured["sentences"][0]["entities"][1]["label"] == "GPE"
 
 
-def test_index_source_accepts_wrapped_hanlp_ner_mentions_payload(tmp_path: Path):
+def test_index_source_accepts_wrapped_hanlp_ner_mentions_payload(
+    tmp_path: Path,
+):
     config = make_knowledge_config()
     config.index.chunk_size = 10_000
     config.nlp.enabled = True
@@ -1083,7 +1279,11 @@ def test_index_source_accepts_wrapped_hanlp_ner_mentions_payload(tmp_path: Path)
         "reason_code": "HANLP_TASK_READY",
         "reason": "HanLP task is ready.",
     }
-    with patch.object(manager._semantic_runtime, "probe", return_value=ready_state), patch.object(
+    with patch.object(
+        manager._semantic_runtime,
+        "probe",
+        return_value=ready_state,
+    ), patch.object(
         manager._semantic_runtime,
         "run_ner",
         return_value=(
@@ -1091,28 +1291,35 @@ def test_index_source_accepts_wrapped_hanlp_ner_mentions_payload(tmp_path: Path)
                 "mentions": [
                     {"text": "微软", "label": "ORG", "span": [0, 2]},
                     {"text": "北京", "label": "LOC", "span": [3, 5]},
-                ]
+                ],
             },
             ready_state,
         ),
     ), patch.object(
         manager._semantic_runtime,
         "tokenize",
-        side_effect=AssertionError("tokenize should not be used when wrapped HanLP NER payload succeeds"),
+        side_effect=AssertionError(
+            "tokenize should not be used when wrapped HanLP NER payload succeeds",
+        ),
     ):
         manager.index_source(source, config)
 
     payload = json.loads(
-        manager._source_index_path(source.id).read_text(encoding="utf-8")
+        manager._source_index_path(source.id).read_text(encoding="utf-8"),
     )
     chunk = payload["chunks"][0]
     ner_structured = json.loads(
-        (manager.root_dir / chunk["ner_structured_path"]).read_text(encoding="utf-8")
+        (manager.root_dir / chunk["ner_structured_path"]).read_text(
+            encoding="utf-8",
+        ),
     )
 
     assert chunk["ner_status"] == "ready"
     assert chunk["ner_entity_count"] == 2
-    assert {(item["normalized"], item["label"]) for item in ner_structured["entity_catalog"]} == {
+    assert {
+        (item["normalized"], item["label"])
+        for item in ner_structured["entity_catalog"]
+    } == {
         ("微软", "ORG"),
         ("北京", "LOC"),
     }
@@ -1140,7 +1347,11 @@ def test_index_source_accepts_label_keyed_hanlp_ner_payload(tmp_path: Path):
         "reason_code": "HANLP_TASK_READY",
         "reason": "HanLP task is ready.",
     }
-    with patch.object(manager._semantic_runtime, "probe", return_value=ready_state), patch.object(
+    with patch.object(
+        manager._semantic_runtime,
+        "probe",
+        return_value=ready_state,
+    ), patch.object(
         manager._semantic_runtime,
         "run_ner",
         return_value=(
@@ -1153,31 +1364,43 @@ def test_index_source_accepts_label_keyed_hanlp_ner_payload(tmp_path: Path):
     ), patch.object(
         manager._semantic_runtime,
         "tokenize",
-        side_effect=AssertionError("tokenize should not be used when label-keyed HanLP payload succeeds"),
+        side_effect=AssertionError(
+            "tokenize should not be used when label-keyed HanLP payload succeeds",
+        ),
     ):
         manager.index_source(source, config)
 
     payload = json.loads(
-        manager._source_index_path(source.id).read_text(encoding="utf-8")
+        manager._source_index_path(source.id).read_text(encoding="utf-8"),
     )
     chunk = payload["chunks"][0]
     ner_structured = json.loads(
-        (manager.root_dir / chunk["ner_structured_path"]).read_text(encoding="utf-8")
+        (manager.root_dir / chunk["ner_structured_path"]).read_text(
+            encoding="utf-8",
+        ),
     )
 
     assert chunk["ner_status"] == "ready"
     assert chunk["ner_entity_count"] == 2
-    assert {(item["normalized"], item["label"]) for item in ner_structured["entity_catalog"]} == {
+    assert {
+        (item["normalized"], item["label"])
+        for item in ner_structured["entity_catalog"]
+    } == {
         ("微软", "ORG"),
         ("北京", "LOC"),
     }
-    assert {(item["normalized"], item["type"]) for item in ner_structured["entity_mentions"]} == {
+    assert {
+        (item["normalized"], item["type"])
+        for item in ner_structured["entity_mentions"]
+    } == {
         ("微软", "ORG"),
         ("北京", "LOC"),
     }
 
 
-def test_index_source_does_not_fallback_to_semantic_tokens_when_hanlp_ready_but_empty(tmp_path: Path):
+def test_index_source_does_not_fallback_to_semantic_tokens_when_hanlp_ready_but_empty(
+    tmp_path: Path,
+):
     config = make_knowledge_config()
     config.index.chunk_size = 10_000
     config.nlp.enabled = True
@@ -1199,24 +1422,32 @@ def test_index_source_does_not_fallback_to_semantic_tokens_when_hanlp_ready_but_
         "reason_code": "HANLP_TASK_READY",
         "reason": "HanLP task is ready.",
     }
-    with patch.object(manager._semantic_runtime, "probe", return_value=ready_state), patch.object(
+    with patch.object(
+        manager._semantic_runtime,
+        "probe",
+        return_value=ready_state,
+    ), patch.object(
         manager._semantic_runtime,
         "run_task",
         return_value=([], ready_state),
     ), patch.object(
         manager._semantic_runtime,
         "tokenize",
-        side_effect=AssertionError("tokenize should not be used when HanLP NER task is ready but empty"),
+        side_effect=AssertionError(
+            "tokenize should not be used when HanLP NER task is ready but empty",
+        ),
     ):
         manager.index_source(source, config)
 
     payload = json.loads(
-        manager._source_index_path(source.id).read_text(encoding="utf-8")
+        manager._source_index_path(source.id).read_text(encoding="utf-8"),
     )
     chunk = payload["chunks"][0]
     ner_path = manager.root_dir / chunk["ner_path"]
     ner_structured = json.loads(
-        (manager.root_dir / chunk["ner_structured_path"]).read_text(encoding="utf-8")
+        (manager.root_dir / chunk["ner_structured_path"]).read_text(
+            encoding="utf-8",
+        ),
     )
 
     assert chunk["ner_status"] == "ready"
@@ -1226,7 +1457,9 @@ def test_index_source_does_not_fallback_to_semantic_tokens_when_hanlp_ready_but_
     assert ner_structured["entity_mentions"] == []
 
 
-def test_index_source_populates_hanlp_syntax_tasks_when_available(tmp_path: Path):
+def test_index_source_populates_hanlp_syntax_tasks_when_available(
+    tmp_path: Path,
+):
     config = make_knowledge_config()
     config.index.chunk_size = 10_000
     config.nlp.enabled = True
@@ -1256,7 +1489,10 @@ def test_index_source_populates_hanlp_syntax_tasks_when_available(tmp_path: Path
                 "clusters": [],
             }, ready_state
         if task_key == "pos":
-            return {"tok/fine": ["微软", "在", "北京", "发布", "模型", "。"], "pos/ctb": ["NR", "P", "NR", "VV", "NN", "PU"]}, ready_state
+            return {
+                "tok/fine": ["微软", "在", "北京", "发布", "模型", "。"],
+                "pos/ctb": ["NR", "P", "NR", "VV", "NN", "PU"],
+            }, ready_state
         if task_key == "dep":
             return {
                 "tokens": ["微软", "北京", "发布模型"],
@@ -1265,14 +1501,30 @@ def test_index_source_populates_hanlp_syntax_tasks_when_available(tmp_path: Path
             }, ready_state
         if task_key == "sdp":
             return [
-                {"dependent_index": 1, "head_index": 3, "relation": "Agt", "dependent": "微软"},
-                {"dependent_index": 2, "head_index": 3, "relation": "Loc", "dependent": "北京"},
+                {
+                    "dependent_index": 1,
+                    "head_index": 3,
+                    "relation": "Agt",
+                    "dependent": "微软",
+                },
+                {
+                    "dependent_index": 2,
+                    "head_index": 3,
+                    "relation": "Loc",
+                    "dependent": "北京",
+                },
             ], ready_state
         if task_key == "con":
-            return {"tree": "(S (NP 微软) (PP 在 (NP 北京)) (VP 发布模型))"}, ready_state
+            return {
+                "tree": "(S (NP 微软) (PP 在 (NP 北京)) (VP 发布模型))",
+            }, ready_state
         raise AssertionError(f"unexpected task key: {task_key}")
 
-    with patch.object(manager._semantic_runtime, "probe", return_value=ready_state), patch.object(
+    with patch.object(
+        manager._semantic_runtime,
+        "probe",
+        return_value=ready_state,
+    ), patch.object(
         manager._semantic_runtime,
         "run_task",
         side_effect=fake_run_task,
@@ -1289,16 +1541,22 @@ def test_index_source_populates_hanlp_syntax_tasks_when_available(tmp_path: Path
     ), patch.object(
         manager._semantic_runtime,
         "run_dep",
-        side_effect=lambda text, current_config: fake_run_task("dep", text, current_config),
+        side_effect=lambda text, current_config: fake_run_task(
+            "dep",
+            text,
+            current_config,
+        ),
     ), patch.object(
         manager._semantic_runtime,
         "tokenize",
-        side_effect=AssertionError("tokenize should not be used when HanLP NER task succeeds"),
+        side_effect=AssertionError(
+            "tokenize should not be used when HanLP NER task succeeds",
+        ),
     ):
         manager.index_source(source, config)
 
     payload = json.loads(
-        manager._source_index_path(source.id).read_text(encoding="utf-8")
+        manager._source_index_path(source.id).read_text(encoding="utf-8"),
     )
     chunk = payload["chunks"][0]
     syntax_structured_path = manager.root_dir / chunk["syntax_structured_path"]
@@ -1307,21 +1565,33 @@ def test_index_source_populates_hanlp_syntax_tasks_when_available(tmp_path: Path
     assert chunk["syntax_status"] == "ready"
     assert chunk["syntax_format_version"] == "0.2"
     assert chunk["syntax_relation_count"] == 5
-    syntax_structured = json.loads(syntax_structured_path.read_text(encoding="utf-8"))
+    syntax_structured = json.loads(
+        syntax_structured_path.read_text(encoding="utf-8"),
+    )
     assert syntax_structured["parse_mode"] == "nlp_task_matrix"
     assert syntax_structured["task_keys"] == ["con", "dep", "pos", "sdp"]
     assert syntax_structured["relation_count"] == 5
     sentence = syntax_structured["sentences"][0]
-    assert [task["task_key"] for task in sentence["syntax_tasks"]] == ["pos", "dep", "sdp", "con"]
+    assert [task["task_key"] for task in sentence["syntax_tasks"]] == [
+        "pos",
+        "dep",
+        "sdp",
+        "con",
+    ]
     assert sentence["dependencies"][0]["task_key"] == "dep"
     assert sentence["dependencies"][3]["task_key"] == "sdp"
-    assert sentence["constituency"]["tree"] == "(S (NP 微软) (PP 在 (NP 北京)) (VP 发布模型))"
+    assert (
+        sentence["constituency"]["tree"]
+        == "(S (NP 微软) (PP 在 (NP 北京)) (VP 发布模型))"
+    )
     syntax_annotated = syntax_annotated_path.read_text(encoding="utf-8")
     assert "### Dependencies" in syntax_annotated
     assert "### Constituency" in syntax_annotated
 
 
-def test_normalize_hanlp_dependencies_handles_nested_head_indices(tmp_path: Path):
+def test_normalize_hanlp_dependencies_handles_nested_head_indices(
+    tmp_path: Path,
+):
     manager = KnowledgeManager(tmp_path)
     tokens = [
         {"text": "微软", "start": 0, "end": 2},
@@ -1354,7 +1624,9 @@ def test_normalize_hanlp_dependencies_handles_nested_head_indices(tmp_path: Path
     assert [row["dependent_index"] for row in sdp_rows] == [1, 2]
 
 
-def test_index_source_runs_cor_after_ner_and_syntax_uses_original_text(tmp_path: Path):
+def test_index_source_runs_cor_after_ner_and_syntax_uses_original_text(
+    tmp_path: Path,
+):
     config = make_knowledge_config()
     config.index.chunk_size = 10_000
     config.nlp.enabled = True
@@ -1381,14 +1653,21 @@ def test_index_source_runs_cor_after_ner_and_syntax_uses_original_text(tmp_path:
     def fake_run_task(task_key: str, text: str, current_config):
         call_trace.append((task_key, text))
         if task_key == "pos":
-            return {"tok/fine": ["我姐", "送", "我", "她的猫", "。"], "pos/ctb": ["PN", "VV", "PN", "NN", "PU"]}, ready_state
+            return {
+                "tok/fine": ["我姐", "送", "我", "她的猫", "。"],
+                "pos/ctb": ["PN", "VV", "PN", "NN", "PU"],
+            }, ready_state
         if task_key in {"dep", "sdp"}:
             return [], ready_state
         if task_key == "con":
             return {"tree": "(S (NP 我姐) (VP 喜欢 (NP 她的猫)))"}, ready_state
         raise AssertionError(f"unexpected task key: {task_key}")
 
-    with patch.object(manager._semantic_runtime, "probe", return_value=ready_state), patch.object(
+    with patch.object(
+        manager._semantic_runtime,
+        "probe",
+        return_value=ready_state,
+    ), patch.object(
         manager._semantic_runtime,
         "run_task",
         side_effect=fake_run_task,
@@ -1405,16 +1684,22 @@ def test_index_source_runs_cor_after_ner_and_syntax_uses_original_text(tmp_path:
     ), patch.object(
         manager._semantic_runtime,
         "run_dep",
-        side_effect=lambda text, current_config: fake_run_task("dep", text, current_config),
+        side_effect=lambda text, current_config: fake_run_task(
+            "dep",
+            text,
+            current_config,
+        ),
     ), patch.object(
         manager._semantic_runtime,
         "tokenize",
-        side_effect=AssertionError("tokenize should not be used when HanLP task chain is available"),
+        side_effect=AssertionError(
+            "tokenize should not be used when HanLP task chain is available",
+        ),
     ):
         manager.index_source(source, config)
 
     payload = json.loads(
-        manager._source_index_path(source.id).read_text(encoding="utf-8")
+        manager._source_index_path(source.id).read_text(encoding="utf-8"),
     )
     chunk = payload["chunks"][0]
     cor_structured_path = manager.root_dir / chunk["cor_structured_path"]
@@ -1424,18 +1709,26 @@ def test_index_source_runs_cor_after_ner_and_syntax_uses_original_text(tmp_path:
     assert chunk["cor_status"] == "unavailable"
     assert chunk["cor_reason_code"] == "HANLP_SIDECAR_UNCONFIGURED"
     assert chunk["cor_cluster_count"] == 0
-    cor_structured = json.loads(cor_structured_path.read_text(encoding="utf-8"))
+    cor_structured = json.loads(
+        cor_structured_path.read_text(encoding="utf-8"),
+    )
     assert cor_structured["source_text"].replace("\n", "") == "我姐送我她的猫。我很喜欢它。"
-    assert cor_structured["resolved_text"].replace("\n", "") == "我姐送我她的猫。我很喜欢它。"
+    assert (
+        cor_structured["resolved_text"].replace("\n", "") == "我姐送我她的猫。我很喜欢它。"
+    )
     assert cor_structured["replacement_count"] == 0
 
-    ner_structured = json.loads(ner_structured_path.read_text(encoding="utf-8"))
+    ner_structured = json.loads(
+        ner_structured_path.read_text(encoding="utf-8"),
+    )
     assert ner_structured["source_text"] == cor_structured["source_text"]
     assert ner_structured["input_text"] == cor_structured["source_text"]
     assert ner_structured["cor_structured_path"] == ""
     assert ner_structured["cor_resolution_mode"] == "identity_fallback"
 
-    syntax_structured = json.loads(syntax_structured_path.read_text(encoding="utf-8"))
+    syntax_structured = json.loads(
+        syntax_structured_path.read_text(encoding="utf-8"),
+    )
     assert syntax_structured["source_text"] == cor_structured["source_text"]
     assert syntax_structured["input_text"] == cor_structured["source_text"]
     assert syntax_structured["cor_structured_path"] == ""
@@ -1449,7 +1742,9 @@ def test_index_source_runs_cor_after_ner_and_syntax_uses_original_text(tmp_path:
     assert "cor" not in task_order
 
 
-def test_materialize_semantic_artifacts_does_not_read_chunk_files(tmp_path: Path):
+def test_materialize_semantic_artifacts_does_not_read_chunk_files(
+    tmp_path: Path,
+):
     config = make_knowledge_config()
     config.index.chunk_size = 10_000
     source = KnowledgeSourceSpec(
@@ -1471,21 +1766,36 @@ def test_materialize_semantic_artifacts_does_not_read_chunk_files(tmp_path: Path
         "reason": "HanLP sidecar is not configured.",
     }
 
-    with patch.object(manager._semantic_runtime, "probe", return_value=unavailable_state):
+    with patch.object(
+        manager._semantic_runtime,
+        "probe",
+        return_value=unavailable_state,
+    ):
         manager.index_source(source, config)
 
-    payload = json.loads(manager._source_index_path(source.id).read_text(encoding="utf-8"))
+    payload = json.loads(
+        manager._source_index_path(source.id).read_text(encoding="utf-8"),
+    )
     chunk = payload["chunks"][0]
     chunk_file = manager.root_dir / chunk["chunk_path"]
     assert chunk_file.exists()
     chunk_file.unlink()
 
-    with patch.object(manager._semantic_runtime, "probe", return_value=unavailable_state):
+    with patch.object(
+        manager._semantic_runtime,
+        "probe",
+        return_value=unavailable_state,
+    ):
         with pytest.raises(RuntimeError, match="Tokenize stage"):
-            manager.materialize_semantic_artifacts_for_source(source, config=config)
+            manager.materialize_semantic_artifacts_for_source(
+                source,
+                config=config,
+            )
 
 
-def test_write_chunk_tokenize_artifacts_persists_line_aligned_outputs(tmp_path: Path):
+def test_write_chunk_tokenize_artifacts_persists_line_aligned_outputs(
+    tmp_path: Path,
+):
     config = make_knowledge_config()
     config.index.chunk_size = 10_000
     source = KnowledgeSourceSpec(
@@ -1513,22 +1823,37 @@ def test_write_chunk_tokenize_artifacts_persists_line_aligned_outputs(tmp_path: 
         "reason": "HanLP semantic engine is ready.",
     }
 
-    with patch.object(manager._semantic_runtime, "probe", return_value=unavailable_state):
+    with patch.object(
+        manager._semantic_runtime,
+        "probe",
+        return_value=unavailable_state,
+    ):
         manager.index_source(source, config, include_semantic_artifacts=False)
 
-    payload = json.loads(manager._source_index_path(source.id).read_text(encoding="utf-8"))
+    payload = json.loads(
+        manager._source_index_path(source.id).read_text(encoding="utf-8"),
+    )
     with patch.object(
         manager._semantic_runtime,
         "tokenize",
-        return_value=(["AgentRunner", "uses", "ToolDispatcher", "."], ready_state),
+        return_value=(
+            ["AgentRunner", "uses", "ToolDispatcher", "."],
+            ready_state,
+        ),
     ):
         manager._write_chunk_tokenize_artifacts(source, payload, config=config)
 
     chunk = payload["chunks"][0]
     tokenize_path = manager.root_dir / chunk["tokenize_path"]
-    tokenize_structured_path = manager.root_dir / chunk["tokenize_structured_path"]
-    tokenize_line_stats_path = manager.root_dir / chunk["tokenize_line_stats_path"]
-    tokenize_file_totals_path = manager._source_tokenize_file_totals_path(source.id)
+    tokenize_structured_path = (
+        manager.root_dir / chunk["tokenize_structured_path"]
+    )
+    tokenize_line_stats_path = (
+        manager.root_dir / chunk["tokenize_line_stats_path"]
+    )
+    tokenize_file_totals_path = manager._source_tokenize_file_totals_path(
+        source.id,
+    )
     assert chunk["tokenize_status"] == "ready"
     assert chunk["tokenize_line_count"] == 1
     assert chunk["tokenize_token_count"] == 4
@@ -1537,17 +1862,25 @@ def test_write_chunk_tokenize_artifacts_persists_line_aligned_outputs(tmp_path: 
     assert tokenize_line_stats_path.exists()
     assert tokenize_file_totals_path.exists()
 
-    structured_payload = json.loads(tokenize_structured_path.read_text(encoding="utf-8"))
+    structured_payload = json.loads(
+        tokenize_structured_path.read_text(encoding="utf-8"),
+    )
     assert structured_payload["line_count"] == 1
     assert structured_payload["token_count"] == 4
     assert len(structured_payload["lines"]) == 1
 
-    line_stats_payload = json.loads(tokenize_line_stats_path.read_text(encoding="utf-8"))
+    line_stats_payload = json.loads(
+        tokenize_line_stats_path.read_text(encoding="utf-8"),
+    )
     assert line_stats_payload["line_count"] == 1
     assert line_stats_payload["token_count_total"] == 4
-    assert line_stats_payload["line_token_counts"] == [{"line_index": 1, "token_count": 4}]
+    assert line_stats_payload["line_token_counts"] == [
+        {"line_index": 1, "token_count": 4},
+    ]
 
-    file_totals_payload = json.loads(tokenize_file_totals_path.read_text(encoding="utf-8"))
+    file_totals_payload = json.loads(
+        tokenize_file_totals_path.read_text(encoding="utf-8"),
+    )
     assert file_totals_payload["file_count"] == 1
     assert file_totals_payload["token_count_total"] == 4
 
@@ -1573,7 +1906,11 @@ def test_delete_index_removes_ner_files(tmp_path: Path):
         "reason_code": "HANLP_READY",
         "reason": "HanLP semantic engine is ready.",
     }
-    with patch.object(manager._semantic_runtime, "probe", return_value=ready_state), patch.object(
+    with patch.object(
+        manager._semantic_runtime,
+        "probe",
+        return_value=ready_state,
+    ), patch.object(
         manager._semantic_runtime,
         "tokenize",
         return_value=(
@@ -1584,14 +1921,22 @@ def test_delete_index_removes_ner_files(tmp_path: Path):
         manager.index_source(source, config)
 
     payload = json.loads(
-        manager._source_index_path(source.id).read_text(encoding="utf-8")
+        manager._source_index_path(source.id).read_text(encoding="utf-8"),
     )
     cor_path = manager.root_dir / payload["chunks"][0]["cor_path"]
-    cor_structured_path = manager.root_dir / payload["chunks"][0]["cor_structured_path"]
-    cor_annotated_path = manager.root_dir / payload["chunks"][0]["cor_annotated_path"]
+    cor_structured_path = (
+        manager.root_dir / payload["chunks"][0]["cor_structured_path"]
+    )
+    cor_annotated_path = (
+        manager.root_dir / payload["chunks"][0]["cor_annotated_path"]
+    )
     syntax_path = manager.root_dir / payload["chunks"][0]["syntax_path"]
-    syntax_structured_path = manager.root_dir / payload["chunks"][0]["syntax_structured_path"]
-    syntax_annotated_path = manager.root_dir / payload["chunks"][0]["syntax_annotated_path"]
+    syntax_structured_path = (
+        manager.root_dir / payload["chunks"][0]["syntax_structured_path"]
+    )
+    syntax_annotated_path = (
+        manager.root_dir / payload["chunks"][0]["syntax_annotated_path"]
+    )
     assert cor_path.exists()
     assert cor_structured_path.exists()
     assert cor_annotated_path.exists()
@@ -1633,7 +1978,11 @@ def test_get_source_chunk_documents_exposes_syntax_artifacts(tmp_path: Path):
         "reason_code": "HANLP_READY",
         "reason": "HanLP semantic engine is ready.",
     }
-    with patch.object(manager._semantic_runtime, "probe", return_value=ready_state), patch.object(
+    with patch.object(
+        manager._semantic_runtime,
+        "probe",
+        return_value=ready_state,
+    ), patch.object(
         manager._semantic_runtime,
         "tokenize",
         return_value=(
@@ -1653,13 +2002,18 @@ def test_get_source_chunk_documents_exposes_syntax_artifacts(tmp_path: Path):
     assert "# Syntax Annotated" in chunk["syntax_annotated_text"]
 
 
-def test_get_source_chunk_documents_reads_snapshot_text_without_chunk_text(tmp_path: Path):
+def test_get_source_chunk_documents_reads_snapshot_text_without_chunk_text(
+    tmp_path: Path,
+):
     config = make_knowledge_config()
     config.index.chunk_size = 10_000
     docs_dir = tmp_path / "docs"
     docs_dir.mkdir(parents=True, exist_ok=True)
     document_path = docs_dir / "knowledge.md"
-    document_path.write_text("ToolDispatcher cooperates with FileSearch.", encoding="utf-8")
+    document_path.write_text(
+        "ToolDispatcher cooperates with FileSearch.",
+        encoding="utf-8",
+    )
     source = KnowledgeSourceSpec(
         id="snapshot-doc-source",
         name="Snapshot Doc Source",
@@ -1682,7 +2036,10 @@ def test_get_source_chunk_documents_reads_snapshot_text_without_chunk_text(tmp_p
             continue
         chunk.pop("text", None)
         chunk["chunk_path"] = ""
-    index_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    index_path.write_text(
+        json.dumps(payload, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
 
     document_path.unlink()
 
@@ -1717,7 +2074,9 @@ def test_delete_index_removes_chunk_files(tmp_path: Path):
     assert not chunk_path.exists()
 
 
-def test_index_source_writes_interlinear_and_lightweight_line_stats(tmp_path: Path):
+def test_index_source_writes_interlinear_and_lightweight_line_stats(
+    tmp_path: Path,
+):
     config = make_knowledge_config()
     source_file = tmp_path / "note.md"
     source_file.write_text("第一句。Second line 123!第三句？", encoding="utf-8")
@@ -1737,34 +2096,48 @@ def test_index_source_writes_interlinear_and_lightweight_line_stats(tmp_path: Pa
     manager.index_source(source, config, include_semantic_artifacts=False)
 
     interlinear_manifest = json.loads(
-        manager._source_interlinear_manifest_path(source.id).read_text(encoding="utf-8")
+        manager._source_interlinear_manifest_path(source.id).read_text(
+            encoding="utf-8",
+        ),
     )
     lightweight_manifest = json.loads(
-        manager._source_lightweight_manifest_path(source.id).read_text(encoding="utf-8")
+        manager._source_lightweight_manifest_path(source.id).read_text(
+            encoding="utf-8",
+        ),
     )
 
     artifacts = interlinear_manifest["artifacts"]
     lightweight_paths = lightweight_manifest["lightweight_paths"]
-    interlinear_artifact = next(a for a in artifacts if str(a.get("path") or "").endswith(".txt"))
+    interlinear_artifact = next(
+        a for a in artifacts if str(a.get("path") or "").endswith(".txt")
+    )
     interlinear_text_rel = interlinear_artifact["path"]
     line_index_rel = interlinear_artifact["line_index_path"]
     lightweight_result_rel = next(
-        path
-        for path in lightweight_paths
-        if path.endswith(".json")
+        path for path in lightweight_paths if path.endswith(".json")
     )
 
-    interlinear_text = (manager.root_dir / interlinear_text_rel).read_text(encoding="utf-8")
+    interlinear_text = (manager.root_dir / interlinear_text_rel).read_text(
+        encoding="utf-8",
+    )
     line_index_rows = [
         json.loads(line)
-        for line in (manager.root_dir / line_index_rel).read_text(encoding="utf-8").splitlines()
+        for line in (manager.root_dir / line_index_rel)
+        .read_text(encoding="utf-8")
+        .splitlines()
         if line.strip()
     ]
     lightweight_result = json.loads(
-        (manager.root_dir / lightweight_result_rel).read_text(encoding="utf-8")
+        (manager.root_dir / lightweight_result_rel).read_text(
+            encoding="utf-8",
+        ),
     )
 
-    assert interlinear_text.splitlines() == ["第一句。", "Second line 123!", "第三句？"]
+    assert interlinear_text.splitlines() == [
+        "第一句。",
+        "Second line 123!",
+        "第三句？",
+    ]
     assert [item["line_index"] for item in line_index_rows] == [1, 2, 3]
     assert [item["char_count"] for item in line_index_rows] == [3, 13, 3]
     assert [item["token_count"] for item in line_index_rows] == [1, 3, 1]
@@ -1773,7 +2146,9 @@ def test_index_source_writes_interlinear_and_lightweight_line_stats(tmp_path: Pa
     assert [item["score"] for item in lightweight_result] == [1, 3, 1]
 
 
-def test_build_interlinear_artifact_key_omits_source_prefix_for_all_sources(tmp_path: Path):
+def test_build_interlinear_artifact_key_omits_source_prefix_for_all_sources(
+    tmp_path: Path,
+):
     manager = KnowledgeManager(tmp_path)
     project_source_id = "project-project-qznbwx-workspace"
     regular_source_id = "interlinear-line-stats-source"
@@ -1785,8 +2160,14 @@ def test_build_interlinear_artifact_key_omits_source_prefix_for_all_sources(tmp_
         "document_path": "aacid__duxiu_files/260317_002144.md",
     }
 
-    project_key = manager._build_interlinear_artifact_key(project_source_id, snapshot_entry)
-    regular_key = manager._build_interlinear_artifact_key(regular_source_id, snapshot_entry)
+    project_key = manager._build_interlinear_artifact_key(
+        project_source_id,
+        snapshot_entry,
+    )
+    regular_key = manager._build_interlinear_artifact_key(
+        regular_source_id,
+        snapshot_entry,
+    )
 
     assert not project_key.startswith("project-project-qznbwx-workspace__")
     assert project_key.startswith("aacid__duxiu_files__")
@@ -1794,7 +2175,9 @@ def test_build_interlinear_artifact_key_omits_source_prefix_for_all_sources(tmp_
     assert regular_key.startswith("aacid__duxiu_files__")
 
 
-def test_delete_index_removes_interlinear_and_lightweight_files(tmp_path: Path):
+def test_delete_index_removes_interlinear_and_lightweight_files(
+    tmp_path: Path,
+):
     config = make_knowledge_config()
     source_file = tmp_path / "cleanup-note.md"
     source_file.write_text("第一句。Second line 123!第三句？", encoding="utf-8")
@@ -1814,10 +2197,14 @@ def test_delete_index_removes_interlinear_and_lightweight_files(tmp_path: Path):
     manager.index_source(source, config, include_semantic_artifacts=False)
 
     interlinear_manifest = json.loads(
-        manager._source_interlinear_manifest_path(source.id).read_text(encoding="utf-8")
+        manager._source_interlinear_manifest_path(source.id).read_text(
+            encoding="utf-8",
+        ),
     )
     lightweight_manifest = json.loads(
-        manager._source_lightweight_manifest_path(source.id).read_text(encoding="utf-8")
+        manager._source_lightweight_manifest_path(source.id).read_text(
+            encoding="utf-8",
+        ),
     )
     all_paths = [
         *(
@@ -1847,7 +2234,9 @@ def test_delete_index_removes_interlinear_and_lightweight_files(tmp_path: Path):
             assert not (manager.root_dir / rel).exists(), f"{rel} 未被正确清理"
 
 
-def test_delete_index_uses_chunk_manifest_when_index_is_missing(tmp_path: Path):
+def test_delete_index_uses_chunk_manifest_when_index_is_missing(
+    tmp_path: Path,
+):
     config = make_knowledge_config()
     config.index.chunk_size = 10_000
     source = KnowledgeSourceSpec(
@@ -1877,7 +2266,9 @@ def test_delete_index_uses_chunk_manifest_when_index_is_missing(tmp_path: Path):
     assert not chunk_path.exists()
 
 
-def test_lightweight_token_count_does_not_depend_on_semantic_tokenizer(tmp_path: Path):
+def test_lightweight_token_count_does_not_depend_on_semantic_tokenizer(
+    tmp_path: Path,
+):
     config = make_knowledge_config()
     config.index.chunk_size = 10_000
     source = KnowledgeSourceSpec(
@@ -1897,45 +2288,63 @@ def test_lightweight_token_count_does_not_depend_on_semantic_tokenizer(tmp_path:
     assert result.get("token_count") == 4
 
 
-def test_process_knowledge_text_returns_empty_keywords_without_hanlp(tmp_path: Path):
+def test_process_knowledge_text_returns_empty_keywords_without_hanlp(
+    tmp_path: Path,
+):
     manager = KnowledgeManager(tmp_path)
 
     with patch.object(
         manager._semantic_runtime,
         "tokenize",
-        return_value=([], {
-            "engine": "hanlp",
-            "status": "unavailable",
-            "reason_code": "HANLP_SIDECAR_UNCONFIGURED",
-            "reason": "HanLP sidecar is not configured.",
-        }),
+        return_value=(
+            [],
+            {
+                "engine": "hanlp",
+                "status": "unavailable",
+                "reason_code": "HANLP_SIDECAR_UNCONFIGURED",
+                "reason": "HanLP sidecar is not configured.",
+            },
+        ),
     ):
-        processed = manager._process_knowledge_text("第一句。第二句! Third sentence?", top_n=3)
+        processed = manager._process_knowledge_text(
+            "第一句。第二句! Third sentence?",
+            top_n=3,
+        )
 
     assert processed["subject"] == "第一句。第二句"
     assert processed["summary"] == "第一句。第二句"
     assert processed["keywords"] == []
 
 
-def test_semantic_tokenizer_uses_hanlp_tok_and_flattens_nested_tokens(tmp_path: Path):
+def test_semantic_tokenizer_uses_hanlp_tok_and_flattens_nested_tokens(
+    tmp_path: Path,
+):
     manager = KnowledgeManager(tmp_path)
 
     with patch.object(
         manager._semantic_runtime,
         "tokenize",
-        return_value=(["Agent", "runner", "关系抽取"], {
-            "engine": "hanlp",
-            "status": "ready",
-            "reason_code": "HANLP_READY",
-            "reason": "HanLP semantic engine is ready.",
-        }),
+        return_value=(
+            ["Agent", "runner", "关系抽取"],
+            {
+                "engine": "hanlp",
+                "status": "ready",
+                "reason_code": "HANLP_READY",
+                "reason": "HanLP semantic engine is ready.",
+            },
+        ),
     ):
-        tokens = manager._tokenize_semantic_text("Agent runner 关系抽取", exclude_stop_words=False)
+        tokens = manager._tokenize_semantic_text(
+            "Agent runner 关系抽取",
+            exclude_stop_words=False,
+        )
 
     assert tokens == ["agent", "runner", "关系抽取"]
 
 
-def test_semantic_engine_state_reports_unavailable_without_hanlp(tmp_path: Path):
+def test_semantic_engine_state_reports_unavailable_without_hanlp(
+    tmp_path: Path,
+):
     manager = KnowledgeManager(tmp_path)
 
     state = manager.get_semantic_engine_state()
@@ -1953,18 +2362,23 @@ def test_semantic_engine_state_reports_missing_entrypoint(tmp_path: Path):
     assert state["reason_code"] == "NLP_ENGINE_UNAVAILABLE"
 
 
-def test_semantic_engine_state_reports_tokenize_runtime_failure(tmp_path: Path):
+def test_semantic_engine_state_reports_tokenize_runtime_failure(
+    tmp_path: Path,
+):
     manager = KnowledgeManager(tmp_path)
 
     with patch.object(
         manager._semantic_runtime,
         "tokenize",
-        return_value=([], {
-            "engine": "hanlp",
-            "status": "error",
-            "reason_code": "HANLP_TOKENIZE_FAILED",
-            "reason": "HanLP semantic tokenization failed via tok: RuntimeError.",
-        }),
+        return_value=(
+            [],
+            {
+                "engine": "hanlp",
+                "status": "error",
+                "reason_code": "HANLP_TOKENIZE_FAILED",
+                "reason": "HanLP semantic tokenization failed via tok: RuntimeError.",
+            },
+        ),
     ):
         tokens = manager._tokenize_semantic_text("Agent runner 关系抽取")
 
@@ -1974,7 +2388,9 @@ def test_semantic_engine_state_reports_tokenize_runtime_failure(tmp_path: Path):
     assert state["reason_code"] == "NLP_ENGINE_UNAVAILABLE"
 
 
-def test_compute_processing_fingerprint_changes_with_chunk_size(tmp_path: Path):
+def test_compute_processing_fingerprint_changes_with_chunk_size(
+    tmp_path: Path,
+):
     manager = KnowledgeManager(tmp_path)
     config = make_knowledge_config()
     fp1 = manager.compute_processing_fingerprint(config, None)
@@ -2005,14 +2421,19 @@ def test_get_source_status_needs_reindex_on_stale_index(tmp_path: Path):
     index_path = manager._source_index_path(source.id)
     payload = json.loads(index_path.read_text(encoding="utf-8"))
     payload.pop("processing_fingerprint", None)
-    index_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    index_path.write_text(
+        json.dumps(payload, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
 
     status = manager.get_source_status(source.id, source, config)
     # artifacts-only: 未生成 interlinear-manifest.json 时为 False
     assert status.get("needs_reindex") is False
 
 
-def test_get_source_status_needs_reindex_false_after_fresh_index(tmp_path: Path):
+def test_get_source_status_needs_reindex_false_after_fresh_index(
+    tmp_path: Path,
+):
     config = make_knowledge_config()
     source = KnowledgeSourceSpec(
         id="fresh-status-source",
@@ -2108,7 +2529,9 @@ def test_save_uploaded_directory_updates_raw_stats_and_status(tmp_path: Path):
     assert status["needs_reindex"] is True
 
 
-def test_get_source_status_uses_chunk_list_length_when_chunk_count_missing(tmp_path: Path):
+def test_get_source_status_uses_chunk_list_length_when_chunk_count_missing(
+    tmp_path: Path,
+):
     config = make_knowledge_config()
     source = KnowledgeSourceSpec(
         id="missing-chunk-count-source",
@@ -2127,7 +2550,10 @@ def test_get_source_status_uses_chunk_list_length_when_chunk_count_missing(tmp_p
     index_path = manager._source_index_path(source.id)
     payload = json.loads(index_path.read_text(encoding="utf-8"))
     payload.pop("chunk_count", None)
-    index_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    index_path.write_text(
+        json.dumps(payload, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
 
     status = manager.get_source_status(source.id, source, config)
 
@@ -2135,7 +2561,9 @@ def test_get_source_status_uses_chunk_list_length_when_chunk_count_missing(tmp_p
     assert status["chunk_count"] == 1
 
 
-def test_get_source_status_uses_manifest_metrics_when_index_payload_missing(tmp_path: Path):
+def test_get_source_status_uses_manifest_metrics_when_index_payload_missing(
+    tmp_path: Path,
+):
     config = make_knowledge_config()
     source = KnowledgeSourceSpec(
         id="missing-index-source",
@@ -2165,7 +2593,9 @@ def test_get_source_status_uses_manifest_metrics_when_index_payload_missing(tmp_
     assert status["sentence_count"] == result["sentence_count"]
 
 
-def test_get_source_status_falls_back_to_stats_when_interlinear_manifest_missing(tmp_path: Path):
+def test_get_source_status_falls_back_to_stats_when_interlinear_manifest_missing(
+    tmp_path: Path,
+):
     config = make_knowledge_config()
     source = KnowledgeSourceSpec(
         id="missing-interlinear-source",
@@ -2212,26 +2642,47 @@ def test_index_source_writes_project_file_analysis_stats_files(tmp_path: Path):
     manager = KnowledgeManager(tmp_path)
     result = manager.index_source(source, config)
 
-    latest_path = project_root / ".knowledge" / "stats" / "file_analysis" / "latest.json"
-    history_path = project_root / ".knowledge" / "stats" / "file_analysis" / "history.jsonl"
+    latest_path = (
+        project_root / ".knowledge" / "stats" / "file_analysis" / "latest.json"
+    )
+    history_path = (
+        project_root
+        / ".knowledge"
+        / "stats"
+        / "file_analysis"
+        / "history.jsonl"
+    )
 
     assert latest_path.exists()
     assert history_path.exists()
 
     latest_payload = json.loads(latest_path.read_text(encoding="utf-8"))
-    history_lines = [line for line in history_path.read_text(encoding="utf-8").splitlines() if line.strip()]
+    history_lines = [
+        line
+        for line in history_path.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
     history_payload = json.loads(history_lines[-1])
 
     assert latest_payload["project_id"] == "project-l1-stats"
     assert latest_payload["source_id"] == source.id
     assert latest_payload["step_id"] == "file_analysis"
-    assert latest_payload["metrics"]["document_count"] == result["document_count"]
-    assert latest_payload["metrics"]["snapshot_count"] == result["snapshot_count"]
+    assert (
+        latest_payload["metrics"]["document_count"] == result["document_count"]
+    )
+    assert (
+        latest_payload["metrics"]["snapshot_count"] == result["snapshot_count"]
+    )
     assert latest_payload["metrics"]["chunk_count"] == result["chunk_count"]
-    assert history_payload["metrics"]["sentence_count"] == result["sentence_count"]
+    assert (
+        history_payload["metrics"]["sentence_count"]
+        == result["sentence_count"]
+    )
 
 
-def test_get_source_status_prefers_chunk_manifest_count_over_interlinear_summary(tmp_path: Path):
+def test_get_source_status_prefers_chunk_manifest_count_over_interlinear_summary(
+    tmp_path: Path,
+):
     config = make_knowledge_config()
     source = KnowledgeSourceSpec(
         id="chunk-manifest-preferred-source",
@@ -2253,7 +2704,7 @@ def test_get_source_status_prefers_chunk_manifest_count_over_interlinear_summary
             {
                 "summary": {
                     "chunk_count": result["chunk_count"] + 1000,
-                }
+                },
             },
             ensure_ascii=False,
             indent=2,
@@ -2262,7 +2713,10 @@ def test_get_source_status_prefers_chunk_manifest_count_over_interlinear_summary
     )
     payload = json.loads(manifest_path.read_text(encoding="utf-8"))
     payload["summary"]["chunk_count"] = result["chunk_count"] + 1000
-    manifest_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    manifest_path.write_text(
+        json.dumps(payload, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
 
     status = manager.get_source_status(source.id, source, config)
 
@@ -2270,7 +2724,10 @@ def test_get_source_status_prefers_chunk_manifest_count_over_interlinear_summary
     assert status["chunk_count"] == result["chunk_count"]
 
 
-def test_semantic_stage_writers_skip_ready_chunks_on_resume(tmp_path: Path, monkeypatch):
+def test_semantic_stage_writers_skip_ready_chunks_on_resume(
+    tmp_path: Path,
+    monkeypatch,
+):
     config = make_knowledge_config()
     source = KnowledgeSourceSpec(
         id="resume-stage-source",
@@ -2308,7 +2765,7 @@ def test_semantic_stage_writers_skip_ready_chunks_on_resume(tmp_path: Path, monk
                 "syntax_sentence_count": 1,
                 "syntax_token_count": 4,
                 "syntax_relation_count": 2,
-            }
+            },
         ],
     }
 
@@ -2329,11 +2786,17 @@ def test_semantic_stage_writers_skip_ready_chunks_on_resume(tmp_path: Path, monk
         artifact_path.write_text("ok", encoding="utf-8")
 
     manager._write_source_index_payload(source.id, payload)
-    monkeypatch.setattr(manager, "get_semantic_engine_state", lambda *_args, **_kwargs: {"status": "ready"})
+    monkeypatch.setattr(
+        manager,
+        "get_semantic_engine_state",
+        lambda *_args, **_kwargs: {"status": "ready"},
+    )
     monkeypatch.setattr(
         manager._semantic_runtime,
         "run_task",
-        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("run_task should not be called")),
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            AssertionError("run_task should not be called"),
+        ),
     )
 
     manager._write_chunk_cor_artifacts(source, payload, config=config)
@@ -2355,7 +2818,7 @@ def test_ner_with_sliding_window():
         "Microsoft released a new product.",
         "The product is called Surface Pro.",
         "It is a popular device.",
-        "End of the document."
+        "End of the document.",
     ]
 
     # Mock the NER model's predict method
@@ -2378,7 +2841,7 @@ def test_ner_with_sliding_window():
                         "end": start + len("Microsoft"),
                         "text": "Microsoft",
                         "label": "ORG",
-                    }
+                    },
                 )
             if "Surface Pro" in sentence:
                 start = sentence.index("Surface Pro")
@@ -2388,7 +2851,7 @@ def test_ner_with_sliding_window():
                         "end": start + len("Surface Pro"),
                         "text": "Surface Pro",
                         "label": "PRODUCT",
-                    }
+                    },
                 )
             batch_results.append(sentence_results)
         return batch_results

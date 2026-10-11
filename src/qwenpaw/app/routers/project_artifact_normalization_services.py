@@ -58,7 +58,9 @@ def normalize_project_created_time(raw_value: Any) -> str:
     if not created_time:
         return ""
     try:
-        normalized = datetime.fromisoformat(created_time.replace("Z", "+00:00"))
+        normalized = datetime.fromisoformat(
+            created_time.replace("Z", "+00:00"),
+        )
     except ValueError:
         return created_time
     return normalized.isoformat(timespec="seconds")
@@ -72,7 +74,7 @@ def resolve_project_created_time(
     format_iso_time: FormatIsoTime,
 ) -> str:
     created_time = normalize_project_created_time(
-        metadata.get("created_time") or metadata.get("createdAt")
+        metadata.get("created_time") or metadata.get("createdAt"),
     )
     if created_time:
         return created_time
@@ -129,7 +131,9 @@ def build_project_artifact_file_path(
     return f"{kind_dir}/{artifact_slug}/{version_slug}.md"
 
 
-def parse_project_artifact_version_history(raw_value: Any) -> list[dict[str, str]]:
+def parse_project_artifact_version_history(
+    raw_value: Any,
+) -> list[dict[str, str]]:
     if not isinstance(raw_value, list):
         return []
 
@@ -165,12 +169,18 @@ def normalize_project_artifact_storage(
     kind: str,
     *,
     build_project_artifact_file_path: Callable[[str, str, str], str],
-    parse_project_artifact_version_history: Callable[[Any], list[dict[str, str]]],
+    parse_project_artifact_version_history: Callable[
+        [Any],
+        list[dict[str, str]],
+    ],
 ) -> Any:
-    file_path = item.artifact_file_path.strip() or build_project_artifact_file_path(
-        kind,
-        item.id,
-        item.version,
+    file_path = (
+        item.artifact_file_path.strip()
+        or build_project_artifact_file_path(
+            kind,
+            item.id,
+            item.version,
+        )
     )
     history = parse_project_artifact_version_history(item.version_history)
 
@@ -241,7 +251,10 @@ def normalize_project_artifact_item(
     kind: str,
     *,
     project_artifact_item_factory: Callable[..., Any],
-    parse_project_artifact_version_history: Callable[[Any], list[dict[str, str]]],
+    parse_project_artifact_version_history: Callable[
+        [Any],
+        list[dict[str, str]],
+    ],
     parse_project_tags: Callable[[Any], list[str]],
     normalize_project_artifact_storage: Callable[[Any, str], Any],
 ) -> Any | None:
@@ -263,7 +276,10 @@ def normalize_project_artifact_item(
         return None
 
     item_name = str(raw_item.get("name") or item_id).strip() or item_id
-    origin = str(raw_item.get("origin") or "project-distilled").strip() or "project-distilled"
+    origin = (
+        str(raw_item.get("origin") or "project-distilled").strip()
+        or "project-distilled"
+    )
     status = str(raw_item.get("status") or "draft").strip() or "draft"
     version = str(raw_item.get("version") or "").strip()
     artifact_file_path = str(raw_item.get("artifact_file_path") or "").strip()
@@ -273,7 +289,9 @@ def normalize_project_artifact_item(
     tags = parse_project_tags(raw_item.get("tags"))
     derived_from_ids = parse_project_tags(raw_item.get("derived_from_ids"))
     distillation_note = str(raw_item.get("distillation_note") or "").strip()
-    market_source_id = str(raw_item.get("market_source_id") or "").strip() or None
+    market_source_id = (
+        str(raw_item.get("market_source_id") or "").strip() or None
+    )
     market_item_id = str(raw_item.get("market_item_id") or "").strip() or None
 
     item = project_artifact_item_factory(

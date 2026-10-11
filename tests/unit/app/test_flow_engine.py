@@ -40,7 +40,9 @@ def _build_definition() -> FlowDefinition:
 
 
 def test_sqlite_flow_engine_repository_ensures_schema(tmp_path: Path):
-    repo = SQLiteFlowEngineRepository(tmp_path / "flow-engine" / "flow_engine.sqlite3")
+    repo = SQLiteFlowEngineRepository(
+        tmp_path / "flow-engine" / "flow_engine.sqlite3",
+    )
 
     db_path = repo.ensure_schema()
 
@@ -77,7 +79,11 @@ def test_flow_engine_service_enqueues_run_and_records_event(tmp_path: Path):
         idempotency_key="project-123:knowledge",
     )
 
-    runs = service.repo.list_runs(agent_id="agent-a", scope_kind="project", scope_id="project-123")
+    runs = service.repo.list_runs(
+        agent_id="agent-a",
+        scope_kind="project",
+        scope_id="project-123",
+    )
     events = service.repo.list_events(run.id, agent_id="agent-a")
 
     assert run.status == "queued"
@@ -143,8 +149,16 @@ def test_flow_engine_service_isolates_runs_by_agent_id(tmp_path: Path):
         scope_id="shared-project",
     )
 
-    runs_a = service.list_runs(agent_id="agent-a", scope_kind="project", scope_id="shared-project")
-    runs_b = service.list_runs(agent_id="agent-b", scope_kind="project", scope_id="shared-project")
+    runs_a = service.list_runs(
+        agent_id="agent-a",
+        scope_kind="project",
+        scope_id="shared-project",
+    )
+    runs_b = service.list_runs(
+        agent_id="agent-b",
+        scope_kind="project",
+        scope_id="shared-project",
+    )
 
     assert [item.id for item in runs_a] == [run_a.id]
     assert [item.id for item in runs_b] == [run_b.id]
@@ -171,7 +185,11 @@ def test_flow_engine_service_rejects_illegal_transition(tmp_path: Path):
         service.pause_run(agent_id="agent-a", run_id=run.id)
 
     events = service.repo.list_events(run.id, agent_id="agent-a")
-    failed_events = [event for event in events if event.event_type == "run.transition_failed"]
+    failed_events = [
+        event
+        for event in events
+        if event.event_type == "run.transition_failed"
+    ]
     assert len(failed_events) == 1
     assert failed_events[0].payload["reason"] == "transition_not_allowed"
     assert failed_events[0].payload["target_status"] == "paused"
@@ -211,7 +229,9 @@ def test_flow_engine_service_enqueues_idempotently_by_key(tmp_path: Path):
     assert "run.enqueue_deduplicated" in event_types
 
 
-def test_flow_engine_service_transition_rejects_concurrent_status_conflict(tmp_path: Path):
+def test_flow_engine_service_transition_rejects_concurrent_status_conflict(
+    tmp_path: Path,
+):
     service = FlowEngineService(tmp_path / "flow-engine.sqlite3")
     definition = _build_definition()
     service.register_definition(definition)
@@ -244,7 +264,11 @@ def test_flow_engine_service_transition_rejects_concurrent_status_conflict(tmp_p
         )
 
     events = service.repo.list_events(run.id, agent_id="agent-a")
-    failed_events = [event for event in events if event.event_type == "run.transition_failed"]
+    failed_events = [
+        event
+        for event in events
+        if event.event_type == "run.transition_failed"
+    ]
     assert len(failed_events) == 1
     assert failed_events[0].payload["reason"] == "transition_conflict"
     assert failed_events[0].payload["target_status"] == "running"

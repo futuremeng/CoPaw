@@ -148,7 +148,10 @@ class ProjectKnowledgeWatcher:
         self,
         command: ProjectPipelineCommand,
     ):
-        return await asyncio.to_thread(self._sync_coordinator.dispatch, command)
+        return await asyncio.to_thread(
+            self._sync_coordinator.dispatch,
+            command,
+        )
 
     async def _ensure_project_source_registered_async(
         self,
@@ -167,7 +170,10 @@ class ProjectKnowledgeWatcher:
             persist=lambda: config_utils.save_config(global_config),
         )
 
-    def _build_project_pipeline_manager(self, project_id: str) -> ProjectKnowledgePipelineManager:
+    def _build_project_pipeline_manager(
+        self,
+        project_id: str,
+    ) -> ProjectKnowledgePipelineManager:
         return ProjectKnowledgePipelineManager(
             self._workspace_dir,
             knowledge_dirname=f"projects/{project_id}/.knowledge",
@@ -197,7 +203,11 @@ class ProjectKnowledgeWatcher:
         ):
             global_config = cache["global_config"]
             knowledge_config = global_config.knowledge.model_copy(deep=True)
-            setattr(knowledge_config, "nlp", global_config.nlp.model_copy(deep=True))
+            setattr(
+                knowledge_config,
+                "nlp",
+                global_config.nlp.model_copy(deep=True),
+            )
             return global_config, knowledge_config, cache["running_config"]
 
         global_config, agent_config = await asyncio.gather(
@@ -212,7 +222,11 @@ class ProjectKnowledgeWatcher:
             "running_config": running_config,
         }
         knowledge_config = global_config.knowledge.model_copy(deep=True)
-        setattr(knowledge_config, "nlp", global_config.nlp.model_copy(deep=True))
+        setattr(
+            knowledge_config,
+            "nlp",
+            global_config.nlp.model_copy(deep=True),
+        )
         return global_config, knowledge_config, running_config
 
     async def _collect_snapshots_async(self) -> dict[str, dict[str, Any]]:
@@ -235,8 +249,14 @@ class ProjectKnowledgeWatcher:
         self,
         current: dict[str, dict[str, Any]],
     ) -> None:
-        global_config, knowledge_config, running_config = await self._load_runtime_context()
-        if not knowledge_config.enabled or not bool(getattr(knowledge_config, "memify_enabled", False)):
+        (
+            global_config,
+            knowledge_config,
+            running_config,
+        ) = await self._load_runtime_context()
+        if not knowledge_config.enabled or not bool(
+            getattr(knowledge_config, "memify_enabled", False),
+        ):
             return
 
         for project_id, snapshot in current.items():
@@ -269,7 +289,7 @@ class ProjectKnowledgeWatcher:
                     running_config=running_config,
                     source=source,
                     idempotency_key=f"watcher-resume:{project_id}",
-                )
+                ),
             )
             if event.accepted:
                 logger.info(
@@ -310,8 +330,14 @@ class ProjectKnowledgeWatcher:
         self,
         current: dict[str, dict[str, Any]],
     ) -> None:
-        global_config, knowledge_config, running_config = await self._load_runtime_context()
-        if not knowledge_config.enabled or not bool(getattr(knowledge_config, "memify_enabled", False)):
+        (
+            global_config,
+            knowledge_config,
+            running_config,
+        ) = await self._load_runtime_context()
+        if not knowledge_config.enabled or not bool(
+            getattr(knowledge_config, "memify_enabled", False),
+        ):
             return
 
         for project_id, snapshot in current.items():
@@ -343,7 +369,7 @@ class ProjectKnowledgeWatcher:
                         config=knowledge_config,
                         running_config=running_config,
                         idempotency_key=f"watcher-check-reindex:{project_id}",
-                    )
+                    ),
                 )
                 should_config_reindex = bool(reindex_event.payload)
                 if not should_config_reindex:
@@ -363,7 +389,11 @@ class ProjectKnowledgeWatcher:
             trigger = (
                 "project_watcher_bootstrap"
                 if should_bootstrap
-                else ("project_watcher_config_change" if should_config_reindex else "project_watcher_change")
+                else (
+                    "project_watcher_config_change"
+                    if should_config_reindex
+                    else "project_watcher_change"
+                )
             )
             event = await self._dispatch_sync_command_async(
                 ProjectPipelineCommand.start(
@@ -378,13 +408,17 @@ class ProjectKnowledgeWatcher:
                     debounce_seconds=DEFAULT_CHANGE_DEBOUNCE_SECONDS,
                     cooldown_seconds=DEFAULT_SYNC_COOLDOWN_SECONDS,
                     idempotency_key=f"watcher-start:{project_id}:{trigger}",
-                )
+                ),
             )
             if event.accepted:
                 logger.info(
                     "ProjectKnowledgeWatcher triggered sync for %s (%s, %s paths, op=%s, key=%s, dedup=%s)",
                     project_id,
-                    "bootstrap" if should_bootstrap else ("config-change" if should_config_reindex else "change"),
+                    "bootstrap"
+                    if should_bootstrap
+                    else (
+                        "config-change" if should_config_reindex else "change"
+                    ),
                     len(changed_paths),
                     event.operation_id,
                     event.idempotency_key,
@@ -395,7 +429,10 @@ class ProjectKnowledgeWatcher:
         if not self._projects_dir.exists():
             return {}
         snapshots: dict[str, dict[str, Any]] = {}
-        for project_dir in sorted(self._projects_dir.iterdir(), key=lambda item: item.name.lower()):
+        for project_dir in sorted(
+            self._projects_dir.iterdir(),
+            key=lambda item: item.name.lower(),
+        ):
             if not project_dir.is_dir():
                 continue
             snapshot = self._build_project_snapshot(project_dir)
@@ -404,7 +441,10 @@ class ProjectKnowledgeWatcher:
             snapshots[snapshot["project_id"]] = snapshot
         return snapshots
 
-    def _build_project_snapshot(self, project_dir: Path) -> dict[str, Any] | None:
+    def _build_project_snapshot(
+        self,
+        project_dir: Path,
+    ) -> dict[str, Any] | None:
         metadata_file = next(
             (
                 project_dir / rel_path
@@ -416,15 +456,26 @@ class ProjectKnowledgeWatcher:
         if metadata_file is None:
             return None
         meta = _parse_frontmatter(metadata_file)
-        project_id = str(meta.get("id") or project_dir.name).strip() or project_dir.name
-        project_name = str(meta.get("name") or project_id).strip() or project_id
-        auto_enabled = _normalize_auto_sink(meta.get("project_auto_knowledge_sink"))
-        project_knowledge_registered = _normalize_project_agent_knowledge_registered(
-            meta.get("project_agent_knowledge_registered")
+        project_id = (
+            str(meta.get("id") or project_dir.name).strip() or project_dir.name
+        )
+        project_name = (
+            str(meta.get("name") or project_id).strip() or project_id
+        )
+        auto_enabled = _normalize_auto_sink(
+            meta.get("project_auto_knowledge_sink"),
+        )
+        project_knowledge_registered = (
+            _normalize_project_agent_knowledge_registered(
+                meta.get("project_agent_knowledge_registered"),
+            )
         )
 
         file_map: dict[str, str] = {}
-        for path in sorted(project_dir.rglob("*"), key=lambda item: item.as_posix().lower()):
+        for path in sorted(
+            project_dir.rglob("*"),
+            key=lambda item: item.as_posix().lower(),
+        ):
             if not path.is_file():
                 continue
             rel = path.relative_to(project_dir).as_posix()
@@ -441,7 +492,9 @@ class ProjectKnowledgeWatcher:
         fingerprint_source = "\n".join(
             f"{key}:{value}" for key, value in sorted(file_map.items())
         )
-        fingerprint = hashlib.sha1(fingerprint_source.encode("utf-8")).hexdigest()
+        fingerprint = hashlib.sha1(
+            fingerprint_source.encode("utf-8"),
+        ).hexdigest()
         return {
             "project_id": project_id,
             "project_name": project_name,

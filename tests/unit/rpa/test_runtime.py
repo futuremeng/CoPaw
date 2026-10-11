@@ -94,7 +94,10 @@ def test_execute_rpa_script_step_loop_actions(monkeypatch, tmp_path: Path):
     assert action_names.count("wait_for") == 2
 
 
-def test_execute_rpa_script_step_loop_stop_condition_page_number_reached(monkeypatch, tmp_path: Path):
+def test_execute_rpa_script_step_loop_stop_condition_page_number_reached(
+    monkeypatch,
+    tmp_path: Path,
+):
     calls: list[tuple[str, dict]] = []
 
     def _fake_invoke(action: str, **kwargs):
@@ -133,7 +136,7 @@ def test_execute_rpa_script_step_loop_stop_condition_page_number_reached(monkeyp
                     {
                         "kind": "browser.screenshot",
                         "path": "{{screenshot_dir}}/{{page_prefix}}-{{page_index:03d}}.png",
-                    }
+                    },
                 ],
             },
         },
@@ -147,7 +150,10 @@ def test_execute_rpa_script_step_loop_stop_condition_page_number_reached(monkeyp
     assert evidence
 
 
-def test_execute_rpa_script_step_loop_max_iterations(monkeypatch, tmp_path: Path):
+def test_execute_rpa_script_step_loop_max_iterations(
+    monkeypatch,
+    tmp_path: Path,
+):
     calls: list[tuple[str, dict]] = []
 
     def _fake_invoke(action: str, **kwargs):
@@ -179,7 +185,7 @@ def test_execute_rpa_script_step_loop_max_iterations(monkeypatch, tmp_path: Path
                     {
                         "kind": "browser.screenshot",
                         "path": "{{screenshot_dir}}/{{page_prefix}}-{{page_index:03d}}.png",
-                    }
+                    },
                 ],
             },
         },
@@ -192,7 +198,10 @@ def test_execute_rpa_script_step_loop_max_iterations(monkeypatch, tmp_path: Path
     assert any("max_iterations" in item for item in evidence)
 
 
-def test_execute_rpa_script_step_loop_stop_condition_continue_policy(monkeypatch, tmp_path: Path):
+def test_execute_rpa_script_step_loop_stop_condition_continue_policy(
+    monkeypatch,
+    tmp_path: Path,
+):
     calls: list[tuple[str, dict]] = []
 
     def _fake_invoke(action: str, **kwargs):
@@ -230,7 +239,7 @@ def test_execute_rpa_script_step_loop_stop_condition_continue_policy(monkeypatch
                     {
                         "kind": "browser.screenshot",
                         "path": "{{screenshot_dir}}/{{page_prefix}}-{{page_index:03d}}.png",
-                    }
+                    },
                 ],
             },
         },

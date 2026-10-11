@@ -51,18 +51,31 @@ class SiameseTaskRunResponse(BaseModel):
 
 
 @router.post("/tasks/{task_key}/run", response_model=SiameseTaskRunResponse)
-async def run_siamese_task(task_key: str, body: SiameseTaskRunRequest) -> SiameseTaskRunResponse:
+async def run_siamese_task(
+    task_key: str,
+    body: SiameseTaskRunRequest,
+) -> SiameseTaskRunResponse:
     """Execute a Siamese UniNLU task via provider-specific route."""
     config = load_config()
     request_id = str(body.request_id or uuid.uuid4())
     payload = body.model_dump(by_alias=True)
 
     started = time.perf_counter()
-    result = SiameseUniNLURuntime.run_task(config, task_key=task_key, payload=payload)
-    elapsed_ms = float(result.get("duration_ms") or ((time.perf_counter() - started) * 1000.0))
+    result = SiameseUniNLURuntime.run_task(
+        config,
+        task_key=task_key,
+        payload=payload,
+    )
+    elapsed_ms = float(
+        result.get("duration_ms")
+        or ((time.perf_counter() - started) * 1000.0),
+    )
 
     if str(result.get("status") or "") == "invalid":
-        raise HTTPException(status_code=400, detail=str(result.get("reason") or "Invalid task"))
+        raise HTTPException(
+            status_code=400,
+            detail=str(result.get("reason") or "Invalid task"),
+        )
 
     raw = result.get("result")
     pretty = ""
@@ -78,7 +91,9 @@ async def run_siamese_task(task_key: str, body: SiameseTaskRunRequest) -> Siames
         task_key=task_key,
         request_id=request_id,
         status=str(result.get("status") or "unavailable"),
-        reason_code=str(result.get("reason_code") or "SIAMESE_TASK_EXECUTION_FAILED"),
+        reason_code=str(
+            result.get("reason_code") or "SIAMESE_TASK_EXECUTION_FAILED",
+        ),
         reason=str(result.get("reason") or "Siamese task failed."),
         result=raw,
         raw_result=raw,

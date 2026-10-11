@@ -29,7 +29,10 @@ class FlowEngineService:
         self.repo = SQLiteFlowEngineRepository(database_path)
         self.repo.ensure_schema()
 
-    def register_definition(self, definition: FlowDefinition) -> FlowDefinition:
+    def register_definition(
+        self,
+        definition: FlowDefinition,
+    ) -> FlowDefinition:
         now = flow_now_iso()
         definition.updated_at = now
         if not definition.created_at:
@@ -58,7 +61,12 @@ class FlowEngineService:
     def get_run_any_agent(self, *, run_id: str) -> FlowRunRecord | None:
         return self.repo.get_run(run_id, agent_id=None)
 
-    def get_run(self, *, agent_id: str | None, run_id: str) -> FlowRunRecord | None:
+    def get_run(
+        self,
+        *,
+        agent_id: str | None,
+        run_id: str,
+    ) -> FlowRunRecord | None:
         return self.repo.get_run(run_id, agent_id=agent_id)
 
     def get_run_timeline(
@@ -86,11 +94,16 @@ class FlowEngineService:
         }
         return transitions.get(current_status, set())
 
-    def _ensure_transition_allowed(self, *, run: FlowRunRecord, target_status: str) -> None:
+    def _ensure_transition_allowed(
+        self,
+        *,
+        run: FlowRunRecord,
+        target_status: str,
+    ) -> None:
         allowed = self._allowed_target_statuses(run.status)
         if target_status not in allowed:
             raise FlowTransitionNotAllowedError(
-                f"flow run transition not allowed: {run.status} -> {target_status}"
+                f"flow run transition not allowed: {run.status} -> {target_status}",
             )
 
     def _append_transition_failure_event(
@@ -117,7 +130,7 @@ class FlowEngineService:
                 status=current_status,
                 payload=event_payload,
                 created_at=flow_now_iso(),
-            )
+            ),
         )
 
     def _ensure_transition_allowed_with_audit(
@@ -128,7 +141,10 @@ class FlowEngineService:
         target_status: str,
     ) -> None:
         try:
-            self._ensure_transition_allowed(run=run, target_status=target_status)
+            self._ensure_transition_allowed(
+                run=run,
+                target_status=target_status,
+            )
         except ValueError:
             self._append_transition_failure_event(
                 agent_id=agent_id,
@@ -150,7 +166,9 @@ class FlowEngineService:
         idempotency_key: str = "",
     ) -> FlowRunRecord:
         if self.repo.get_definition(definition_id) is None:
-            raise FlowDefinitionNotFoundError(f"Flow definition '{definition_id}' not found")
+            raise FlowDefinitionNotFoundError(
+                f"Flow definition '{definition_id}' not found",
+            )
         normalized_idempotency_key = str(idempotency_key or "").strip()
         if normalized_idempotency_key:
             existing = self.repo.get_run_by_idempotency_key(
@@ -175,7 +193,7 @@ class FlowEngineService:
                             "scope_id": scope_id,
                         },
                         created_at=flow_now_iso(),
-                    )
+                    ),
                 )
                 return existing
         now = flow_now_iso()
@@ -206,7 +224,7 @@ class FlowEngineService:
                     "priority": priority,
                 },
                 created_at=now,
-            )
+            ),
         )
         return run
 
@@ -270,11 +288,14 @@ class FlowEngineService:
                 current_status=latest.status,
                 target_status=status,
                 reason="transition_conflict",
-                payload={"expected_status": current.status, "actual_status": latest.status},
+                payload={
+                    "expected_status": current.status,
+                    "actual_status": latest.status,
+                },
             )
             raise FlowTransitionConflictError(
                 "flow run transition conflicted due to concurrent status change: "
-                f"expected {current.status}, actual {latest.status}, target {status}"
+                f"expected {current.status}, actual {latest.status}, target {status}",
             )
         self.repo.append_event(
             FlowEventRecord(
@@ -286,7 +307,7 @@ class FlowEngineService:
                 step_id=step_id,
                 payload=payload or {},
                 created_at=now,
-            )
+            ),
         )
         return run
 

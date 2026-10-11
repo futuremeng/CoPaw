@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 import json
 import sys
 import time
@@ -16,7 +17,11 @@ def main() -> None:
     nlp = getattr(cfg, "nlp", None) or getattr(cfg, "hanlp", None)
     if nlp is None:
         out_path.write_text(
-            json.dumps({"error": "knowledge.nlp not found"}, ensure_ascii=False, indent=2),
+            json.dumps(
+                {"error": "knowledge.nlp not found"},
+                ensure_ascii=False,
+                indent=2,
+            ),
             encoding="utf-8",
         )
         print(str(out_path))
@@ -41,7 +46,10 @@ def main() -> None:
 
     t0 = time.perf_counter()
     status1 = runtime.task_status("ner_msra", cfg)
-    result["first_task_status_ms"] = round((time.perf_counter() - t0) * 1000, 2)
+    result["first_task_status_ms"] = round(
+        (time.perf_counter() - t0) * 1000,
+        2,
+    )
     result["first_task_status"] = status1
 
     t1 = time.perf_counter()
@@ -56,7 +64,10 @@ def main() -> None:
     result["second_run_ner_state"] = state2
     result["second_run_ner_sample"] = ner2
 
-    out_path.write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
+    out_path.write_text(
+        json.dumps(result, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
     print(str(out_path))
 
 

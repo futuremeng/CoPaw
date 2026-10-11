@@ -85,6 +85,7 @@ class BuiltinSkillIdentity:
     language: str
     source_name: str
 
+
 from ..constant import WORKING_DIR
 
 ACTIVE_SKILLS_DIR = Path(WORKING_DIR) / "active_skills"
@@ -338,7 +339,9 @@ def get_workspace_skills_dir(workspace_dir: Path) -> Path:
 
 def get_working_skills_dir(workspace_dir: Path | None = None) -> Path:
     """Backward-compatible alias returning the effective workspace skills dir."""
-    base_dir = Path(workspace_dir) if workspace_dir is not None else Path(WORKING_DIR)
+    base_dir = (
+        Path(workspace_dir) if workspace_dir is not None else Path(WORKING_DIR)
+    )
     return get_workspace_skills_dir(base_dir)
 
 

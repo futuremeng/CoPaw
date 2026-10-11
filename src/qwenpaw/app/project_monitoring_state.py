@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 from __future__ import annotations
 
 import json
@@ -53,22 +54,32 @@ def _load_project_watch_leases(project_dir: Path) -> dict[str, Any]:
         return {"updated_at": None, "leases": {}}
     return {
         "updated_at": payload.get("updated_at"),
-        "leases": payload.get("leases") if isinstance(payload.get("leases"), dict) else {},
+        "leases": payload.get("leases")
+        if isinstance(payload.get("leases"), dict)
+        else {},
     }
 
 
-def _save_project_watch_leases(project_dir: Path, payload: dict[str, Any]) -> None:
+def _save_project_watch_leases(
+    project_dir: Path,
+    payload: dict[str, Any],
+) -> None:
     path = _project_watch_leases_path(project_dir)
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(
-        json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
+        json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True)
+        + "\n",
         encoding="utf-8",
     )
 
 
 def acquire_project_watch_lease(project_dir: Path) -> dict[str, Any]:
     payload = _load_project_watch_leases(project_dir)
-    leases = payload.get("leases") if isinstance(payload.get("leases"), dict) else {}
+    leases = (
+        payload.get("leases")
+        if isinstance(payload.get("leases"), dict)
+        else {}
+    )
     lease_id = uuid4().hex
     acquired_at = _utc_now_iso()
     leases[lease_id] = {
@@ -82,7 +93,10 @@ def acquire_project_watch_lease(project_dir: Path) -> dict[str, Any]:
             "leases": leases,
         },
     )
-    update_project_file_monitoring_state(project_dir, PROJECT_FILE_MONITORING_ACTIVE)
+    update_project_file_monitoring_state(
+        project_dir,
+        PROJECT_FILE_MONITORING_ACTIVE,
+    )
     return {
         "lease_id": lease_id,
         "active_count": len(leases),
@@ -91,10 +105,17 @@ def acquire_project_watch_lease(project_dir: Path) -> dict[str, Any]:
     }
 
 
-def release_project_watch_lease(project_dir: Path, lease_id: str) -> dict[str, Any]:
+def release_project_watch_lease(
+    project_dir: Path,
+    lease_id: str,
+) -> dict[str, Any]:
     normalized_lease_id = str(lease_id or "").strip()
     payload = _load_project_watch_leases(project_dir)
-    leases = payload.get("leases") if isinstance(payload.get("leases"), dict) else {}
+    leases = (
+        payload.get("leases")
+        if isinstance(payload.get("leases"), dict)
+        else {}
+    )
     released = False
     if normalized_lease_id and normalized_lease_id in leases:
         leases.pop(normalized_lease_id, None)
@@ -107,7 +128,11 @@ def release_project_watch_lease(project_dir: Path, lease_id: str) -> dict[str, A
             "leases": leases,
         },
     )
-    next_state = PROJECT_FILE_MONITORING_ACTIVE if leases else PROJECT_FILE_MONITORING_IDLE
+    next_state = (
+        PROJECT_FILE_MONITORING_ACTIVE
+        if leases
+        else PROJECT_FILE_MONITORING_IDLE
+    )
     update_project_file_monitoring_state(project_dir, next_state)
     return {
         "lease_id": normalized_lease_id,
@@ -187,7 +212,9 @@ def update_project_file_monitoring_state(
     project_dir: Path,
     next_state: str,
 ) -> bool:
-    metadata_file, metadata, body = read_project_metadata_with_body(project_dir)
+    metadata_file, metadata, body = read_project_metadata_with_body(
+        project_dir,
+    )
     if metadata_file is None:
         return False
     normalized = normalize_project_file_monitoring_state(next_state)

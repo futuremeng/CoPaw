@@ -42,7 +42,12 @@ def _http_json(
     }
     if payload is not None:
         data = json.dumps(payload, ensure_ascii=False).encode("utf-8")
-    req = request.Request(url=url, method=method.upper(), data=data, headers=req_headers)
+    req = request.Request(
+        url=url,
+        method=method.upper(),
+        data=data,
+        headers=req_headers,
+    )
     try:
         with request.urlopen(req, timeout=timeout) as resp:
             raw = resp.read().decode("utf-8", errors="replace")
@@ -51,7 +56,11 @@ def _http_json(
             parsed = json.loads(raw)
             return parsed if isinstance(parsed, dict) else {"raw": parsed}
     except error.HTTPError as exc:
-        body = exc.read().decode("utf-8", errors="replace") if exc.fp is not None else ""
+        body = (
+            exc.read().decode("utf-8", errors="replace")
+            if exc.fp is not None
+            else ""
+        )
         detail: dict[str, Any]
         try:
             parsed = json.loads(body)
@@ -65,7 +74,9 @@ def _exists_any(project_dir: Path, pattern: str) -> bool:
     return any(project_dir.glob(pattern))
 
 
-def _collect_artifact_state(project_dir: Path) -> tuple[list[str], list[str], list[str], list[str]]:
+def _collect_artifact_state(
+    project_dir: Path,
+) -> tuple[list[str], list[str], list[str], list[str]]:
     required = [
         ".knowledge/sources/*/index.json",
         ".knowledge/graphify-out/graph.json",
@@ -81,8 +92,12 @@ def _collect_artifact_state(project_dir: Path) -> tuple[list[str], list[str], li
         ".knowledge/stats/domain_graph_build/history.jsonl",
         ".knowledge/stats/quality_review/history.jsonl",
     ]
-    missing_required = [item for item in required if not _exists_any(project_dir, item)]
-    missing_optional = [item for item in optional if not _exists_any(project_dir, item)]
+    missing_required = [
+        item for item in required if not _exists_any(project_dir, item)
+    ]
+    missing_optional = [
+        item for item in optional if not _exists_any(project_dir, item)
+    ]
     return required, optional, missing_required, missing_optional
 
 
@@ -116,7 +131,13 @@ def _wait_for_status(
 
     last_payload: dict[str, Any] = {}
     while True:
-        payload = _http_json("GET", status_url, None, headers=headers, timeout=20)
+        payload = _http_json(
+            "GET",
+            status_url,
+            None,
+            headers=headers,
+            timeout=20,
+        )
         last_payload = payload
         status = str(payload.get("status") or "").strip().lower()
         if status in {"succeeded", "failed"}:
@@ -137,7 +158,10 @@ def run_verification(args: argparse.Namespace) -> VerificationResult:
     if not project_dir.exists() or not project_dir.is_dir():
         raise RuntimeError(f"Project directory not found: {project_dir}")
 
-    created_input = _ensure_minimal_input(project_dir, args.input_relative_path)
+    created_input = _ensure_minimal_input(
+        project_dir,
+        args.input_relative_path,
+    )
 
     run_url = f"{args.api_base.rstrip('/')}/knowledge/project-pipeline/run?project_id={parse.quote(args.project_id)}"
     headers = {"X-Agent-Id": args.agent_id}
@@ -161,7 +185,12 @@ def run_verification(args: argparse.Namespace) -> VerificationResult:
         poll_interval_sec=float(args.poll_interval_sec),
     )
 
-    required, optional, missing_required, missing_optional = _collect_artifact_state(project_dir)
+    (
+        required,
+        optional,
+        missing_required,
+        missing_optional,
+    ) = _collect_artifact_state(project_dir)
     final_status = str(status_payload.get("status") or "").strip().lower()
 
     ok = final_status in {"succeeded", "idle"} and not missing_required
@@ -185,18 +214,44 @@ def build_parser() -> argparse.ArgumentParser:
         description="Verify Project Knowledge Pipeline end-to-end on one raw file.",
     )
     parser.add_argument("--workspace", default=".", help="Workspace root path")
-    parser.add_argument("--project-id", required=True, help="Project id under projects/<project-id>")
-    parser.add_argument("--api-base", default="http://127.0.0.1:8088", help="Backend API base URL")
-    parser.add_argument("--agent-id", default="default", help="Agent id sent in X-Agent-Id header")
+    parser.add_argument(
+        "--project-id",
+        required=True,
+        help="Project id under projects/<project-id>",
+    )
+    parser.add_argument(
+        "--api-base",
+        default="http://127.0.0.1:8088",
+        help="Backend API base URL",
+    )
+    parser.add_argument(
+        "--agent-id",
+        default="default",
+        help="Agent id sent in X-Agent-Id header",
+    )
     parser.add_argument(
         "--input-relative-path",
         default="data/e2e-raw-input.md",
         help="Create this file when missing before triggering sync",
     )
-    parser.add_argument("--processing-mode", default="agentic", choices=["fast", "nlp", "agentic"])
+    parser.add_argument(
+        "--processing-mode",
+        default="agentic",
+        choices=["fast", "nlp", "agentic"],
+    )
     parser.add_argument("--trigger", default="manual-e2e-verify")
-    parser.add_argument("--force", action="store_true", default=True, help="Force project pipeline run")
-    parser.add_argument("--no-force", action="store_false", dest="force", help="Do not force project pipeline run")
+    parser.add_argument(
+        "--force",
+        action="store_true",
+        default=True,
+        help="Force project pipeline run",
+    )
+    parser.add_argument(
+        "--no-force",
+        action="store_false",
+        dest="force",
+        help="Do not force project pipeline run",
+    )
     parser.add_argument("--timeout-sec", type=float, default=300.0)
     parser.add_argument("--poll-interval-sec", type=float, default=2.0)
     parser.add_argument(
@@ -221,7 +276,10 @@ def main() -> int:
     project_dir = (workspace / "projects" / args.project_id).resolve()
     report_path = (project_dir / args.report_path).resolve()
     if not str(report_path).startswith(str(project_dir)):
-        print("[verify] ERROR: --report-path escapes project directory", file=sys.stderr)
+        print(
+            "[verify] ERROR: --report-path escapes project directory",
+            file=sys.stderr,
+        )
         return 2
 
     report_path.parent.mkdir(parents=True, exist_ok=True)
@@ -230,7 +288,9 @@ def main() -> int:
         encoding="utf-8",
     )
 
-    print(f"[verify] project={result.project_id} status={result.status} ok={result.ok}")
+    print(
+        f"[verify] project={result.project_id} status={result.status} ok={result.ok}",
+    )
     if result.created_input_file:
         print(f"[verify] created input: {result.created_input_file}")
     if result.missing_required:

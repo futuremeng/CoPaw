@@ -510,7 +510,9 @@ _MARKETPLACE_CACHE: dict[str, Any] = {
     "errors": [],
     "meta": {},
 }
-_SKILLS_MARKET_DEFAULT_DIR = Path(__file__).resolve().parents[2] / "skills_market"
+_SKILLS_MARKET_DEFAULT_DIR = (
+    Path(__file__).resolve().parents[2] / "skills_market"
+)
 _SKILLS_MARKET_CONFIG_PATH = _SKILLS_MARKET_DEFAULT_DIR / "config.json"
 _SKILLS_MARKET_DEFAULT_PATH = _SKILLS_MARKET_DEFAULT_DIR / "default.json"
 
@@ -609,10 +611,17 @@ def _load_market_payload_from_path(path: Path) -> SkillsMarketPayload:
     return SkillsMarketPayload.model_validate(raw)
 
 
-def _write_market_payload_to_path(payload: SkillsMarketPayload, path: Path) -> None:
+def _write_market_payload_to_path(
+    payload: SkillsMarketPayload,
+    path: Path,
+) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(
-        json.dumps(payload.model_dump(mode="json"), ensure_ascii=False, indent=2),
+        json.dumps(
+            payload.model_dump(mode="json"),
+            ensure_ascii=False,
+            indent=2,
+        ),
         encoding="utf-8",
     )
 
@@ -716,7 +725,9 @@ def _market_config_to_payload(cfg: SkillsMarketConfig) -> SkillsMarketPayload:
     )
 
 
-def _payload_to_market_config(payload: SkillsMarketPayload) -> SkillsMarketConfig:
+def _payload_to_market_config(
+    payload: SkillsMarketPayload,
+) -> SkillsMarketConfig:
     _validate_market_ids(payload.markets)
     normalized_markets: list[SkillMarketSpec] = []
     for market in payload.markets:
@@ -892,7 +903,9 @@ def _market_source_install_url(
     return f"{repo_web_url}/tree/{branch}/{source_path}"
 
 
-def _load_market_index(market: SkillMarketSpec) -> tuple[dict[str, Any], list[str]]:
+def _load_market_index(
+    market: SkillMarketSpec,
+) -> tuple[dict[str, Any], list[str]]:
     normalized_market = _normalize_market_spec(market)
     market_url = _normalize_market_url(normalized_market.url)
     with tempfile.TemporaryDirectory(prefix="copaw-market-") as tmp:
@@ -929,7 +942,10 @@ def _load_market_index(market: SkillMarketSpec) -> tuple[dict[str, Any], list[st
                     repo_dir=repo_dir,
                     effective_branch=effective_branch,
                 )
-            return json.loads(target_path.read_text(encoding="utf-8")), warnings
+            return (
+                json.loads(target_path.read_text(encoding="utf-8")),
+                warnings,
+            )
         if target_path.is_dir():
             return _generate_market_index_from_directory(
                 normalized_market,
@@ -939,7 +955,10 @@ def _load_market_index(market: SkillMarketSpec) -> tuple[dict[str, Any], list[st
         if _is_default_market_index_path(target_raw_path):
             fallback_skills_dir = repo_dir / "skills"
             if fallback_skills_dir.is_dir():
-                index_doc, fallback_warnings = _generate_market_index_from_directory(
+                (
+                    index_doc,
+                    fallback_warnings,
+                ) = _generate_market_index_from_directory(
                     normalized_market,
                     fallback_skills_dir,
                     effective_branch=effective_branch,
@@ -987,7 +1006,9 @@ def _extract_market_items(
             if not isinstance(source, dict):
                 raise ValueError("source must be an object")
             source_url = str(source.get("url") or market.url).strip()
-            source_branch = str(source.get("branch") or market.branch or "main").strip()
+            source_branch = str(
+                source.get("branch") or market.branch or "main",
+            ).strip()
             source_path = str(source.get("path") or "").strip()
             repo_web_url = _market_repo_web_url(source_url)
             install_url = _market_source_install_url(
@@ -1007,8 +1028,12 @@ def _extract_market_items(
             items.append(
                 MarketplaceItem(
                     market_id=market.id,
-                    skill_id=str(raw.get("skill_id") or raw.get("name") or "").strip(),
-                    name=str(raw.get("name") or raw.get("skill_id") or "").strip(),
+                    skill_id=str(
+                        raw.get("skill_id") or raw.get("name") or "",
+                    ).strip(),
+                    name=str(
+                        raw.get("name") or raw.get("skill_id") or "",
+                    ).strip(),
                     description=str(description or ""),
                     version=str(raw.get("version") or ""),
                     source_url=source_url,
@@ -1050,7 +1075,10 @@ def _aggregate_marketplace(
     for market in enabled_markets:
         try:
             index_doc, warnings = _load_market_index(market)
-            market_items, market_errors = _extract_market_items(market, index_doc)
+            market_items, market_errors = _extract_market_items(
+                market,
+                index_doc,
+            )
             items.extend(market_items)
             errors.extend(market_errors)
             for warning in warnings:
@@ -1234,7 +1262,10 @@ async def save_markets(payload: SkillsMarketPayload) -> SkillsMarketPayload:
     save_config(current)
 
     normalized_payload = _market_config_to_payload(cfg)
-    _write_market_payload_to_path(normalized_payload, _SKILLS_MARKET_CONFIG_PATH)
+    _write_market_payload_to_path(
+        normalized_payload,
+        _SKILLS_MARKET_CONFIG_PATH,
+    )
     with _MARKETPLACE_CACHE_LOCK:
         _MARKETPLACE_CACHE["expires_at"] = 0.0
     return normalized_payload
@@ -1253,7 +1284,9 @@ async def reset_markets() -> SkillsMarketPayload:
 
 
 @router.post("/markets/validate")
-async def validate_market_endpoint(payload: ValidateMarketRequest) -> dict[str, Any]:
+async def validate_market_endpoint(
+    payload: ValidateMarketRequest,
+) -> dict[str, Any]:
     return await validate_market(payload)
 
 
@@ -1278,7 +1311,8 @@ async def install_marketplace_skill(
         (
             item
             for item in items
-            if item.market_id == payload.market_id and item.skill_id == payload.skill_id
+            if item.market_id == payload.market_id
+            and item.skill_id == payload.skill_id
         ),
         None,
     )

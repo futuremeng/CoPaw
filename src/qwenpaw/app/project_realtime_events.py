@@ -98,15 +98,21 @@ def _load_state(project_dir: Path, project_id: str) -> dict[str, Any]:
             continue
         if event_id <= 0:
             continue
-        changed_paths = _normalize_paths(list(raw_event.get("changed_paths") or []))
+        changed_paths = _normalize_paths(
+            list(raw_event.get("changed_paths") or []),
+        )
         if not changed_paths:
             continue
         events.append(
             {
                 "event_id": event_id,
                 "changed_paths": changed_paths,
-                "updated_at": str(raw_event.get("updated_at") or state.get("updated_at") or _now_iso()),
-            }
+                "updated_at": str(
+                    raw_event.get("updated_at")
+                    or state.get("updated_at")
+                    or _now_iso(),
+                ),
+            },
         )
     state["events"] = events[-_MAX_EVENTS:]
     return state
@@ -124,7 +130,10 @@ def _save_state(project_dir: Path, state: dict[str, Any]) -> None:
     tmp_path.replace(state_path)
 
 
-def _load_recent_updates_state(project_dir: Path, project_id: str) -> dict[str, Any]:
+def _load_recent_updates_state(
+    project_dir: Path,
+    project_id: str,
+) -> dict[str, Any]:
     state_path = _recent_updates_path(project_dir)
     if not state_path.exists():
         return _default_recent_updates_state(project_id)
@@ -160,9 +169,15 @@ def _load_recent_updates_state(project_dir: Path, project_id: str) -> dict[str, 
         items.append(
             {
                 "path": path,
-                "modified_time": str(raw_item.get("modified_time") or _now_iso()),
-                "recorded_at": str(raw_item.get("recorded_at") or state.get("updated_at") or _now_iso()),
-            }
+                "modified_time": str(
+                    raw_item.get("modified_time") or _now_iso(),
+                ),
+                "recorded_at": str(
+                    raw_item.get("recorded_at")
+                    or state.get("updated_at")
+                    or _now_iso(),
+                ),
+            },
         )
         if len(items) >= _MAX_RECENT_UPDATES:
             break
@@ -171,7 +186,10 @@ def _load_recent_updates_state(project_dir: Path, project_id: str) -> dict[str, 
     return state
 
 
-def _save_recent_updates_state(project_dir: Path, state: dict[str, Any]) -> None:
+def _save_recent_updates_state(
+    project_dir: Path,
+    state: dict[str, Any],
+) -> None:
     state_path = _recent_updates_path(project_dir)
     state_path.parent.mkdir(parents=True, exist_ok=True)
     state["updated_at"] = _now_iso()
@@ -202,7 +220,11 @@ def _record_recent_updates(
 
     for path in changed_paths:
         normalized = str(path or "").strip().replace("\\", "/")
-        if not normalized or normalized in seen or normalized.startswith(".knowledge/"):
+        if (
+            not normalized
+            or normalized in seen
+            or normalized.startswith(".knowledge/")
+        ):
             continue
         candidate = (project_dir / normalized).resolve(strict=False)
         try:
@@ -224,7 +246,7 @@ def _record_recent_updates(
                 "path": normalized,
                 "modified_time": modified_time,
                 "recorded_at": _now_iso(),
-            }
+            },
         )
         seen.add(normalized)
 

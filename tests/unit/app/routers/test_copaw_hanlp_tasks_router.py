@@ -36,7 +36,11 @@ class _FakeRuntime:
     last_tokenized_tokens: list[str] | None = None
 
     def run_ner(self, text: str, config):
-        _FakeRuntime.last_ner_model_id = getattr(getattr(config, "nlp", None), "model_id", None)
+        _FakeRuntime.last_ner_model_id = getattr(
+            getattr(config, "nlp", None),
+            "model_id",
+            None,
+        )
         return [{"text": text, "label": "ORG", "span": [0, len(text)]}], {
             "status": "ready",
             "reason_code": "HANLP_TASK_READY",
@@ -44,7 +48,11 @@ class _FakeRuntime:
         }
 
     def run_dep(self, text: str, config):
-        _FakeRuntime.last_dep_model_id = getattr(getattr(config, "nlp", None), "model_id", None)
+        _FakeRuntime.last_dep_model_id = getattr(
+            getattr(config, "nlp", None),
+            "model_id",
+            None,
+        )
         return [{"token": text, "head": 0, "deprel": "root"}], {
             "status": "ready",
             "reason_code": "HANLP_TASK_READY",
@@ -67,7 +75,7 @@ class _FakeRuntime:
                     ["微软", "ARG0", 0, 1],
                     ["发布", "PRED", 1, 2],
                     ["新模型", "ARG1", 2, 3],
-                ]
+                ],
             ], {
                 "status": "ready",
                 "reason_code": "HANLP_TASK_READY",
@@ -81,7 +89,9 @@ class _FakeRuntime:
 
     def tokenize_batch(self, texts: list[str], config):
         _ = config
-        return [[token for token in text.split(" ") if token] for text in texts], {
+        return [
+            [token for token in text.split(" ") if token] for text in texts
+        ], {
             "status": "ready",
             "reason_code": "HANLP_BATCH_READY",
             "reason": "HanLP batch tokenization finished successfully.",
@@ -101,7 +111,7 @@ class _FakeRuntime:
                         ["微软", "ARG0", 0, 1],
                         ["发布", "PRED", 1, 2],
                         ["新模型", "ARG1", 2, 3],
-                    ]
+                    ],
                 ]
                 for _ in texts
             ], {
@@ -135,7 +145,7 @@ class _FakeRuntime:
                 [
                     [tokens[pred_index], "PRED", pred_index, pred_index + 1],
                     ["".join(tokens), "ARG1", 0, len(tokens)],
-                ]
+                ],
             ], {
                 "status": "ready",
                 "reason_code": "HANLP_TASK_READY",
@@ -153,7 +163,12 @@ class _FakeRuntime:
             "reason": "HanLP task is ready.",
         }
 
-    def run_task_tokenized_batch(self, task_key: str, tokens_batch: list[list[str]], config):
+    def run_task_tokenized_batch(
+        self,
+        task_key: str,
+        tokens_batch: list[list[str]],
+        config,
+    ):
         _ = config
         if task_key == "srl":
             results = []
@@ -165,10 +180,15 @@ class _FakeRuntime:
                 results.append(
                     [
                         [
-                            [tokens[pred_index], "PRED", pred_index, pred_index + 1],
+                            [
+                                tokens[pred_index],
+                                "PRED",
+                                pred_index,
+                                pred_index + 1,
+                            ],
                             ["".join(tokens), "ARG1", 0, len(tokens)],
-                        ]
-                    ]
+                        ],
+                    ],
                 )
             return results, {
                 "status": "ready",
@@ -180,7 +200,9 @@ class _FakeRuntime:
                 "sidecar_trace_stage_ms": {},
                 "preload_status": "idle",
             }
-        return [{"task": task_key, "tokens": tokens} for tokens in tokens_batch], {
+        return [
+            {"task": task_key, "tokens": tokens} for tokens in tokens_batch
+        ], {
             "status": "ready",
             "reason_code": "HANLP_BATCH_READY",
             "reason": "HanLP batch task finished successfully.",
@@ -249,7 +271,12 @@ class _UnavailableRuntime:
             "reason": "HanLP model load failed.",
         }
 
-    def run_task_tokenized_batch(self, task_key: str, tokens_batch: list[list[str]], config):
+    def run_task_tokenized_batch(
+        self,
+        task_key: str,
+        tokens_batch: list[list[str]],
+        config,
+    ):
         _ = (task_key, tokens_batch, config)
         return [None for _ in tokens_batch], {
             "status": "unavailable",
@@ -274,9 +301,17 @@ class _TaskMatrixProbeRuntime(_FakeRuntime):
     def run_ner(self, text: str, config):
         nlp_cfg = getattr(config, "nlp", None)
         task_matrix = getattr(nlp_cfg, "task_matrix", None)
-        tasks = getattr(task_matrix, "tasks", None) if task_matrix is not None else None
+        tasks = (
+            getattr(task_matrix, "tasks", None)
+            if task_matrix is not None
+            else None
+        )
         task_cfg = tasks.get("ner_msra") if isinstance(tasks, dict) else None
-        _TaskMatrixProbeRuntime.last_ner_matrix_model_id = getattr(task_cfg, "model_id", None)
+        _TaskMatrixProbeRuntime.last_ner_matrix_model_id = getattr(
+            task_cfg,
+            "model_id",
+            None,
+        )
         return super().run_ner(text, config)
 
 
@@ -306,7 +341,7 @@ def _install_runtime_mocks(monkeypatch):
     from qwenpaw.app.routers import knowledge_hanlp_tasks as module
 
     fake_cfg = _make_root_config(
-        _make_nlp_config(model_id="MSRA_NER_BERT_BASE_ZH")
+        _make_nlp_config(model_id="MSRA_NER_BERT_BASE_ZH"),
     )
     monkeypatch.setattr(module, "load_config", lambda: fake_cfg)
     monkeypatch.setattr(module, "NLPRuntime", lambda: _FakeRuntime())
@@ -338,7 +373,7 @@ def _install_unavailable_runtime_mocks(monkeypatch):
     from qwenpaw.app.routers import knowledge_hanlp_tasks as module
 
     fake_cfg = _make_root_config(
-        _make_nlp_config(model_id="MSRA_NER_BERT_BASE_ZH")
+        _make_nlp_config(model_id="MSRA_NER_BERT_BASE_ZH"),
     )
     monkeypatch.setattr(module, "load_config", lambda: fake_cfg)
     monkeypatch.setattr(module, "NLPRuntime", lambda: _UnavailableRuntime())
@@ -348,7 +383,7 @@ def _install_nested_list_ner_runtime_mocks(monkeypatch):
     from qwenpaw.app.routers import knowledge_hanlp_tasks as module
 
     fake_cfg = _make_root_config(
-        _make_nlp_config(model_id="MSRA_NER_BERT_BASE_ZH")
+        _make_nlp_config(model_id="MSRA_NER_BERT_BASE_ZH"),
     )
     monkeypatch.setattr(module, "load_config", lambda: fake_cfg)
     monkeypatch.setattr(module, "NLPRuntime", lambda: _NestedListNerRuntime())
@@ -372,20 +407,26 @@ def _install_runtime_mocks_with_strategy_and_task_matrix(monkeypatch):
             ),
             task_matrix=SimpleNamespace(
                 tasks={
-                    "ner_msra": SimpleNamespace(model_id="MSRA_NER_BERT_BASE_ZH"),
+                    "ner_msra": SimpleNamespace(
+                        model_id="MSRA_NER_BERT_BASE_ZH",
+                    ),
                 },
             ),
         ),
     )
     monkeypatch.setattr(module, "load_config", lambda: cfg)
-    monkeypatch.setattr(module, "NLPRuntime", lambda: _TaskMatrixProbeRuntime())
+    monkeypatch.setattr(
+        module,
+        "NLPRuntime",
+        lambda: _TaskMatrixProbeRuntime(),
+    )
 
 
 def _install_fragmented_ner_runtime_mocks(monkeypatch):
     from qwenpaw.app.routers import knowledge_hanlp_tasks as module
 
     fake_cfg = _make_root_config(
-        _make_nlp_config(model_id="MSRA_NER_BERT_BASE_ZH")
+        _make_nlp_config(model_id="MSRA_NER_BERT_BASE_ZH"),
     )
     monkeypatch.setattr(module, "load_config", lambda: fake_cfg)
     monkeypatch.setattr(module, "NLPRuntime", lambda: _FragmentedNerRuntime())
@@ -403,7 +444,11 @@ def _install_slow_tokenize_runtime_mocks(monkeypatch):
     )
     monkeypatch.setattr(module, "load_config", lambda: fake_cfg)
     monkeypatch.setattr(module, "NLPRuntime", lambda: _SlowTokenizeRuntime())
-    monkeypatch.setattr(module, "_route_timeout_sec", lambda task_key, effective_config: 0.01)
+    monkeypatch.setattr(
+        module,
+        "_route_timeout_sec",
+        lambda task_key, effective_config: 0.01,
+    )
 
 
 def test_copaw_hanlp_ner_run_endpoint(monkeypatch):
@@ -510,10 +555,16 @@ def test_copaw_hanlp_auto_route_classical_chinese_model(monkeypatch):
     assert response.status_code == 200
     payload = response.json()
     assert payload["detected_style"] == "classical_chinese"
-    assert payload["resolved_model"] == "hanlp.pretrained.mtl.KYOTO_EVAHAN_TOK_LEM_POS_UDEP_LZH"
+    assert (
+        payload["resolved_model"]
+        == "hanlp.pretrained.mtl.KYOTO_EVAHAN_TOK_LEM_POS_UDEP_LZH"
+    )
     assert payload["detection_score"] >= 0.2
     assert "strategy.auto_classical_chinese" in payload["matched_rules"]
-    assert _FakeRuntime.last_ner_model_id == "hanlp.pretrained.mtl.KYOTO_EVAHAN_TOK_LEM_POS_UDEP_LZH"
+    assert (
+        _FakeRuntime.last_ner_model_id
+        == "hanlp.pretrained.mtl.KYOTO_EVAHAN_TOK_LEM_POS_UDEP_LZH"
+    )
 
 
 def test_copaw_hanlp_auto_route_modern_text_uses_default_model(monkeypatch):
@@ -530,12 +581,20 @@ def test_copaw_hanlp_auto_route_modern_text_uses_default_model(monkeypatch):
     assert response.status_code == 200
     payload = response.json()
     assert payload["detected_style"] == "modern"
-    assert payload["resolved_model"] == "hanlp.pretrained.mtl.CLOSE_TOK_POS_NER_SRL_DEP_SDP_CON_ELECTRA_SMALL_ZH"
+    assert (
+        payload["resolved_model"]
+        == "hanlp.pretrained.mtl.CLOSE_TOK_POS_NER_SRL_DEP_SDP_CON_ELECTRA_SMALL_ZH"
+    )
     assert payload["detection_score"] < 0.2
-    assert _FakeRuntime.last_ner_model_id == "hanlp.pretrained.mtl.CLOSE_TOK_POS_NER_SRL_DEP_SDP_CON_ELECTRA_SMALL_ZH"
+    assert (
+        _FakeRuntime.last_ner_model_id
+        == "hanlp.pretrained.mtl.CLOSE_TOK_POS_NER_SRL_DEP_SDP_CON_ELECTRA_SMALL_ZH"
+    )
 
 
-def test_copaw_hanlp_ner_prefers_task_matrix_model_over_strategy_default(monkeypatch):
+def test_copaw_hanlp_ner_prefers_task_matrix_model_over_strategy_default(
+    monkeypatch,
+):
     _install_runtime_mocks_with_strategy_and_task_matrix(monkeypatch)
 
     from copaw.app._app import app
@@ -543,7 +602,10 @@ def test_copaw_hanlp_ner_prefers_task_matrix_model_over_strategy_default(monkeyp
     with TestClient(app) as client:
         response = client.post(
             "/api/nlp/tasks/ner/run",
-            json={"text": "微软在北京发布Copaw", "request_id": "req-ner-matrix-priority"},
+            json={
+                "text": "微软在北京发布Copaw",
+                "request_id": "req-ner-matrix-priority",
+            },
         )
 
     assert response.status_code == 200
@@ -551,10 +613,15 @@ def test_copaw_hanlp_ner_prefers_task_matrix_model_over_strategy_default(monkeyp
     assert payload["status"] == "ready"
     assert payload["resolved_model"] == "MSRA_NER_BERT_BASE_ZH"
     assert "strategy.default_model_id" in payload["matched_rules"]
-    assert _TaskMatrixProbeRuntime.last_ner_matrix_model_id == "MSRA_NER_BERT_BASE_ZH"
+    assert (
+        _TaskMatrixProbeRuntime.last_ner_matrix_model_id
+        == "MSRA_NER_BERT_BASE_ZH"
+    )
 
 
-def test_copaw_hanlp_ner_injects_runtime_default_model_when_matrix_empty(monkeypatch):
+def test_copaw_hanlp_ner_injects_runtime_default_model_when_matrix_empty(
+    monkeypatch,
+):
     from qwenpaw.app.routers import knowledge_hanlp_tasks as module
 
     cfg = _make_root_config(
@@ -564,7 +631,11 @@ def test_copaw_hanlp_ner_injects_runtime_default_model_when_matrix_empty(monkeyp
                 mode="auto",
                 default_model_id="FINE_ELECTRA_SMALL_ZH",
                 task_overrides={},
-                auto_classical_chinese=SimpleNamespace(enabled=False, threshold=0.2, model_id=""),
+                auto_classical_chinese=SimpleNamespace(
+                    enabled=False,
+                    threshold=0.2,
+                    model_id="",
+                ),
             ),
             task_matrix=SimpleNamespace(
                 tasks={
@@ -574,24 +645,36 @@ def test_copaw_hanlp_ner_injects_runtime_default_model_when_matrix_empty(monkeyp
         ),
     )
     monkeypatch.setattr(module, "load_config", lambda: cfg)
-    monkeypatch.setattr(module, "NLPRuntime", lambda: _TaskMatrixProbeRuntime())
+    monkeypatch.setattr(
+        module,
+        "NLPRuntime",
+        lambda: _TaskMatrixProbeRuntime(),
+    )
 
     from copaw.app._app import app
 
     with TestClient(app) as client:
         response = client.post(
             "/api/nlp/tasks/ner/run",
-            json={"text": "微软在北京发布Copaw", "request_id": "req-ner-matrix-default"},
+            json={
+                "text": "微软在北京发布Copaw",
+                "request_id": "req-ner-matrix-default",
+            },
         )
 
     assert response.status_code == 200
     payload = response.json()
     assert payload["status"] == "ready"
     assert payload["resolved_model"] == "MSRA_NER_ELECTRA_SMALL_ZH"
-    assert _TaskMatrixProbeRuntime.last_ner_matrix_model_id == "MSRA_NER_ELECTRA_SMALL_ZH"
+    assert (
+        _TaskMatrixProbeRuntime.last_ner_matrix_model_id
+        == "MSRA_NER_ELECTRA_SMALL_ZH"
+    )
 
 
-def test_copaw_hanlp_dep_injects_runtime_default_model_when_matrix_empty(monkeypatch):
+def test_copaw_hanlp_dep_injects_runtime_default_model_when_matrix_empty(
+    monkeypatch,
+):
     from qwenpaw.app.routers import knowledge_hanlp_tasks as module
 
     cfg = _make_root_config(
@@ -601,7 +684,11 @@ def test_copaw_hanlp_dep_injects_runtime_default_model_when_matrix_empty(monkeyp
                 mode="auto",
                 default_model_id="FINE_ELECTRA_SMALL_ZH",
                 task_overrides={},
-                auto_classical_chinese=SimpleNamespace(enabled=False, threshold=0.2, model_id=""),
+                auto_classical_chinese=SimpleNamespace(
+                    enabled=False,
+                    threshold=0.2,
+                    model_id="",
+                ),
             ),
             task_matrix=SimpleNamespace(
                 tasks={
@@ -618,7 +705,10 @@ def test_copaw_hanlp_dep_injects_runtime_default_model_when_matrix_empty(monkeyp
     with TestClient(app) as client:
         response = client.post(
             "/api/nlp/tasks/dep/run",
-            json={"text": "微软在北京发布Copaw", "request_id": "req-dep-matrix-default"},
+            json={
+                "text": "微软在北京发布Copaw",
+                "request_id": "req-dep-matrix-default",
+            },
         )
 
     assert response.status_code == 200
@@ -641,12 +731,17 @@ def test_copaw_hanlp_ner_filters_noisy_and_overlapping_entities(monkeypatch):
         "微软在北京发布Copaw。",
     )
 
-    assert any(item.get("text") == "北京" and item.get("label") == "LOCATION" for item in normalized)
+    assert any(
+        item.get("text") == "北京" and item.get("label") == "LOCATION"
+        for item in normalized
+    )
     assert all(str(item.get("text") or "") != "发布" for item in normalized)
     assert all(str(item.get("text") or "") != "微软在北京" for item in normalized)
 
 
-def test_copaw_hanlp_ner_runtime_timeout_is_raised_for_bert_when_too_low(monkeypatch):
+def test_copaw_hanlp_ner_runtime_timeout_is_raised_for_bert_when_too_low(
+    monkeypatch,
+):
     from qwenpaw.app.routers import knowledge_hanlp_tasks as module
 
     cfg = SimpleNamespace(
@@ -690,7 +785,9 @@ def test_copaw_hanlp_ner_route_timeout_budget_matches_ner_model(monkeypatch):
     assert timeout_sec <= 90.0
 
 
-def test_copaw_hanlp_ner_merges_adjacent_fragments_and_repairs_span(monkeypatch):
+def test_copaw_hanlp_ner_merges_adjacent_fragments_and_repairs_span(
+    monkeypatch,
+):
     _install_fragmented_ner_runtime_mocks(monkeypatch)
 
     from copaw.app._app import app
@@ -743,7 +840,9 @@ def test_copaw_hanlp_ner_nested_list_result_is_normalized(monkeypatch):
     payload = response.json()
     assert payload["status"] == "ready"
     assert payload["raw_result"] == [[], [], [], [["微", "PERSON", 0, 1]]]
-    assert payload["result"] == [{"text": "微", "label": "PERSON", "start": 0, "end": 1, "score": None}]
+    assert payload["result"] == [
+        {"text": "微", "label": "PERSON", "start": 0, "end": 1, "score": None},
+    ]
 
 
 def test_copaw_hanlp_tokenize_run_slash_endpoint(monkeypatch):
@@ -821,7 +920,9 @@ def test_copaw_hanlp_batch_rejects_more_than_five_sentences(monkeypatch):
         assert response.json().get("detail") == "HANLP_BATCH_TOO_LARGE"
 
 
-def test_copaw_hanlp_tokenize_run_slash_endpoint_degrades_on_route_timeout(monkeypatch):
+def test_copaw_hanlp_tokenize_run_slash_endpoint_degrades_on_route_timeout(
+    monkeypatch,
+):
     _install_slow_tokenize_runtime_mocks(monkeypatch)
 
     from copaw.app._app import app
@@ -851,9 +952,9 @@ def test_route_timeout_sec_is_capped_for_interactive_requests():
             task_matrix=SimpleNamespace(
                 tasks={
                     "tok": SimpleNamespace(timeout_sec=30.0),
-                }
+                },
             ),
-        )
+        ),
     )
 
     timeout_sec = module._route_timeout_sec("tokenize", effective_config)
@@ -862,7 +963,9 @@ def test_route_timeout_sec_is_capped_for_interactive_requests():
     assert timeout_sec < module._ROUTE_TIMEOUT_MAX_SEC
 
 
-def test_copaw_hanlp_tokenize_run_degrades_when_route_setup_exceeds_deadline(monkeypatch):
+def test_copaw_hanlp_tokenize_run_degrades_when_route_setup_exceeds_deadline(
+    monkeypatch,
+):
     from qwenpaw.app.routers import knowledge_hanlp_tasks as module
 
     async def _slow_resolve(_request):
@@ -872,7 +975,7 @@ def test_copaw_hanlp_tokenize_run_degrades_when_route_setup_exceeds_deadline(mon
                 model_id="FINE_ELECTRA_SMALL_ZH",
                 tokenize_timeout_sec=30.0,
                 task_matrix=SimpleNamespace(tasks={}),
-            )
+            ),
         )
 
     monkeypatch.setattr(module, "_resolve_knowledge_config", _slow_resolve)
@@ -883,7 +986,10 @@ def test_copaw_hanlp_tokenize_run_degrades_when_route_setup_exceeds_deadline(mon
     with TestClient(app) as client:
         response = client.post(
             "/api/nlp/tasks/tokenize/run",
-            json={"text": "微软 发布 新模型", "request_id": "req-tokenize-setup-timeout"},
+            json={
+                "text": "微软 发布 新模型",
+                "request_id": "req-tokenize-setup-timeout",
+            },
         )
 
     assert response.status_code == 200
@@ -912,7 +1018,9 @@ def test_copaw_hanlp_colon_run_endpoint_is_not_supported(monkeypatch):
     assert response.status_code in {404, 405}
 
 
-def test_copaw_hanlp_legacy_knowledge_run_endpoint_is_not_supported(monkeypatch):
+def test_copaw_hanlp_legacy_knowledge_run_endpoint_is_not_supported(
+    monkeypatch,
+):
     _install_runtime_mocks(monkeypatch)
 
     from copaw.app._app import app
@@ -920,7 +1028,10 @@ def test_copaw_hanlp_legacy_knowledge_run_endpoint_is_not_supported(monkeypatch)
     with TestClient(app) as client:
         response = client.post(
             "/api/knowledge/tasks/tokenize/run",
-            json={"text": "微软 发布 新模型", "request_id": "req-tokenize-legacy-knowledge"},
+            json={
+                "text": "微软 发布 新模型",
+                "request_id": "req-tokenize-legacy-knowledge",
+            },
         )
 
     assert response.status_code in {404, 405}

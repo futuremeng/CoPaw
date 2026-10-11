@@ -29,19 +29,27 @@ class _FakeStdout:
 
 
 class _FakeStdin:
-    def __init__(self, buffer: deque[str], mode_payloads: dict[str, dict[str, object]]) -> None:
+    def __init__(
+        self,
+        buffer: deque[str],
+        mode_payloads: dict[str, dict[str, object]],
+    ) -> None:
         self._buffer = buffer
         self._mode_payloads = mode_payloads
 
     def write(self, text: str) -> int:
         request = json.loads(text.strip() or "{}")
         mode = str(request.get("mode") or "probe")
-        payload = self._mode_payloads.get(mode) or self._mode_payloads.get("*") or {
-            "engine": "hanlp",
-            "status": "unavailable",
-            "reason_code": "HANLP_WORKER_PROTOCOL_ERROR",
-            "reason": f"Unexpected mode: {mode}",
-        }
+        payload = (
+            self._mode_payloads.get(mode)
+            or self._mode_payloads.get("*")
+            or {
+                "engine": "hanlp",
+                "status": "unavailable",
+                "reason_code": "HANLP_WORKER_PROTOCOL_ERROR",
+                "reason": f"Unexpected mode: {mode}",
+            }
+        )
         self._buffer.append(json.dumps(payload, ensure_ascii=False) + "\n")
         return len(text)
 
@@ -59,7 +67,12 @@ class _BrokenStdin:
 
 
 class _FakePopen:
-    def __init__(self, mode_payloads: dict[str, dict[str, object]], *, pid: int = 43210) -> None:
+    def __init__(
+        self,
+        mode_payloads: dict[str, dict[str, object]],
+        *,
+        pid: int = 43210,
+    ) -> None:
         self.pid = pid
         self._alive = True
         self._buffer: deque[str] = deque()
@@ -118,7 +131,13 @@ class _SlowStdout:
 
 
 class _SlowPopen:
-    def __init__(self, mode_payloads: dict[str, dict[str, object]], *, delay_sec: float = 0.05, pid: int = 43333) -> None:
+    def __init__(
+        self,
+        mode_payloads: dict[str, dict[str, object]],
+        *,
+        delay_sec: float = 0.05,
+        pid: int = 43333,
+    ) -> None:
         self.pid = pid
         self._alive = True
         self._buffer: deque[str] = deque()
@@ -229,7 +248,11 @@ def test_start_worker_injects_repo_src_into_pythonpath() -> None:
         "subprocess.Popen",
         side_effect=_fake_popen,
     ):
-        runtime._start_worker_locked(Path("/bin/python3"), payload, cache_key="cache-key")
+        runtime._start_worker_locked(
+            Path("/bin/python3"),
+            payload,
+            cache_key="cache-key",
+        )
 
     env = captured_kwargs.get("env")
     assert isinstance(env, dict)
@@ -238,7 +261,9 @@ def test_start_worker_injects_repo_src_into_pythonpath() -> None:
     assert repo_src in pythonpath
 
 
-def test_bridge_probe_accepts_model_loader_without_top_level_tokenizer(tmp_path: Path) -> None:
+def test_bridge_probe_accepts_model_loader_without_top_level_tokenizer(
+    tmp_path: Path,
+) -> None:
     hanlp_pkg = tmp_path / "hanlp"
     hanlp_pkg.mkdir()
     (hanlp_pkg / "__init__.py").write_text(
@@ -387,7 +412,9 @@ def test_local_models_status_alias_returns_model_status() -> None:
     assert state["reason_code"] == "HANLP_MODEL_READY"
 
 
-def test_ensure_model_returns_unavailable_when_sidecar_reports_model_failure() -> None:
+def test_ensure_model_returns_unavailable_when_sidecar_reports_model_failure() -> (
+    None
+):
     runtime = NLPRuntime()
     config = make_knowledge_config()
     config.nlp.enabled = True
@@ -493,7 +520,9 @@ def test_run_task_returns_structured_result_from_sidecar() -> None:
     assert result == [{"span": [0, 5], "label": "组织名"}]
 
 
-def test_run_task_uses_task_specific_timeout_and_disables_timeout_retry() -> None:
+def test_run_task_uses_task_specific_timeout_and_disables_timeout_retry() -> (
+    None
+):
     runtime = NLPRuntime()
     config = make_knowledge_config()
     config.nlp.enabled = True
@@ -512,7 +541,14 @@ def test_run_task_uses_task_specific_timeout_and_disables_timeout_retry() -> Non
             "reason": "ready",
         }
 
-    def _fake_run_bridge(executable, *, mode, payload, timeout, retry_on_timeout=True):
+    def _fake_run_bridge(
+        executable,
+        *,
+        mode,
+        payload,
+        timeout,
+        retry_on_timeout=True,
+    ):
         _ = executable
         captured["mode"] = mode
         captured["timeout"] = timeout
@@ -540,7 +576,9 @@ def test_run_task_uses_task_specific_timeout_and_disables_timeout_retry() -> Non
     assert captured["retry_on_timeout"] is False
 
 
-def test_task_status_uses_task_specific_timeout_and_disables_timeout_retry() -> None:
+def test_task_status_uses_task_specific_timeout_and_disables_timeout_retry() -> (
+    None
+):
     runtime = NLPRuntime()
     config = make_knowledge_config()
     config.nlp.enabled = True
@@ -559,7 +597,14 @@ def test_task_status_uses_task_specific_timeout_and_disables_timeout_retry() -> 
             "reason": "ready",
         }
 
-    def _fake_run_bridge(executable, *, mode, payload, timeout, retry_on_timeout=True):
+    def _fake_run_bridge(
+        executable,
+        *,
+        mode,
+        payload,
+        timeout,
+        retry_on_timeout=True,
+    ):
         _ = executable
         captured["mode"] = mode
         captured["timeout"] = timeout
@@ -611,7 +656,10 @@ def test_run_task_returns_degraded_when_worker_response_times_out() -> None:
     }
     runtime._ensure_sidecar = lambda payload: Path("/bin/python3")  # type: ignore[assignment]
 
-    with patch("subprocess.Popen", return_value=_SlowPopen(mode_payloads, delay_sec=0.05)):
+    with patch(
+        "subprocess.Popen",
+        return_value=_SlowPopen(mode_payloads, delay_sec=0.05),
+    ):
         result, state = runtime.run_task("ner_msra", "微软发布新模型", config)
 
     assert result == []
@@ -654,8 +702,16 @@ def test_run_task_short_circuits_after_timeout_breaker_opens() -> None:
     runtime._ensure_sidecar = lambda payload: Path("/bin/python3")  # type: ignore[assignment]
 
     with patch("subprocess.Popen", side_effect=_fake_popen):
-        first_result, first_state = runtime.run_task("ner_msra", "微软发布新模型", config)
-        second_result, second_state = runtime.run_task("ner_msra", "微软发布新模型", config)
+        first_result, first_state = runtime.run_task(
+            "ner_msra",
+            "微软发布新模型",
+            config,
+        )
+        second_result, second_state = runtime.run_task(
+            "ner_msra",
+            "微软发布新模型",
+            config,
+        )
 
     assert first_result == []
     assert first_state["reason_code"] == "HANLP_WORKER_TIMEOUT"
@@ -736,7 +792,9 @@ def test_run_dep_returns_structured_result_from_sidecar() -> None:
     ]
 
 
-def test_bridge_run_task_uses_parse_entrypoint_for_configured_task(tmp_path: Path) -> None:
+def test_bridge_run_task_uses_parse_entrypoint_for_configured_task(
+    tmp_path: Path,
+) -> None:
     hanlp_pkg = tmp_path / "hanlp"
     hanlp_pkg.mkdir()
     torch_pkg = tmp_path / "torch"
@@ -748,7 +806,10 @@ def parse(text, tasks=None):
 """.strip(),
         encoding="utf-8",
     )
-    (torch_pkg / "__init__.py").write_text("__version__='0.test'", encoding="utf-8")
+    (torch_pkg / "__init__.py").write_text(
+        "__version__='0.test'",
+        encoding="utf-8",
+    )
 
     bridge_code = hanlp_runtime_module._BRIDGE_CODE.replace(
         "return (3, 6) <= current <= (3, 10)",
@@ -790,13 +851,21 @@ def parse(text, tasks=None):
     assert parsed["task_result"] == [{"text": "微软发布新模型", "label": "ORG"}]
 
 
-def test_bridge_run_task_returns_unavailable_for_cor_task(tmp_path: Path) -> None:
+def test_bridge_run_task_returns_unavailable_for_cor_task(
+    tmp_path: Path,
+) -> None:
     hanlp_pkg = tmp_path / "hanlp"
     hanlp_pkg.mkdir()
     torch_pkg = tmp_path / "torch"
     torch_pkg.mkdir()
-    (hanlp_pkg / "__init__.py").write_text("__version__='2.x'", encoding="utf-8")
-    (torch_pkg / "__init__.py").write_text("__version__='0.test'", encoding="utf-8")
+    (hanlp_pkg / "__init__.py").write_text(
+        "__version__='2.x'",
+        encoding="utf-8",
+    )
+    (torch_pkg / "__init__.py").write_text(
+        "__version__='0.test'",
+        encoding="utf-8",
+    )
 
     bridge_code = hanlp_runtime_module._BRIDGE_CODE.replace(
         "return (3, 6) <= current <= (3, 10)",
@@ -838,7 +907,9 @@ def test_bridge_run_task_returns_unavailable_for_cor_task(tmp_path: Path) -> Non
     assert parsed["task_result"] is None
 
 
-def test_bridge_run_task_falls_back_to_parse_when_ner_model_fails(tmp_path: Path) -> None:
+def test_bridge_run_task_falls_back_to_parse_when_ner_model_fails(
+    tmp_path: Path,
+) -> None:
     hanlp_pkg = tmp_path / "hanlp"
     hanlp_pkg.mkdir()
     torch_pkg = tmp_path / "torch"
@@ -859,7 +930,10 @@ def parse(text, tasks=None):
 """.strip(),
         encoding="utf-8",
     )
-    (torch_pkg / "__init__.py").write_text("__version__='0.test'", encoding="utf-8")
+    (torch_pkg / "__init__.py").write_text(
+        "__version__='0.test'",
+        encoding="utf-8",
+    )
 
     bridge_code = hanlp_runtime_module._BRIDGE_CODE.replace(
         "return (3, 6) <= current <= (3, 10)",
@@ -901,7 +975,9 @@ def parse(text, tasks=None):
     assert parsed["task_result"] == [{"text": "微软", "label": "ORG"}]
 
 
-def test_bridge_run_task_keeps_direct_list_result_from_ner_model(tmp_path: Path) -> None:
+def test_bridge_run_task_keeps_direct_list_result_from_ner_model(
+    tmp_path: Path,
+) -> None:
     hanlp_pkg = tmp_path / "hanlp"
     hanlp_pkg.mkdir()
     torch_pkg = tmp_path / "torch"
@@ -918,7 +994,10 @@ def load(model_id):
 """.strip(),
         encoding="utf-8",
     )
-    (torch_pkg / "__init__.py").write_text("__version__='0.test'", encoding="utf-8")
+    (torch_pkg / "__init__.py").write_text(
+        "__version__='0.test'",
+        encoding="utf-8",
+    )
 
     bridge_code = hanlp_runtime_module._BRIDGE_CODE.replace(
         "return (3, 6) <= current <= (3, 10)",
@@ -957,10 +1036,14 @@ def load(model_id):
     parsed = json.loads(completed.stdout)
     assert parsed["status"] == "ready"
     assert parsed["reason_code"] == "HANLP_TASK_READY"
-    assert parsed["task_result"] == [{"text": "微软", "label": "ORG", "span": [0, 2]}]
+    assert parsed["task_result"] == [
+        {"text": "微软", "label": "ORG", "span": [0, 2]},
+    ]
 
 
-def test_bridge_run_task_ner_tokenized_fallback_accepts_token_list_input(tmp_path: Path) -> None:
+def test_bridge_run_task_ner_tokenized_fallback_accepts_token_list_input(
+    tmp_path: Path,
+) -> None:
     hanlp_pkg = tmp_path / "hanlp"
     hanlp_pkg.mkdir()
     torch_pkg = tmp_path / "torch"
@@ -983,7 +1066,10 @@ def tokenize(text):
 """.strip(),
         encoding="utf-8",
     )
-    (torch_pkg / "__init__.py").write_text("__version__='0.test'", encoding="utf-8")
+    (torch_pkg / "__init__.py").write_text(
+        "__version__='0.test'",
+        encoding="utf-8",
+    )
 
     bridge_code = hanlp_runtime_module._BRIDGE_CODE.replace(
         "return (3, 6) <= current <= (3, 10)",
@@ -1022,7 +1108,9 @@ def tokenize(text):
     parsed = json.loads(completed.stdout)
     assert parsed["status"] == "ready"
     assert parsed["reason_code"] == "HANLP_TASK_READY"
-    assert parsed["task_result"] == [{"text": "微软", "label": "ORG", "span": [0, 2]}]
+    assert parsed["task_result"] == [
+        {"text": "微软", "label": "ORG", "span": [0, 2]},
+    ]
 
 
 def test_persistent_worker_reuses_same_pid_between_calls() -> None:
@@ -1130,7 +1218,10 @@ def test_persistent_worker_restarts_when_config_cache_key_changes() -> None:
 
     with patch("pathlib.Path.exists", return_value=True), patch(
         "subprocess.Popen",
-        side_effect=[_FakePopen(mode_payloads, pid=50101), _FakePopen(mode_payloads, pid=50202)],
+        side_effect=[
+            _FakePopen(mode_payloads, pid=50101),
+            _FakePopen(mode_payloads, pid=50202),
+        ],
     ):
         probe_state = runtime.probe(config)
         _, first_state = runtime.tokenize("微软发布", config)

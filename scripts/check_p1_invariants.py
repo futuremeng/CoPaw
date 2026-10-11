@@ -67,7 +67,10 @@ def _diff_cmd(base_ref: str, target_ref: str | None, flags: list[str]) -> str:
     return _run(cmd)
 
 
-def _numstat(base_ref: str, target_ref: str | None) -> dict[str, tuple[int, int]]:
+def _numstat(
+    base_ref: str,
+    target_ref: str | None,
+) -> dict[str, tuple[int, int]]:
     """Authoritative added/removed line counts per path."""
     out: dict[str, tuple[int, int]] = {}
     for line in _diff_cmd(base_ref, target_ref, ["--numstat"]).splitlines():
@@ -162,7 +165,8 @@ def rename_pairs_by_path(
     return {
         path: pairs
         for path, removed, added in _iter_diff_files(base_ref, target_ref)
-        if path not in NO_RENAME_PAIRING and (pairs := pair_rename_lines(removed, added))
+        if path not in NO_RENAME_PAIRING
+        and (pairs := pair_rename_lines(removed, added))
     }
 
 
@@ -207,7 +211,9 @@ def _totals(entries: dict[str, dict[str, object]]) -> dict[str, int]:
         "behavior_files": sum(1 for e in files if _behavior(e) > 0),
         "naming_files": sum(1 for e in files if _behavior(e) == 0),
         "naming_touched_files": sum(1 for e in files if int(e["naming"]) > 0),
-        "mechanical_files": sum(1 for e in entries.values() if e["mechanical"]),
+        "mechanical_files": sum(
+            1 for e in entries.values() if e["mechanical"]
+        ),
     }
 
 
@@ -236,7 +242,9 @@ def main() -> int:
             "totals": totals,
             "files": {k: entries[k] for k in sorted(entries)},
         }
-        baseline_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n")
+        baseline_path.write_text(
+            json.dumps(payload, indent=2, sort_keys=True) + "\n",
+        )
         print(f"wrote {baseline_path} ({totals['files']} files)")
         return 0
 

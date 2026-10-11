@@ -11,7 +11,10 @@ import zipfile
 import logging
 
 # Enable logging capture for the test
-logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+logging.basicConfig(
+    level=logging.DEBUG,
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+)
 
 import pytest
 from fastapi import FastAPI
@@ -23,7 +26,9 @@ from qwenpaw.app.routers import knowledge as knowledge_router_module
 from qwenpaw.app import knowledge_workflow as knowledge_workflow_module
 from copaw.config.config import Config
 from qwenpaw.knowledge import GraphOpsManager, KnowledgeManager
-from qwenpaw.knowledge.knowledge_quantization_architecture import QuantizationArchitectureManager
+from qwenpaw.knowledge.knowledge_quantization_architecture import (
+    QuantizationArchitectureManager,
+)
 from tests.fixtures.knowledge_config import make_knowledge_config
 
 
@@ -38,8 +43,16 @@ def knowledge_api_client(tmp_path: Path, monkeypatch) -> TestClient:
     def fake_save_config(new_config):
         state["config"] = new_config
 
-    monkeypatch.setattr(knowledge_router_module, "load_config", fake_load_config)
-    monkeypatch.setattr(knowledge_router_module, "save_config", fake_save_config)
+    monkeypatch.setattr(
+        knowledge_router_module,
+        "load_config",
+        fake_load_config,
+    )
+    monkeypatch.setattr(
+        knowledge_router_module,
+        "save_config",
+        fake_save_config,
+    )
     monkeypatch.setattr(knowledge_router_module, "WORKING_DIR", tmp_path)
 
     app = FastAPI()
@@ -80,10 +93,7 @@ def test_upsert_source_auto_summary_includes_keywords(
             "name": "Manual Name",
             "type": "text",
             "content": (
-                "支付系统 风控规则 更新。"
-                "支付系统 对账流程 优化。"
-                "支付系统 异常告警 升级。"
-                "风控规则 每日巡检。"
+                "支付系统 风控规则 更新。" "支付系统 对账流程 优化。" "支付系统 异常告警 升级。" "风控规则 每日巡检。"
             ),
             "enabled": True,
             "recursive": False,
@@ -116,7 +126,10 @@ def test_upsert_source_subject_prefers_summary_over_content(
     )
 
     assert response.status_code == 200
-    assert response.json()["name"] == "Release checklist summary for sprint handoff"
+    assert (
+        response.json()["name"]
+        == "Release checklist summary for sprint handoff"
+    )
 
 
 def test_list_sources_uses_auto_generated_subjects_for_existing_config(
@@ -152,11 +165,7 @@ def test_list_sources_returns_structured_summary_keywords(
             "id": "text-structured-fields",
             "name": "Manual Name",
             "type": "text",
-            "content": (
-                "支付系统 风控规则 更新。"
-                "支付系统 对账流程 优化。"
-                "支付系统 异常告警 升级。"
-            ),
+            "content": ("支付系统 风控规则 更新。" "支付系统 对账流程 优化。" "支付系统 异常告警 升级。"),
             "enabled": True,
             "recursive": False,
             "tags": [],
@@ -186,7 +195,7 @@ def test_list_sources_returns_semantic_engine_status(
                 "status": "unavailable",
                 "reason_code": "HANLP_IMPORT_UNAVAILABLE",
                 "reason": "HanLP module is not installed or failed to import.",
-            }
+            },
         ),
     )
 
@@ -205,12 +214,16 @@ def test_list_sources_returns_semantic_engine_status(
     )
     assert put_response.status_code == 200
 
-    listing = knowledge_api_client.get("/knowledge/sources?include_semantic=true")
+    listing = knowledge_api_client.get(
+        "/knowledge/sources?include_semantic=true",
+    )
     assert listing.status_code == 200
     source = listing.json()["sources"][0]
     assert source["semantic_status"]["engine"] == "hanlp"
     assert source["semantic_status"]["status"] == "unavailable"
-    assert source["semantic_status"]["reason_code"] == "HANLP_IMPORT_UNAVAILABLE"
+    assert (
+        source["semantic_status"]["reason_code"] == "HANLP_IMPORT_UNAVAILABLE"
+    )
 
 
 def test_list_sources_filters_by_project_id(
@@ -248,7 +261,9 @@ def test_list_sources_filters_by_project_id(
     )
     assert second.status_code == 200
 
-    listing = knowledge_api_client.get("/knowledge/sources?project_id=project-A")
+    listing = knowledge_api_client.get(
+        "/knowledge/sources?project_id=project-A",
+    )
     assert listing.status_code == 200
     sources = listing.json()["sources"]
     assert len(sources) == 1
@@ -304,7 +319,9 @@ def test_list_sources_uses_project_file_analysis_stats_for_project_source(
     )
     assert registered.status_code == 200
 
-    listing = knowledge_api_client.get(f"/knowledge/sources?project_id={project_id}")
+    listing = knowledge_api_client.get(
+        f"/knowledge/sources?project_id={project_id}",
+    )
     assert listing.status_code == 200
     sources = listing.json()["sources"]
 
@@ -356,12 +373,13 @@ def test_get_project_step_stats_accepts_file_analysis_hyphen_alias(
         encoding="utf-8",
     )
     (stats_dir / "history.jsonl").write_text(
-        "\n".join(json.dumps(row, ensure_ascii=False) for row in history_rows) + "\n",
+        "\n".join(json.dumps(row, ensure_ascii=False) for row in history_rows)
+        + "\n",
         encoding="utf-8",
     )
 
     response = knowledge_api_client.get(
-        f"/knowledge/project-stats/file-analysis?project_id={project_id}&limit=1"
+        f"/knowledge/project-stats/file-analysis?project_id={project_id}&limit=1",
     )
 
     assert response.status_code == 200
@@ -403,7 +421,7 @@ def test_get_project_step_stats_accepts_source_scan_hyphen_alias(
     )
 
     response = knowledge_api_client.get(
-        f"/knowledge/project-stats/source-scan?project_id={project_id}&limit=1"
+        f"/knowledge/project-stats/source-scan?project_id={project_id}&limit=1",
     )
 
     assert response.status_code == 200
@@ -444,7 +462,7 @@ def test_get_project_step_stats_generic_route_returns_latest_and_history(
     )
 
     response = knowledge_api_client.get(
-        f"/knowledge/project-stats/file_analysis?project_id={project_id}&limit=1"
+        f"/knowledge/project-stats/file_analysis?project_id={project_id}&limit=1",
     )
 
     assert response.status_code == 200
@@ -464,7 +482,7 @@ def test_get_project_step_stats_generic_route_accepts_workflow_step_without_stat
     project_dir.mkdir(parents=True, exist_ok=True)
 
     response = knowledge_api_client.get(
-        f"/knowledge/project-stats/domain_graph_build?project_id={project_id}&limit=1"
+        f"/knowledge/project-stats/domain_graph_build?project_id={project_id}&limit=1",
     )
 
     assert response.status_code == 200
@@ -479,7 +497,7 @@ def test_get_project_step_stats_rejects_unknown_step(
     knowledge_api_client: TestClient,
 ):
     response = knowledge_api_client.get(
-        "/knowledge/project-stats/unknown-step?project_id=project-abc"
+        "/knowledge/project-stats/unknown-step?project_id=project-abc",
     )
 
     assert response.status_code == 404
@@ -506,7 +524,7 @@ def test_list_sources_offloads_processing_to_thread(
                 summary="",
             ),
             config,
-        )
+        ),
     )
     calls: list[tuple[object, tuple[object, ...]]] = []
 
@@ -514,14 +532,21 @@ def test_list_sources_offloads_processing_to_thread(
         calls.append((func, args))
         return await original_to_thread(func, *args, **kwargs)
 
-    monkeypatch.setattr(knowledge_router_module.asyncio, "to_thread", fake_to_thread)
+    monkeypatch.setattr(
+        knowledge_router_module.asyncio,
+        "to_thread",
+        fake_to_thread,
+    )
 
     response = knowledge_api_client.get("/knowledge/sources")
 
     assert response.status_code == 200
     assert calls
     assert calls[0][0].__name__ == "list_sources"
-    assert any(source.id == "threaded-list-source" for source in calls[0][1][0].sources)
+    assert any(
+        source.id == "threaded-list-source"
+        for source in calls[0][1][0].sources
+    )
     assert calls[0][1][1] is False
 
 
@@ -545,7 +570,7 @@ def test_list_sources_include_semantic_true(
                 summary="",
             ),
             config,
-        )
+        ),
     )
     calls: list[tuple[object, tuple[object, ...]]] = []
 
@@ -553,9 +578,15 @@ def test_list_sources_include_semantic_true(
         calls.append((func, args))
         return await original_to_thread(func, *args, **kwargs)
 
-    monkeypatch.setattr(knowledge_router_module.asyncio, "to_thread", fake_to_thread)
+    monkeypatch.setattr(
+        knowledge_router_module.asyncio,
+        "to_thread",
+        fake_to_thread,
+    )
 
-    response = knowledge_api_client.get("/knowledge/sources?include_semantic=true")
+    response = knowledge_api_client.get(
+        "/knowledge/sources?include_semantic=true",
+    )
 
     assert response.status_code == 200
     assert calls
@@ -574,7 +605,11 @@ def test_upsert_source_offloads_name_normalization_to_thread(
         calls.append((func, args))
         return await original_to_thread(func, *args, **kwargs)
 
-    monkeypatch.setattr(knowledge_router_module.asyncio, "to_thread", fake_to_thread)
+    monkeypatch.setattr(
+        knowledge_router_module.asyncio,
+        "to_thread",
+        fake_to_thread,
+    )
 
     response = knowledge_api_client.put(
         "/knowledge/sources",
@@ -627,9 +662,15 @@ def test_index_source_offloads_indexing_to_thread(
         calls.append((func, args))
         return await original_to_thread(func, *args, **kwargs)
 
-    monkeypatch.setattr(knowledge_router_module.asyncio, "to_thread", fake_to_thread)
+    monkeypatch.setattr(
+        knowledge_router_module.asyncio,
+        "to_thread",
+        fake_to_thread,
+    )
 
-    response = knowledge_api_client.post("/knowledge/sources/threaded-index-source/index")
+    response = knowledge_api_client.post(
+        "/knowledge/sources/threaded-index-source/index",
+    )
 
     assert response.status_code == 200
     assert calls
@@ -657,8 +698,16 @@ def test_search_knowledge_offloads_search_to_thread(
         calls.append((func, args))
         return await original_to_thread(func, *args, **kwargs)
 
-    monkeypatch.setattr(knowledge_router_module, "_manager_for_workspace", lambda *_args, **_kwargs: _FakeManager())
-    monkeypatch.setattr(knowledge_router_module.asyncio, "to_thread", fake_to_thread)
+    monkeypatch.setattr(
+        knowledge_router_module,
+        "_manager_for_workspace",
+        lambda *_args, **_kwargs: _FakeManager(),
+    )
+    monkeypatch.setattr(
+        knowledge_router_module.asyncio,
+        "to_thread",
+        fake_to_thread,
+    )
 
     response = knowledge_api_client.get("/knowledge/search?q=threaded-search")
 
@@ -743,7 +792,11 @@ def test_project_pipeline_run_does_not_expose_project_source_to_global_search(
                 operation_id="ps-global-scope-sync-only",
                 idempotency_key="sync-only-key",
                 deduplicated=False,
-                payload={"accepted": True, "project_id": project_id, "status": "queued"},
+                payload={
+                    "accepted": True,
+                    "project_id": project_id,
+                    "status": "queued",
+                },
             )
 
     monkeypatch.setattr(
@@ -783,7 +836,9 @@ def test_project_pipeline_run_does_not_expose_project_source_to_global_search(
         lambda *_args, **_kwargs: _FakeSearchManager(),
     )
 
-    search_response = knowledge_api_client.get("/knowledge/search?q=sync-only-query")
+    search_response = knowledge_api_client.get(
+        "/knowledge/search?q=sync-only-query",
+    )
     assert search_response.status_code == 200
     assert captured["source_ids"] == []
 
@@ -835,7 +890,9 @@ def test_register_project_source_exposes_it_to_global_search_and_graph_query(
         lambda *_args, **_kwargs: _FakeSearchManager(),
     )
 
-    search_response = knowledge_api_client.get("/knowledge/search?q=registered-query")
+    search_response = knowledge_api_client.get(
+        "/knowledge/search?q=registered-query",
+    )
     assert search_response.status_code == 200
     assert source_id in captured_search["source_ids"]
 
@@ -858,7 +915,9 @@ def test_register_project_source_exposes_it_to_global_search_and_graph_query(
         lambda *_args, **_kwargs: _FakeGraphOps(),
     )
 
-    graph_response = knowledge_api_client.get("/knowledge/graph-query?q=registered-graph")
+    graph_response = knowledge_api_client.get(
+        "/knowledge/graph-query?q=registered-graph",
+    )
     assert graph_response.status_code == 200
     assert source_id in captured_graph["source_ids"]
 
@@ -889,10 +948,20 @@ def test_graph_query_offloads_query_to_thread(
         calls.append((func, args))
         return await original_to_thread(func, *args, **kwargs)
 
-    monkeypatch.setattr(knowledge_router_module, "_graph_ops_for_workspace", lambda *_args, **_kwargs: _FakeGraphOps())
-    monkeypatch.setattr(knowledge_router_module.asyncio, "to_thread", fake_to_thread)
+    monkeypatch.setattr(
+        knowledge_router_module,
+        "_graph_ops_for_workspace",
+        lambda *_args, **_kwargs: _FakeGraphOps(),
+    )
+    monkeypatch.setattr(
+        knowledge_router_module.asyncio,
+        "to_thread",
+        fake_to_thread,
+    )
 
-    response = knowledge_api_client.get("/knowledge/graph-query?q=threaded-graph")
+    response = knowledge_api_client.get(
+        "/knowledge/graph-query?q=threaded-graph",
+    )
 
     assert response.status_code == 200
     assert response.json()["records"][0]["query"] == "threaded-graph"
@@ -918,13 +987,23 @@ def test_graph_query_forwards_output_mode(
             return SimpleNamespace(
                 records=[{"query": kwargs["query_text"]}],
                 summary={"mode": kwargs["query_mode"]},
-                provenance={"resolved_output_mode": kwargs.get("preferred_output_mode")},
+                provenance={
+                    "resolved_output_mode": kwargs.get(
+                        "preferred_output_mode",
+                    ),
+                },
                 warnings=[],
             )
 
-    monkeypatch.setattr(knowledge_router_module, "_graph_ops_for_workspace", lambda *_args, **_kwargs: _FakeGraphOps())
+    monkeypatch.setattr(
+        knowledge_router_module,
+        "_graph_ops_for_workspace",
+        lambda *_args, **_kwargs: _FakeGraphOps(),
+    )
 
-    response = knowledge_api_client.get("/knowledge/graph-query?q=threaded-graph&output_mode=agentic")
+    response = knowledge_api_client.get(
+        "/knowledge/graph-query?q=threaded-graph&output_mode=agentic",
+    )
 
     assert response.status_code == 200
     assert captured["preferred_output_mode"] == "agentic"
@@ -949,11 +1028,18 @@ def test_graph_query_passes_scope_filters(
             return SimpleNamespace(
                 records=[{"query": kwargs["query_text"]}],
                 summary={"mode": kwargs["query_mode"]},
-                provenance={"scope_type": kwargs.get("scope_type"), "scope_id": kwargs.get("scope_id")},
+                provenance={
+                    "scope_type": kwargs.get("scope_type"),
+                    "scope_id": kwargs.get("scope_id"),
+                },
                 warnings=[],
             )
 
-    monkeypatch.setattr(knowledge_router_module, "_graph_ops_for_workspace", lambda *_args, **_kwargs: _FakeGraphOps())
+    monkeypatch.setattr(
+        knowledge_router_module,
+        "_graph_ops_for_workspace",
+        lambda *_args, **_kwargs: _FakeGraphOps(),
+    )
 
     response = knowledge_api_client.get(
         "/knowledge/graph-query?q=threaded-graph&scope_type=project&scope_id=project-demo",
@@ -998,13 +1084,22 @@ def test_graph_query_fast_preview_bypasses_graph_enabled_flag(
             return SimpleNamespace(
                 records=[{"query": kwargs["query_text"]}],
                 summary="fast-preview",
-                provenance={"resolved_output_mode": kwargs.get("preferred_output_mode") or "fast"},
+                provenance={
+                    "resolved_output_mode": kwargs.get("preferred_output_mode")
+                    or "fast",
+                },
                 warnings=[],
             )
 
-    monkeypatch.setattr(knowledge_router_module, "_graph_ops_for_workspace", lambda *_args, **_kwargs: _FakeGraphOps())
+    monkeypatch.setattr(
+        knowledge_router_module,
+        "_graph_ops_for_workspace",
+        lambda *_args, **_kwargs: _FakeGraphOps(),
+    )
 
-    response = knowledge_api_client.get("/knowledge/graph-query?q=threaded-graph&output_mode=fast")
+    response = knowledge_api_client.get(
+        "/knowledge/graph-query?q=threaded-graph&output_mode=fast",
+    )
 
     assert response.status_code == 200
     assert response.json()["summary"] == "fast-preview"
@@ -1030,7 +1125,8 @@ def test_graph_query_template_non_fast_downgrades_to_fast_when_graph_disabled(
                 records=[{"query": kwargs["query_text"]}],
                 summary="auto-fast-preview",
                 provenance={
-                    "resolved_output_mode": kwargs.get("preferred_output_mode") or "fast"
+                    "resolved_output_mode": kwargs.get("preferred_output_mode")
+                    or "fast",
                 },
                 warnings=[],
             )
@@ -1042,7 +1138,7 @@ def test_graph_query_template_non_fast_downgrades_to_fast_when_graph_disabled(
     )
 
     response = knowledge_api_client.get(
-        "/knowledge/graph-query?q=threaded-graph&output_mode=agentic"
+        "/knowledge/graph-query?q=threaded-graph&output_mode=agentic",
     )
 
     assert response.status_code == 200
@@ -1064,7 +1160,7 @@ def test_graph_query_cypher_still_requires_graph_enabled(
     assert saved.status_code == 200
 
     response = knowledge_api_client.get(
-        "/knowledge/graph-query?q=MATCH (n) RETURN n&mode=cypher"
+        "/knowledge/graph-query?q=MATCH (n) RETURN n&mode=cypher",
     )
 
     assert response.status_code == 400
@@ -1092,8 +1188,16 @@ def test_get_memify_job_status_offloads_status_read_to_thread(
         calls.append((func, args))
         return await original_to_thread(func, *args, **kwargs)
 
-    monkeypatch.setattr(knowledge_router_module, "_graph_ops_for_workspace", lambda *_args, **_kwargs: _FakeGraphOps())
-    monkeypatch.setattr(knowledge_router_module.asyncio, "to_thread", fake_to_thread)
+    monkeypatch.setattr(
+        knowledge_router_module,
+        "_graph_ops_for_workspace",
+        lambda *_args, **_kwargs: _FakeGraphOps(),
+    )
+    monkeypatch.setattr(
+        knowledge_router_module.asyncio,
+        "to_thread",
+        fake_to_thread,
+    )
 
     response = knowledge_api_client.get("/knowledge/memify/jobs/job-threaded")
 
@@ -1134,11 +1238,19 @@ def test_run_quality_loop_offloads_run_to_thread(
         "_graph_ops_for_workspace",
         lambda *_args, **_kwargs: _FakeGraphOps(),
     )
-    monkeypatch.setattr(knowledge_router_module.asyncio, "to_thread", fake_to_thread)
+    monkeypatch.setattr(
+        knowledge_router_module.asyncio,
+        "to_thread",
+        fake_to_thread,
+    )
 
     response = knowledge_api_client.post(
         "/knowledge/quality-loop/run",
-        json={"max_rounds": 4, "dry_run": True, "dataset_scope": ["project:demo"]},
+        json={
+            "max_rounds": 4,
+            "dry_run": True,
+            "dataset_scope": ["project:demo"],
+        },
     )
 
     assert response.status_code == 200
@@ -1179,9 +1291,15 @@ def test_get_quality_loop_job_status_offloads_status_read_to_thread(
         "_graph_ops_for_workspace",
         lambda *_args, **_kwargs: _FakeGraphOps(),
     )
-    monkeypatch.setattr(knowledge_router_module.asyncio, "to_thread", fake_to_thread)
+    monkeypatch.setattr(
+        knowledge_router_module.asyncio,
+        "to_thread",
+        fake_to_thread,
+    )
 
-    response = knowledge_api_client.get("/knowledge/quality-loop/jobs/quality-threaded")
+    response = knowledge_api_client.get(
+        "/knowledge/quality-loop/jobs/quality-threaded",
+    )
 
     assert response.status_code == 200
     assert response.json()["job_id"] == "quality-threaded"
@@ -1203,9 +1321,17 @@ def test_get_knowledge_tasks_snapshot_offloads_collection_to_thread(
     monkeypatch.setattr(
         knowledge_router_module,
         "_collect_knowledge_tasks_snapshot",
-        lambda *_args, **_kwargs: {"tasks": [], "updated_at": "now", "project_id": ""},
+        lambda *_args, **_kwargs: {
+            "tasks": [],
+            "updated_at": "now",
+            "project_id": "",
+        },
     )
-    monkeypatch.setattr(knowledge_router_module.asyncio, "to_thread", fake_to_thread)
+    monkeypatch.setattr(
+        knowledge_router_module.asyncio,
+        "to_thread",
+        fake_to_thread,
+    )
 
     response = knowledge_api_client.get("/knowledge/tasks/snapshot")
 
@@ -1238,7 +1364,11 @@ def test_run_knowledge_nlp_task_delegates_to_hanlp_runner(
             "duration_ms": 1,
         }
 
-    monkeypatch.setattr(hanlp_tasks_module, "_run_hanlp_task", fake_run_hanlp_task)
+    monkeypatch.setattr(
+        hanlp_tasks_module,
+        "_run_hanlp_task",
+        fake_run_hanlp_task,
+    )
 
     response = knowledge_api_client.post(
         "/nlp/tasks/tokenize/run",
@@ -1272,9 +1402,15 @@ def test_get_project_pipeline_status_offloads_state_read_to_thread(
         "_project_pipeline_for_workspace",
         lambda *_args, **_kwargs: _FakeProjectPipelineManager(),
     )
-    monkeypatch.setattr(knowledge_router_module.asyncio, "to_thread", fake_to_thread)
+    monkeypatch.setattr(
+        knowledge_router_module.asyncio,
+        "to_thread",
+        fake_to_thread,
+    )
 
-    response = knowledge_api_client.get("/knowledge/project-pipeline/status?project_id=threaded-project")
+    response = knowledge_api_client.get(
+        "/knowledge/project-pipeline/status?project_id=threaded-project",
+    )
 
     assert response.status_code == 200
     assert response.json()["project_id"] == "threaded-project"
@@ -1299,14 +1435,26 @@ def test_get_project_pipeline_status_does_not_auto_register_project_source(
 
     class _FakeProjectPipelineManager:
         def get_state(self, project_id):
-            return {"project_id": project_id, "status": "idle", "latest_source_id": ""}
+            return {
+                "project_id": project_id,
+                "status": "idle",
+                "latest_source_id": "",
+            }
 
     captured: dict[str, object] = {}
 
     class _FakeCoordinator:
         def dispatch(self, command):
-            captured["source_id"] = getattr(getattr(command, "source", None), "id", "")
-            captured["source_location"] = getattr(getattr(command, "source", None), "location", "")
+            captured["source_id"] = getattr(
+                getattr(command, "source", None),
+                "id",
+                "",
+            )
+            captured["source_location"] = getattr(
+                getattr(command, "source", None),
+                "location",
+                "",
+            )
             return SimpleNamespace(
                 action="resume_sync",
                 operation_id="ps-status-no-register",
@@ -1326,7 +1474,9 @@ def test_get_project_pipeline_status_does_not_auto_register_project_source(
         lambda *_args, **_kwargs: _FakeCoordinator(),
     )
 
-    response = knowledge_api_client.get(f"/knowledge/project-pipeline/status?project_id={project_id}")
+    response = knowledge_api_client.get(
+        f"/knowledge/project-pipeline/status?project_id={project_id}",
+    )
 
     assert response.status_code == 200
     assert captured["source_id"] == f"project-{project_id}-workspace"
@@ -1375,7 +1525,11 @@ def test_run_project_pipeline_offloads_dispatch_to_thread(
         "_project_pipeline_for_workspace",
         lambda *_args, **_kwargs: _FakeProjectPipelineManager(),
     )
-    monkeypatch.setattr(knowledge_router_module.asyncio, "to_thread", fake_to_thread)
+    monkeypatch.setattr(
+        knowledge_router_module.asyncio,
+        "to_thread",
+        fake_to_thread,
+    )
 
     response = knowledge_api_client.post(
         f"/knowledge/project-pipeline/run?project_id={project_id}",
@@ -1428,17 +1582,31 @@ def test_run_project_pipeline_dispatches_selected_manual_source_file(
 
     class _FakeCoordinator:
         def dispatch(self, command):
-            captured["source_id"] = getattr(getattr(command, "source", None), "id", "")
-            captured["source_location"] = getattr(getattr(command, "source", None), "location", "")
+            captured["source_id"] = getattr(
+                getattr(command, "source", None),
+                "id",
+                "",
+            )
+            captured["source_location"] = getattr(
+                getattr(command, "source", None),
+                "location",
+                "",
+            )
             context = getattr(command, "execution_context", None) or {}
             captured["execution_scope"] = context.get("scope")
-            captured["execution_source_file_path"] = context.get("source_file_path")
+            captured["execution_source_file_path"] = context.get(
+                "source_file_path",
+            )
             return SimpleNamespace(
                 action="start_sync",
                 operation_id="ps-run-no-register",
                 idempotency_key="run-key",
                 deduplicated=False,
-                payload={"accepted": True, "project_id": project_id, "status": "queued"},
+                payload={
+                    "accepted": True,
+                    "project_id": project_id,
+                    "status": "queued",
+                },
             )
 
     monkeypatch.setattr(
@@ -1464,7 +1632,9 @@ def test_run_project_pipeline_dispatches_selected_manual_source_file(
 
     assert response.status_code == 200
     assert str(captured["source_id"]).startswith("project-file-")
-    assert str(captured["source_location"]).endswith(f"projects/{project_id}/notes.md")
+    assert str(captured["source_location"]).endswith(
+        f"projects/{project_id}/notes.md",
+    )
     assert captured["execution_scope"] == "source_file"
     assert captured["execution_source_file_path"] == "notes.md"
     assert knowledge_router_module.load_config().knowledge.sources == []
@@ -1496,7 +1666,11 @@ def test_run_project_pipeline_allows_fast_mode_when_memify_disabled(
 
         def start_sync(self, **kwargs):
             captured.update(kwargs)
-            return {"accepted": True, "project_id": kwargs["project_id"], "status": "queued"}
+            return {
+                "accepted": True,
+                "project_id": kwargs["project_id"],
+                "status": "queued",
+            }
 
     monkeypatch.setattr(
         knowledge_router_module,
@@ -1506,7 +1680,11 @@ def test_run_project_pipeline_allows_fast_mode_when_memify_disabled(
 
     response = knowledge_api_client.post(
         f"/knowledge/project-pipeline/run?project_id={project_id}",
-        json={"trigger": "manual-test", "force": True, "processing_mode": "fast"},
+        json={
+            "trigger": "manual-test",
+            "force": True,
+            "processing_mode": "fast",
+        },
     )
 
     assert response.status_code == 200
@@ -1617,7 +1795,11 @@ def test_run_project_pipeline_returns_flow_run_id_when_bridge_available(
                 operation_id="ps-flow-bridge-run",
                 idempotency_key="manual-flow-bridge-key-1",
                 deduplicated=False,
-                payload={"accepted": True, "project_id": project_id, "status": "queued"},
+                payload={
+                    "accepted": True,
+                    "project_id": project_id,
+                    "status": "queued",
+                },
             )
 
     monkeypatch.setattr(
@@ -1650,7 +1832,9 @@ def test_run_project_pipeline_returns_flow_run_id_when_bridge_available(
     assert payload["accepted"] is True
     assert payload["flow_run_id"] == "flow-run-bridge-1"
 
-    status = knowledge_api_client.get(f"/knowledge/project-pipeline/status?project_id={project_id}")
+    status = knowledge_api_client.get(
+        f"/knowledge/project-pipeline/status?project_id={project_id}",
+    )
     assert status.status_code == 200
     assert status.json().get("flow_run_id") == "flow-run-bridge-1"
 
@@ -1697,7 +1881,11 @@ def test_project_pipeline_status_syncs_flow_run_terminal_state(
                 operation_id="ps-flow-status-sync-start",
                 idempotency_key="flow-status-sync-start-key",
                 deduplicated=False,
-                payload={"accepted": True, "project_id": project_id, "status": "queued"},
+                payload={
+                    "accepted": True,
+                    "project_id": project_id,
+                    "status": "queued",
+                },
             )
 
     class _FakeFlowRun:
@@ -1712,7 +1900,15 @@ def test_project_pipeline_status_syncs_flow_run_terminal_state(
         def get_run(self, *, agent_id, run_id):
             return self.run
 
-        def transition_run(self, *, agent_id, run_id, status, payload=None, step_id=""):
+        def transition_run(
+            self,
+            *,
+            agent_id,
+            run_id,
+            status,
+            payload=None,
+            step_id="",
+        ):
             self.transitions.append(status)
             self.run.status = status
             return self.run
@@ -1752,7 +1948,7 @@ def test_project_pipeline_status_syncs_flow_run_terminal_state(
     assert started.json().get("flow_run_id") == "flow-run-sync-1"
 
     status = knowledge_api_client.get(
-        f"/knowledge/project-pipeline/status?project_id={project_id}"
+        f"/knowledge/project-pipeline/status?project_id={project_id}",
     )
     assert status.status_code == 200
     assert status.json().get("flow_run_id") == "flow-run-sync-1"
@@ -1791,7 +1987,7 @@ def test_run_project_pipeline_persists_bridge_flow_run_id_for_later_commands(
         def get_state(self, project_id):
             return {
                 "project_id": project_id,
-    "status": "queued",
+                "status": "queued",
                 "last_result": {},
                 "manual_source_paths": ["notes.md"],
             }
@@ -1812,7 +2008,11 @@ def test_run_project_pipeline_persists_bridge_flow_run_id_for_later_commands(
                 operation_id="ps-flow-bridge-persisted-run",
                 idempotency_key="manual-flow-bridge-persisted-key-1",
                 deduplicated=False,
-                payload={"accepted": True, "project_id": project_id, "status": "queued"},
+                payload={
+                    "accepted": True,
+                    "project_id": project_id,
+                    "status": "queued",
+                },
             )
 
     class _FakeFlowRun:
@@ -1944,7 +2144,11 @@ def test_project_pipeline_ws_snapshot_recovers_persisted_runtime_meta_after_brid
                 operation_id="ps-ws-persisted-run",
                 idempotency_key="manual-ws-persisted-key-1",
                 deduplicated=False,
-                payload={"accepted": True, "project_id": project_id, "status": "queued"},
+                payload={
+                    "accepted": True,
+                    "project_id": project_id,
+                    "status": "queued",
+                },
             )
 
     class _FakeFlowRun:
@@ -2021,7 +2225,10 @@ def test_project_pipeline_ws_snapshot_recovers_persisted_runtime_meta_after_brid
     assert payload["type"] == "snapshot"
     assert payload["state"]["flow_run_id"] == "flow-run-ws-persisted-1"
     assert payload["state"]["recent_control_command"] == "resume"
-    assert payload["state"]["idempotency_key"] == "manual-flow-resume:flow-run-ws-persisted-1"
+    assert (
+        payload["state"]["idempotency_key"]
+        == "manual-flow-resume:flow-run-ws-persisted-1"
+    )
 
 
 def test_project_pipeline_status_syncs_resume_command_to_flow_engine(
@@ -2071,7 +2278,14 @@ def test_project_pipeline_status_syncs_resume_command_to_flow_engine(
         def get_run(self, *, agent_id, run_id):
             return self.run
 
-        def request_command(self, *, agent_id, run_id, command_type, payload=None):
+        def request_command(
+            self,
+            *,
+            agent_id,
+            run_id,
+            command_type,
+            payload=None,
+        ):
             self.commands.append(command_type)
             return SimpleNamespace(id="flow-cmd-1")
 
@@ -2080,7 +2294,15 @@ def test_project_pipeline_status_syncs_resume_command_to_flow_engine(
             self.run.status = "running"
             return self.run
 
-        def transition_run(self, *, agent_id, run_id, status, payload=None, step_id=""):
+        def transition_run(
+            self,
+            *,
+            agent_id,
+            run_id,
+            status,
+            payload=None,
+            step_id="",
+        ):
             self.run.status = status
             return self.run
 
@@ -2102,7 +2324,10 @@ def test_project_pipeline_status_syncs_resume_command_to_flow_engine(
         lambda: fake_flow_service,
     )
 
-    runtime_key = knowledge_router_module._project_pipeline_runtime_key(tmp_path, project_id)
+    runtime_key = knowledge_router_module._project_pipeline_runtime_key(
+        tmp_path,
+        project_id,
+    )
     knowledge_router_module._PROJECT_PIPELINE_RUNTIME_META[runtime_key] = {
         "operation_id": "existing-op",
         "idempotency_key": "existing-key",
@@ -2113,7 +2338,7 @@ def test_project_pipeline_status_syncs_resume_command_to_flow_engine(
     }
 
     response = knowledge_api_client.get(
-        f"/knowledge/project-pipeline/status?project_id={project_id}"
+        f"/knowledge/project-pipeline/status?project_id={project_id}",
     )
     assert response.status_code == 200
     assert response.json().get("flow_run_id") == "flow-run-resume-1"
@@ -2165,7 +2390,10 @@ def test_project_pipeline_command_controls_flow_run(
         lambda: fake_flow_service,
     )
 
-    runtime_key = knowledge_router_module._project_pipeline_runtime_key(tmp_path, project_id)
+    runtime_key = knowledge_router_module._project_pipeline_runtime_key(
+        tmp_path,
+        project_id,
+    )
     knowledge_router_module._PROJECT_PIPELINE_RUNTIME_META[runtime_key] = {
         "operation_id": "existing-op",
         "idempotency_key": "existing-key",
@@ -2220,7 +2448,7 @@ def test_project_pipeline_command_controls_flow_run(
     )
 
     status = knowledge_api_client.get(
-        f"/knowledge/project-pipeline/status?project_id={project_id}"
+        f"/knowledge/project-pipeline/status?project_id={project_id}",
     )
     assert status.status_code == 200
     status_payload = status.json()
@@ -2240,13 +2468,19 @@ def test_project_pipeline_command_returns_409_on_invalid_transition(
 
     class _FakeFlowService:
         def pause_run(self, *, agent_id, run_id, payload=None):
-            raise FlowTransitionNotAllowedError("flow run transition not allowed: running -> paused")
+            raise FlowTransitionNotAllowedError(
+                "flow run transition not allowed: running -> paused",
+            )
 
         def resume_run(self, *, agent_id, run_id, payload=None):
-            raise FlowTransitionNotAllowedError("flow run transition not allowed: running -> running")
+            raise FlowTransitionNotAllowedError(
+                "flow run transition not allowed: running -> running",
+            )
 
         def cancel_run(self, *, agent_id, run_id, payload=None):
-            raise FlowTransitionNotAllowedError("flow run transition not allowed: succeeded -> cancelled")
+            raise FlowTransitionNotAllowedError(
+                "flow run transition not allowed: succeeded -> cancelled",
+            )
 
     monkeypatch.setattr(
         knowledge_router_module,
@@ -2254,7 +2488,10 @@ def test_project_pipeline_command_returns_409_on_invalid_transition(
         lambda: _FakeFlowService(),
     )
 
-    runtime_key = knowledge_router_module._project_pipeline_runtime_key(tmp_path, project_id)
+    runtime_key = knowledge_router_module._project_pipeline_runtime_key(
+        tmp_path,
+        project_id,
+    )
     knowledge_router_module._PROJECT_PIPELINE_RUNTIME_META[runtime_key] = {
         "operation_id": "existing-op",
         "idempotency_key": "existing-key",
@@ -2277,11 +2514,13 @@ def test_project_pipeline_command_returns_409_on_invalid_transition(
     assert "transition not allowed" in str(detail.get("message") or "")
 
     status = knowledge_api_client.get(
-        f"/knowledge/project-pipeline/status?project_id={project_id}"
+        f"/knowledge/project-pipeline/status?project_id={project_id}",
     )
     assert status.status_code == 200
     payload = status.json()
-    assert payload.get("recent_error_code") == "PROJECT_PIPELINE_COMMAND_CONFLICT"
+    assert (
+        payload.get("recent_error_code") == "PROJECT_PIPELINE_COMMAND_CONFLICT"
+    )
     assert payload.get("recent_error_source") == "flow_control"
 
 
@@ -2306,11 +2545,14 @@ def test_project_pipeline_command_returns_404_without_flow_run_id(
     assert detail.get("message") == "PROJECT_PIPELINE_FLOW_RUN_NOT_FOUND"
 
     status = knowledge_api_client.get(
-        f"/knowledge/project-pipeline/status?project_id={project_id}"
+        f"/knowledge/project-pipeline/status?project_id={project_id}",
     )
     assert status.status_code == 200
     payload = status.json()
-    assert payload.get("recent_error_code") == "PROJECT_PIPELINE_FLOW_RUN_NOT_FOUND"
+    assert (
+        payload.get("recent_error_code")
+        == "PROJECT_PIPELINE_FLOW_RUN_NOT_FOUND"
+    )
     assert payload.get("recent_error_source") == "flow_control"
 
 
@@ -2325,7 +2567,7 @@ def test_restore_knowledge_backup_offloads_filesystem_copy_to_thread(
                 "new content",
             ),
             "sources/new-source/content.md": "# new-source\n\nnew content\n",
-        }
+        },
     )
 
     original_to_thread = knowledge_router_module.asyncio.to_thread
@@ -2335,7 +2577,11 @@ def test_restore_knowledge_backup_offloads_filesystem_copy_to_thread(
         calls.append((func, args))
         return await original_to_thread(func, *args, **kwargs)
 
-    monkeypatch.setattr(knowledge_router_module.asyncio, "to_thread", fake_to_thread)
+    monkeypatch.setattr(
+        knowledge_router_module.asyncio,
+        "to_thread",
+        fake_to_thread,
+    )
 
     response = knowledge_api_client.post(
         "/knowledge/restore",
@@ -2370,7 +2616,9 @@ def test_history_backfill_progress_ws_snapshot(
     assert "running" in payload["progress"]
 
 
-def test_clear_knowledge_requires_confirmation(knowledge_api_client: TestClient):
+def test_clear_knowledge_requires_confirmation(
+    knowledge_api_client: TestClient,
+):
     response = knowledge_api_client.delete("/knowledge/clear")
     assert response.status_code == 400
     assert response.json()["detail"] == "KNOWLEDGE_CLEAR_CONFIRM_REQUIRED"
@@ -2393,7 +2641,7 @@ def test_clear_knowledge_removes_sources_and_indexes(
             "recursive": False,
             "tags": [],
             "summary": "",
-        }
+        },
     ]
     saved = knowledge_api_client.put("/knowledge/config", json=config_payload)
     assert saved.status_code == 200
@@ -2403,7 +2651,7 @@ def test_clear_knowledge_removes_sources_and_indexes(
     source_index.write_text("{}", encoding="utf-8")
 
     response = knowledge_api_client.delete(
-        "/knowledge/clear?confirm=true&remove_sources=true"
+        "/knowledge/clear?confirm=true&remove_sources=true",
     )
 
     assert response.status_code == 200
@@ -2423,7 +2671,10 @@ def test_read_url_document_skips_binary_content(monkeypatch):
         def raise_for_status():
             return None
 
-    monkeypatch.setattr("copaw.knowledge.manager.httpx.get", lambda *args, **kwargs: _Resp())
+    monkeypatch.setattr(
+        "copaw.knowledge.manager.httpx.get",
+        lambda *args, **kwargs: _Resp(),
+    )
 
     doc = KnowledgeManager._read_url_document("https://example.com/a.png")
 
@@ -2434,22 +2685,28 @@ def test_read_url_document_skips_binary_content(monkeypatch):
 def test_read_file_document_rejects_structured_json(tmp_path: Path):
     manager = KnowledgeManager(knowledge_router_module.WORKING_DIR)
     json_file = tmp_path / "document.json"
-    json_file.write_text("{\"hello\": \"world\"}", encoding="utf-8")
+    json_file.write_text('{"hello": "world"}', encoding="utf-8")
 
-    with pytest.raises(ValueError, match="structured data and is not part of document knowledge"):
+    with pytest.raises(
+        ValueError,
+        match="structured data and is not part of document knowledge",
+    ):
         manager._read_file_document(json_file, make_knowledge_config())
 
 
 def test_read_url_document_skips_json_content(monkeypatch):
     class _Resp:
         headers = {"content-type": "application/json; charset=utf-8"}
-        text = "{\"hello\": \"world\"}"
+        text = '{"hello": "world"}'
 
         @staticmethod
         def raise_for_status():
             return None
 
-    monkeypatch.setattr("copaw.knowledge.manager.httpx.get", lambda *args, **kwargs: _Resp())
+    monkeypatch.setattr(
+        "copaw.knowledge.manager.httpx.get",
+        lambda *args, **kwargs: _Resp(),
+    )
 
     doc = KnowledgeManager._read_url_document("https://example.com/a.json")
 
@@ -2459,7 +2716,10 @@ def test_read_url_document_skips_json_content(monkeypatch):
 
 def test_classify_source_path_distinguishes_document_structured_image_and_ignored():
     assert KnowledgeManager.classify_source_path("docs/spec.md") == "document"
-    assert KnowledgeManager.classify_source_path("data/schema.json") == "structured"
+    assert (
+        KnowledgeManager.classify_source_path("data/schema.json")
+        == "structured"
+    )
     assert KnowledgeManager.classify_source_path("images/cover.png") == "image"
     assert KnowledgeManager.classify_source_path("docs/book.pdf") == "ignored"
 
@@ -2472,8 +2732,13 @@ def test_collect_project_source_candidates_excludes_pdf(tmp_path: Path):
     (project_workspace / "assets").mkdir(parents=True, exist_ok=True)
 
     (project_workspace / "notes.md").write_text("# doc", encoding="utf-8")
-    (project_workspace / "data" / "schema.json").write_text('{"k":1}', encoding="utf-8")
-    (project_workspace / "assets" / "cover.png").write_bytes(b"\x89PNG\r\n\x1a\n")
+    (project_workspace / "data" / "schema.json").write_text(
+        '{"k":1}',
+        encoding="utf-8",
+    )
+    (project_workspace / "assets" / "cover.png").write_bytes(
+        b"\x89PNG\r\n\x1a\n",
+    )
     (project_workspace / "docs.pdf").write_bytes(b"%PDF-1.7")
 
     candidates = knowledge_router_module._collect_project_source_candidates(
@@ -2545,7 +2810,12 @@ def test_get_memify_job_status_success(
 
     assert last_payload is not None
     assert last_payload["job_id"] == job_id
-    assert last_payload["status"] in {"pending", "running", "succeeded", "failed"}
+    assert last_payload["status"] in {
+        "pending",
+        "running",
+        "succeeded",
+        "failed",
+    }
 
 
 def test_put_knowledge_config_syncs_running_toggle_and_module_skill(
@@ -2562,7 +2832,10 @@ def test_put_knowledge_config_syncs_running_toggle_and_module_skill(
     config_payload = make_knowledge_config().model_dump(mode="json")
     config_payload["enabled"] = False
 
-    response = knowledge_api_client.put("/knowledge/config", json=config_payload)
+    response = knowledge_api_client.put(
+        "/knowledge/config",
+        json=config_payload,
+    )
 
     assert response.status_code == 200
     assert response.json()["enabled"] is False
@@ -2583,7 +2856,10 @@ def test_put_knowledge_config_does_not_resync_module_skill_when_toggle_unchanged
     config_payload = make_knowledge_config().model_dump(mode="json")
     config_payload["enabled"] = True
 
-    response = knowledge_api_client.put("/knowledge/config", json=config_payload)
+    response = knowledge_api_client.put(
+        "/knowledge/config",
+        json=config_payload,
+    )
 
     assert response.status_code == 200
     assert response.json()["enabled"] is True
@@ -2592,13 +2868,20 @@ def test_put_knowledge_config_does_not_resync_module_skill_when_toggle_unchanged
 
 def _build_knowledge_zip(entries: dict[str, str]) -> bytes:
     buf = io.BytesIO()
-    with zipfile.ZipFile(buf, mode="w", compression=zipfile.ZIP_DEFLATED) as zf:
+    with zipfile.ZipFile(
+        buf,
+        mode="w",
+        compression=zipfile.ZIP_DEFLATED,
+    ) as zf:
         for path, content in entries.items():
             zf.writestr(path, content)
     return buf.getvalue()
 
 
-def _source_index_payload(source_id: str, content: str = "knowledge text") -> str:
+def _source_index_payload(
+    source_id: str,
+    content: str = "knowledge text",
+) -> str:
     payload = {
         "source": {
             "id": source_id,
@@ -2616,7 +2899,7 @@ def _source_index_payload(source_id: str, content: str = "knowledge text") -> st
                 "path": f"{source_id}.md",
                 "title": source_id,
                 "text": content,
-            }
+            },
         ],
         "chunks": [],
     }
@@ -2642,7 +2925,7 @@ def test_restore_knowledge_backup_replace_existing(
             ),
             "sources/new-source/content.md": "# new-source\n\nnew content\n",
             "catalog.json": json.dumps({"version": 2}),
-        }
+        },
     )
 
     response = knowledge_api_client.post(
@@ -2682,7 +2965,7 @@ def test_restore_knowledge_backup_merge_existing(
                 "imported content",
             ),
             "sources/imported-source/content.md": "# imported-source\n\nimported content\n",
-        }
+        },
     )
 
     response = knowledge_api_client.post(
@@ -2710,7 +2993,7 @@ def test_restore_knowledge_backup_rejects_unsafe_zip_path(
     zip_data = _build_knowledge_zip(
         {
             "../escape/index.json": _source_index_payload("escape"),
-        }
+        },
     )
 
     response = knowledge_api_client.post(
@@ -2750,7 +3033,7 @@ def test_project_scoped_index_storage_isolated(
     assert upsert.status_code == 200
 
     indexed = knowledge_api_client.post(
-        "/knowledge/sources/proj-source-a/index?project_id=project-a"
+        "/knowledge/sources/proj-source-a/index?project_id=project-a",
     )
     assert indexed.status_code == 200
 
@@ -2762,14 +3045,18 @@ def test_project_scoped_index_storage_isolated(
         / "proj-source-a--index.json"
     )
     global_index = tmp_path / "knowledge" / "proj-source-a--index.json"
-    project_chunks_dir = tmp_path / "projects" / "project-a" / ".knowledge" / "chunks"
+    project_chunks_dir = (
+        tmp_path / "projects" / "project-a" / ".knowledge" / "chunks"
+    )
     global_chunks_dir = tmp_path / "knowledge" / "chunks"
 
     assert project_index.exists()
     assert not global_index.exists()
     assert project_chunks_dir.exists()
     assert any(project_chunks_dir.rglob("*.txt"))
-    assert not global_chunks_dir.exists() or not any(global_chunks_dir.rglob("*.txt"))
+    assert not global_chunks_dir.exists() or not any(
+        global_chunks_dir.rglob("*.txt"),
+    )
 
 
 def test_project_scoped_memify_jobs_are_isolated(
@@ -2796,12 +3083,14 @@ def test_project_scoped_memify_jobs_are_isolated(
     job_id = started.json()["job_id"]
 
     status = knowledge_api_client.get(
-        f"/knowledge/memify/jobs/{job_id}?project_id=project-b"
+        f"/knowledge/memify/jobs/{job_id}?project_id=project-b",
     )
     assert status.status_code == 200
     assert status.json()["job_id"] == job_id
 
-    project_jobs = tmp_path / "projects" / "project-b" / ".knowledge" / "memify-jobs.json"
+    project_jobs = (
+        tmp_path / "projects" / "project-b" / ".knowledge" / "memify-jobs.json"
+    )
     global_jobs = tmp_path / "knowledge" / "memify-jobs.json"
 
     assert project_jobs.exists()
@@ -2835,7 +3124,7 @@ def test_project_pipeline_source_candidates_returns_structured_items(
     (project_dir / "paper.pdf").write_bytes(b"%PDF-1.7")
 
     response = knowledge_api_client.get(
-        f"/knowledge/project-pipeline/source-candidates?project_id={project_id}"
+        f"/knowledge/project-pipeline/source-candidates?project_id={project_id}",
     )
     assert response.status_code == 200
 
@@ -2885,7 +3174,7 @@ def test_project_pipeline_sources_returns_manual_source_items_and_excludes_pdf(
     assert "paper.pdf" not in by_path
 
     listed = knowledge_api_client.get(
-        f"/knowledge/project-pipeline/sources?project_id={project_id}"
+        f"/knowledge/project-pipeline/sources?project_id={project_id}",
     )
     assert listed.status_code == 200
     listed_payload = listed.json()
@@ -2937,11 +3226,11 @@ def test_project_pipeline_status_projects_runtime_operation_metadata(
                             "snapshot_raw": {
                                 "snapshot_manifest_path": ".knowledge/sources/project-pipeline-runtime-status/snapshot-manifest.json",
                                 "snapshot_count": 2,
-                            }
+                            },
                         },
                         "recent_error_code": "",
                         "recent_error_source": "invalid-source",
-                    }
+                    },
                 },
                 "manual_source_paths": ["notes.md"],
             }
@@ -2963,7 +3252,7 @@ def test_project_pipeline_status_projects_runtime_operation_metadata(
     assert started.status_code == 200
 
     status = knowledge_api_client.get(
-        f"/knowledge/project-pipeline/status?project_id={project_id}"
+        f"/knowledge/project-pipeline/status?project_id={project_id}",
     )
     assert status.status_code == 200
     payload = status.json()
@@ -3017,7 +3306,7 @@ def test_project_pipeline_status_recovers_runtime_meta_from_persisted_state(
     )
 
     response = knowledge_api_client.get(
-        f"/knowledge/project-pipeline/status?project_id={project_id}"
+        f"/knowledge/project-pipeline/status?project_id={project_id}",
     )
     assert response.status_code == 200
     payload = response.json()
@@ -3091,7 +3380,10 @@ def test_project_pipeline_command_recovers_flow_run_id_from_persisted_state(
     assert fake_flow_service.commands == ["pause:flow-run-persisted-command-1"]
     payload = response.json()
     assert payload["flow_run_id"] == "flow-run-persisted-command-1"
-    assert payload["runtime_meta"]["flow_run_id"] == "flow-run-persisted-command-1"
+    assert (
+        payload["runtime_meta"]["flow_run_id"]
+        == "flow-run-persisted-command-1"
+    )
     assert payload["runtime_meta"]["recent_control_command"] == "pause"
 
 
@@ -3134,11 +3426,11 @@ def test_project_pipeline_ws_snapshot_includes_latest_run_operation_metadata(
                             "tokenize": {
                                 "tokenize_manifest_path": ".knowledge/sources/project-pipeline-runtime-ws/tokenize-manifest.json",
                                 "token_count": 320,
-                            }
+                            },
                         },
                         "recent_error_code": "TOKENIZE_ENGINE_FAILED",
                         "recent_error_source": "workflow_step",
-                    }
+                    },
                 },
                 "manual_source_paths": ["notes.md"],
             }
@@ -3226,7 +3518,10 @@ def test_project_pipeline_ws_snapshot_includes_latest_control_command_metadata(
         lambda: _FakeFlowService(),
     )
 
-    runtime_key = knowledge_router_module._project_pipeline_runtime_key(tmp_path, project_id)
+    runtime_key = knowledge_router_module._project_pipeline_runtime_key(
+        tmp_path,
+        project_id,
+    )
     knowledge_router_module._PROJECT_PIPELINE_RUNTIME_META[runtime_key] = {
         "operation_id": "existing-op",
         "idempotency_key": "existing-key",
@@ -3307,7 +3602,10 @@ def test_project_pipeline_ws_snapshot_emits_incremental_control_update(
         lambda: _FakeFlowService(),
     )
 
-    runtime_key = knowledge_router_module._project_pipeline_runtime_key(tmp_path, project_id)
+    runtime_key = knowledge_router_module._project_pipeline_runtime_key(
+        tmp_path,
+        project_id,
+    )
     knowledge_router_module._PROJECT_PIPELINE_RUNTIME_META[runtime_key] = {
         "operation_id": "existing-op",
         "idempotency_key": "existing-key",
@@ -3333,7 +3631,10 @@ def test_project_pipeline_ws_snapshot_emits_incremental_control_update(
         def _send_resume_command() -> None:
             response = knowledge_api_client.post(
                 f"/knowledge/project-pipeline/commands?project_id={project_id}",
-                json={"command_type": "resume", "payload": {"reason": "incremental-check"}},
+                json={
+                    "command_type": "resume",
+                    "payload": {"reason": "incremental-check"},
+                },
             )
             result_holder["status_code"] = response.status_code
             result_holder["payload"] = response.json()
@@ -3347,7 +3648,10 @@ def test_project_pipeline_ws_snapshot_emits_incremental_control_update(
     assert result_holder.get("status_code") == 200
     assert second["type"] == "snapshot"
     assert second["state"]["project_id"] == project_id
-    assert second["state"].get("flow_run_id") == "flow-run-control-ws-incremental-1"
+    assert (
+        second["state"].get("flow_run_id")
+        == "flow-run-control-ws-incremental-1"
+    )
     assert second["state"].get("recent_control_command") == "resume"
     assert str(second["state"].get("control_updated_at") or "")
 
@@ -3357,7 +3661,9 @@ def test_project_pipeline_run_does_not_auto_register_source_and_persists_state(
     tmp_path: Path,
 ):
     logger = logging.getLogger("test_project_pipeline")
-    logger.debug("Starting test_project_pipeline_run_does_not_auto_register_source_and_persists_state")
+    logger.debug(
+        "Starting test_project_pipeline_run_does_not_auto_register_source_and_persists_state",
+    )
     project_id = "project-pipeline-demo"
     project_dir = tmp_path / "projects" / project_id
     project_dir.mkdir(parents=True, exist_ok=True)
@@ -3388,7 +3694,7 @@ def test_project_pipeline_run_does_not_auto_register_source_and_persists_state(
     last_payload = None
     while time.time() < deadline:
         response = knowledge_api_client.get(
-            f"/knowledge/project-pipeline/status?project_id={project_id}"
+            f"/knowledge/project-pipeline/status?project_id={project_id}",
         )
         assert response.status_code == 200
         last_payload = response.json()
@@ -3404,10 +3710,13 @@ def test_project_pipeline_run_does_not_auto_register_source_and_persists_state(
         "graphifying",
         "succeeded",
     }
-    assert str(last_payload["latest_source_id"] or "").startswith("project-file-")
+    assert str(last_payload["latest_source_id"] or "").startswith(
+        "project-file-",
+    )
 
     source_ids = {
-        source.id for source in knowledge_router_module.load_config().knowledge.sources
+        source.id
+        for source in knowledge_router_module.load_config().knowledge.sources
     }
     assert "project-project-pipeline-demo-workspace" not in source_ids
 
@@ -3550,7 +3859,7 @@ def test_project_pipeline_status_includes_lane_and_quantization_stage_skeleton(
     assert saved.status_code == 200
 
     response = knowledge_api_client.get(
-        f"/knowledge/project-pipeline/status?project_id={project_id}"
+        f"/knowledge/project-pipeline/status?project_id={project_id}",
     )
 
     assert response.status_code == 200
@@ -3566,16 +3875,28 @@ def test_schedule_stage_run_dependencies():
     manager = QuantizationArchitectureManager("/tmp/test_project")
 
     # Simulate L1 completion
-    manager.write_stage_result(stage="l1", source_id="source1", snapshot_id="snapshot1")
+    manager.write_stage_result(
+        stage="l1",
+        source_id="source1",
+        snapshot_id="snapshot1",
+    )
 
     # Schedule L3 without L2 (should raise an error)
     try:
-        manager.schedule_stage_run(stage="l3", source_id="source1", snapshot_id="snapshot1")
+        manager.schedule_stage_run(
+            stage="l3",
+            source_id="source1",
+            snapshot_id="snapshot1",
+        )
     except RuntimeError as e:
         assert "Dependency not met" in str(e)
     else:
         assert False, "Expected RuntimeError for unmet dependency"
 
     # Now schedule L2 (should pass as L1 is ready)
-    result = manager.schedule_stage_run(stage="l2", source_id="source1", snapshot_id="snapshot1")
+    result = manager.schedule_stage_run(
+        stage="l2",
+        source_id="source1",
+        snapshot_id="snapshot1",
+    )
     assert result["status"] == "ready"

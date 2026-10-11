@@ -9,243 +9,354 @@ from ..config.config import KnowledgeConfig, KnowledgeSourceSpec
 
 
 def _exception_reason_code(exc: Exception) -> str:
-	name = str(type(exc).__name__ or "").strip()
-	if not name:
-		return "PROJECT_PIPELINE_EXECUTION_FAILED"
-	parts: list[str] = []
-	token: list[str] = []
-	for idx, ch in enumerate(name):
-		if ch.isupper() and idx > 0 and token and token[-1].islower():
-			parts.append("".join(token))
-			token = [ch]
-		elif ch.isalnum():
-			token.append(ch)
-		elif token:
-			parts.append("".join(token))
-			token = []
-	if token:
-		parts.append("".join(token))
-	normalized = "_".join(item.upper() for item in parts if item).strip("_")
-	if not normalized:
-		return "PROJECT_PIPELINE_EXECUTION_FAILED"
-	return f"{normalized}_FAILED" if not normalized.endswith("_FAILED") else normalized
+    name = str(type(exc).__name__ or "").strip()
+    if not name:
+        return "PROJECT_PIPELINE_EXECUTION_FAILED"
+    parts: list[str] = []
+    token: list[str] = []
+    for idx, ch in enumerate(name):
+        if ch.isupper() and idx > 0 and token and token[-1].islower():
+            parts.append("".join(token))
+            token = [ch]
+        elif ch.isalnum():
+            token.append(ch)
+        elif token:
+            parts.append("".join(token))
+            token = []
+    if token:
+        parts.append("".join(token))
+    normalized = "_".join(item.upper() for item in parts if item).strip("_")
+    if not normalized:
+        return "PROJECT_PIPELINE_EXECUTION_FAILED"
+    return (
+        f"{normalized}_FAILED"
+        if not normalized.endswith("_FAILED")
+        else normalized
+    )
 
 
 def start_worker(manager: Any, **kwargs) -> None:
-	manager._run_sync_loop(**kwargs)
+    manager._run_sync_loop(**kwargs)
 
 
 def resume_sync_if_needed(
-	manager: Any,
-	*,
-	project_id: str,
-	config: KnowledgeConfig,
-	running_config: Any,
-	source: KnowledgeSourceSpec,
+    manager: Any,
+    *,
+    project_id: str,
+    config: KnowledgeConfig,
+    running_config: Any,
+    source: KnowledgeSourceSpec,
 ) -> dict[str, Any]:
-	with manager._lock:
-		state = manager._load_state(project_id, hydrate=False)
-		status = str(state.get("status") or "").strip()
-		if status not in manager._resumable_statuses and not bool(state.get("dirty_after_run")):
-			return {"accepted": False, "reason": "NOOP", "deduplicated": True}
-		changed_paths = list(dict.fromkeys([*list(state.get("changed_paths") or []), *list(state.get("pending_changed_paths") or [])]))
-		state.update({
-			"status": "pending",
-			"current_stage": "pending",
-			"stage": "pending",
-			"last_trigger": "resume",
-			"dirty_after_run": False,
-			"pending_changed_paths": [],
-			"changed_paths": changed_paths,
-			"changed_count": len(changed_paths),
-			"latest_source_id": source.id,
-			"semantic_engine": manager._capture_semantic_engine_state(config),
-			"updated_at": manager._now_iso(),
-		})
-		manager._save_state(state)
-		processing_mode = str(state.get("latest_requested_mode") or "agentic")
-		manager._start_worker(
-			project_id=project_id,
-			config=config,
-			running_config=running_config,
-			source=source,
-			processing_mode=processing_mode,
-			execution_context=dict(state.get("execution_context") or {}),
-		)
-		return {"accepted": True, "reason": "RESUMED", "state": manager._load_state(project_id)}
+    with manager._lock:
+        state = manager._load_state(project_id, hydrate=False)
+        status = str(state.get("status") or "").strip()
+        if status not in manager._resumable_statuses and not bool(
+            state.get("dirty_after_run"),
+        ):
+            return {"accepted": False, "reason": "NOOP", "deduplicated": True}
+        changed_paths = list(
+            dict.fromkeys(
+                [
+                    *list(state.get("changed_paths") or []),
+                    *list(state.get("pending_changed_paths") or []),
+                ],
+            ),
+        )
+        state.update(
+            {
+                "status": "pending",
+                "current_stage": "pending",
+                "stage": "pending",
+                "last_trigger": "resume",
+                "dirty_after_run": False,
+                "pending_changed_paths": [],
+                "changed_paths": changed_paths,
+                "changed_count": len(changed_paths),
+                "latest_source_id": source.id,
+                "semantic_engine": manager._capture_semantic_engine_state(
+                    config,
+                ),
+                "updated_at": manager._now_iso(),
+            },
+        )
+        manager._save_state(state)
+        processing_mode = str(state.get("latest_requested_mode") or "agentic")
+        manager._start_worker(
+            project_id=project_id,
+            config=config,
+            running_config=running_config,
+            source=source,
+            processing_mode=processing_mode,
+            execution_context=dict(state.get("execution_context") or {}),
+        )
+        return {
+            "accepted": True,
+            "reason": "RESUMED",
+            "state": manager._load_state(project_id),
+        }
 
 
 def check_needs_reindex(
-	manager: Any,
-	*,
-	project_id: str,
-	config: KnowledgeConfig,
-	running_config: Any,
+    manager: Any,
+    *,
+    project_id: str,
+    config: KnowledgeConfig,
+    running_config: Any,
 ) -> bool:
-	state = manager._load_state(project_id, hydrate=False)
-	recorded = str(state.get("indexed_processing_fingerprint") or "").strip()
-	if not recorded:
-		return True
-	compute = getattr(manager._knowledge_manager, "compute_processing_fingerprint", None)
-	if not callable(compute):
-		return False
-	return str(compute(config, running_config) or "").strip() != recorded
+    state = manager._load_state(project_id, hydrate=False)
+    recorded = str(state.get("indexed_processing_fingerprint") or "").strip()
+    if not recorded:
+        return True
+    compute = getattr(
+        manager._knowledge_manager,
+        "compute_processing_fingerprint",
+        None,
+    )
+    if not callable(compute):
+        return False
+    return str(compute(config, running_config) or "").strip() != recorded
 
 
 def run_sync_loop(
-	manager: Any,
-	*,
-	project_id: str,
-	config: KnowledgeConfig,
-	running_config: Any,
-	source: KnowledgeSourceSpec,
-	processing_mode: str = "agentic",
-	quantization_stage: str | None = None,
-	execution_context: dict[str, Any] | None = None,
+    manager: Any,
+    *,
+    project_id: str,
+    config: KnowledgeConfig,
+    running_config: Any,
+    source: KnowledgeSourceSpec,
+    processing_mode: str = "agentic",
+    quantization_stage: str | None = None,
+    execution_context: dict[str, Any] | None = None,
 ) -> None:
-	with manager._lock:
-		state = manager._load_state(project_id, hydrate=False)
-		preserved_l2_metrics = dict(state.get("l2_metrics") or {}) if isinstance(state.get("l2_metrics"), dict) else {}
-		preserved_l2_progress = dict(state.get("l2_progress") or {}) if isinstance(state.get("l2_progress"), dict) else {}
-		preserved_l2_documents_progress = list(state.get("l2_documents_progress") or []) if isinstance(state.get("l2_documents_progress"), list) else []
-		state.update({
-			"status": "pending",
-			"current_stage": "pending",
-			"stage": "pending",
-			"last_error": "",
-			"latest_source_id": source.id,
-			"latest_requested_mode": processing_mode,
-			"execution_context": dict(execution_context or state.get("execution_context") or {}),
-			"semantic_engine": manager._capture_semantic_engine_state(config),
-			"l2_progress": {},
-			"l2_metrics": {},
-			"l2_documents_progress": [],
-			"updated_at": manager._now_iso(),
-		})
-		manager._save_state(state)
+    with manager._lock:
+        state = manager._load_state(project_id, hydrate=False)
+        preserved_l2_metrics = (
+            dict(state.get("l2_metrics") or {})
+            if isinstance(state.get("l2_metrics"), dict)
+            else {}
+        )
+        preserved_l2_progress = (
+            dict(state.get("l2_progress") or {})
+            if isinstance(state.get("l2_progress"), dict)
+            else {}
+        )
+        preserved_l2_documents_progress = (
+            list(state.get("l2_documents_progress") or [])
+            if isinstance(state.get("l2_documents_progress"), list)
+            else []
+        )
+        state.update(
+            {
+                "status": "pending",
+                "current_stage": "pending",
+                "stage": "pending",
+                "last_error": "",
+                "latest_source_id": source.id,
+                "latest_requested_mode": processing_mode,
+                "execution_context": dict(
+                    execution_context or state.get("execution_context") or {},
+                ),
+                "semantic_engine": manager._capture_semantic_engine_state(
+                    config,
+                ),
+                "l2_progress": {},
+                "l2_metrics": {},
+                "l2_documents_progress": [],
+                "updated_at": manager._now_iso(),
+            },
+        )
+        manager._save_state(state)
 
-	def _status_callback(patch: dict[str, Any]) -> None:
-		if not isinstance(patch, dict) or not patch:
-			return
-		with manager._lock:
-			current_state = manager._load_state(project_id, hydrate=False)
-			current_state.update(dict(patch))
-			current_state["updated_at"] = manager._now_iso()
-			manager._save_state(current_state)
-	try:
-		from qwenpaw.app.knowledge_workflow import KnowledgeWorkflowOrchestrator
+    def _status_callback(patch: dict[str, Any]) -> None:
+        if not isinstance(patch, dict) or not patch:
+            return
+        with manager._lock:
+            current_state = manager._load_state(project_id, hydrate=False)
+            current_state.update(dict(patch))
+            current_state["updated_at"] = manager._now_iso()
+            manager._save_state(current_state)
 
-		orchestrator = KnowledgeWorkflowOrchestrator(
-			workspace_dir=manager.working_dir,
-			project_id=project_id,
-			knowledge_dirname=manager.knowledge_dirname,
-		)
-		result = orchestrator.run(
-			config=config,
-			running_config=running_config,
-			source=source,
-			trigger="project-pipeline",
-			changed_paths=list(state.get("changed_paths") or []),
-			processing_mode=processing_mode,
-			quantization_stage=quantization_stage,
-			execution_context=dict(state.get("execution_context") or execution_context or {}),
-			status_callback=_status_callback,
-		)
-		normalized_result = dict(result or {})
-		pipeline_run = normalized_result.get("pipeline_run")
-		if not isinstance(pipeline_run, dict):
-			pipeline_run = {
-				"run_id": str(normalized_result.get("run_id") or ""),
-				"status": str(
-					normalized_result.get("run_status")
-					or normalized_result.get("status")
-					or ""
-				).strip().lower(),
-				"mode": str(
-					normalized_result.get("processing_mode")
-					or processing_mode
-					or "agentic"
-				).strip().lower() or "agentic",
-				"template_id": str(normalized_result.get("template_id") or ""),
-				"processing_fingerprint": str(normalized_result.get("processing_fingerprint") or ""),
-				"artifacts": list(normalized_result.get("artifacts") or []),
-				"step_outputs": dict(normalized_result.get("step_outputs") or {}),
-				"recent_error_code": str(normalized_result.get("recent_error_code") or "").strip(),
-				"recent_error_source": str(normalized_result.get("recent_error_source") or "").strip(),
-			}
-			normalized_result["pipeline_run"] = pipeline_run
-		with manager._lock:
-			state = manager._load_state(project_id, hydrate=False)
-			fingerprint = str(normalized_result.get("processing_fingerprint") or "").strip()
-			if not fingerprint:
-				compute = getattr(manager._knowledge_manager, "compute_processing_fingerprint", None)
-				if callable(compute):
-					fingerprint = str(compute(config, running_config) or "").strip()
-			now = manager._now_iso()
-			state.update({
-				"status": "succeeded",
-				"current_stage": "completed",
-				"stage": "completed",
-				"stage_message": "Project pipeline completed",
-				"updated_at": now,
-				"last_finished_at": now,
-				"last_success_at": now,
-				"latest_pipeline_run_id": str(normalized_result.get("run_id") or ""),
-				"latest_job_id": str(normalized_result.get("latest_job_id") or ""),
-				"last_result": normalized_result,
-				"indexed_processing_fingerprint": fingerprint,
-			})
-			follow_up_paths = list(state.get("pending_changed_paths") or [])
-			if bool(state.get("dirty_after_run")) or follow_up_paths:
-				changed_paths = list(dict.fromkeys([*list(state.get("changed_paths") or []), *follow_up_paths]))
-				state.update({
-					"status": "queued",
-					"current_stage": "debouncing",
-					"stage": "debouncing",
-					"dirty": True,
-					"dirty_after_run": False,
-					"pending_changed_paths": [],
-					"changed_paths": changed_paths,
-					"changed_count": len(changed_paths),
-				})
-				manager._save_state(state)
-				run_at = datetime.now(manager.UTC) + timedelta(seconds=max(0.0, manager._normalize_seconds(state.get("debounce_seconds"))))
-				manager._schedule_dispatch(run_at, project_id=project_id)
-			else:
-				manager._save_state(state)
-	except Exception as exc:
-		reason_code = _exception_reason_code(exc)
-		error_source = "execution_loop"
-		with manager._lock:
-			state = manager._load_state(project_id, hydrate=False)
-			prior_pipeline_run = state.get("last_result", {}).get("pipeline_run") if isinstance(state.get("last_result"), dict) else {}
-			if not isinstance(prior_pipeline_run, dict):
-				prior_pipeline_run = {}
-			state.update({
-				"status": "failed",
-				"current_stage": "failed",
-				"stage": "failed",
-				"failed_stage": str(state.get("current_stage") or "pending") or "pending",
-				"last_error": str(exc),
-				"recent_error_code": reason_code,
-				"recent_error_source": error_source,
-				"last_result": {
-					"pipeline_run": {
-						**prior_pipeline_run,
-						"status": "failed",
-						"mode": str(state.get("latest_requested_mode") or processing_mode or "agentic"),
-						"recent_error_code": reason_code,
-						"recent_error_source": error_source,
-						"step_outputs": dict(prior_pipeline_run.get("step_outputs") or {}),
-					},
-				},
-				"updated_at": manager._now_iso(),
-				"last_finished_at": manager._now_iso(),
-				"l2_metrics": preserved_l2_metrics,
-				"l2_progress": preserved_l2_progress,
-				"l2_documents_progress": preserved_l2_documents_progress,
-			})
-			manager._save_state(state)
+    try:
+        from qwenpaw.app.knowledge_workflow import (
+            KnowledgeWorkflowOrchestrator,
+        )
+
+        orchestrator = KnowledgeWorkflowOrchestrator(
+            workspace_dir=manager.working_dir,
+            project_id=project_id,
+            knowledge_dirname=manager.knowledge_dirname,
+        )
+        result = orchestrator.run(
+            config=config,
+            running_config=running_config,
+            source=source,
+            trigger="project-pipeline",
+            changed_paths=list(state.get("changed_paths") or []),
+            processing_mode=processing_mode,
+            quantization_stage=quantization_stage,
+            execution_context=dict(
+                state.get("execution_context") or execution_context or {},
+            ),
+            status_callback=_status_callback,
+        )
+        normalized_result = dict(result or {})
+        pipeline_run = normalized_result.get("pipeline_run")
+        if not isinstance(pipeline_run, dict):
+            pipeline_run = {
+                "run_id": str(normalized_result.get("run_id") or ""),
+                "status": str(
+                    normalized_result.get("run_status")
+                    or normalized_result.get("status")
+                    or "",
+                )
+                .strip()
+                .lower(),
+                "mode": str(
+                    normalized_result.get("processing_mode")
+                    or processing_mode
+                    or "agentic",
+                )
+                .strip()
+                .lower()
+                or "agentic",
+                "template_id": str(normalized_result.get("template_id") or ""),
+                "processing_fingerprint": str(
+                    normalized_result.get("processing_fingerprint") or "",
+                ),
+                "artifacts": list(normalized_result.get("artifacts") or []),
+                "step_outputs": dict(
+                    normalized_result.get("step_outputs") or {},
+                ),
+                "recent_error_code": str(
+                    normalized_result.get("recent_error_code") or "",
+                ).strip(),
+                "recent_error_source": str(
+                    normalized_result.get("recent_error_source") or "",
+                ).strip(),
+            }
+            normalized_result["pipeline_run"] = pipeline_run
+        with manager._lock:
+            state = manager._load_state(project_id, hydrate=False)
+            fingerprint = str(
+                normalized_result.get("processing_fingerprint") or "",
+            ).strip()
+            if not fingerprint:
+                compute = getattr(
+                    manager._knowledge_manager,
+                    "compute_processing_fingerprint",
+                    None,
+                )
+                if callable(compute):
+                    fingerprint = str(
+                        compute(config, running_config) or "",
+                    ).strip()
+            now = manager._now_iso()
+            state.update(
+                {
+                    "status": "succeeded",
+                    "current_stage": "completed",
+                    "stage": "completed",
+                    "stage_message": "Project pipeline completed",
+                    "updated_at": now,
+                    "last_finished_at": now,
+                    "last_success_at": now,
+                    "latest_pipeline_run_id": str(
+                        normalized_result.get("run_id") or "",
+                    ),
+                    "latest_job_id": str(
+                        normalized_result.get("latest_job_id") or "",
+                    ),
+                    "last_result": normalized_result,
+                    "indexed_processing_fingerprint": fingerprint,
+                },
+            )
+            follow_up_paths = list(state.get("pending_changed_paths") or [])
+            if bool(state.get("dirty_after_run")) or follow_up_paths:
+                changed_paths = list(
+                    dict.fromkeys(
+                        [
+                            *list(state.get("changed_paths") or []),
+                            *follow_up_paths,
+                        ],
+                    ),
+                )
+                state.update(
+                    {
+                        "status": "queued",
+                        "current_stage": "debouncing",
+                        "stage": "debouncing",
+                        "dirty": True,
+                        "dirty_after_run": False,
+                        "pending_changed_paths": [],
+                        "changed_paths": changed_paths,
+                        "changed_count": len(changed_paths),
+                    },
+                )
+                manager._save_state(state)
+                run_at = datetime.now(manager.UTC) + timedelta(
+                    seconds=max(
+                        0.0,
+                        manager._normalize_seconds(
+                            state.get("debounce_seconds"),
+                        ),
+                    ),
+                )
+                manager._schedule_dispatch(run_at, project_id=project_id)
+            else:
+                manager._save_state(state)
+    except Exception as exc:
+        reason_code = _exception_reason_code(exc)
+        error_source = "execution_loop"
+        with manager._lock:
+            state = manager._load_state(project_id, hydrate=False)
+            prior_pipeline_run = (
+                state.get("last_result", {}).get("pipeline_run")
+                if isinstance(state.get("last_result"), dict)
+                else {}
+            )
+            if not isinstance(prior_pipeline_run, dict):
+                prior_pipeline_run = {}
+            state.update(
+                {
+                    "status": "failed",
+                    "current_stage": "failed",
+                    "stage": "failed",
+                    "failed_stage": str(
+                        state.get("current_stage") or "pending",
+                    )
+                    or "pending",
+                    "last_error": str(exc),
+                    "recent_error_code": reason_code,
+                    "recent_error_source": error_source,
+                    "last_result": {
+                        "pipeline_run": {
+                            **prior_pipeline_run,
+                            "status": "failed",
+                            "mode": str(
+                                state.get("latest_requested_mode")
+                                or processing_mode
+                                or "agentic",
+                            ),
+                            "recent_error_code": reason_code,
+                            "recent_error_source": error_source,
+                            "step_outputs": dict(
+                                prior_pipeline_run.get("step_outputs") or {},
+                            ),
+                        },
+                    },
+                    "updated_at": manager._now_iso(),
+                    "last_finished_at": manager._now_iso(),
+                    "l2_metrics": preserved_l2_metrics,
+                    "l2_progress": preserved_l2_progress,
+                    "l2_documents_progress": preserved_l2_documents_progress,
+                },
+            )
+            manager._save_state(state)
 
 
-__all__ = ["check_needs_reindex", "resume_sync_if_needed", "run_sync_loop", "start_worker"]
+__all__ = [
+    "check_needs_reindex",
+    "resume_sync_if_needed",
+    "run_sync_loop",
+    "start_worker",
+]

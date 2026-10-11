@@ -142,10 +142,16 @@ def _resolve_l2_state_path(
         return Path(state_file).expanduser().resolve()
 
     if not project_id:
-        raise click.ClickException("Either --project-id or --state-file is required.")
+        raise click.ClickException(
+            "Either --project-id or --state-file is required.",
+        )
 
-    dirname = (knowledge_dirname or f"projects/{project_id}/.knowledge").strip()
-    return (Path(WORKING_DIR) / dirname / "project-pipeline-state.json").resolve()
+    dirname = (
+        knowledge_dirname or f"projects/{project_id}/.knowledge"
+    ).strip()
+    return (
+        Path(WORKING_DIR) / dirname / "project-pipeline-state.json"
+    ).resolve()
 
 
 def _grade_l2_assessment(
@@ -193,7 +199,10 @@ def _run_l2_probes(sample_texts: list[str]) -> dict[str, Any]:
             continue
         for task_key in _L2_PROBE_TASKS:
             total += 1
-            _result, state, elapsed_ms = _execute_task_with_timeout(task_key, text)
+            _result, state, elapsed_ms = _execute_task_with_timeout(
+                task_key,
+                text,
+            )
             status = str(state.get("status") or "unavailable")
             if status == "ready":
                 ok += 1
@@ -204,9 +213,13 @@ def _run_l2_probes(sample_texts: list[str]) -> dict[str, Any]:
                     "status": status,
                     "duration_ms": elapsed_ms,
                     "reason_code": str(state.get("reason_code") or ""),
-                    "sidecar_elapsed_ms": _safe_int(state.get("sidecar_elapsed_ms")),
-                    "sidecar_execution_path": str(state.get("sidecar_execution_path") or ""),
-                }
+                    "sidecar_elapsed_ms": _safe_int(
+                        state.get("sidecar_elapsed_ms"),
+                    ),
+                    "sidecar_execution_path": str(
+                        state.get("sidecar_execution_path") or "",
+                    ),
+                },
             )
 
     success_ratio = (ok / total) if total > 0 else 0.0
@@ -214,7 +227,10 @@ def _run_l2_probes(sample_texts: list[str]) -> dict[str, Any]:
     p95_ms = 0
     if latencies:
         sorted_lat = sorted(int(x) for x in latencies)
-        idx = max(0, min(len(sorted_lat) - 1, int(round((len(sorted_lat) - 1) * 0.95))))
+        idx = max(
+            0,
+            min(len(sorted_lat) - 1, int(round((len(sorted_lat) - 1) * 0.95))),
+        )
         p95_ms = sorted_lat[idx]
 
     return {
@@ -292,17 +308,27 @@ def _print_assessment_table(payload: dict[str, Any]) -> None:
     density = _as_dict(score.get("density"))
     click.echo("L2 Assessment Summary")
     click.echo("---------------------")
-    click.echo(f"project_id: {payload.get('project_id') or '(from state file)'}")
+    click.echo(
+        f"project_id: {payload.get('project_id') or '(from state file)'}",
+    )
     click.echo(f"total_chunks: {score.get('total_chunks', 0)}")
     click.echo(f"coverage.l2_core: {coverage.get('l2_core', 0):.4f}")
     click.echo(f"coverage.ner: {coverage.get('ner', 0):.4f}")
     click.echo(f"coverage.syntax: {coverage.get('syntax', 0):.4f}")
     click.echo(f"quality_proxy: {score.get('quality_proxy', 0):.4f}")
-    click.echo(f"density.entity_per_chunk: {density.get('entity_per_chunk', 0):.4f}")
-    click.echo(f"density.relation_per_token: {density.get('relation_per_token', 0):.4f}")
+    click.echo(
+        f"density.entity_per_chunk: {density.get('entity_per_chunk', 0):.4f}",
+    )
+    click.echo(
+        f"density.relation_per_token: {density.get('relation_per_token', 0):.4f}",
+    )
     raw_degrade_flags = score.get("degrade_flags")
-    degrade_flags = raw_degrade_flags if isinstance(raw_degrade_flags, list) else []
-    click.echo(f"degrade_flags: {', '.join(degrade_flags) if degrade_flags else '(none)'}")
+    degrade_flags = (
+        raw_degrade_flags if isinstance(raw_degrade_flags, list) else []
+    )
+    click.echo(
+        f"degrade_flags: {', '.join(degrade_flags) if degrade_flags else '(none)'}",
+    )
 
     probes = _as_dict(payload.get("probes"))
     if probes:
@@ -311,8 +337,12 @@ def _print_assessment_table(payload: dict[str, Any]) -> None:
         click.echo(f"tasks: {', '.join(probes.get('tasks') or [])}")
         click.echo(f"total_runs: {probes.get('total_runs', 0)}")
         click.echo(f"ready_runs: {probes.get('ready_runs', 0)}")
-        click.echo(f"success_ratio: {float(probes.get('success_ratio') or 0):.4f}")
-        click.echo(f"p95_duration_ms: {int(probes.get('p95_duration_ms') or 0)}")
+        click.echo(
+            f"success_ratio: {float(probes.get('success_ratio') or 0):.4f}",
+        )
+        click.echo(
+            f"p95_duration_ms: {int(probes.get('p95_duration_ms') or 0)}",
+        )
 
     grade = _as_dict(payload.get("grade"))
     if grade:
@@ -321,14 +351,28 @@ def _print_assessment_table(payload: dict[str, Any]) -> None:
         click.echo(f"grade: {grade.get('grade', 'N/A')}")
         click.echo(f"score: {float(grade.get('score') or 0):.4f}")
         click.echo(f"risk_score: {float(grade.get('risk_score') or 0):.4f}")
-        labels = grade.get("risk_labels") if isinstance(grade.get("risk_labels"), list) else []
-        click.echo(f"risk_labels: {', '.join(str(x) for x in labels) if labels else '(none)'}")
-        reasons = grade.get("reasons") if isinstance(grade.get("reasons"), list) else []
+        labels = (
+            grade.get("risk_labels")
+            if isinstance(grade.get("risk_labels"), list)
+            else []
+        )
+        click.echo(
+            f"risk_labels: {', '.join(str(x) for x in labels) if labels else '(none)'}",
+        )
+        reasons = (
+            grade.get("reasons")
+            if isinstance(grade.get("reasons"), list)
+            else []
+        )
         if reasons:
             click.echo("reasons:")
             for reason in reasons:
                 click.echo(f"  - {reason}")
-        recommendations = grade.get("recommendations") if isinstance(grade.get("recommendations"), list) else []
+        recommendations = (
+            grade.get("recommendations")
+            if isinstance(grade.get("recommendations"), list)
+            else []
+        )
         if recommendations:
             click.echo("recommendations:")
             for rec in recommendations:
@@ -337,13 +381,25 @@ def _print_assessment_table(payload: dict[str, Any]) -> None:
 
 def _print_batch_assessment_table(payload: dict[str, Any]) -> None:
     raw_items = payload.get("items")
-    items: list[dict[str, Any]] = raw_items if isinstance(raw_items, list) else []
-    risk_label_hits = payload.get("risk_label_hits") if isinstance(payload.get("risk_label_hits"), dict) else {}
+    items: list[dict[str, Any]] = (
+        raw_items if isinstance(raw_items, list) else []
+    )
+    risk_label_hits = (
+        payload.get("risk_label_hits")
+        if isinstance(payload.get("risk_label_hits"), dict)
+        else {}
+    )
     click.echo("L2 Batch Assessment")
     click.echo("-------------------")
     click.echo(f"projects_scanned: {len(items)}")
     if risk_label_hits:
-        summary = ", ".join(f"{k}:{v}" for k, v in sorted(risk_label_hits.items(), key=lambda x: (-int(x[1]), str(x[0]))))
+        summary = ", ".join(
+            f"{k}:{v}"
+            for k, v in sorted(
+                risk_label_hits.items(),
+                key=lambda x: (-int(x[1]), str(x[0])),
+            )
+        )
         click.echo(f"risk_label_hits: {summary}")
     click.echo("project_id            grade   score    risk    state")
     click.echo("-------------------   -----   ------   ------  -------------")
@@ -357,14 +413,20 @@ def _print_batch_assessment_table(payload: dict[str, Any]) -> None:
         risk_value = float(grade.get("risk_score") or 0)
         source = _as_dict(item.get("source"))
         source_status = str(source.get("status") or "")
-        click.echo(f"{project_id:<20} {grade_value:<5}   {score_value:0.4f}   {risk_value:0.4f}  {source_status}")
+        click.echo(
+            f"{project_id:<20} {grade_value:<5}   {score_value:0.4f}   {risk_value:0.4f}  {source_status}",
+        )
 
 
 def _export_payload(payload: dict[str, Any], export_path: str) -> Path:
     path = Path(export_path).expanduser().resolve()
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    path.write_text(
+        json.dumps(payload, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
     return path
+
 
 @click.group("nlp")
 def nlp_group() -> None:
@@ -383,7 +445,12 @@ def list_tasks_cmd() -> None:
 @click.argument("task_key", type=click.Choice(list(_TASKS.keys())))
 @click.argument("text", type=str)
 @click.option("--show-perf", is_flag=True, help="Show performance details.")
-@click.option("--json", "json_output", is_flag=True, help="Output structured JSON.")
+@click.option(
+    "--json",
+    "json_output",
+    is_flag=True,
+    help="Output structured JSON.",
+)
 def run_cmd(
     task_key: str,
     text: str,
@@ -401,26 +468,98 @@ def run_cmd(
     default=None,
     help="Knowledge directory relative to WORKING_DIR (default: projects/<project_id>/.knowledge).",
 )
-@click.option("--state-file", default=None, help="Explicit project-pipeline-state.json path.")
+@click.option(
+    "--state-file",
+    default=None,
+    help="Explicit project-pipeline-state.json path.",
+)
 @click.option(
     "--sample-text",
     "sample_texts",
     multiple=True,
     help="Sample text for NLP probe. Repeatable.",
 )
-@click.option("--run-probes/--no-run-probes", default=True, help="Run NLP probes for NER/DEP/SDP/CON.")
-@click.option("--probe-timeout", default=20.0, type=float, show_default=True, help="Per task timeout in seconds for probe runs.")
-@click.option("--probe-only", is_flag=True, help="Run probes without loading project pipeline state.")
-@click.option("--all-projects", is_flag=True, help="Assess all local projects under WORKING_DIR/projects.")
-@click.option("--allow-empty", is_flag=True, help="In --all-projects mode, return empty result instead of error when no state files found.")
-@click.option("--project-limit", default=100, type=int, show_default=True, help="Max number of projects to scan in batch mode.")
-@click.option("--sort-by", type=click.Choice(["risk", "score", "project_id"]), default="risk", show_default=True, help="Batch result ordering.")
-@click.option("--top", default=0, type=int, show_default=True, help="Return top-N projects after sorting (0 means all).")
-@click.option("--grade-a", default=0.85, type=float, show_default=True, help="Grade A threshold.")
-@click.option("--grade-b", default=0.70, type=float, show_default=True, help="Grade B threshold.")
-@click.option("--grade-c", default=0.50, type=float, show_default=True, help="Grade C threshold.")
-@click.option("--export", "export_path", default=None, help="Write assessment JSON output to file.")
-@click.option("--json", "json_output", is_flag=True, help="Output structured JSON.")
+@click.option(
+    "--run-probes/--no-run-probes",
+    default=True,
+    help="Run NLP probes for NER/DEP/SDP/CON.",
+)
+@click.option(
+    "--probe-timeout",
+    default=20.0,
+    type=float,
+    show_default=True,
+    help="Per task timeout in seconds for probe runs.",
+)
+@click.option(
+    "--probe-only",
+    is_flag=True,
+    help="Run probes without loading project pipeline state.",
+)
+@click.option(
+    "--all-projects",
+    is_flag=True,
+    help="Assess all local projects under WORKING_DIR/projects.",
+)
+@click.option(
+    "--allow-empty",
+    is_flag=True,
+    help="In --all-projects mode, return empty result instead of error when no state files found.",
+)
+@click.option(
+    "--project-limit",
+    default=100,
+    type=int,
+    show_default=True,
+    help="Max number of projects to scan in batch mode.",
+)
+@click.option(
+    "--sort-by",
+    type=click.Choice(["risk", "score", "project_id"]),
+    default="risk",
+    show_default=True,
+    help="Batch result ordering.",
+)
+@click.option(
+    "--top",
+    default=0,
+    type=int,
+    show_default=True,
+    help="Return top-N projects after sorting (0 means all).",
+)
+@click.option(
+    "--grade-a",
+    default=0.85,
+    type=float,
+    show_default=True,
+    help="Grade A threshold.",
+)
+@click.option(
+    "--grade-b",
+    default=0.70,
+    type=float,
+    show_default=True,
+    help="Grade B threshold.",
+)
+@click.option(
+    "--grade-c",
+    default=0.50,
+    type=float,
+    show_default=True,
+    help="Grade C threshold.",
+)
+@click.option(
+    "--export",
+    "export_path",
+    default=None,
+    help="Write assessment JSON output to file.",
+)
+@click.option(
+    "--json",
+    "json_output",
+    is_flag=True,
+    help="Output structured JSON.",
+)
 def assess_l2_cmd(
     project_id: str | None,
     knowledge_dirname: str | None,
@@ -442,7 +581,11 @@ def assess_l2_cmd(
 ) -> None:
     """Assess L2 knowledge quantization using current project pipeline metrics + NLP probes."""
     try:
-        threshold_a, threshold_b, threshold_c = normalize_l2_quantization_grade_thresholds(
+        (
+            threshold_a,
+            threshold_b,
+            threshold_c,
+        ) = normalize_l2_quantization_grade_thresholds(
             grade_a,
             grade_b,
             grade_c,
@@ -450,13 +593,17 @@ def assess_l2_cmd(
     except ValueError as exc:
         raise click.ClickException(str(exc)) from exc
     if all_projects and (project_id or state_file or probe_only):
-        raise click.ClickException("--all-projects cannot be combined with --project-id/--state-file/--probe-only.")
+        raise click.ClickException(
+            "--all-projects cannot be combined with --project-id/--state-file/--probe-only.",
+        )
 
     if all_projects:
         discovered = _discover_project_state_files(limit=max(1, project_limit))
         if not discovered:
             if not allow_empty:
-                raise click.ClickException("No project-pipeline-state.json found under WORKING_DIR/projects.")
+                raise click.ClickException(
+                    "No project-pipeline-state.json found under WORKING_DIR/projects.",
+                )
             payload = {
                 "mode": "all-projects",
                 "sort_by": sort_by,
@@ -481,7 +628,9 @@ def assess_l2_cmd(
             "阿婆主来到北京立方庭参观自然语义科技公司。",
             "项目空间中的知识图谱需要高质量实体与关系抽取。",
         ]
-        samples = [s for s in list(sample_texts) if str(s or "").strip()] or default_samples
+        samples = [
+            s for s in list(sample_texts) if str(s or "").strip()
+        ] or default_samples
 
         items: list[dict[str, Any]] = []
         for item_project_id, path in discovered:
@@ -491,9 +640,16 @@ def assess_l2_cmd(
             except json.JSONDecodeError as exc:
                 state = {}
                 state_error = f"Invalid state JSON: {exc}"
-            scorecard = build_l2_quantization_scorecard(state) if state_error is None else None
+            scorecard = (
+                build_l2_quantization_scorecard(state)
+                if state_error is None
+                else None
+            )
             probes = (
-                _run_l2_probes_with_timeout(samples, timeout_sec=max(1.0, probe_timeout))
+                _run_l2_probes_with_timeout(
+                    samples,
+                    timeout_sec=max(1.0, probe_timeout),
+                )
                 if run_probes
                 else None
             )
@@ -509,9 +665,15 @@ def assess_l2_cmd(
                 "state_file": str(path),
                 "scorecard": scorecard,
                 "source": {
-                    "status": "invalid_state_json" if state_error else str(state.get("status") or ""),
+                    "status": "invalid_state_json"
+                    if state_error
+                    else str(state.get("status") or ""),
                     "stage": str(state.get("stage") or ""),
-                    "updated_at": str(state.get("updated_at") or state.get("last_finished_at") or ""),
+                    "updated_at": str(
+                        state.get("updated_at")
+                        or state.get("last_finished_at")
+                        or "",
+                    ),
                 },
                 "grade": grade,
             }
@@ -519,9 +681,13 @@ def assess_l2_cmd(
                 item_payload["state_error"] = state_error
                 item_grade = _as_dict(item_payload.get("grade"))
                 raw_labels = item_grade.get("risk_labels")
-                labels: list[Any] = raw_labels if isinstance(raw_labels, list) else []
+                labels: list[Any] = (
+                    raw_labels if isinstance(raw_labels, list) else []
+                )
                 raw_reasons = item_grade.get("reasons")
-                reasons: list[Any] = raw_reasons if isinstance(raw_reasons, list) else []
+                reasons: list[Any] = (
+                    raw_reasons if isinstance(raw_reasons, list) else []
+                )
                 item_grade["risk_labels"] = [*labels, "state_parse_error"]
                 item_grade["reasons"] = [*reasons, state_error]
                 item_grade["grade"] = "N/A"
@@ -572,7 +738,9 @@ def assess_l2_cmd(
         try:
             state = json.loads(state_path.read_text(encoding="utf-8"))
         except json.JSONDecodeError as exc:
-            raise click.ClickException(f"Invalid state JSON: {state_path} ({exc})") from exc
+            raise click.ClickException(
+                f"Invalid state JSON: {state_path} ({exc})",
+            ) from exc
 
         scorecard = build_l2_quantization_scorecard(state)
 
@@ -580,7 +748,9 @@ def assess_l2_cmd(
         "阿婆主来到北京立方庭参观自然语义科技公司。",
         "项目空间中的知识图谱需要高质量实体与关系抽取。",
     ]
-    samples = [s for s in list(sample_texts) if str(s or "").strip()] or default_samples
+    samples = [
+        s for s in list(sample_texts) if str(s or "").strip()
+    ] or default_samples
 
     payload: dict[str, Any] = {
         "project_id": project_id,
@@ -589,12 +759,17 @@ def assess_l2_cmd(
         "source": {
             "status": str(state.get("status") or ""),
             "stage": str(state.get("stage") or ""),
-            "updated_at": str(state.get("updated_at") or state.get("last_finished_at") or ""),
+            "updated_at": str(
+                state.get("updated_at") or state.get("last_finished_at") or "",
+            ),
         },
     }
 
     if run_probes:
-        payload["probes"] = _run_l2_probes_with_timeout(samples, timeout_sec=max(1.0, probe_timeout))
+        payload["probes"] = _run_l2_probes_with_timeout(
+            samples,
+            timeout_sec=max(1.0, probe_timeout),
+        )
 
     payload["grade"] = _grade_l2_assessment(
         scorecard,
@@ -619,7 +794,11 @@ def assess_l2_cmd(
         click.echo(f"\nExported: {saved}")
 
 
-def _run_l2_probes_with_timeout(sample_texts: list[str], *, timeout_sec: float) -> dict[str, Any]:
+def _run_l2_probes_with_timeout(
+    sample_texts: list[str],
+    *,
+    timeout_sec: float,
+) -> dict[str, Any]:
     rows: list[dict[str, Any]] = []
     ok = 0
     total = 0
@@ -645,9 +824,13 @@ def _run_l2_probes_with_timeout(sample_texts: list[str], *, timeout_sec: float) 
                     "status": status,
                     "duration_ms": elapsed_ms,
                     "reason_code": str(state.get("reason_code") or ""),
-                    "sidecar_elapsed_ms": _safe_int(state.get("sidecar_elapsed_ms")),
-                    "sidecar_execution_path": str(state.get("sidecar_execution_path") or ""),
-                }
+                    "sidecar_elapsed_ms": _safe_int(
+                        state.get("sidecar_elapsed_ms"),
+                    ),
+                    "sidecar_execution_path": str(
+                        state.get("sidecar_execution_path") or "",
+                    ),
+                },
             )
 
     success_ratio = (ok / total) if total > 0 else 0.0
@@ -655,7 +838,10 @@ def _run_l2_probes_with_timeout(sample_texts: list[str], *, timeout_sec: float) 
     p95_ms = 0
     if latencies:
         sorted_lat = sorted(int(x) for x in latencies)
-        idx = max(0, min(len(sorted_lat) - 1, int(round((len(sorted_lat) - 1) * 0.95))))
+        idx = max(
+            0,
+            min(len(sorted_lat) - 1, int(round((len(sorted_lat) - 1) * 0.95))),
+        )
         p95_ms = sorted_lat[idx]
 
     return {
@@ -673,8 +859,17 @@ def _run_l2_probes_with_timeout(sample_texts: list[str], *, timeout_sec: float) 
 def _register_shortcut(task_key: str, description: str) -> None:
     @nlp_group.command(name=task_key, help=f"{description}.")
     @click.argument("text", type=str)
-    @click.option("--show-perf", is_flag=True, help="Show performance details.")
-    @click.option("--json", "json_output", is_flag=True, help="Output structured JSON.")
+    @click.option(
+        "--show-perf",
+        is_flag=True,
+        help="Show performance details.",
+    )
+    @click.option(
+        "--json",
+        "json_output",
+        is_flag=True,
+        help="Output structured JSON.",
+    )
     def _cmd(text: str, show_perf: bool, json_output: bool) -> None:
         _run_task(task_key, text, show_perf=show_perf, json_output=json_output)
 

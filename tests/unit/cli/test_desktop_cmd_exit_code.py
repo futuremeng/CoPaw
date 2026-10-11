@@ -74,7 +74,9 @@ def _patch_desktop(
         lambda *_a: (5599, None),
     )
     monkeypatch.setattr(
-        desktop_cmd_module, "_wait_for_http", lambda *_a, **_k: ready
+        desktop_cmd_module,
+        "_wait_for_http",
+        lambda *_a, **_k: ready,
     )
     monkeypatch.setattr(
         desktop_cmd_module.subprocess,

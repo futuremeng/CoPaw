@@ -21,11 +21,17 @@ def test_sync_knowledge_module_skills_toggles_active_skill(
     )
 
     active_skills_dir = tmp_path / "active_skills"
-    monkeypatch.setattr(module, "KNOWLEDGE_MODULE_SKILLS_DIR", module_skills_dir)
+    monkeypatch.setattr(
+        module,
+        "KNOWLEDGE_MODULE_SKILLS_DIR",
+        module_skills_dir,
+    )
     monkeypatch.setattr(skills_manager, "ACTIVE_SKILLS_DIR", active_skills_dir)
 
     module.sync_knowledge_module_skills(True)
-    assert (active_skills_dir / "knowledge_search_assistant" / "SKILL.md").exists()
+    assert (
+        active_skills_dir / "knowledge_search_assistant" / "SKILL.md"
+    ).exists()
 
     module.sync_knowledge_module_skills(False)
     assert not (active_skills_dir / "knowledge_search_assistant").exists()

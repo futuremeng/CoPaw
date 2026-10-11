@@ -11,7 +11,10 @@ from agentscope.tool import ToolResponse
 
 from ...agents.skill_system.hub import install_skill_from_hub
 from ...agents.skills_manager import reconcile_workspace_manifest
-from ...app.routers.skills import _aggregate_marketplace, _load_current_market_config
+from ...app.routers.skills import (
+    _aggregate_marketplace,
+    _load_current_market_config,
+)
 from ...config.context import get_current_workspace_dir
 from ...constant import WORKING_DIR
 from ...security.skill_scanner import SkillScanError
@@ -21,7 +24,9 @@ _TRUSTED_MARKET_LEVELS = {"official", "community"}
 
 
 def _confirmation_valid(confirm: bool, confirmation_token: str) -> bool:
-    return bool(confirm) and (confirmation_token or "").strip() == _CONFIRM_TOKEN
+    return (
+        bool(confirm) and (confirmation_token or "").strip() == _CONFIRM_TOKEN
+    )
 
 
 async def skill_market_install(

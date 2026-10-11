@@ -61,7 +61,10 @@ ALLOWED_COPAW_ONLY_PREFIXES = (
 # channel: the engine package must never read it.
 ALLOWED_COPAW_ONLY_FILES: set[str] = {"release_channel.py"}
 
-QWENPAW_TO_COPAW_IMPORT_RE = re.compile(r"^\s*from\s+copaw\.[\w.]+\s+import\s+", re.M)
+QWENPAW_TO_COPAW_IMPORT_RE = re.compile(
+    r"^\s*from\s+copaw\.[\w.]+\s+import\s+",
+    re.M,
+)
 COPAW_TO_QWENPAW_IMPORT_RE = re.compile(
     r"^\s*(from\s+qwenpaw\.[\w.]+\s+import\s+.+|import\s+qwenpaw\.[\w.]+)(\s+#.*)?$",
     re.M,
@@ -84,13 +87,21 @@ def _read(path: Path) -> str:
 
 
 def _is_thin_copaw_shim(content: str) -> bool:
-    lines = [ln.strip() for ln in content.splitlines() if ln.strip() and not ln.strip().startswith("#")]
+    lines = [
+        ln.strip()
+        for ln in content.splitlines()
+        if ln.strip() and not ln.strip().startswith("#")
+    ]
     if not lines:
         return False
     if QWENPAW_TO_COPAW_IMPORT_RE.search(content):
         return False
 
-    import_lines = [ln for ln in lines if ln.startswith("from ") or ln.startswith("import ")]
+    import_lines = [
+        ln
+        for ln in lines
+        if ln.startswith("from ") or ln.startswith("import ")
+    ]
     non_import_lines = [ln for ln in lines if ln not in import_lines]
 
     if not import_lines:
@@ -147,7 +158,10 @@ def compute_local_report() -> dict:
         c_text = _read(c_path)
         q_text = _read(q_path)
 
-        if QWENPAW_TO_COPAW_IMPORT_RE.search(q_text) and rel not in ALLOWED_QWENPAW_TO_COPAW:
+        if (
+            QWENPAW_TO_COPAW_IMPORT_RE.search(q_text)
+            and rel not in ALLOWED_QWENPAW_TO_COPAW
+        ):
             reverse_imports.append(rel)
 
         if rel in ALLOWED_NON_THIN_SHARED:
@@ -188,7 +202,10 @@ def compute_ref_report(ref: str) -> dict | None:
         c_text = _git_show_text(ref, f"src/copaw/{rel}")
         q_text = _git_show_text(ref, f"src/qwenpaw/{rel}")
 
-        if QWENPAW_TO_COPAW_IMPORT_RE.search(q_text) and rel not in ALLOWED_QWENPAW_TO_COPAW:
+        if (
+            QWENPAW_TO_COPAW_IMPORT_RE.search(q_text)
+            and rel not in ALLOWED_QWENPAW_TO_COPAW
+        ):
             reverse_imports.append(rel)
 
         if rel in ALLOWED_NON_THIN_SHARED:
@@ -221,13 +238,17 @@ def _print_report(title: str, report: dict) -> None:
     print(f"non_thin_shared: {len(report['non_thin_shared'])}")
     for item in report["non_thin_shared"]:
         print(f"  - {item}")
-    print(f"non_extension_copaw_only: {len(report['non_extension_copaw_only'])}")
+    print(
+        f"non_extension_copaw_only: {len(report['non_extension_copaw_only'])}",
+    )
     for item in report["non_extension_copaw_only"]:
         print(f"  - {item}")
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Check copaw/qwenpaw namespace boundaries.")
+    parser = argparse.ArgumentParser(
+        description="Check copaw/qwenpaw namespace boundaries.",
+    )
     parser.add_argument(
         "--upstream-ref",
         default="",
@@ -242,27 +263,32 @@ def main() -> int:
     if args.upstream_ref.strip():
         baseline = compute_ref_report(args.upstream_ref.strip())
         if baseline is None:
-            print(f"\nwarning: failed to read baseline ref {args.upstream_ref!r}")
+            print(
+                f"\nwarning: failed to read baseline ref {args.upstream_ref!r}",
+            )
         else:
             _print_report(f"baseline:{args.upstream_ref}", baseline)
             print("\n== delta(current - baseline) ==")
             print(
                 "reverse_imports_delta:",
-                len(current["reverse_imports"]) - len(baseline["reverse_imports"]),
+                len(current["reverse_imports"])
+                - len(baseline["reverse_imports"]),
             )
             print(
                 "non_thin_shared_delta:",
-                len(current["non_thin_shared"]) - len(baseline["non_thin_shared"]),
+                len(current["non_thin_shared"])
+                - len(baseline["non_thin_shared"]),
             )
             print(
                 "non_extension_copaw_only_delta:",
-                len(current["non_extension_copaw_only"]) - len(baseline["non_extension_copaw_only"]),
+                len(current["non_extension_copaw_only"])
+                - len(baseline["non_extension_copaw_only"]),
             )
 
     failed = bool(
         current["reverse_imports"]
         or current["non_thin_shared"]
-        or current["non_extension_copaw_only"]
+        or current["non_extension_copaw_only"],
     )
     if failed:
         print("\nresult: FAILED")

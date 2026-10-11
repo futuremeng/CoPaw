@@ -20,7 +20,11 @@ def test_get_local_whisper_status_offloads_to_thread(monkeypatch):
         calls.append((func, args))
         return await original_to_thread(func, *args, **kwargs)
 
-    monkeypatch.setattr(agent_router_module.asyncio, "to_thread", fake_to_thread)
+    monkeypatch.setattr(
+        agent_router_module.asyncio,
+        "to_thread",
+        fake_to_thread,
+    )
     monkeypatch.setattr(
         "qwenpaw.agents.utils.audio_transcription.check_local_whisper_available",
         lambda: {
@@ -50,7 +54,11 @@ def test_get_hanlp_status_offloads_to_thread(monkeypatch):
         calls.append((func, args))
         return await original_to_thread(func, *args, **kwargs)
 
-    monkeypatch.setattr(agent_router_module.asyncio, "to_thread", fake_to_thread)
+    monkeypatch.setattr(
+        agent_router_module.asyncio,
+        "to_thread",
+        fake_to_thread,
+    )
     monkeypatch.setattr(
         "qwenpaw.agents.utils.hanlp_sidecar.get_hanlp_sidecar_status",
         lambda **_kwargs: {
@@ -76,7 +84,7 @@ def test_get_hanlp_status_offloads_to_thread(monkeypatch):
                     "reason_code": "HANLP_TASK_READY",
                     "reason": "HanLP task is ready.",
                     "task_name": "ner/msra",
-                }
+                },
             },
         },
     )
@@ -101,14 +109,26 @@ def test_post_hanlp_install_offloads_to_thread(monkeypatch):
         calls.append((func, args))
         return await original_to_thread(func, *args, **kwargs)
 
-    monkeypatch.setattr(agent_router_module.asyncio, "to_thread", fake_to_thread)
+    monkeypatch.setattr(
+        agent_router_module.asyncio,
+        "to_thread",
+        fake_to_thread,
+    )
     monkeypatch.setattr(
         "qwenpaw.agents.utils.hanlp_sidecar.auto_install_hanlp_sidecar",
         lambda: {
             "success": True,
             "already_available": False,
-            "status_before": {"sidecar": {"status": "unavailable"}, "model": {"status": "unavailable"}, "tasks": {}},
-            "status_after": {"sidecar": {"status": "ready"}, "model": {"status": "unavailable"}, "tasks": {}},
+            "status_before": {
+                "sidecar": {"status": "unavailable"},
+                "model": {"status": "unavailable"},
+                "tasks": {},
+            },
+            "status_after": {
+                "sidecar": {"status": "ready"},
+                "model": {"status": "unavailable"},
+                "tasks": {},
+            },
             "operations": [],
             "manual_steps": [],
         },
@@ -134,13 +154,25 @@ def test_post_hanlp_download_model_offloads_to_thread(monkeypatch):
         calls.append((func, args))
         return await original_to_thread(func, *args, **kwargs)
 
-    monkeypatch.setattr(agent_router_module.asyncio, "to_thread", fake_to_thread)
+    monkeypatch.setattr(
+        agent_router_module.asyncio,
+        "to_thread",
+        fake_to_thread,
+    )
     monkeypatch.setattr(
         "qwenpaw.agents.utils.hanlp_sidecar.ensure_hanlp_model",
         lambda: {
             "success": True,
-            "status_before": {"sidecar": {"status": "ready"}, "model": {"status": "unavailable"}, "tasks": {}},
-            "status_after": {"sidecar": {"status": "ready"}, "model": {"status": "ready"}, "tasks": {"ner_msra": {"status": "ready"}}},
+            "status_before": {
+                "sidecar": {"status": "ready"},
+                "model": {"status": "unavailable"},
+                "tasks": {},
+            },
+            "status_after": {
+                "sidecar": {"status": "ready"},
+                "model": {"status": "ready"},
+                "tasks": {"ner_msra": {"status": "ready"}},
+            },
             "model_result": {
                 "status": "ready",
                 "reason_code": "HANLP_MODEL_READY",
@@ -153,7 +185,7 @@ def test_post_hanlp_download_model_offloads_to_thread(monkeypatch):
                     "reason_code": "HANLP_TASK_READY",
                     "reason": "HanLP task is ready.",
                     "task_name": "ner/msra",
-                }
+                },
             },
             "manual_steps": [],
         },
@@ -179,7 +211,11 @@ def test_post_siamese_install_offloads_to_thread(monkeypatch):
         calls.append((func, args))
         return await original_to_thread(func, *args, **kwargs)
 
-    monkeypatch.setattr(agent_router_module.asyncio, "to_thread", fake_to_thread)
+    monkeypatch.setattr(
+        agent_router_module.asyncio,
+        "to_thread",
+        fake_to_thread,
+    )
     monkeypatch.setattr(
         "qwenpaw.knowledge.siamese_uninlu_runtime.initialize_siamese_sidecar",
         lambda _config: {
@@ -197,8 +233,16 @@ def test_post_siamese_install_offloads_to_thread(monkeypatch):
             "manual_steps": [],
         },
     )
-    monkeypatch.setattr(agent_router_module, "load_config", lambda: SimpleNamespace(nlp=SimpleNamespace()))
-    monkeypatch.setattr(agent_router_module, "save_config", lambda _config: None)
+    monkeypatch.setattr(
+        agent_router_module,
+        "load_config",
+        lambda: SimpleNamespace(nlp=SimpleNamespace()),
+    )
+    monkeypatch.setattr(
+        agent_router_module,
+        "save_config",
+        lambda _config: None,
+    )
 
     client = TestClient(app)
     response = client.post("/agent/siamese-install")
@@ -262,7 +306,10 @@ def test_put_nlp_strategy_updates_config(monkeypatch):
     assert payload["strategy"]["task_overrides"] == {"ner": "model-ner-new"}
     assert payload["strategy"]["auto_classical_chinese"]["enabled"] is True
     assert payload["strategy"]["auto_classical_chinese"]["threshold"] == 0.23
-    assert payload["strategy"]["auto_classical_chinese"]["model_id"] == "model-lzh-new"
+    assert (
+        payload["strategy"]["auto_classical_chinese"]["model_id"]
+        == "model-lzh-new"
+    )
     assert saved["called"] is True
 
 
@@ -367,7 +414,9 @@ def test_get_running_config_does_not_force_workspace_start(monkeypatch):
     )
 
     manager = MagicMock()
-    manager.get_agent.side_effect = AssertionError("workspace should not start")
+    manager.get_agent.side_effect = AssertionError(
+        "workspace should not start",
+    )
     app.state.multi_agent_manager = manager
 
     client = TestClient(app)

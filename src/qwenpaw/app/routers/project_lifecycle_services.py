@@ -98,7 +98,10 @@ def create_project(
     project_dir.mkdir(parents=True, exist_ok=False)
 
     data_subdir = safe_project_data_subdir(body.data_dir)
-    (project_dir / ".pipelines" / "templates").mkdir(parents=True, exist_ok=True)
+    (project_dir / ".pipelines" / "templates").mkdir(
+        parents=True,
+        exist_ok=True,
+    )
     ensure_project_artifact_layout(project_dir)
 
     metadata_file = default_project_metadata_file(project_dir)
@@ -203,7 +206,10 @@ def clone_project(
     if parsed is not None:
         metadata, content_body = parsed
     elif metadata_file.exists():
-        content_body = metadata_file.read_text(encoding="utf-8", errors="ignore")
+        content_body = metadata_file.read_text(
+            encoding="utf-8",
+            errors="ignore",
+        )
 
     metadata["id"] = cloned_id
     metadata["name"] = cloned_name

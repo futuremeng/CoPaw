@@ -28,7 +28,8 @@ FIXTURE_FILES = (
 def _module():
     path = REPO_ROOT / "scripts/check_release_channel_consistency.py"
     spec = importlib.util.spec_from_file_location(
-        "check_release_channel_consistency", path
+        "check_release_channel_consistency",
+        path,
     )
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
@@ -50,13 +51,14 @@ def fixture_root(tmp_path):
 
 def _fact(root: Path) -> dict:
     return json.loads(
-        (root / "src/copaw/release_channel.json").read_text(encoding="utf-8")
+        (root / "src/copaw/release_channel.json").read_text(encoding="utf-8"),
     )
 
 
 def _write_fact(root: Path, data: dict) -> None:
     (root / "src/copaw/release_channel.json").write_text(
-        json.dumps(data, indent=2) + "\n", encoding="utf-8"
+        json.dumps(data, indent=2) + "\n",
+        encoding="utf-8",
     )
 
 
@@ -83,7 +85,8 @@ def test_rule_one_rejects_an_empty_distribution_name(fixture_root, capsys):
 
 
 def test_rule_two_rejects_a_ready_channel_without_address(
-    fixture_root, capsys
+    fixture_root,
+    capsys,
 ):
     mod = _module()
     data = _fact(fixture_root)
@@ -116,7 +119,8 @@ def test_rule_three_rejects_an_upstream_clone_source(fixture_root, capsys):
 
 
 def test_rule_three_rejects_an_installer_without_our_releases_page(
-    fixture_root, capsys
+    fixture_root,
+    capsys,
 ):
     mod = _module()
     path = fixture_root / "scripts/install.bat"
@@ -142,7 +146,8 @@ def test_rule_four_rejects_a_stale_generated_file(fixture_root, capsys):
     path = fixture_root / "console/src/generated/releaseChannel.ts"
     path.write_text(
         path.read_text(encoding="utf-8").replace(
-            '"futuremeng/CoPaw"', '"someone/Else"'
+            '"futuremeng/CoPaw"',
+            '"someone/Else"',
         ),
         encoding="utf-8",
     )
@@ -180,6 +185,6 @@ def test_our_channel_number_carries_a_post_release():
     """CoPaw ships upstream's number plus its own suffix (design §5), so the
     distributed version can never equal the upstream build."""
     text = (REPO_ROOT / "src/qwenpaw/__version__.py").read_text(
-        encoding="utf-8"
+        encoding="utf-8",
     )
     assert ".post" in text

@@ -5,7 +5,9 @@ from pathlib import Path
 import pytest
 
 from qwenpaw.agents.tools import file_io
-from qwenpaw.app.project_realtime_events import collect_project_realtime_changes
+from qwenpaw.app.project_realtime_events import (
+    collect_project_realtime_changes,
+)
 from qwenpaw.config.context import (
     set_current_project_dir,
     set_current_workspace_dir,

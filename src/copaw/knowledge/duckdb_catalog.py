@@ -51,7 +51,7 @@ class DuckDBKnowledgeCatalog:
         except ImportError as exc:
             raise RuntimeError(
                 "duckdb is required for DuckDBKnowledgeCatalog. "
-                "Install dependencies with `pip install duckdb` or project extras."
+                "Install dependencies with `pip install duckdb` or project extras.",
             ) from exc
 
     def ensure_layout(self) -> dict[str, str]:
@@ -95,7 +95,7 @@ class DuckDBKnowledgeCatalog:
                     meta_value TEXT NOT NULL,
                     updated_at TEXT NOT NULL
                 )
-                """
+                """,
             )
             conn.execute(
                 """
@@ -111,7 +111,7 @@ class DuckDBKnowledgeCatalog:
                     error_message TEXT,
                     metadata_json TEXT DEFAULT '{}'
                 )
-                """
+                """,
             )
             conn.execute(
                 """
@@ -121,7 +121,7 @@ class DuckDBKnowledgeCatalog:
                     updated_at TEXT NOT NULL,
                     metadata_json TEXT DEFAULT '{}'
                 )
-                """
+                """,
             )
 
             now = self._now_iso()
@@ -256,7 +256,12 @@ class DuckDBKnowledgeCatalog:
                 )
                 VALUES (?, ?, ?, ?)
                 """,
-                [watermark_key, watermark_value, updated_at, self._to_json(metadata)],
+                [
+                    watermark_key,
+                    watermark_value,
+                    updated_at,
+                    self._to_json(metadata),
+                ],
             )
 
         return {

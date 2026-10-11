@@ -50,7 +50,7 @@ def _build_workspace_with_project(
                     "distillation_note": "alpha distilled",
                     "tags": ["demo"],
                     "derived_from_ids": ["run-1"],
-                }
+                },
             ],
             "scripts": [],
             "flows": [],
@@ -67,7 +67,9 @@ def _build_workspace_with_project(
     return project_id, project_dir
 
 
-def _build_workspace_with_empty_artifacts(workspace_dir: Path) -> tuple[str, Path]:
+def _build_workspace_with_empty_artifacts(
+    workspace_dir: Path,
+) -> tuple[str, Path]:
     project_id = "project-demo"
     project_dir = workspace_dir / "projects" / project_id
     (project_dir / ".skills").mkdir(parents=True, exist_ok=True)
@@ -153,14 +155,18 @@ def test_promote_project_skill_writes_target_and_updates_profile(
     updated = _load_project_summary(workspace_dir / "projects" / project_id)
     assert updated is not None
     promoted_item = next(
-        item for item in updated.artifact_profile.skills if item.id == "skill-alpha"
+        item
+        for item in updated.artifact_profile.skills
+        if item.id == "skill-alpha"
     )
     assert isinstance(promoted_item, ProjectArtifactItem)
     assert promoted_item.origin == "project-promoted"
     assert promoted_item.market_item_id == "team_skill_alpha"
 
 
-def test_auto_distill_project_skills_creates_draft_entries(tmp_path: Path) -> None:
+def test_auto_distill_project_skills_creates_draft_entries(
+    tmp_path: Path,
+) -> None:
     workspace_dir = tmp_path
     project_id, _ = _build_workspace_with_empty_artifacts(workspace_dir)
 
@@ -198,6 +204,8 @@ def test_confirm_project_skill_stable_updates_status(tmp_path: Path) -> None:
     updated = _load_project_summary(workspace_dir / "projects" / project_id)
     assert updated is not None
     item = next(
-        entry for entry in updated.artifact_profile.skills if entry.id == "skill-alpha"
+        entry
+        for entry in updated.artifact_profile.skills
+        if entry.id == "skill-alpha"
     )
     assert item.status == "stable"

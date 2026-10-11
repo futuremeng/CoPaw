@@ -36,7 +36,11 @@ def _build_client(base_url: str, timeout: float) -> httpx.Client:
     )
 
 
-def _get_templates(client: httpx.Client, agent_id: str, project_id: str) -> list[dict[str, Any]]:
+def _get_templates(
+    client: httpx.Client,
+    agent_id: str,
+    project_id: str,
+) -> list[dict[str, Any]]:
     resp = client.get(
         f"/agents/{agent_id}/projects/{project_id}/pipelines/templates",
     )
@@ -112,26 +116,56 @@ def _load_parameters(raw: str) -> dict[str, Any]:
 
 def _save_json(path: Path, payload: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    path.write_text(
+        json.dumps(payload, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
 
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Start and monitor one project pipeline run for multibook reproducibility.",
     )
-    parser.add_argument("--base-url", default="http://127.0.0.1:8088", help="CoPaw API base url")
+    parser.add_argument(
+        "--base-url",
+        default="http://127.0.0.1:8088",
+        help="CoPaw API base url",
+    )
     parser.add_argument("--agent-id", required=True, help="Agent ID")
     parser.add_argument("--project-id", required=True, help="Project ID")
-    parser.add_argument("--template-id", default="books-alignment-v1", help="Pipeline template ID")
+    parser.add_argument(
+        "--template-id",
+        default="books-alignment-v1",
+        help="Pipeline template ID",
+    )
     parser.add_argument(
         "--parameters",
         default="{}",
         help="Run parameters JSON text or path to JSON file",
     )
-    parser.add_argument("--timeout", type=float, default=30.0, help="HTTP timeout seconds")
-    parser.add_argument("--wait", action="store_true", help="Poll until terminal status")
-    parser.add_argument("--poll-interval", type=float, default=5.0, help="Polling interval seconds")
-    parser.add_argument("--wait-timeout", type=float, default=7200.0, help="Max wait seconds")
+    parser.add_argument(
+        "--timeout",
+        type=float,
+        default=30.0,
+        help="HTTP timeout seconds",
+    )
+    parser.add_argument(
+        "--wait",
+        action="store_true",
+        help="Poll until terminal status",
+    )
+    parser.add_argument(
+        "--poll-interval",
+        type=float,
+        default=5.0,
+        help="Polling interval seconds",
+    )
+    parser.add_argument(
+        "--wait-timeout",
+        type=float,
+        default=7200.0,
+        help="Max wait seconds",
+    )
     parser.add_argument(
         "--output",
         default="",
@@ -155,7 +189,9 @@ def main() -> int:
             print(f"[error] Failed to fetch templates: {exc}", file=sys.stderr)
             return 2
 
-        template_ids = {str(item.get("id")) for item in templates if isinstance(item, dict)}
+        template_ids = {
+            str(item.get("id")) for item in templates if isinstance(item, dict)
+        }
         if args.template_id not in template_ids:
             print(
                 f"[error] Template '{args.template_id}' not found. Available: {sorted(template_ids)}",
@@ -190,7 +226,12 @@ def main() -> int:
             last_status = ""
             while True:
                 try:
-                    detail = _get_run_detail(client, args.agent_id, args.project_id, run_id)
+                    detail = _get_run_detail(
+                        client,
+                        args.agent_id,
+                        args.project_id,
+                        run_id,
+                    )
                 except Exception as exc:
                     print(f"[warn] Poll failed: {exc}")
                     time.sleep(args.poll_interval)

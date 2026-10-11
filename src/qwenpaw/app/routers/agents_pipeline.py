@@ -74,7 +74,10 @@ def _resolve_rpa_source_path(workspace_dir: Path, source_path: str) -> Path:
             detail="source_path must resolve under the agent workspace",
         ) from exc
     if not resolved.exists() or not resolved.is_file():
-        raise HTTPException(status_code=404, detail=f"RPA package not found: {source_path}")
+        raise HTTPException(
+            status_code=404,
+            detail=f"RPA package not found: {source_path}",
+        )
     return resolved
 
 
@@ -212,7 +215,10 @@ async def import_rpa_template(
         raise HTTPException(status_code=404, detail=str(e)) from e
 
     if body.package is None and not (body.source_path or "").strip():
-        raise HTTPException(status_code=400, detail="Either package or source_path is required")
+        raise HTTPException(
+            status_code=400,
+            detail="Either package or source_path is required",
+        )
 
     workspace_dir = Path(workspace.workspace_dir)
     try:
@@ -220,12 +226,17 @@ async def import_rpa_template(
         if body.package is not None:
             package_source = body.package
         else:
-            package_source = _resolve_rpa_source_path(workspace_dir, body.source_path or "")
+            package_source = _resolve_rpa_source_path(
+                workspace_dir,
+                body.source_path or "",
+            )
 
         package = load_rpa_template_package(package_source)
         rpa_template = package.template
         if body.target_template_id:
-            rpa_template = rpa_template.model_copy(update={"id": body.target_template_id})
+            rpa_template = rpa_template.model_copy(
+                update={"id": body.target_template_id},
+            )
 
         pipeline_template = rpa_template_to_pipeline_template(rpa_template)
         saved = _save_agent_pipeline_template_with_md(
@@ -237,7 +248,7 @@ async def import_rpa_template(
             update={
                 "builtin_kind": "rpa",
                 "entrypoint": saved.entrypoint or "rpa-workbench",
-            }
+            },
         )
     except HTTPException:
         raise
@@ -284,7 +295,9 @@ async def export_pipeline_template_as_rpa_package(
             )
 
         rpa_template = rpa_template_from_pipeline_template(template)
-        normalized_tags = [str(item).strip() for item in tags if str(item).strip()]
+        normalized_tags = [
+            str(item).strip() for item in tags if str(item).strip()
+        ]
         metadata: dict[str, Any] = {
             "source": "agent-template",
             "pipeline_template_id": templateId,
@@ -402,7 +415,10 @@ async def save_agent_pipeline_template_stream(
             }
             return f"data: {json.dumps(data, ensure_ascii=False)}\\n\\n"
 
-        yield _event("validation_started", {"expected_revision": expectedRevision})
+        yield _event(
+            "validation_started",
+            {"expected_revision": expectedRevision},
+        )
         try:
             saved = _save_agent_pipeline_template_with_md(
                 workspace_dir,
@@ -420,7 +436,9 @@ async def save_agent_pipeline_template_stream(
             yield _event("done", {"ok": True})
         except HTTPException as exc:
             yield _event(
-                "validation_failed" if exc.status_code == 422 else "save_failed",
+                "validation_failed"
+                if exc.status_code == 422
+                else "save_failed",
                 {
                     "ok": False,
                     "status_code": exc.status_code,
@@ -510,7 +528,10 @@ async def ensure_agent_pipeline_draft(
 
     try:
         normalized = body.model_copy(update={"id": templateId})
-        return _ensure_pipeline_draft_workspace(Path(workspace.workspace_dir), normalized)
+        return _ensure_pipeline_draft_workspace(
+            Path(workspace.workspace_dir),
+            normalized,
+        )
     except HTTPException:
         raise
     except Exception as e:
@@ -734,7 +755,10 @@ async def create_project_pipeline_run(
         raise HTTPException(status_code=404, detail=str(e)) from e
 
     try:
-        project_dir = agents_router_impl._resolve_project_dir(Path(workspace.workspace_dir), projectId)
+        project_dir = agents_router_impl._resolve_project_dir(
+            Path(workspace.workspace_dir),
+            projectId,
+        )
         return _create_project_pipeline_run(projectId, project_dir, body)
     except HTTPException:
         raise
@@ -764,7 +788,10 @@ async def retry_project_pipeline_run(
         raise HTTPException(status_code=404, detail=str(e)) from e
 
     try:
-        project_dir = agents_router_impl._resolve_project_dir(Path(workspace.workspace_dir), projectId)
+        project_dir = agents_router_impl._resolve_project_dir(
+            Path(workspace.workspace_dir),
+            projectId,
+        )
         return _retry_project_pipeline_run(projectId, project_dir, runId, body)
     except HTTPException:
         raise
@@ -788,13 +815,19 @@ async def add_or_update_pipeline_step(
     body: PipelineTemplateStep,
     agentId: str = PathParam(...),
     templateId: str = PathParam(...),
-    operation: str = Query(default="update", description="Either 'add' or 'update'"),
+    operation: str = Query(
+        default="update",
+        description="Either 'add' or 'update'",
+    ),
     expectedRevision: int | None = Query(default=None),
 ) -> PipelineTemplateInfo:
     """Add a new step or update an existing step in a pipeline template."""
     if operation not in ("add", "update"):
-        raise HTTPException(status_code=400, detail="operation must be 'add' or 'update'")
-    
+        raise HTTPException(
+            status_code=400,
+            detail="operation must be 'add' or 'update'",
+        )
+
     manager = agents_router_impl._get_multi_agent_manager(request)
 
     try:

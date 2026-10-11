@@ -7,8 +7,12 @@ from types import SimpleNamespace
 from qwenpaw.app.routers.skills import MarketError, MarketplaceItem
 
 
-async def test_skill_market_search_filters_by_query_and_tags(monkeypatch) -> None:
-    module = importlib.import_module("qwenpaw.agents.tools.skill_market_search")
+async def test_skill_market_search_filters_by_query_and_tags(
+    monkeypatch,
+) -> None:
+    module = importlib.import_module(
+        "qwenpaw.agents.tools.skill_market_search",
+    )
 
     monkeypatch.setattr(
         module,
@@ -80,8 +84,12 @@ async def test_skill_market_search_filters_by_query_and_tags(monkeypatch) -> Non
     assert '"returned_count": 1' in text
 
 
-async def test_skill_market_search_returns_no_matches_message(monkeypatch) -> None:
-    module = importlib.import_module("qwenpaw.agents.tools.skill_market_search")
+async def test_skill_market_search_returns_no_matches_message(
+    monkeypatch,
+) -> None:
+    module = importlib.import_module(
+        "qwenpaw.agents.tools.skill_market_search",
+    )
 
     monkeypatch.setattr(
         module,
@@ -109,8 +117,12 @@ async def test_skill_market_search_returns_no_matches_message(monkeypatch) -> No
     assert '"returned_count": 0' in text
 
 
-async def test_skill_market_search_returns_error_message_on_exception(monkeypatch) -> None:
-    module = importlib.import_module("qwenpaw.agents.tools.skill_market_search")
+async def test_skill_market_search_returns_error_message_on_exception(
+    monkeypatch,
+) -> None:
+    module = importlib.import_module(
+        "qwenpaw.agents.tools.skill_market_search",
+    )
 
     monkeypatch.setattr(
         module,

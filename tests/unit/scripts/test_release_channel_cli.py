@@ -21,8 +21,8 @@ def _module():
 def _fact():
     return json.loads(
         (REPO_ROOT / "src/copaw/release_channel.json").read_text(
-            encoding="utf-8"
-        )
+            encoding="utf-8",
+        ),
     )
 
 
@@ -96,4 +96,4 @@ def test_render_ts_is_prettier_stable():
     mod = _module()
     body = mod.render_ts(_fact())
     for line in body.splitlines():
-        assert not line.startswith("  \""), line
+        assert not line.startswith('  "'), line

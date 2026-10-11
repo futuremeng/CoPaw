@@ -34,7 +34,9 @@ def check_hanlp_sidecar(cfg) -> tuple[bool, str, list[str]]:
     state = runtime.probe(runtime_cfg)
     status = str(state.get("status") or "unavailable").strip().lower()
     reason_code = str(state.get("reason_code") or "").strip().upper()
-    reason = str(state.get("reason") or "HanLP sidecar state is unavailable.").strip()
+    reason = str(
+        state.get("reason") or "HanLP sidecar state is unavailable.",
+    ).strip()
     notes: list[str] = []
 
     hanlp_cfg = cfg.nlp

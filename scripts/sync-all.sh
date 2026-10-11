@@ -30,7 +30,7 @@ if [ "$BEFORE" -eq 0 ]; then
   echo "   ℹ️  fork/main 已与 mirror/upstream-main 对齐，无需更新"
 else
   echo "   ℹ️  fork/main 落后 $BEFORE commits，尝试 rebase..."
-  
+
   if git rebase mirror/upstream-main > /dev/null 2>&1; then
     AFTER=$(git rev-list --count fork/main..mirror/upstream-main 2>/dev/null || echo "0")
     echo "   ✅ fork/main rebase 成功（本地提交: $AFTER）"

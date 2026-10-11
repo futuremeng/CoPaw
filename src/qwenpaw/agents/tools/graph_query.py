@@ -54,7 +54,12 @@ async def graph_query(
     text = (query_text or "").strip()
     if not text:
         return ToolResponse(
-            content=[TextBlock(type="text", text="Error: query_text cannot be empty.")],
+            content=[
+                TextBlock(
+                    type="text",
+                    text="Error: query_text cannot be empty.",
+                ),
+            ],
         )
 
     mode = (query_mode or "template").strip().lower()
@@ -64,18 +69,22 @@ async def graph_query(
                 TextBlock(
                     type="text",
                     text="Error: query_mode must be 'template' or 'cypher'.",
-                )
+                ),
             ],
         )
 
     preferred_output_mode = (output_mode or "").strip().lower()
-    if preferred_output_mode and preferred_output_mode not in {"fast", "nlp", "agentic"}:
+    if preferred_output_mode and preferred_output_mode not in {
+        "fast",
+        "nlp",
+        "agentic",
+    }:
         return ToolResponse(
             content=[
                 TextBlock(
                     type="text",
                     text="Error: output_mode must be 'fast', 'nlp', or 'agentic'.",
-                )
+                ),
             ],
         )
 
@@ -83,25 +92,39 @@ async def graph_query(
     if not getattr(config, "knowledge", None) or not config.knowledge.enabled:
         return ToolResponse(
             content=[
-                TextBlock(type="text", text="Error: knowledge is disabled in configuration."),
+                TextBlock(
+                    type="text",
+                    text="Error: knowledge is disabled in configuration.",
+                ),
             ],
         )
     if not bool(getattr(running, "knowledge_enabled", True)):
         return ToolResponse(
             content=[
-                TextBlock(type="text", text="Error: knowledge is disabled in agent runtime configuration."),
+                TextBlock(
+                    type="text",
+                    text="Error: knowledge is disabled in agent runtime configuration.",
+                ),
             ],
         )
     if not bool(getattr(config.knowledge, "graph_query_enabled", False)):
         return ToolResponse(
             content=[
-                TextBlock(type="text", text="Error: graph query is disabled in configuration."),
+                TextBlock(
+                    type="text",
+                    text="Error: graph query is disabled in configuration.",
+                ),
             ],
         )
-    if mode == "cypher" and not bool(getattr(config.knowledge, "allow_cypher_query", False)):
+    if mode == "cypher" and not bool(
+        getattr(config.knowledge, "allow_cypher_query", False),
+    ):
         return ToolResponse(
             content=[
-                TextBlock(type="text", text="Error: cypher query is not allowed by configuration."),
+                TextBlock(
+                    type="text",
+                    text="Error: cypher query is not allowed by configuration.",
+                ),
             ],
         )
 
@@ -127,9 +150,19 @@ async def graph_query(
             "warnings": result.warnings,
         }
         return ToolResponse(
-            content=[TextBlock(type="text", text=json.dumps(payload, ensure_ascii=False, indent=2))],
+            content=[
+                TextBlock(
+                    type="text",
+                    text=json.dumps(payload, ensure_ascii=False, indent=2),
+                ),
+            ],
         )
     except Exception as e:
         return ToolResponse(
-            content=[TextBlock(type="text", text=f"Error: graph query failed due to\n{e}")],
+            content=[
+                TextBlock(
+                    type="text",
+                    text=f"Error: graph query failed due to\n{e}",
+                ),
+            ],
         )

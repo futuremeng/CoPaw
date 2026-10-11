@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+# -*- coding: utf-8 -*-
 """Fail when a GitHub workflow runs a package.json script that does not exist.
 
 Conflict-surface judgment 20: the fork can edit its own ``console/package.json``
@@ -36,7 +37,10 @@ def _run_defaults(container: dict) -> str | None:
     return run.get("working-directory") if isinstance(run, dict) else None
 
 
-def resolve_working_directory(step: dict, job_default: str | None) -> str | None:
+def resolve_working_directory(
+    step: dict,
+    job_default: str | None,
+) -> str | None:
     return step.get("working-directory") or _run_defaults(step) or job_default
 
 
@@ -72,12 +76,19 @@ def collect(repo_root: Path) -> list[tuple[str, str, str]]:
                 continue
             job_default = _run_defaults(job)
             for step in job.get("steps") or []:
-                if not isinstance(step, dict) or not isinstance(step.get("run"), str):
+                if not isinstance(step, dict) or not isinstance(
+                    step.get("run"),
+                    str,
+                ):
                     continue
                 directory = resolve_working_directory(step, job_default) or "."
                 for cd_target, script_name in commands_in_run(step["run"]):
                     entries.append(
-                        (f"{workflow.name}:{job_name}", cd_target or directory, script_name)
+                        (
+                            f"{workflow.name}:{job_name}",
+                            cd_target or directory,
+                            script_name,
+                        ),
                     )
     return entries
 
@@ -102,7 +113,7 @@ def main(argv: list[str] | None = None) -> int:
             if not package_json.exists():
                 errors.append(
                     f"{location} runs '{script_name}' in {directory}, "
-                    f"which has no package.json"
+                    f"which has no package.json",
                 )
                 continue
             packages[directory] = load_scripts(package_json)
@@ -110,7 +121,7 @@ def main(argv: list[str] | None = None) -> int:
         if script_name not in available:
             errors.append(
                 f"{location} runs 'npm run {script_name}' in {directory}, "
-                f"but {directory}/package.json has no such script"
+                f"but {directory}/package.json has no such script",
             )
 
     if errors:
@@ -120,7 +131,7 @@ def main(argv: list[str] | None = None) -> int:
 
     print(
         f"CI command target check passed ({checked} run commands across "
-        f"{len(packages)} package dirs)"
+        f"{len(packages)} package dirs)",
     )
     return 0
 

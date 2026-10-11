@@ -1091,7 +1091,10 @@ async def test_failed_runtime_update_reports_rollback_conflict() -> None:
 
 
 @pytest.fixture
-def workspace_api_client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> tuple[TestClient, Path]:
+def workspace_api_client(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> tuple[TestClient, Path]:
     def _mock_load_config():
         return SimpleNamespace(
             agents=SimpleNamespace(
@@ -1135,7 +1138,9 @@ def test_workspace_upload_records_project_realtime_event(
 
     response = client.post(
         "/workspace/upload",
-        files={"file": ("workspace.zip", archive.getvalue(), "application/zip")},
+        files={
+            "file": ("workspace.zip", archive.getvalue(), "application/zip"),
+        },
     )
 
     assert response.status_code == 200
@@ -1150,14 +1155,19 @@ def test_workspace_upload_records_project_realtime_event(
 
     assert latest_event_id >= 1
     assert "original/note.md" in changed_paths
-    assert (project_dir / "original" / "note.md").read_text(encoding="utf-8") == "hello from upload"
+    assert (project_dir / "original" / "note.md").read_text(
+        encoding="utf-8",
+    ) == "hello from upload"
 
 
 def test_workspace_files_preserves_agent_http_exception(
     monkeypatch: pytest.MonkeyPatch,
 ):
     def _mock_resolve_agent_id_for_request(_request):
-        raise HTTPException(status_code=404, detail="Agent 'missing' not found")
+        raise HTTPException(
+            status_code=404,
+            detail="Agent 'missing' not found",
+        )
 
     monkeypatch.setattr(
         workspace_router_module,

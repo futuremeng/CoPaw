@@ -244,11 +244,11 @@ echo "[INFO] 检查过期分枝..."
 git branch -v | while read branch rest; do
   LAST_COMMIT_DATE=$(git log -1 --format=%ai $branch | cut -d' ' -f1)
   DAYS_AGO=$(( ($(date +%s) - $(date -d "$LAST_COMMIT_DATE" +%s)) / 86400 ))
-  
+
   if [[ $branch == "feat/fork/"* ]] && [ $DAYS_AGO -gt 14 ]; then
     echo "[WARN] feat/fork 分枝 $branch 已 $DAYS_AGO 天未更新，建议清理"
   fi
-  
+
   if [[ $branch == "feat/upstream/"* ]] && [ $DAYS_AGO -gt 7 ]; then
     echo "[WARN] feat/upstream 分枝 $branch 已 $DAYS_AGO 天未更新，建议清理"
   fi
@@ -339,7 +339,7 @@ START: 要开发新功能？
 A: upstream 快速迭代（10+ commits/天）。不定期同步会导致 fork/main 与 upstream 偏离 50+ commits，最后 rebase 冲突爆发。定期同步避免问题积累。
 
 ### Q: fork/main 落后 mirror/upstream-main 多少算"正常"？
-A: 
+A:
 - <= 5 commits：完全正常（可能是本地功能 cherry-pick 的差异）
 - 5-20 commits：可接受（fork 特有功能正在开发）
 - 20-50 commits：需要关注（考虑优先提交这些改动）

@@ -28,7 +28,11 @@ def test_query_project_file_records_classifies_and_counts(tmp_path: Path):
     assert summary["stage_counts"]["intermediate"] == 1
     assert summary["stage_counts"]["artifact"] == 1
     assert summary["stage_counts"]["builtin"] == 1
-    assert any(item["path"] == "original/note.md" and item["content_type"] == "markdown" for item in items)
+    assert any(
+        item["path"] == "original/note.md"
+        and item["content_type"] == "markdown"
+        for item in items
+    )
 
 
 def test_query_project_file_records_supports_filters_and_sort(tmp_path: Path):

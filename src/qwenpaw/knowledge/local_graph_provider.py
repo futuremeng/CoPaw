@@ -18,14 +18,23 @@ from .manager import KnowledgeManager
 logger = logging.getLogger(__name__)
 
 _ENTITY_RE = re.compile(r"[A-Za-z][A-Za-z0-9_./-]{2,}|[\u4e00-\u9fff]{2,16}")
-_FILE_TOKEN_RE = re.compile(r"^[A-Za-z0-9_-]+\.(?:md|txt|json|ya?ml|csv|tsv|py|js|ts|tsx|jsx|html|xml|toml|ini|cfg)$", re.IGNORECASE)
-_MULTI_SUFFIX_FILE_TOKEN_RE = re.compile(r"^[A-Za-z0-9_-]+(?:\.[A-Za-z0-9_-]+)+$", re.IGNORECASE)
+_FILE_TOKEN_RE = re.compile(
+    r"^[A-Za-z0-9_-]+\.(?:md|txt|json|ya?ml|csv|tsv|py|js|ts|tsx|jsx|html|xml|toml|ini|cfg)$",
+    re.IGNORECASE,
+)
+_MULTI_SUFFIX_FILE_TOKEN_RE = re.compile(
+    r"^[A-Za-z0-9_-]+(?:\.[A-Za-z0-9_-]+)+$",
+    re.IGNORECASE,
+)
 _UUID_RE = re.compile(
     r"^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
     re.IGNORECASE,
 )
 _HEXISH_RE = re.compile(r"^[0-9a-f]{12,}$", re.IGNORECASE)
-_ID_LIKE_RE = re.compile(r"(?:^|[_-])(id|uuid|session|chat|token|hash|digest)(?:$|[_-])", re.IGNORECASE)
+_ID_LIKE_RE = re.compile(
+    r"(?:^|[_-])(id|uuid|session|chat|token|hash|digest)(?:$|[_-])",
+    re.IGNORECASE,
+)
 _CODE_IDENTIFIER_RE = re.compile(r"^[a-z0-9]+(?:[_-][a-z0-9]+)+$")
 _SYSTEM_FILENAMES = {".ds_store", "thumbs.db"}
 _GRAPH_TEXT_SUFFIXES = {".md", ".markdown", ".mdx", ".txt", ".rst", ".adoc"}
@@ -33,10 +42,18 @@ _FRONTMATTER_RE = re.compile(r"\A---\s*\n.*?\n---\s*(?:\n|\Z)", re.DOTALL)
 _FENCED_CODE_BLOCK_RE = re.compile(r"```.*?```", re.DOTALL)
 _INLINE_CODE_RE = re.compile(r"`[^`]+`")
 _MARKDOWN_HEADING_RE = re.compile(r"^\s{0,3}#{1,6}\s+.*$", re.MULTILINE)
-_TABLE_SEPARATOR_RE = re.compile(r"^\s*\|?(?:\s*:?-{2,}:?\s*\|)+\s*$", re.MULTILINE)
-_KEY_VALUE_PREFIX_RE = re.compile(r"^\s*(?:[-*]\s*)?[A-Za-z_][A-Za-z0-9_ -]{1,40}:\s*", re.MULTILINE)
+_TABLE_SEPARATOR_RE = re.compile(
+    r"^\s*\|?(?:\s*:?-{2,}:?\s*\|)+\s*$",
+    re.MULTILINE,
+)
+_KEY_VALUE_PREFIX_RE = re.compile(
+    r"^\s*(?:[-*]\s*)?[A-Za-z_][A-Za-z0-9_ -]{1,40}:\s*",
+    re.MULTILINE,
+)
 _CAMEL_CASE_RE = re.compile(r"^[A-Z][A-Za-z0-9]+(?:[A-Z][A-Za-z0-9]+)+$")
-_PREDICATE_TRIM_RE = re.compile(r"^[\s\.,;:!\?，。；：！？、\-]+|[\s\.,;:!\?，。；：！？、\-]+$")
+_PREDICATE_TRIM_RE = re.compile(
+    r"^[\s\.,;:!\?，。；：！？、\-]+|[\s\.,;:!\?，。；：！？、\-]+$",
+)
 _ENTITY_STOP_WORDS = {
     "the",
     "and",
@@ -76,9 +93,19 @@ _ENTITY_STOP_WORDS = {
     "输出",
 }
 
-_QUERY_DIRECTIVE_RE = re.compile(r'(?P<key>path|file|version|before|after|since|until|sort|group|latest):(?P<value>"[^"]+"|\S+)', re.IGNORECASE)
+_QUERY_DIRECTIVE_RE = re.compile(
+    r'(?P<key>path|file|version|before|after|since|until|sort|group|latest):(?P<value>"[^"]+"|\S+)',
+    re.IGNORECASE,
+)
 _QUERY_GROUP_MODES = {"path", "file", "version", "time", "snapshot"}
-_QUERY_SORT_MODES = {"score_desc", "score_asc", "time_desc", "time_asc", "path_asc", "path_desc"}
+_QUERY_SORT_MODES = {
+    "score_desc",
+    "score_asc",
+    "time_desc",
+    "time_asc",
+    "path_asc",
+    "path_desc",
+}
 _ALL_GRAPH_QUERY_TOKENS = {"*", "__all__", "all"}
 
 
@@ -120,7 +147,9 @@ def _record_snapshot_dt(record: dict[str, Any]) -> datetime | None:
 def _record_group_value(record: dict[str, Any], group_mode: str) -> str:
     normalized = str(group_mode or "").strip().lower()
     if normalized in {"path", "file"}:
-        return str(record.get("document_path") or record.get("file_key") or "").strip()
+        return str(
+            record.get("document_path") or record.get("file_key") or "",
+        ).strip()
     if normalized == "version":
         return str(record.get("version_id") or "").strip()
     if normalized in {"time", "snapshot"}:
@@ -160,9 +189,18 @@ def _parse_query_directives(query_text: str) -> tuple[str, dict[str, Any]]:
         elif key == "group":
             normalized = value.lower()
             if normalized in _QUERY_GROUP_MODES:
-                directives["group"] = "path" if normalized == "file" else ("time" if normalized == "snapshot" else normalized)
+                directives["group"] = (
+                    "path"
+                    if normalized == "file"
+                    else ("time" if normalized == "snapshot" else normalized)
+                )
         elif key == "latest":
-            directives["latest"] = value.lower() not in {"0", "false", "no", "off"}
+            directives["latest"] = value.lower() not in {
+                "0",
+                "false",
+                "no",
+                "off",
+            }
         return " "
 
     residual = _QUERY_DIRECTIVE_RE.sub(_replace, str(query_text or ""))
@@ -175,66 +213,148 @@ def _is_all_graph_query(query_text: str) -> bool:
     return normalized in _ALL_GRAPH_QUERY_TOKENS
 
 
-def _record_matches_directives(record: dict[str, Any], directives: dict[str, Any]) -> bool:
+def _record_matches_directives(
+    record: dict[str, Any],
+    directives: dict[str, Any],
+) -> bool:
     document_path = str(record.get("document_path") or "").strip().lower()
-    file_key = str(record.get("file_key") or record.get("document_path") or "").strip().lower()
+    file_key = (
+        str(record.get("file_key") or record.get("document_path") or "")
+        .strip()
+        .lower()
+    )
     version_id = str(record.get("version_id") or "").strip().lower()
     snapshot_dt = _record_snapshot_dt(record)
 
-    path_filters = [str(item).strip().lower() for item in directives.get("path") or [] if str(item).strip()]
-    if path_filters and not any(item in document_path or item in file_key for item in path_filters):
+    path_filters = [
+        str(item).strip().lower()
+        for item in directives.get("path") or []
+        if str(item).strip()
+    ]
+    if path_filters and not any(
+        item in document_path or item in file_key for item in path_filters
+    ):
         return False
 
-    file_filters = [str(item).strip().lower() for item in directives.get("file") or [] if str(item).strip()]
-    if file_filters and not any(item in Path(document_path or file_key).name.lower() for item in file_filters):
+    file_filters = [
+        str(item).strip().lower()
+        for item in directives.get("file") or []
+        if str(item).strip()
+    ]
+    if file_filters and not any(
+        item in Path(document_path or file_key).name.lower()
+        for item in file_filters
+    ):
         return False
 
-    version_filters = [str(item).strip().lower() for item in directives.get("version") or [] if str(item).strip()]
-    if version_filters and not any(item in version_id for item in version_filters):
+    version_filters = [
+        str(item).strip().lower()
+        for item in directives.get("version") or []
+        if str(item).strip()
+    ]
+    if version_filters and not any(
+        item in version_id for item in version_filters
+    ):
         return False
 
     after_dt = directives.get("after")
-    if after_dt is not None and (snapshot_dt is None or snapshot_dt < after_dt):
+    if after_dt is not None and (
+        snapshot_dt is None or snapshot_dt < after_dt
+    ):
         return False
 
     before_dt = directives.get("before")
-    if before_dt is not None and (snapshot_dt is None or snapshot_dt > before_dt):
+    if before_dt is not None and (
+        snapshot_dt is None or snapshot_dt > before_dt
+    ):
         return False
 
     return True
 
 
-def _apply_query_record_sort(records: list[dict[str, Any]], sort_mode: str) -> list[dict[str, Any]]:
+def _apply_query_record_sort(
+    records: list[dict[str, Any]],
+    sort_mode: str,
+) -> list[dict[str, Any]]:
     normalized = str(sort_mode or "score_desc").strip().lower()
     if normalized == "score_asc":
-        return sorted(records, key=lambda item: (float(item.get("score") or 0.0), str(item.get("document_path") or "")))
+        return sorted(
+            records,
+            key=lambda item: (
+                float(item.get("score") or 0.0),
+                str(item.get("document_path") or ""),
+            ),
+        )
     if normalized == "time_desc":
-        return sorted(records, key=lambda item: (_record_snapshot_dt(item) or datetime.min, float(item.get("score") or 0.0)), reverse=True)
+        return sorted(
+            records,
+            key=lambda item: (
+                _record_snapshot_dt(item) or datetime.min,
+                float(item.get("score") or 0.0),
+            ),
+            reverse=True,
+        )
     if normalized == "time_asc":
-        return sorted(records, key=lambda item: (_record_snapshot_dt(item) or datetime.min, -float(item.get("score") or 0.0)))
+        return sorted(
+            records,
+            key=lambda item: (
+                _record_snapshot_dt(item) or datetime.min,
+                -float(item.get("score") or 0.0),
+            ),
+        )
     if normalized == "path_asc":
-        return sorted(records, key=lambda item: (str(item.get("document_path") or item.get("file_key") or ""), -float(item.get("score") or 0.0)))
+        return sorted(
+            records,
+            key=lambda item: (
+                str(item.get("document_path") or item.get("file_key") or ""),
+                -float(item.get("score") or 0.0),
+            ),
+        )
     if normalized == "path_desc":
-        return sorted(records, key=lambda item: (str(item.get("document_path") or item.get("file_key") or ""), float(item.get("score") or 0.0)), reverse=True)
-    return sorted(records, key=lambda item: float(item.get("score") or 0.0), reverse=True)
+        return sorted(
+            records,
+            key=lambda item: (
+                str(item.get("document_path") or item.get("file_key") or ""),
+                float(item.get("score") or 0.0),
+            ),
+            reverse=True,
+        )
+    return sorted(
+        records,
+        key=lambda item: float(item.get("score") or 0.0),
+        reverse=True,
+    )
 
 
-def _apply_latest_record_filter(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    latest_by_path: dict[str, tuple[datetime | None, float, dict[str, Any]]] = {}
+def _apply_latest_record_filter(
+    records: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    latest_by_path: dict[
+        str,
+        tuple[datetime | None, float, dict[str, Any]],
+    ] = {}
     for record in records:
-        path_key = str(record.get("document_path") or record.get("file_key") or "").strip()
+        path_key = str(
+            record.get("document_path") or record.get("file_key") or "",
+        ).strip()
         if not path_key:
             continue
         snapshot_dt = _record_snapshot_dt(record)
         score = float(record.get("score") or 0.0)
         current = latest_by_path.get(path_key)
-        if current is None or (snapshot_dt or datetime.min, score) > (current[0] or datetime.min, current[1]):
+        if current is None or (snapshot_dt or datetime.min, score) > (
+            current[0] or datetime.min,
+            current[1],
+        ):
             latest_by_path[path_key] = (snapshot_dt, score, record)
     filtered = [item[2] for item in latest_by_path.values()]
     return filtered if filtered else records
 
 
-def _aggregate_query_records(records: list[dict[str, Any]], group_mode: str) -> list[dict[str, Any]]:
+def _aggregate_query_records(
+    records: list[dict[str, Any]],
+    group_mode: str,
+) -> list[dict[str, Any]]:
     normalized = str(group_mode or "").strip().lower()
     if normalized not in {"path", "version", "time"}:
         return records
@@ -253,17 +373,51 @@ def _aggregate_query_records(records: list[dict[str, Any]], group_mode: str) -> 
         exemplar["subject"] = group_value
         exemplar["predicate"] = f"aggregate_by_{normalized}"
         exemplar["object"] = str(len(items))
-        exemplar["score"] = float(sum(float(item.get("score") or 0.0) for item in items))
+        exemplar["score"] = float(
+            sum(float(item.get("score") or 0.0) for item in items),
+        )
         exemplar["aggregate_mode"] = normalized
         exemplar["aggregate_group"] = normalized
         exemplar["aggregate_key"] = group_value
         exemplar["aggregate_count"] = len(items)
-        exemplar["aggregate_predicates"] = sorted({str(item.get("predicate") or "") for item in items if str(item.get("predicate") or "")})
-        exemplar["document_paths"] = sorted({str(item.get("document_path") or "") for item in items if str(item.get("document_path") or "")})
-        exemplar["version_ids"] = sorted({str(item.get("version_id") or "") for item in items if str(item.get("version_id") or "")})
+        exemplar["aggregate_predicates"] = sorted(
+            {
+                str(item.get("predicate") or "")
+                for item in items
+                if str(item.get("predicate") or "")
+            },
+        )
+        exemplar["document_paths"] = sorted(
+            {
+                str(item.get("document_path") or "")
+                for item in items
+                if str(item.get("document_path") or "")
+            },
+        )
+        exemplar["version_ids"] = sorted(
+            {
+                str(item.get("version_id") or "")
+                for item in items
+                if str(item.get("version_id") or "")
+            },
+        )
         exemplar["snapshot_range"] = [
-            min((str(item.get("snapshot_at") or "") for item in items if str(item.get("snapshot_at") or "")), default=""),
-            max((str(item.get("snapshot_at") or "") for item in items if str(item.get("snapshot_at") or "")), default=""),
+            min(
+                (
+                    str(item.get("snapshot_at") or "")
+                    for item in items
+                    if str(item.get("snapshot_at") or "")
+                ),
+                default="",
+            ),
+            max(
+                (
+                    str(item.get("snapshot_at") or "")
+                    for item in items
+                    if str(item.get("snapshot_at") or "")
+                ),
+                default="",
+            ),
         ]
         aggregated.append(exemplar)
     return aggregated
@@ -331,7 +485,9 @@ def _load_syntax_payload(document: dict[str, Any]) -> dict[str, Any] | None:
     return payload if isinstance(payload, dict) else None
 
 
-def _collect_syntax_sentences(document: dict[str, Any]) -> list[dict[str, Any]]:
+def _collect_syntax_sentences(
+    document: dict[str, Any],
+) -> list[dict[str, Any]]:
     payload = _load_syntax_payload(document)
     if not isinstance(payload, dict):
         return []
@@ -347,7 +503,9 @@ def _collect_syntax_entity_counter(document: dict[str, Any]) -> Counter[str]:
         for entity in sentence.get("entities") or []:
             if not isinstance(entity, dict):
                 continue
-            normalized = _normalize_entity(str(entity.get("normalized") or entity.get("surface") or ""))
+            normalized = _normalize_entity(
+                str(entity.get("normalized") or entity.get("surface") or ""),
+            )
             if len(normalized) < 2 or _looks_like_noise_entity(normalized):
                 continue
             if normalized.isdigit():
@@ -387,22 +545,34 @@ def _split_sentences(text: str) -> list[str]:
     return sentences
 
 
-def _collect_sentence_entity_stats(document: dict[str, Any]) -> list[dict[str, Any]]:
+def _collect_sentence_entity_stats(
+    document: dict[str, Any],
+) -> list[dict[str, Any]]:
     syntax_sentences = _collect_syntax_sentences(document)
     if syntax_sentences:
         sentence_stats: list[dict[str, Any]] = []
         syntax_entity_total = 0
         for sentence in syntax_sentences:
             sentence_text = str(sentence.get("sentence_text") or "")
-            entities = [item for item in (sentence.get("entities") or []) if isinstance(item, dict)]
+            entities = [
+                item
+                for item in (sentence.get("entities") or [])
+                if isinstance(item, dict)
+            ]
             entity_count_total = len(entities)
             syntax_entity_total += entity_count_total
             unique_entities = {
-                _normalize_entity(str(item.get("normalized") or item.get("surface") or ""))
+                _normalize_entity(
+                    str(item.get("normalized") or item.get("surface") or ""),
+                )
                 for item in entities
-                if _normalize_entity(str(item.get("normalized") or item.get("surface") or ""))
+                if _normalize_entity(
+                    str(item.get("normalized") or item.get("surface") or ""),
+                )
             }
-            entity_char_count = sum(len(str(item.get("surface") or "")) for item in entities)
+            entity_char_count = sum(
+                len(str(item.get("surface") or "")) for item in entities
+            )
             sentence_char_count = int(len(re.sub(r"\s+", "", sentence_text)))
             entity_char_ratio = (
                 float(entity_char_count / sentence_char_count)
@@ -411,24 +581,32 @@ def _collect_sentence_entity_stats(document: dict[str, Any]) -> list[dict[str, A
             )
             sentence_stats.append(
                 {
-                    "sentence_index": int(sentence.get("sentence_index") or len(sentence_stats) + 1),
+                    "sentence_index": int(
+                        sentence.get("sentence_index")
+                        or len(sentence_stats) + 1,
+                    ),
                     "sentence": sentence_text,
                     "entity_count_total": entity_count_total,
                     "entity_count_unique": int(len(unique_entities)),
                     "entity_char_count": entity_char_count,
                     "sentence_char_count": sentence_char_count,
                     "entity_char_ratio": entity_char_ratio,
-                }
+                },
             )
         if syntax_entity_total > 0:
             return sentence_stats
 
     prepared_text = _prepare_entity_text(document)
     sentence_stats: list[dict[str, Any]] = []
-    for sentence_index, sentence in enumerate(_split_sentences(prepared_text), start=1):
+    for sentence_index, sentence in enumerate(
+        _split_sentences(prepared_text),
+        start=1,
+    ):
         counter = _extract_entity_counter(sentence)
         entity_count_total = int(sum(counter.values()))
-        entity_char_count = int(sum(len(term) * count for term, count in counter.items()))
+        entity_char_count = int(
+            sum(len(term) * count for term, count in counter.items()),
+        )
         sentence_char_count = int(len(re.sub(r"\s+", "", sentence)))
         entity_char_ratio = (
             float(entity_char_count / sentence_char_count)
@@ -444,7 +622,7 @@ def _collect_sentence_entity_stats(document: dict[str, Any]) -> list[dict[str, A
                 "entity_char_count": entity_char_count,
                 "sentence_char_count": sentence_char_count,
                 "entity_char_ratio": entity_char_ratio,
-            }
+            },
         )
     return sentence_stats
 
@@ -484,7 +662,9 @@ def _is_high_signal_entity(raw_token: str) -> bool:
     return False
 
 
-def _collect_ranked_entities(document: dict[str, Any]) -> list[tuple[str, int]]:
+def _collect_ranked_entities(
+    document: dict[str, Any],
+) -> list[tuple[str, int]]:
     syntax_counter = _collect_syntax_entity_counter(document)
     if syntax_counter:
         return syntax_counter.most_common()
@@ -522,7 +702,9 @@ def _collect_ranked_entities(document: dict[str, Any]) -> list[tuple[str, int]]:
     return ranked.most_common()
 
 
-def _collect_syntax_sentence_entity_groups(document: dict[str, Any]) -> list[list[str]]:
+def _collect_syntax_sentence_entity_groups(
+    document: dict[str, Any],
+) -> list[list[str]]:
     groups: list[list[str]] = []
     for sentence in _collect_syntax_sentences(document):
         labels: list[str] = []
@@ -530,7 +712,9 @@ def _collect_syntax_sentence_entity_groups(document: dict[str, Any]) -> list[lis
         for entity in sentence.get("entities") or []:
             if not isinstance(entity, dict):
                 continue
-            normalized = _normalize_entity(str(entity.get("normalized") or entity.get("surface") or ""))
+            normalized = _normalize_entity(
+                str(entity.get("normalized") or entity.get("surface") or ""),
+            )
             if len(normalized) < 2 or _looks_like_noise_entity(normalized):
                 continue
             if normalized in seen:
@@ -556,22 +740,47 @@ def _looks_like_noise_predicate(text: str) -> bool:
         return True
     if re.fullmatch(r"[\W_]+", normalized):
         return True
-    if normalized in {"和", "与", "及", "以及", "and", "or", "to", "with", "by", "of"}:
+    if normalized in {
+        "和",
+        "与",
+        "及",
+        "以及",
+        "and",
+        "or",
+        "to",
+        "with",
+        "by",
+        "of",
+    }:
         return True
     if len(normalized) > 32:
         return True
     return False
 
 
-def _collect_relation_candidates(document: dict[str, Any]) -> list[dict[str, Any]]:
+def _collect_relation_candidates(
+    document: dict[str, Any],
+) -> list[dict[str, Any]]:
     candidates: list[dict[str, Any]] = []
     for sentence in _collect_syntax_sentences(document):
         sentence_text = str(sentence.get("sentence_text") or "")
         sentence_start = int(sentence.get("start") or 0)
-        entities = [item for item in (sentence.get("entities") or []) if isinstance(item, dict)]
+        entities = [
+            item
+            for item in (sentence.get("entities") or [])
+            if isinstance(item, dict)
+        ]
         filtered_entities: list[dict[str, Any]] = []
-        for entity in sorted(entities, key=lambda item: (int(item.get("start") or 0), int(item.get("end") or 0))):
-            normalized = _normalize_entity(str(entity.get("normalized") or entity.get("surface") or ""))
+        for entity in sorted(
+            entities,
+            key=lambda item: (
+                int(item.get("start") or 0),
+                int(item.get("end") or 0),
+            ),
+        ):
+            normalized = _normalize_entity(
+                str(entity.get("normalized") or entity.get("surface") or ""),
+            )
             if len(normalized) < 2 or _looks_like_noise_entity(normalized):
                 continue
             if normalized.isdigit():
@@ -593,7 +802,7 @@ def _collect_relation_candidates(document: dict[str, Any]) -> list[dict[str, Any
                         "start": sentence_start + match.start(),
                         "end": sentence_start + match.end(),
                         "_normalized": normalized,
-                    }
+                    },
                 )
             if len(regex_entities) >= 2:
                 filtered_entities = [regex_entities[0], regex_entities[-1]]
@@ -605,7 +814,12 @@ def _collect_relation_candidates(document: dict[str, Any]) -> list[dict[str, Any
                 continue
             left_end = int(left.get("end") or 0)
             right_start = int(right.get("start") or 0)
-            predicate_text = sentence_text[max(left_end - sentence_start, 0):max(right_start - sentence_start, 0)]
+            predicate_text = sentence_text[
+                max(left_end - sentence_start, 0) : max(
+                    right_start - sentence_start,
+                    0,
+                )
+            ]
             predicate = _normalize_predicate(predicate_text)
             if _looks_like_noise_predicate(predicate):
                 continue
@@ -619,11 +833,13 @@ def _collect_relation_candidates(document: dict[str, Any]) -> list[dict[str, Any
                     "sentence_index": int(sentence.get("sentence_index") or 0),
                     "sentence": sentence_text,
                     "confidence": "syntax_span",
-                    "parse_mode": str(sentence.get("parse_mode") or "tokenized_only"),
+                    "parse_mode": str(
+                        sentence.get("parse_mode") or "tokenized_only",
+                    ),
                     "subject_surface": str(left.get("surface") or subject),
                     "object_surface": str(right.get("surface") or object_),
                     "predicate_text": predicate_text,
-                }
+                },
             )
     return candidates
 
@@ -633,7 +849,9 @@ def _load_dataset_documents(
     config: KnowledgeConfig,
     dataset_scope: list[str] | None,
 ) -> list[dict[str, Any]]:
-    source_ids = dataset_scope or [source.id for source in config.sources if source.enabled]
+    source_ids = dataset_scope or [
+        source.id for source in config.sources if source.enabled
+    ]
     source_map = {source.id: source for source in config.sources}
     documents: list[dict[str, Any]] = []
     for source_id in source_ids:
@@ -660,66 +878,126 @@ def _load_dataset_documents(
                     "chunk_id": str(document.get("chunk_id") or ""),
                     "chunk_path": str(document.get("chunk_path") or ""),
                     "snapshot_path": str(document.get("snapshot_path") or ""),
-                    "snapshot_relative_path": str(document.get("snapshot_relative_path") or ""),
+                    "snapshot_relative_path": str(
+                        document.get("snapshot_relative_path") or "",
+                    ),
                     "snapshot_at": str(document.get("snapshot_at") or ""),
                     "version_id": str(document.get("version_id") or ""),
-                    "file_key": str(document.get("file_key") or document.get("path") or ""),
+                    "file_key": str(
+                        document.get("file_key") or document.get("path") or "",
+                    ),
                     "ner_path": str(document.get("ner_path") or ""),
-                    "ner_status": str(document.get("ner_status") or "unavailable"),
-                    "ner_entity_count": int(document.get("ner_entity_count") or 0),
+                    "ner_status": str(
+                        document.get("ner_status") or "unavailable",
+                    ),
+                    "ner_entity_count": int(
+                        document.get("ner_entity_count") or 0,
+                    ),
                     "ner_text": str(document.get("ner_text") or ""),
                     "syntax_path": str(document.get("syntax_path") or ""),
-                    "syntax_structured_path": str(document.get("syntax_structured_path") or ""),
-                    "syntax_status": str(document.get("syntax_status") or "unavailable"),
-                    "syntax_structured_text": str(document.get("syntax_structured_text") or ""),
-                }
+                    "syntax_structured_path": str(
+                        document.get("syntax_structured_path") or "",
+                    ),
+                    "syntax_status": str(
+                        document.get("syntax_status") or "unavailable",
+                    ),
+                    "syntax_structured_text": str(
+                        document.get("syntax_structured_text") or "",
+                    ),
+                },
             )
     return documents
 
 
 def _document_group_key(document: dict[str, Any]) -> str:
-    return str(document.get("path") or document.get("file_key") or document.get("title") or "").strip()
+    return str(
+        document.get("path")
+        or document.get("file_key")
+        or document.get("title")
+        or "",
+    ).strip()
 
 
 def _graphify_document_filename(document_path: str) -> str:
-    normalized = re.sub(r"[^a-z0-9]+", "-", str(document_path or "").strip().lower()).strip("-")
+    normalized = re.sub(
+        r"[^a-z0-9]+",
+        "-",
+        str(document_path or "").strip().lower(),
+    ).strip("-")
     if not normalized:
         normalized = "document"
     normalized = normalized[:48].strip("-") or "document"
-    digest = hashlib.sha1(str(document_path or normalized).encode("utf-8")).hexdigest()[:12]
+    digest = hashlib.sha1(
+        str(document_path or normalized).encode("utf-8"),
+    ).hexdigest()[:12]
     return f"{normalized}-{digest}.graphify.json"
 
 
 def _sorted_unique_nonempty(values: list[str]) -> list[str]:
-    return sorted({str(value).strip() for value in values if str(value).strip()})
+    return sorted(
+        {str(value).strip() for value in values if str(value).strip()},
+    )
 
 
-def _merge_node_fields(existing: dict[str, Any], incoming: dict[str, Any]) -> None:
+def _merge_node_fields(
+    existing: dict[str, Any],
+    incoming: dict[str, Any],
+) -> None:
     for key in ("chunk_paths", "snapshot_paths", "version_history"):
         if key in incoming:
-            merged = _sorted_unique_nonempty(list(existing.get(key) or []) + list(incoming.get(key) or []))
+            merged = _sorted_unique_nonempty(
+                list(existing.get(key) or []) + list(incoming.get(key) or []),
+            )
             if merged:
                 existing[key] = merged
-    for key in ("source_id", "source_file", "source_location", "file_type", "node_type", "project_id", "file_key", "ner_path"):
+    for key in (
+        "source_id",
+        "source_file",
+        "source_location",
+        "file_type",
+        "node_type",
+        "project_id",
+        "file_key",
+        "ner_path",
+    ):
         if not existing.get(key) and incoming.get(key):
             existing[key] = incoming.get(key)
     if not existing.get("label") and incoming.get("label"):
         existing["label"] = incoming.get("label")
 
 
-def _merge_edge_fields(existing: dict[str, Any], incoming: dict[str, Any]) -> None:
-    existing["weight"] = float(existing.get("weight") or 0) + float(incoming.get("weight") or 0)
+def _merge_edge_fields(
+    existing: dict[str, Any],
+    incoming: dict[str, Any],
+) -> None:
+    existing["weight"] = float(existing.get("weight") or 0) + float(
+        incoming.get("weight") or 0,
+    )
     for key in ("chunk_paths", "snapshot_paths", "version_history"):
         if key in incoming:
-            merged = _sorted_unique_nonempty(list(existing.get(key) or []) + list(incoming.get(key) or []))
+            merged = _sorted_unique_nonempty(
+                list(existing.get(key) or []) + list(incoming.get(key) or []),
+            )
             if merged:
                 existing[key] = merged
-    for key in ("document_path", "document_title", "chunk_path", "snapshot_path", "snapshot_at", "version_id", "file_key", "source_id"):
+    for key in (
+        "document_path",
+        "document_title",
+        "chunk_path",
+        "snapshot_path",
+        "snapshot_at",
+        "version_id",
+        "file_key",
+        "source_id",
+    ):
         if not existing.get(key) and incoming.get(key):
             existing[key] = incoming.get(key)
 
 
-def _build_document_graphify_payload(document_path: str, documents: list[dict[str, Any]]) -> dict[str, Any]:
+def _build_document_graphify_payload(
+    document_path: str,
+    documents: list[dict[str, Any]],
+) -> dict[str, Any]:
     primary = documents[0] if documents else {}
     title = str(primary.get("title") or document_path)
     doc_id = _safe_node_id("doc", document_path)
@@ -756,7 +1034,9 @@ def _build_document_graphify_payload(document_path: str, documents: list[dict[st
             entity_mentions_count += entity_count_total
             if entity_count_total > 0:
                 sentence_with_entities_count += 1
-            entity_char_ratio_sum += float(stat.get("entity_char_ratio") or 0.0)
+            entity_char_ratio_sum += float(
+                stat.get("entity_char_ratio") or 0.0,
+            )
             sentence_entity_stats.append(
                 {
                     "source_id": document["source_id"],
@@ -768,7 +1048,7 @@ def _build_document_graphify_payload(document_path: str, documents: list[dict[st
                     "snapshot_at": snapshot_at,
                     "version_id": version_id,
                     **stat,
-                }
+                },
             )
 
         document_relation_candidates = _collect_relation_candidates(document)
@@ -785,7 +1065,7 @@ def _build_document_graphify_payload(document_path: str, documents: list[dict[st
                     "version_id": version_id,
                     "file_key": document.get("file_key") or document_path,
                     **candidate,
-                }
+                },
             )
 
         entity_pairs = _collect_ranked_entities(document)
@@ -796,7 +1076,9 @@ def _build_document_graphify_payload(document_path: str, documents: list[dict[st
             entity_sources[entity_id].add(document["source_id"])
 
         syntax_entity_groups = _collect_syntax_sentence_entity_groups(document)
-        co_occurrence_groups = syntax_entity_groups or [sorted(set(entity_labels))]
+        co_occurrence_groups = syntax_entity_groups or [
+            sorted(set(entity_labels)),
+        ]
         for group in co_occurrence_groups:
             for left, right in combinations(sorted(set(group)), 2):
                 ordered = tuple(sorted((left, right)))
@@ -836,10 +1118,16 @@ def _build_document_graphify_payload(document_path: str, documents: list[dict[st
 
     metadata_relations = [
         ("has_path", document_path, "path"),
-        ("has_file_name", Path(document_path).name or document_path, "file_name"),
+        (
+            "has_file_name",
+            Path(document_path).name or document_path,
+            "file_name",
+        ),
     ]
     for snapshot_at in snapshot_ats:
-        metadata_relations.append(("has_snapshot_at", snapshot_at, "snapshot_at"))
+        metadata_relations.append(
+            ("has_snapshot_at", snapshot_at, "snapshot_at"),
+        )
     for version_id in version_ids:
         metadata_relations.append(("has_version", version_id, "version"))
 
@@ -890,7 +1178,10 @@ def _build_document_graphify_payload(document_path: str, documents: list[dict[st
             {
                 "id": entity_id,
                 "label": label,
-                "source_id": sorted(entity_sources.get(entity_id) or [str(primary.get("source_id") or "")])[0],
+                "source_id": sorted(
+                    entity_sources.get(entity_id)
+                    or [str(primary.get("source_id") or "")],
+                )[0],
                 "source_file": document_path,
                 "source_location": document_path,
                 "file_type": "entity",
@@ -993,18 +1284,25 @@ def _build_document_graphify_payload(document_path: str, documents: list[dict[st
     }
 
 
-def _build_document_graphify_payloads(documents: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def _build_document_graphify_payloads(
+    documents: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
     grouped: defaultdict[str, list[dict[str, Any]]] = defaultdict(list)
     for document in documents:
         grouped[_document_group_key(document)].append(document)
     return [
         _build_document_graphify_payload(document_path, grouped_documents)
-        for document_path, grouped_documents in sorted(grouped.items(), key=lambda item: item[0])
+        for document_path, grouped_documents in sorted(
+            grouped.items(),
+            key=lambda item: item[0],
+        )
         if document_path
     ]
 
 
-def _build_project_graph_payload_from_documents(document_payloads: list[dict[str, Any]]) -> dict[str, Any]:
+def _build_project_graph_payload_from_documents(
+    document_payloads: list[dict[str, Any]],
+) -> dict[str, Any]:
     nodes: dict[str, dict[str, Any]] = {}
     edges: dict[tuple[str, str, str], dict[str, Any]] = {}
     sentence_entity_stats: list[dict[str, Any]] = []
@@ -1040,18 +1338,28 @@ def _build_project_graph_payload_from_documents(document_payloads: list[dict[str
                 _merge_edge_fields(existing, edge)
 
         sentence_entity_stats.extend(
-            item for item in (payload.get("sentence_entity_stats") or []) if isinstance(item, dict)
+            item
+            for item in (payload.get("sentence_entity_stats") or [])
+            if isinstance(item, dict)
         )
         relation_candidates.extend(
-            item for item in (payload.get("relation_candidates") or []) if isinstance(item, dict)
+            item
+            for item in (payload.get("relation_candidates") or [])
+            if isinstance(item, dict)
         )
         stats = payload.get("stats") or {}
         sentence_count_total += int(stats.get("sentence_count") or 0)
-        sentence_with_entities_count += int(stats.get("sentence_with_entities_count") or 0)
+        sentence_with_entities_count += int(
+            stats.get("sentence_with_entities_count") or 0,
+        )
         entity_mentions_count += int(stats.get("entity_mentions_count") or 0)
-        entity_char_ratio_sum += float(stats.get("entity_char_ratio_sum") or 0.0)
+        entity_char_ratio_sum += float(
+            stats.get("entity_char_ratio_sum") or 0.0,
+        )
 
-    total_entities = len([n for n in nodes.values() if n.get("node_type") == "entity"])
+    total_entities = len(
+        [n for n in nodes.values() if n.get("node_type") == "entity"],
+    )
     total_relations = len(edges)
     entity_coverage_ratio = (
         float(total_entities / sentence_count_total * 100)
@@ -1071,7 +1379,7 @@ def _build_project_graph_payload_from_documents(document_payloads: list[dict[str
         f"coverage_ratio={entity_coverage_ratio:.2f}%, "
         f"relations={total_relations}, "
         f"entity_mentions={entity_mentions_count}, "
-        f"avg_mentions_per_sent={avg_mentions_per_sentence:.2f}"
+        f"avg_mentions_per_sent={avg_mentions_per_sentence:.2f}",
     )
 
     return {
@@ -1131,16 +1439,23 @@ def persist_local_graph(
         document_path = str(payload.get("document_path") or "")
         payload_name = _graphify_document_filename(document_path)
         payload_path = graphify_dir / payload_name
-        payload_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+        payload_path.write_text(
+            json.dumps(payload, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
         manifest_documents.append(
             {
                 "document_path": document_path,
                 "document_title": str(payload.get("document_title") or ""),
                 "payload_path": str(payload_path),
-                "payload_relative_path": str(payload_path.relative_to(graph_path.parent.parent)),
-                "chunk_count": int((payload.get("stats") or {}).get("chunk_count") or 0),
+                "payload_relative_path": str(
+                    payload_path.relative_to(graph_path.parent.parent),
+                ),
+                "chunk_count": int(
+                    (payload.get("stats") or {}).get("chunk_count") or 0,
+                ),
                 "version_ids": list(payload.get("version_ids") or []),
-            }
+            },
         )
     manifest_path = graphify_dir / "manifest.json"
     if document_payloads:
@@ -1161,25 +1476,40 @@ def persist_local_graph(
 
     payload = _build_project_graph_payload_from_documents(document_payloads)
     graph_path.parent.mkdir(parents=True, exist_ok=True)
-    graph_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    graph_path.write_text(
+        json.dumps(payload, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
     stats = payload.get("stats") or {}
     return {
         "status": "succeeded",
         "error": None,
-        "warnings": [] if stats.get("relation_count", 0) > 0 else ["LOCAL_GRAPH_EMPTY"],
+        "warnings": []
+        if stats.get("relation_count", 0) > 0
+        else ["LOCAL_GRAPH_EMPTY"],
         "graph_path": str(graph_path),
         "document_graph_dir": str(graphify_dir),
-        "document_graph_manifest_path": str(manifest_path) if document_payloads else "",
+        "document_graph_manifest_path": str(manifest_path)
+        if document_payloads
+        else "",
         "document_graph_count": len(document_payloads),
         "document_count": int(stats.get("document_count") or 0),
         "node_count": int(stats.get("node_count") or 0),
         "relation_count": int(stats.get("relation_count") or 0),
-        "relation_candidate_count": int(stats.get("relation_candidate_count") or 0),
+        "relation_candidate_count": int(
+            stats.get("relation_candidate_count") or 0,
+        ),
         "sentence_count": int(stats.get("sentence_count") or 0),
-        "sentence_with_entities_count": int(stats.get("sentence_with_entities_count") or 0),
+        "sentence_with_entities_count": int(
+            stats.get("sentence_with_entities_count") or 0,
+        ),
         "entity_mentions_count": int(stats.get("entity_mentions_count") or 0),
-        "avg_entities_per_sentence": float(stats.get("avg_entities_per_sentence") or 0.0),
-        "avg_entity_char_ratio": float(stats.get("avg_entity_char_ratio") or 0.0),
+        "avg_entities_per_sentence": float(
+            stats.get("avg_entities_per_sentence") or 0.0,
+        ),
+        "avg_entity_char_ratio": float(
+            stats.get("avg_entity_char_ratio") or 0.0,
+        ),
     }
 
 
@@ -1196,20 +1526,30 @@ def query_local_graph(
         for item in (payload.get("nodes") or [])
         if isinstance(item, dict) and item.get("id")
     }
-    links = [item for item in (payload.get("links") or []) if isinstance(item, dict)]
+    links = [
+        item for item in (payload.get("links") or []) if isinstance(item, dict)
+    ]
     effective_query_text, directives = _parse_query_directives(query_text)
     all_query = _is_all_graph_query(effective_query_text)
-    terms = [token.lower() for token in _ENTITY_RE.findall(effective_query_text or "") if len(token) > 1]
-    if not all_query and not terms and not any(
-        [
-            directives.get("path"),
-            directives.get("file"),
-            directives.get("version"),
-            directives.get("after"),
-            directives.get("before"),
-            directives.get("group"),
-            directives.get("latest"),
-        ]
+    terms = [
+        token.lower()
+        for token in _ENTITY_RE.findall(effective_query_text or "")
+        if len(token) > 1
+    ]
+    if (
+        not all_query
+        and not terms
+        and not any(
+            [
+                directives.get("path"),
+                directives.get("file"),
+                directives.get("version"),
+                directives.get("after"),
+                directives.get("before"),
+                directives.get("group"),
+                directives.get("latest"),
+            ],
+        )
     ):
         return []
 
@@ -1228,27 +1568,57 @@ def query_local_graph(
                 str(edge.get("snapshot_at") or ""),
                 str(edge.get("version_id") or ""),
                 str(edge.get("file_key") or ""),
-            ]
+            ],
         ).lower()
         score = sum(1 for term in terms if term in haystack)
         if not all_query and terms and score <= 0:
             continue
         record = {
-            "subject": str(source.get("label") or edge.get("source") or "unknown"),
-            "subject_type": str(source.get("node_type") or source.get("type") or source.get("file_type") or "entity"),
+            "subject": str(
+                source.get("label") or edge.get("source") or "unknown",
+            ),
+            "subject_type": str(
+                source.get("node_type")
+                or source.get("type")
+                or source.get("file_type")
+                or "entity",
+            ),
             "predicate": str(edge.get("relation") or "related_to"),
-            "object": str(target.get("label") or edge.get("target") or "unknown"),
-            "object_type": str(target.get("node_type") or target.get("type") or target.get("file_type") or "entity"),
+            "object": str(
+                target.get("label") or edge.get("target") or "unknown",
+            ),
+            "object_type": str(
+                target.get("node_type")
+                or target.get("type")
+                or target.get("file_type")
+                or "entity",
+            ),
             "score": float(score + float(edge.get("weight") or 0) * 0.1),
-            "source_id": str(edge.get("source_id") or source.get("source_id") or ""),
+            "source_id": str(
+                edge.get("source_id") or source.get("source_id") or "",
+            ),
             "source_type": str(source.get("file_type") or "graph"),
-            "document_path": str(edge.get("document_path") or source.get("source_file") or ""),
-            "document_title": str(edge.get("document_title") or source.get("label") or ""),
-            "chunk_path": str(edge.get("chunk_path") or source.get("chunk_path") or ""),
-            "snapshot_path": str(edge.get("snapshot_path") or source.get("snapshot_path") or ""),
-            "snapshot_at": str(edge.get("snapshot_at") or source.get("snapshot_at") or ""),
-            "version_id": str(edge.get("version_id") or source.get("version_id") or ""),
-            "file_key": str(edge.get("file_key") or source.get("file_key") or ""),
+            "document_path": str(
+                edge.get("document_path") or source.get("source_file") or "",
+            ),
+            "document_title": str(
+                edge.get("document_title") or source.get("label") or "",
+            ),
+            "chunk_path": str(
+                edge.get("chunk_path") or source.get("chunk_path") or "",
+            ),
+            "snapshot_path": str(
+                edge.get("snapshot_path") or source.get("snapshot_path") or "",
+            ),
+            "snapshot_at": str(
+                edge.get("snapshot_at") or source.get("snapshot_at") or "",
+            ),
+            "version_id": str(
+                edge.get("version_id") or source.get("version_id") or "",
+            ),
+            "file_key": str(
+                edge.get("file_key") or source.get("file_key") or "",
+            ),
         }
         if not _record_matches_directives(record, directives):
             continue
@@ -1256,6 +1626,12 @@ def query_local_graph(
     if directives.get("latest"):
         records = _apply_latest_record_filter(records)
     if directives.get("group"):
-        records = _aggregate_query_records(records, str(directives.get("group") or ""))
-    records = _apply_query_record_sort(records, str(directives.get("sort") or "score_desc"))
+        records = _aggregate_query_records(
+            records,
+            str(directives.get("group") or ""),
+        )
+    records = _apply_query_record_sort(
+        records,
+        str(directives.get("sort") or "score_desc"),
+    )
     return records[: max(1, int(top_k))]

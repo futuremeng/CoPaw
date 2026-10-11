@@ -39,14 +39,20 @@ class BuiltinAgentSpec:
     system_protected: bool = True
 
 
-BUILTIN_UNDERSTAND_PROJECT_SCANNER_ID = "CoPaw_Understand_ProjectScanner_0.1beta1"
+BUILTIN_UNDERSTAND_PROJECT_SCANNER_ID = (
+    "CoPaw_Understand_ProjectScanner_0.1beta1"
+)
 BUILTIN_UNDERSTAND_FILE_ANALYZER_ID = "CoPaw_Understand_FileAnalyzer_0.1beta1"
 BUILTIN_UNDERSTAND_ARCHITECTURE_ANALYZER_ID = (
     "CoPaw_Understand_ArchitectureAnalyzer_0.1beta1"
 )
 BUILTIN_UNDERSTAND_TOUR_BUILDER_ID = "CoPaw_Understand_TourBuilder_0.1beta1"
-BUILTIN_UNDERSTAND_GRAPH_REVIEWER_ID = "CoPaw_Understand_GraphReviewer_0.1beta1"
-BUILTIN_UNDERSTAND_DOMAIN_ANALYZER_ID = "CoPaw_Understand_DomainAnalyzer_0.1beta1"
+BUILTIN_UNDERSTAND_GRAPH_REVIEWER_ID = (
+    "CoPaw_Understand_GraphReviewer_0.1beta1"
+)
+BUILTIN_UNDERSTAND_DOMAIN_ANALYZER_ID = (
+    "CoPaw_Understand_DomainAnalyzer_0.1beta1"
+)
 
 
 _UNDERSTAND_AGENT_SKILL_NAMES: tuple[str, ...] = (

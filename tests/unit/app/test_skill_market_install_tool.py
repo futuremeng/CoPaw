@@ -9,8 +9,12 @@ from types import SimpleNamespace
 from qwenpaw.app.routers.skills import MarketplaceItem
 
 
-async def test_skill_market_install_requires_explicit_confirmation(monkeypatch) -> None:
-    module = importlib.import_module("qwenpaw.agents.tools.skill_market_install")
+async def test_skill_market_install_requires_explicit_confirmation(
+    monkeypatch,
+) -> None:
+    module = importlib.import_module(
+        "qwenpaw.agents.tools.skill_market_install",
+    )
 
     result = await module.skill_market_install(
         market_id="editor",
@@ -26,14 +30,23 @@ async def test_skill_market_install_requires_explicit_confirmation(monkeypatch) 
 
 
 async def test_skill_market_install_returns_not_found(monkeypatch) -> None:
-    module = importlib.import_module("qwenpaw.agents.tools.skill_market_install")
+    module = importlib.import_module(
+        "qwenpaw.agents.tools.skill_market_install",
+    )
 
     monkeypatch.setattr(
         module,
         "_load_current_market_config",
-        lambda: SimpleNamespace(install=SimpleNamespace(overwrite_default=False), markets=[]),
+        lambda: SimpleNamespace(
+            install=SimpleNamespace(overwrite_default=False),
+            markets=[],
+        ),
     )
-    monkeypatch.setattr(module, "_aggregate_marketplace", lambda *_a, **_k: ([], [], {}))
+    monkeypatch.setattr(
+        module,
+        "_aggregate_marketplace",
+        lambda *_a, **_k: ([], [], {}),
+    )
 
     result = await module.skill_market_install(
         market_id="editor",
@@ -48,9 +61,14 @@ async def test_skill_market_install_returns_not_found(monkeypatch) -> None:
     assert '"code": "MARKET_ITEM_NOT_FOUND"' in text
 
 
-@pytest.mark.xfail(strict=True, reason="P1-BEHAVIOR-LOST: skill_market_install 的 overwrite 已成死参（hub.install_skill_from_hub 无 overwrite 形参），转发补丁随同步丢失")
+@pytest.mark.xfail(
+    strict=True,
+    reason="P1-BEHAVIOR-LOST: skill_market_install 的 overwrite 已成死参（hub.install_skill_from_hub 无 overwrite 形参），转发补丁随同步丢失",
+)
 async def test_skill_market_install_succeeds(monkeypatch, tmp_path) -> None:
-    module = importlib.import_module("qwenpaw.agents.tools.skill_market_install")
+    module = importlib.import_module(
+        "qwenpaw.agents.tools.skill_market_install",
+    )
 
     monkeypatch.setattr(
         module,
@@ -80,7 +98,11 @@ async def test_skill_market_install_succeeds(monkeypatch, tmp_path) -> None:
             {},
         ),
     )
-    monkeypatch.setattr(module, "get_current_workspace_dir", lambda: str(tmp_path))
+    monkeypatch.setattr(
+        module,
+        "get_current_workspace_dir",
+        lambda: str(tmp_path),
+    )
 
     captured = {}
 
@@ -88,7 +110,11 @@ async def test_skill_market_install_succeeds(monkeypatch, tmp_path) -> None:
         captured.update(kwargs)
         return SimpleNamespace(name="proofread-single", enabled=True)
 
-    monkeypatch.setattr(module, "install_skill_from_hub", _mock_install_skill_from_hub)
+    monkeypatch.setattr(
+        module,
+        "install_skill_from_hub",
+        _mock_install_skill_from_hub,
+    )
 
     reconciled = {"called": False}
 
@@ -96,7 +122,11 @@ async def test_skill_market_install_succeeds(monkeypatch, tmp_path) -> None:
         reconciled["called"] = True
         assert str(workspace_dir) == str(tmp_path)
 
-    monkeypatch.setattr(module, "reconcile_workspace_manifest", _mock_reconcile_workspace_manifest)
+    monkeypatch.setattr(
+        module,
+        "reconcile_workspace_manifest",
+        _mock_reconcile_workspace_manifest,
+    )
 
     result = await module.skill_market_install(
         market_id="editor",
@@ -122,7 +152,9 @@ async def test_skill_market_install_succeeds(monkeypatch, tmp_path) -> None:
 async def test_skill_market_install_blocks_untrusted_market_by_default(
     monkeypatch,
 ) -> None:
-    module = importlib.import_module("qwenpaw.agents.tools.skill_market_install")
+    module = importlib.import_module(
+        "qwenpaw.agents.tools.skill_market_install",
+    )
 
     monkeypatch.setattr(
         module,
@@ -171,7 +203,9 @@ async def test_skill_market_install_allows_untrusted_market_with_override(
     monkeypatch,
     tmp_path,
 ) -> None:
-    module = importlib.import_module("qwenpaw.agents.tools.skill_market_install")
+    module = importlib.import_module(
+        "qwenpaw.agents.tools.skill_market_install",
+    )
 
     monkeypatch.setattr(
         module,
@@ -201,13 +235,24 @@ async def test_skill_market_install_allows_untrusted_market_with_override(
             {},
         ),
     )
-    monkeypatch.setattr(module, "get_current_workspace_dir", lambda: str(tmp_path))
+    monkeypatch.setattr(
+        module,
+        "get_current_workspace_dir",
+        lambda: str(tmp_path),
+    )
     monkeypatch.setattr(
         module,
         "install_skill_from_hub",
-        lambda **_kwargs: SimpleNamespace(name="proofread-single", enabled=True),
+        lambda **_kwargs: SimpleNamespace(
+            name="proofread-single",
+            enabled=True,
+        ),
     )
-    monkeypatch.setattr(module, "reconcile_workspace_manifest", lambda _p: None)
+    monkeypatch.setattr(
+        module,
+        "reconcile_workspace_manifest",
+        lambda _p: None,
+    )
 
     result = await module.skill_market_install(
         market_id="custom-market",

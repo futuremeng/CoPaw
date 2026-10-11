@@ -47,7 +47,9 @@ def test_payload_to_market_config_normalizes_owner_repo_url() -> None:
 
     cfg = _payload_to_market_config(payload)
 
-    assert cfg.markets[0].url == "https://github.com/futuremeng/editor-skills.git"
+    assert (
+        cfg.markets[0].url == "https://github.com/futuremeng/editor-skills.git"
+    )
     assert cfg.cache.ttl_sec == 600
 
 
@@ -106,7 +108,9 @@ def test_generate_market_index_from_directory_scans_skill_folders(
     assert doc["skills"][0]["source"]["path"] == "skills/weather"
 
 
-def test_extract_market_items_builds_install_url_with_branch_and_path() -> None:
+def test_extract_market_items_builds_install_url_with_branch_and_path() -> (
+    None
+):
     market = SkillMarketSpec(
         id="official",
         name="Official",

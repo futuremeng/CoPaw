@@ -80,7 +80,9 @@ class PipelineTemplateInfo(BaseModel):
     system_owned: bool = False
     builtin_kind: str | None = None
     entrypoint: str | None = None
-    validation_errors: list["PipelineValidationError"] = Field(default_factory=list)
+    validation_errors: list["PipelineValidationError"] = Field(
+        default_factory=list,
+    )
     compilation_status: str = "ready"
 
 
@@ -214,15 +216,21 @@ class PipelineRunDetail(PipelineRunSummary):
     parameters: dict[str, Any] = Field(default_factory=dict)
     steps: list[PipelineRunStep] = Field(default_factory=list)
     artifacts: list[str] = Field(default_factory=list)
-    artifact_records: list[PipelineArtifactRecord] = Field(default_factory=list)
+    artifact_records: list[PipelineArtifactRecord] = Field(
+        default_factory=list,
+    )
     flow_version: str = ""
     source_platform_template_id: str | None = None
     source_platform_template_version: str | None = None
     collaboration_events: list[PipelineCollaborationEvent] = Field(
         default_factory=list,
     )
-    convergence: PipelineRunConvergence = Field(default_factory=PipelineRunConvergence)
-    observability: PipelineRunObservability = Field(default_factory=PipelineRunObservability)
+    convergence: PipelineRunConvergence = Field(
+        default_factory=PipelineRunConvergence,
+    )
+    observability: PipelineRunObservability = Field(
+        default_factory=PipelineRunObservability,
+    )
     next_actions: list[PipelineRunNextAction] = Field(default_factory=list)
 
 
@@ -251,7 +259,9 @@ class PipelineDraftInfo(BaseModel):
     steps: list[PipelineTemplateStep] = Field(default_factory=list)
     revision: int = 0
     content_hash: str = ""
-    validation_errors: list[PipelineValidationError] = Field(default_factory=list)
+    validation_errors: list[PipelineValidationError] = Field(
+        default_factory=list,
+    )
     compilation_status: str = "ready"
 
 
@@ -299,7 +309,12 @@ class PlatformTemplateVersionRecord(BaseModel):
 
 
 def _pipeline_now_iso() -> str:
-    return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+    return (
+        datetime.now(timezone.utc)
+        .replace(microsecond=0)
+        .isoformat()
+        .replace("+00:00", "Z")
+    )
 
 
 def _parse_pipeline_iso(ts: str | None) -> datetime | None:
@@ -315,7 +330,15 @@ def _normalize_run_status(status: str) -> str:
     value = (status or "").strip().lower()
     if value == "completed":
         return "succeeded"
-    if value in {"pending", "running", "retrying", "blocked", "failed", "succeeded", "cancelled"}:
+    if value in {
+        "pending",
+        "running",
+        "retrying",
+        "blocked",
+        "failed",
+        "succeeded",
+        "cancelled",
+    }:
         return value
     return "pending"
 
@@ -324,7 +347,14 @@ def _normalize_step_status(status: str) -> str:
     value = (status or "").strip().lower()
     if value == "completed":
         return "succeeded"
-    if value in {"pending", "running", "blocked", "failed", "succeeded", "skipped"}:
+    if value in {
+        "pending",
+        "running",
+        "blocked",
+        "failed",
+        "succeeded",
+        "skipped",
+    }:
         return value
     return "pending"
 
@@ -481,12 +511,20 @@ def _ensure_default_pipeline_template(templates_dir: Path) -> None:
     if default_path.exists():
         return
     default_path.write_text(
-        json.dumps(_default_pipeline_template_doc(), ensure_ascii=False, indent=2) + "\n",
+        json.dumps(
+            _default_pipeline_template_doc(),
+            ensure_ascii=False,
+            indent=2,
+        )
+        + "\n",
         encoding="utf-8",
     )
 
 
-def _parse_pipeline_template_doc(raw: dict[str, Any], fallback_id: str) -> PipelineTemplateInfo | None:
+def _parse_pipeline_template_doc(
+    raw: dict[str, Any],
+    fallback_id: str,
+) -> PipelineTemplateInfo | None:
     template_id = str(raw.get("id") or fallback_id).strip()
     name = str(raw.get("name") or template_id).strip()
     if not template_id or not name:
@@ -500,11 +538,27 @@ def _parse_pipeline_template_doc(raw: dict[str, Any], fallback_id: str) -> Pipel
             raw = {
                 **raw,
                 "name": str(canonical_doc.get("name") or name),
-                "version": str(canonical_doc.get("version") or raw.get("version") or "").strip(),
-                "description": str(canonical_doc.get("description") or raw.get("description") or "").strip(),
+                "version": str(
+                    canonical_doc.get("version") or raw.get("version") or "",
+                ).strip(),
+                "description": str(
+                    canonical_doc.get("description")
+                    or raw.get("description")
+                    or "",
+                ).strip(),
                 "steps": canonical_doc.get("steps") or [],
-                "builtin_kind": str(canonical_doc.get("builtin_kind") or raw.get("builtin_kind") or "").strip() or None,
-                "entrypoint": str(canonical_doc.get("entrypoint") or raw.get("entrypoint") or "").strip() or None,
+                "builtin_kind": str(
+                    canonical_doc.get("builtin_kind")
+                    or raw.get("builtin_kind")
+                    or "",
+                ).strip()
+                or None,
+                "entrypoint": str(
+                    canonical_doc.get("entrypoint")
+                    or raw.get("entrypoint")
+                    or "",
+                ).strip()
+                or None,
                 "system_owned": True,
             }
             name = str(raw.get("name") or template_id).strip()
@@ -539,19 +593,34 @@ def _parse_pipeline_template_doc(raw: dict[str, Any], fallback_id: str) -> Pipel
                 executor=str(node.get("executor") or "").strip(),
                 outputs=raw_outputs if isinstance(raw_outputs, dict) else {},
                 depends_on=(
-                    [str(item).strip() for item in raw_depends_on if str(item).strip()]
+                    [
+                        str(item).strip()
+                        for item in raw_depends_on
+                        if str(item).strip()
+                    ]
                     if isinstance(raw_depends_on, list)
                     else []
                 ),
                 input_bindings=(
-                    {str(key): str(value) for key, value in raw_input_bindings.items()}
+                    {
+                        str(key): str(value)
+                        for key, value in raw_input_bindings.items()
+                    }
                     if isinstance(raw_input_bindings, dict)
                     else {}
                 ),
-                retry_policy=raw_retry_policy if isinstance(raw_retry_policy, dict) else {},
-                artifact_schema_ref=str(node.get("artifact_schema_ref") or "").strip(),
+                retry_policy=raw_retry_policy
+                if isinstance(raw_retry_policy, dict)
+                else {},
+                artifact_schema_ref=str(
+                    node.get("artifact_schema_ref") or "",
+                ).strip(),
                 error_contract=(
-                    [str(item).strip() for item in raw_error_contract if str(item).strip()]
+                    [
+                        str(item).strip()
+                        for item in raw_error_contract
+                        if str(item).strip()
+                    ]
                     if isinstance(raw_error_contract, list)
                     else []
                 ),
@@ -568,7 +637,7 @@ def _parse_pipeline_template_doc(raw: dict[str, Any], fallback_id: str) -> Pipel
             template_id=template_id,
             name=name,
             version=str(raw.get("version") or "").strip(),
-        )
+        ),
     )
 
     seen_step_ids: set[str] = set()
@@ -581,7 +650,7 @@ def _parse_pipeline_template_doc(raw: dict[str, Any], fallback_id: str) -> Pipel
                     message="Step id is required.",
                     field_path=f"{step_path}.id",
                     suggestion="Provide a stable step id.",
-                )
+                ),
             )
         elif not _TEMPLATE_ID_RE.match(step.id):
             validation_errors.append(
@@ -593,7 +662,7 @@ def _parse_pipeline_template_doc(raw: dict[str, Any], fallback_id: str) -> Pipel
                     expected="^[a-z][a-z0-9_-]{0,63}$",
                     actual=step.id,
                     suggestion="Use lowercase letters, digits, '_' or '-'; start with a letter.",
-                )
+                ),
             )
         if not step.name.strip():
             validation_errors.append(
@@ -603,7 +672,7 @@ def _parse_pipeline_template_doc(raw: dict[str, Any], fallback_id: str) -> Pipel
                     field_path=f"{step_path}.name",
                     step_id=step.id,
                     suggestion="Provide a non-empty display name.",
-                )
+                ),
             )
         if not _MD_KIND_RE.match(step.kind.strip()):
             validation_errors.append(
@@ -615,7 +684,7 @@ def _parse_pipeline_template_doc(raw: dict[str, Any], fallback_id: str) -> Pipel
                     expected="lowercase kebab/snake token",
                     actual=step.kind,
                     suggestion="Use lowercase letters, digits, '_' or '-'.",
-                )
+                ),
             )
         if step.id in seen_step_ids:
             validation_errors.append(
@@ -626,13 +695,15 @@ def _parse_pipeline_template_doc(raw: dict[str, Any], fallback_id: str) -> Pipel
                     step_id=step.id,
                     actual=step.id,
                     suggestion="Use unique step ids in a pipeline.",
-                )
+                ),
             )
         seen_step_ids.add(step.id)
 
     validation_errors.extend(_validate_pipeline_dependency_graph(steps))
     validation_errors.extend(_validate_pipeline_input_references(steps))
-    compilation_status = str(raw.get("compilation_status") or "ready").strip() or "ready"
+    compilation_status = (
+        str(raw.get("compilation_status") or "ready").strip() or "ready"
+    )
     if validation_errors:
         compilation_status = "invalid"
 
@@ -658,11 +729,16 @@ def _parse_pipeline_template_doc(raw: dict[str, Any], fallback_id: str) -> Pipel
     )
 
 
-def _list_project_pipeline_templates(project_dir: Path) -> list[PipelineTemplateInfo]:
+def _list_project_pipeline_templates(
+    project_dir: Path,
+) -> list[PipelineTemplateInfo]:
     _, templates_dir, _ = _project_pipeline_dirs(project_dir)
 
     templates: list[PipelineTemplateInfo] = []
-    for path in sorted(templates_dir.glob("*.json"), key=lambda item: item.name.lower()):
+    for path in sorted(
+        templates_dir.glob("*.json"),
+        key=lambda item: item.name.lower(),
+    ):
         try:
             raw = json.loads(path.read_text(encoding="utf-8"))
             if not isinstance(raw, dict):
@@ -677,7 +753,9 @@ def _list_project_pipeline_templates(project_dir: Path) -> list[PipelineTemplate
 
 def _agent_pipeline_templates_dir(workspace_dir: Path) -> Path:
     templates_dir = (
-        workspace_dir / _AGENT_PIPELINES_DIRNAME / _AGENT_PIPELINE_TEMPLATES_DIRNAME
+        workspace_dir
+        / _AGENT_PIPELINES_DIRNAME
+        / _AGENT_PIPELINE_TEMPLATES_DIRNAME
     )
     templates_dir.mkdir(parents=True, exist_ok=True)
     return templates_dir
@@ -904,7 +982,10 @@ def _pipeline_workspace_dir(workspace_dir: Path, pipeline_id: str) -> Path:
 
 
 def _pipeline_md_path(workspace_dir: Path, pipeline_id: str) -> Path:
-    return _pipeline_workspace_dir(workspace_dir, pipeline_id) / _PIPELINE_MD_FILENAME
+    return (
+        _pipeline_workspace_dir(workspace_dir, pipeline_id)
+        / _PIPELINE_MD_FILENAME
+    )
 
 
 def _pipeline_md_relative_path(pipeline_id: str) -> str:
@@ -913,7 +994,10 @@ def _pipeline_md_relative_path(pipeline_id: str) -> str:
 
 
 def _pipeline_flow_memory_path(workspace_dir: Path, pipeline_id: str) -> Path:
-    return _pipeline_workspace_dir(workspace_dir, pipeline_id) / _PIPELINE_FLOW_MEMORY_FILENAME
+    return (
+        _pipeline_workspace_dir(workspace_dir, pipeline_id)
+        / _PIPELINE_FLOW_MEMORY_FILENAME
+    )
 
 
 def _pipeline_flow_memory_relative_path(pipeline_id: str) -> str:
@@ -950,7 +1034,7 @@ def _ensure_pipeline_flow_memory(
                 "## Pending",
                 "- ",
                 "",
-            ]
+            ],
         ),
         encoding="utf-8",
     )
@@ -982,24 +1066,42 @@ def _pipeline_steps_to_md(template: PipelineTemplateInfo) -> str:
         if step.description:
             lines.append(step.description.strip())
             lines.append("")
-        lines.append(f"- contract_inputs: {json.dumps(step.inputs or {}, ensure_ascii=False)}")
-        lines.append(f"- contract_prompt: {json.dumps((step.prompt or '').strip(), ensure_ascii=False)}")
-        lines.append(f"- contract_script: {json.dumps((step.script or '').strip(), ensure_ascii=False)}")
-        lines.append(f"- contract_executor: {json.dumps((step.executor or '').strip(), ensure_ascii=False)}")
-        lines.append(f"- contract_outputs: {json.dumps(step.outputs or {}, ensure_ascii=False)}")
-        lines.append(f"- contract_depends_on: {json.dumps(step.depends_on or [], ensure_ascii=False)}")
-        lines.append(f"- contract_input_bindings: {json.dumps(step.input_bindings or {}, ensure_ascii=False)}")
-        lines.append(f"- contract_retry_policy: {json.dumps(step.retry_policy or {}, ensure_ascii=False)}")
         lines.append(
-            f"- contract_artifact_schema_ref: {json.dumps((step.artifact_schema_ref or '').strip(), ensure_ascii=False)}"
+            f"- contract_inputs: {json.dumps(step.inputs or {}, ensure_ascii=False)}",
         )
-        lines.append(f"- contract_error_contract: {json.dumps(step.error_contract or [], ensure_ascii=False)}")
+        lines.append(
+            f"- contract_prompt: {json.dumps((step.prompt or '').strip(), ensure_ascii=False)}",
+        )
+        lines.append(
+            f"- contract_script: {json.dumps((step.script or '').strip(), ensure_ascii=False)}",
+        )
+        lines.append(
+            f"- contract_executor: {json.dumps((step.executor or '').strip(), ensure_ascii=False)}",
+        )
+        lines.append(
+            f"- contract_outputs: {json.dumps(step.outputs or {}, ensure_ascii=False)}",
+        )
+        lines.append(
+            f"- contract_depends_on: {json.dumps(step.depends_on or [], ensure_ascii=False)}",
+        )
+        lines.append(
+            f"- contract_input_bindings: {json.dumps(step.input_bindings or {}, ensure_ascii=False)}",
+        )
+        lines.append(
+            f"- contract_retry_policy: {json.dumps(step.retry_policy or {}, ensure_ascii=False)}",
+        )
+        lines.append(
+            f"- contract_artifact_schema_ref: {json.dumps((step.artifact_schema_ref or '').strip(), ensure_ascii=False)}",
+        )
+        lines.append(
+            f"- contract_error_contract: {json.dumps(step.error_contract or [], ensure_ascii=False)}",
+        )
         lines.append("")
     return "\n".join(lines)
 
 
 _STEP_HEADING_RE = re.compile(
-    r"^##\s+(.+?)\s+\[([^\]]+)\]\s+\(([^)]+)\)\s*$"
+    r"^##\s+(.+?)\s+\[([^\]]+)\]\s+\(([^)]+)\)\s*$",
 )
 
 
@@ -1052,7 +1154,7 @@ def _parse_pipeline_md(content: str) -> list[PipelineTemplateStep]:
                     retry_policy=contract_retry_policy,
                     artifact_schema_ref=contract_artifact_schema_ref,
                     error_contract=contract_error_contract,
-                )
+                ),
             )
         contract_inputs = {}
         contract_outputs = {}
@@ -1070,7 +1172,11 @@ def _parse_pipeline_md(content: str) -> list[PipelineTemplateStep]:
         m = _STEP_HEADING_RE.match(line)
         if m:
             _flush()
-            current = {"name": m.group(1).strip(), "id": m.group(2).strip(), "kind": m.group(3).strip()}
+            current = {
+                "name": m.group(1).strip(),
+                "id": m.group(2).strip(),
+                "kind": m.group(3).strip(),
+            }
             desc_lines = []
         elif current is not None:
             # Ignore top-level #/--- headers inside step sections
@@ -1085,11 +1191,19 @@ def _parse_pipeline_md(content: str) -> list[PipelineTemplateStep]:
                 contract_value = contract_match.group(2)
                 if contract_key == "inputs":
                     parsed_inputs = _decode_contract_json(contract_value, {})
-                    contract_inputs = parsed_inputs if isinstance(parsed_inputs, dict) else {}
+                    contract_inputs = (
+                        parsed_inputs
+                        if isinstance(parsed_inputs, dict)
+                        else {}
+                    )
                     continue
                 if contract_key == "outputs":
                     parsed_outputs = _decode_contract_json(contract_value, {})
-                    contract_outputs = parsed_outputs if isinstance(parsed_outputs, dict) else {}
+                    contract_outputs = (
+                        parsed_outputs
+                        if isinstance(parsed_outputs, dict)
+                        else {}
+                    )
                     continue
                 if contract_key == "prompt":
                     parsed_prompt = _decode_contract_json(contract_value, "")
@@ -1107,7 +1221,9 @@ def _parse_pipeline_md(content: str) -> list[PipelineTemplateStep]:
                     parsed_depends = _decode_contract_json(contract_value, [])
                     if isinstance(parsed_depends, list):
                         contract_depends_on = [
-                            str(item).strip() for item in parsed_depends if str(item).strip()
+                            str(item).strip()
+                            for item in parsed_depends
+                            if str(item).strip()
                         ]
                     else:
                         contract_depends_on = []
@@ -1124,7 +1240,10 @@ def _parse_pipeline_md(content: str) -> list[PipelineTemplateStep]:
                         contract_input_bindings = {}
                     continue
                 if contract_key == "retry_policy":
-                    parsed_retry_policy = _decode_contract_json(contract_value, {})
+                    parsed_retry_policy = _decode_contract_json(
+                        contract_value,
+                        {},
+                    )
                     contract_retry_policy = (
                         parsed_retry_policy
                         if isinstance(parsed_retry_policy, dict)
@@ -1132,11 +1251,19 @@ def _parse_pipeline_md(content: str) -> list[PipelineTemplateStep]:
                     )
                     continue
                 if contract_key == "artifact_schema_ref":
-                    parsed_artifact_schema_ref = _decode_contract_json(contract_value, "")
-                    contract_artifact_schema_ref = str(parsed_artifact_schema_ref or "").strip()
+                    parsed_artifact_schema_ref = _decode_contract_json(
+                        contract_value,
+                        "",
+                    )
+                    contract_artifact_schema_ref = str(
+                        parsed_artifact_schema_ref or "",
+                    ).strip()
                     continue
                 if contract_key == "error_contract":
-                    parsed_error_contract = _decode_contract_json(contract_value, [])
+                    parsed_error_contract = _decode_contract_json(
+                        contract_value,
+                        [],
+                    )
                     if isinstance(parsed_error_contract, list):
                         contract_error_contract = [
                             str(item).strip()
@@ -1195,7 +1322,7 @@ def _validate_pipeline_template_meta(
                 expected="^[a-z][a-z0-9_-]{0,63}$",
                 actual=template_id,
                 suggestion="Use lowercase letters, digits, '_' or '-'; start with a letter.",
-            )
+            ),
         )
 
     if not (name or "").strip():
@@ -1207,7 +1334,7 @@ def _validate_pipeline_template_meta(
                 expected="non-empty string",
                 actual=name,
                 suggestion="Provide a concise, human-readable pipeline name.",
-            )
+            ),
         )
 
     if not _SEMVER_RE.match((version or "").strip()):
@@ -1219,7 +1346,7 @@ def _validate_pipeline_template_meta(
                 expected="x.y.z (e.g. 0.1.0)",
                 actual=version,
                 suggestion="Use semantic version format like 0.1.0 or 1.2.3.",
-            )
+            ),
         )
 
     return errors
@@ -1246,17 +1373,21 @@ def _parse_pipeline_md_strict(
                 expected=template_id,
                 actual=parsed_id,
                 suggestion="Keep frontmatter pipeline_id equal to the template id.",
-            )
+            ),
         )
 
-    name = (frontmatter.get("name") or fallback_name or template_id).strip() or template_id
-    version = (frontmatter.get("version") or fallback_version or "0.1.0").strip() or "0.1.0"
+    name = (
+        frontmatter.get("name") or fallback_name or template_id
+    ).strip() or template_id
+    version = (
+        frontmatter.get("version") or fallback_version or "0.1.0"
+    ).strip() or "0.1.0"
     errors.extend(
         _validate_pipeline_template_meta(
             template_id=template_id,
             name=name,
             version=version,
-        )
+        ),
     )
 
     # Description is parsed from body content after first level-1 title and before first step heading.
@@ -1271,7 +1402,9 @@ def _parse_pipeline_md_strict(
             continue
         if found_title:
             description_lines.append(line)
-    description = " ".join(part.strip() for part in description_lines if part.strip())
+    description = " ".join(
+        part.strip() for part in description_lines if part.strip()
+    )
     if not description:
         description = (fallback_description or "").strip()
 
@@ -1286,7 +1419,7 @@ def _parse_pipeline_md_strict(
                 expected="At least one step heading in format: ## <name> [<id>] (<kind>)",
                 actual="0 step",
                 suggestion="Add at least one step heading and a description paragraph.",
-            )
+            ),
         )
 
     seen_step_ids: set[str] = set()
@@ -1299,7 +1432,7 @@ def _parse_pipeline_md_strict(
                     message="Step id is required.",
                     field_path=f"{step_path}.id",
                     suggestion="Use a stable id in heading brackets: [step-id].",
-                )
+                ),
             )
         if not step.name.strip():
             errors.append(
@@ -1309,7 +1442,7 @@ def _parse_pipeline_md_strict(
                     field_path=f"{step_path}.name",
                     step_id=step.id,
                     suggestion="Use a non-empty step title before [id].",
-                )
+                ),
             )
         if not _MD_KIND_RE.match(step.kind.strip()):
             errors.append(
@@ -1321,7 +1454,7 @@ def _parse_pipeline_md_strict(
                     expected="lowercase kebab/snake style token, e.g. ingest/transform/validation",
                     actual=step.kind,
                     suggestion="Change kind to lowercase letters, digits, '_' or '-'.",
-                )
+                ),
             )
         if step.id in seen_step_ids:
             errors.append(
@@ -1332,7 +1465,7 @@ def _parse_pipeline_md_strict(
                     step_id=step.id,
                     actual=step.id,
                     suggestion="Use unique step ids across the whole pipeline.",
-                )
+                ),
             )
         seen_step_ids.add(step.id)
 
@@ -1382,7 +1515,12 @@ def _template_content_hash(template: PipelineTemplateInfo) -> str:
             for step in template.steps
         ],
     }
-    raw = json.dumps(canonical_doc, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    raw = json.dumps(
+        canonical_doc,
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    )
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()
 
 
@@ -1413,21 +1551,33 @@ def _build_pipeline_revision_conflict_exception(
     return HTTPException(status_code=409, detail=detail)
 
 
-def _load_agent_pipeline_template(workspace_dir: Path, template_id: str) -> PipelineTemplateInfo | None:
-    target = _agent_pipeline_templates_dir(workspace_dir) / f"{template_id}.json"
+def _load_agent_pipeline_template(
+    workspace_dir: Path,
+    template_id: str,
+) -> PipelineTemplateInfo | None:
+    target = (
+        _agent_pipeline_templates_dir(workspace_dir) / f"{template_id}.json"
+    )
     if not target.exists():
         return None
     try:
         raw = json.loads(target.read_text(encoding="utf-8"))
     except Exception as exc:
-        logger.warning("Failed to read pipeline template %s: %s", template_id, exc)
+        logger.warning(
+            "Failed to read pipeline template %s: %s",
+            template_id,
+            exc,
+        )
         return None
     if not isinstance(raw, dict):
         return None
     return _parse_pipeline_template_doc(raw, fallback_id=template_id)
 
 
-def _sync_pipeline_md(workspace_dir: Path, template: PipelineTemplateInfo) -> Path:
+def _sync_pipeline_md(
+    workspace_dir: Path,
+    template: PipelineTemplateInfo,
+) -> Path:
     """Write (create or overwrite) the pipeline markdown file and return its path."""
     md_path = _pipeline_md_path(workspace_dir, template.id)
     md_content = _pipeline_steps_to_md(template)
@@ -1443,14 +1593,27 @@ def _ensure_pipeline_draft_workspace(
     template_id = (template.id or "").strip().lower()
     template_id = re.sub(r"[^a-z0-9_-]+", "-", template_id).strip("-")
     if not template_id:
-        raise HTTPException(status_code=400, detail="Invalid pipeline template id")
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid pipeline template id",
+        )
 
     current = _load_agent_pipeline_template(workspace_dir, template_id)
     effective_template = PipelineTemplateInfo(
         id=template_id,
-        name=((current.name if current else "") or template.name or template_id).strip() or template_id,
-        version=((current.version if current else "") or template.version or "0.1.0").strip() or "0.1.0",
-        description=((current.description if current else "") or template.description or "").strip(),
+        name=(
+            (current.name if current else "") or template.name or template_id
+        ).strip()
+        or template_id,
+        version=(
+            (current.version if current else "") or template.version or "0.1.0"
+        ).strip()
+        or "0.1.0",
+        description=(
+            (current.description if current else "")
+            or template.description
+            or ""
+        ).strip(),
         steps=current.steps if current and current.steps else template.steps,
         revision=current.revision if current else 0,
         content_hash=current.content_hash if current else "",
@@ -1476,7 +1639,10 @@ def _ensure_pipeline_draft_workspace(
 
     draft = _get_pipeline_draft(workspace_dir, effective_template.id)
     if draft is None:
-        raise HTTPException(status_code=500, detail="Failed to initialize pipeline draft workspace")
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to initialize pipeline draft workspace",
+        )
     return draft
 
 
@@ -1520,7 +1686,10 @@ def _upsert_pipeline_workspace_memory(
         memory_path.write_text(header + entry_text, encoding="utf-8")
 
 
-def _get_pipeline_draft(workspace_dir: Path, pipeline_id: str) -> PipelineDraftInfo | None:
+def _get_pipeline_draft(
+    workspace_dir: Path,
+    pipeline_id: str,
+) -> PipelineDraftInfo | None:
     """Read the pipeline markdown and return parsed steps + metadata, or None if not exists."""
     md_path = _pipeline_md_path(workspace_dir, pipeline_id)
     if not md_path.exists():
@@ -1539,12 +1708,18 @@ def _get_pipeline_draft(workspace_dir: Path, pipeline_id: str) -> PipelineDraftI
     )
     stat = md_path.stat()
     rel_path = _pipeline_md_relative_path(pipeline_id)
-    content_hash = _template_content_hash(parsed_template) if not errors else ""
+    content_hash = (
+        _template_content_hash(parsed_template) if not errors else ""
+    )
     return PipelineDraftInfo(
         md_path=str(md_path),
         md_relative_path=rel_path,
-        flow_memory_path=str(_pipeline_flow_memory_path(workspace_dir, pipeline_id)),
-        flow_memory_relative_path=_pipeline_flow_memory_relative_path(pipeline_id),
+        flow_memory_path=str(
+            _pipeline_flow_memory_path(workspace_dir, pipeline_id),
+        ),
+        flow_memory_relative_path=_pipeline_flow_memory_relative_path(
+            pipeline_id,
+        ),
         md_mtime=stat.st_mtime,
         steps=parsed_template.steps,
         revision=current.revision if current else 0,
@@ -1554,12 +1729,17 @@ def _get_pipeline_draft(workspace_dir: Path, pipeline_id: str) -> PipelineDraftI
     )
 
 
-def _list_agent_pipeline_templates(workspace_dir: Path) -> list[PipelineTemplateInfo]:
+def _list_agent_pipeline_templates(
+    workspace_dir: Path,
+) -> list[PipelineTemplateInfo]:
     templates_dir = _agent_pipeline_templates_dir(workspace_dir)
     _ensure_default_pipeline_template(templates_dir)
     templates: list[PipelineTemplateInfo] = []
 
-    for path in sorted(templates_dir.glob("*.json"), key=lambda item: item.name.lower()):
+    for path in sorted(
+        templates_dir.glob("*.json"),
+        key=lambda item: item.name.lower(),
+    ):
         try:
             raw = json.loads(path.read_text(encoding="utf-8"))
             if not isinstance(raw, dict):
@@ -1568,7 +1748,11 @@ def _list_agent_pipeline_templates(workspace_dir: Path) -> list[PipelineTemplate
             if parsed is not None:
                 templates.append(parsed)
         except Exception as exc:
-            logger.warning("Skip invalid agent pipeline template %s: %s", path, exc)
+            logger.warning(
+                "Skip invalid agent pipeline template %s: %s",
+                path,
+                exc,
+            )
 
     return templates
 
@@ -1587,12 +1771,15 @@ def _parse_platform_template_doc(
             for item in (raw.get("tags") or [])
             if str(item).strip()
         ],
-        "source_project_id": (str(raw.get("source_project_id") or "").strip() or None),
+        "source_project_id": (
+            str(raw.get("source_project_id") or "").strip() or None
+        ),
         "source_project_template_id": (
             str(raw.get("source_project_template_id") or "").strip() or None
         ),
         "source_project_template_version": (
-            str(raw.get("source_project_template_version") or "").strip() or None
+            str(raw.get("source_project_template_version") or "").strip()
+            or None
         ),
     }
     return PlatformFlowTemplateInfo(**merged)
@@ -1645,12 +1832,13 @@ def _import_platform_template_to_project(
 ) -> ProjectFlowInstanceInfo:
     _, templates_dir, _ = _project_pipeline_dirs(project_dir)
 
-    instance_id = (
-        (target_template_id or platform_template.id).strip().lower()
-    )
+    instance_id = (target_template_id or platform_template.id).strip().lower()
     instance_id = re.sub(r"[^a-z0-9_-]+", "-", instance_id).strip("-")
     if not instance_id:
-        raise HTTPException(status_code=400, detail="Invalid target template id")
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid target template id",
+        )
 
     template_doc = {
         "id": instance_id,
@@ -1709,12 +1897,13 @@ def _publish_project_template_to_platform(
     tags: list[str] | None = None,
 ) -> PlatformFlowTemplateInfo:
     source_template = _resolve_pipeline_template(project_dir, template_id)
-    target_id = (
-        (platform_template_id or source_template.id).strip().lower()
-    )
+    target_id = (platform_template_id or source_template.id).strip().lower()
     target_id = re.sub(r"[^a-z0-9_-]+", "-", target_id).strip("-")
     if not target_id:
-        raise HTTPException(status_code=400, detail="Invalid platform template id")
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid platform template id",
+        )
 
     current_templates = {
         item.id: item for item in _list_platform_flow_templates(workspace_dir)
@@ -1797,7 +1986,10 @@ def _save_agent_pipeline_template(
     template_id = (template.id or "").strip().lower()
     template_id = re.sub(r"[^a-z0-9_-]+", "-", template_id).strip("-")
     if not template_id:
-        raise HTTPException(status_code=400, detail="Invalid pipeline template id")
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid pipeline template id",
+        )
 
     normalized = PipelineTemplateInfo(
         id=template_id,
@@ -1840,7 +2032,9 @@ def _save_agent_pipeline_template(
         ],
     }
 
-    target = _agent_pipeline_templates_dir(workspace_dir) / f"{normalized.id}.json"
+    target = (
+        _agent_pipeline_templates_dir(workspace_dir) / f"{normalized.id}.json"
+    )
     target.write_text(
         json.dumps(template_doc, ensure_ascii=False, indent=2) + "\n",
         encoding="utf-8",
@@ -1858,7 +2052,10 @@ def _save_agent_pipeline_template_with_md(
     template_id = (template.id or "").strip().lower()
     template_id = re.sub(r"[^a-z0-9_-]+", "-", template_id).strip("-")
     if not template_id:
-        raise HTTPException(status_code=400, detail="Invalid pipeline template id")
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid pipeline template id",
+        )
 
     current = _load_agent_pipeline_template(workspace_dir, template_id)
     if (
@@ -1867,7 +2064,10 @@ def _save_agent_pipeline_template_with_md(
         and current is not None
         and current.revision != expected_revision
     ):
-        raise _build_pipeline_revision_conflict_exception(expected_revision, current)
+        raise _build_pipeline_revision_conflict_exception(
+            expected_revision,
+            current,
+        )
 
     base_template = PipelineTemplateInfo(
         id=template_id,
@@ -1887,7 +2087,10 @@ def _save_agent_pipeline_template_with_md(
     md_path = _pipeline_md_path(workspace_dir, template_id)
     if not md_path.exists():
         # Bootstrap markdown workspace from payload only once when markdown does not exist.
-        md_path.write_text(_pipeline_steps_to_md(base_template), encoding="utf-8")
+        md_path.write_text(
+            _pipeline_steps_to_md(base_template),
+            encoding="utf-8",
+        )
 
     md_content = md_path.read_text(encoding="utf-8")
     parsed_template, errors = _parse_pipeline_md_strict(
@@ -1898,7 +2101,10 @@ def _save_agent_pipeline_template_with_md(
         fallback_description=base_template.description,
     )
     if errors:
-        raise _build_pipeline_validation_exception(errors, _pipeline_md_relative_path(template_id))
+        raise _build_pipeline_validation_exception(
+            errors,
+            _pipeline_md_relative_path(template_id),
+        )
 
     parsed_template.md_mtime = md_path.stat().st_mtime
     parsed_template.content_hash = _template_content_hash(parsed_template)
@@ -1943,7 +2149,10 @@ def _save_agent_pipeline_template_with_md(
         "compilation_status": parsed_template.compilation_status,
     }
 
-    target = _agent_pipeline_templates_dir(workspace_dir) / f"{parsed_template.id}.json"
+    target = (
+        _agent_pipeline_templates_dir(workspace_dir)
+        / f"{parsed_template.id}.json"
+    )
     target.write_text(
         json.dumps(template_doc, ensure_ascii=False, indent=2) + "\n",
         encoding="utf-8",
@@ -1963,16 +2172,26 @@ def _save_agent_pipeline_template_with_md(
     return parsed_template
 
 
-def _validate_pipeline_step(step: PipelineTemplateStep) -> list[PipelineValidationError]:
+def _validate_pipeline_step(
+    step: PipelineTemplateStep,
+) -> list[PipelineValidationError]:
     """Validate a single pipeline step. Return list of errors if any."""
     # Valid step kinds
     VALID_STEP_KINDS = {
-        "input", "analysis", "transform", "review",
-        "validation", "publish", "task", "output", "ingest", "alignment"
+        "input",
+        "analysis",
+        "transform",
+        "review",
+        "validation",
+        "publish",
+        "task",
+        "output",
+        "ingest",
+        "alignment",
     }
-    
+
     errors: list[PipelineValidationError] = []
-    
+
     # Validate step id
     step_id = (step.id or "").strip()
     if not step_id:
@@ -1985,7 +2204,7 @@ def _validate_pipeline_step(step: PipelineTemplateStep) -> list[PipelineValidati
                 expected="non-empty string",
                 actual="",
                 suggestion="Provide a unique identifier for the step",
-            )
+            ),
         )
     elif not re.match(r"^[a-z][a-z0-9_-]{0,63}$", step_id):
         errors.append(
@@ -1997,9 +2216,9 @@ def _validate_pipeline_step(step: PipelineTemplateStep) -> list[PipelineValidati
                 expected="^[a-z][a-z0-9_-]{0,63}$",
                 actual=step_id,
                 suggestion="Use lowercase letters, numbers, hyphens, underscores",
-            )
+            ),
         )
-    
+
     # Validate step name
     step_name = (step.name or "").strip()
     if not step_name:
@@ -2012,9 +2231,9 @@ def _validate_pipeline_step(step: PipelineTemplateStep) -> list[PipelineValidati
                 expected="non-empty string",
                 actual="",
                 suggestion="Provide a human-readable display name",
-            )
+            ),
         )
-    
+
     # Validate step kind
     step_kind = (step.kind or "").strip()
     if not step_kind:
@@ -2027,7 +2246,7 @@ def _validate_pipeline_step(step: PipelineTemplateStep) -> list[PipelineValidati
                 expected="one of: input, analysis, transform, review, validation, publish, task, output",
                 actual="",
                 suggestion="Choose a valid step kind",
-            )
+            ),
         )
     elif step_kind not in VALID_STEP_KINDS:
         errors.append(
@@ -2039,7 +2258,7 @@ def _validate_pipeline_step(step: PipelineTemplateStep) -> list[PipelineValidati
                 expected=", ".join(sorted(VALID_STEP_KINDS)),
                 actual=step_kind,
                 suggestion=f"Use one of: {', '.join(sorted(VALID_STEP_KINDS))}",
-            )
+            ),
         )
 
     # Validate explicit step contract fields
@@ -2053,7 +2272,7 @@ def _validate_pipeline_step(step: PipelineTemplateStep) -> list[PipelineValidati
                 expected="object/dict",
                 actual=type(step.inputs).__name__,
                 suggestion="Set inputs as a JSON object with declared input contract.",
-            )
+            ),
         )
 
     if not isinstance(step.outputs, dict):
@@ -2066,7 +2285,7 @@ def _validate_pipeline_step(step: PipelineTemplateStep) -> list[PipelineValidati
                 expected="object/dict",
                 actual=type(step.outputs).__name__,
                 suggestion="Set outputs as a JSON object with declared output contract.",
-            )
+            ),
         )
 
     if not isinstance(step.depends_on, list):
@@ -2079,7 +2298,7 @@ def _validate_pipeline_step(step: PipelineTemplateStep) -> list[PipelineValidati
                 expected="array/list of step ids",
                 actual=type(step.depends_on).__name__,
                 suggestion="Set depends_on as an array of upstream step ids.",
-            )
+            ),
         )
 
     if not isinstance(step.input_bindings, dict):
@@ -2092,7 +2311,7 @@ def _validate_pipeline_step(step: PipelineTemplateStep) -> list[PipelineValidati
                 expected="object/dict",
                 actual=type(step.input_bindings).__name__,
                 suggestion="Set input_bindings as a JSON object like {'input': 'upstream.output'}.",
-            )
+            ),
         )
 
     if not isinstance(step.retry_policy, dict):
@@ -2105,12 +2324,19 @@ def _validate_pipeline_step(step: PipelineTemplateStep) -> list[PipelineValidati
                 expected="object/dict",
                 actual=type(step.retry_policy).__name__,
                 suggestion="Set retry_policy as an object like {'max_attempts': 2}.",
-            )
+            ),
         )
 
-    if isinstance(step.retry_policy, dict) and "max_attempts" in step.retry_policy:
+    if (
+        isinstance(step.retry_policy, dict)
+        and "max_attempts" in step.retry_policy
+    ):
         max_attempts = step.retry_policy.get("max_attempts")
-        if not isinstance(max_attempts, int) or max_attempts < 0 or max_attempts > 10:
+        if (
+            not isinstance(max_attempts, int)
+            or max_attempts < 0
+            or max_attempts > 10
+        ):
             errors.append(
                 PipelineValidationError(
                     error_code="invalid_step_retry_max_attempts",
@@ -2120,11 +2346,14 @@ def _validate_pipeline_step(step: PipelineTemplateStep) -> list[PipelineValidati
                     expected="integer in [0, 10]",
                     actual=str(max_attempts),
                     suggestion="Set retry_policy.max_attempts to a small integer such as 1 or 2.",
-                )
+                ),
             )
 
     schema_ref = (step.artifact_schema_ref or "").strip()
-    if schema_ref and not re.match(r"^[a-z0-9][a-z0-9._/-]{2,127}$", schema_ref):
+    if schema_ref and not re.match(
+        r"^[a-z0-9][a-z0-9._/-]{2,127}$",
+        schema_ref,
+    ):
         errors.append(
             PipelineValidationError(
                 error_code="invalid_step_artifact_schema_ref",
@@ -2134,7 +2363,7 @@ def _validate_pipeline_step(step: PipelineTemplateStep) -> list[PipelineValidati
                 expected="lowercase path-like token, e.g. knowledge/snapshot-manifest.v1",
                 actual=schema_ref,
                 suggestion="Use lowercase letters, digits, '.', '_', '-', '/'.",
-            )
+            ),
         )
 
     for idx, error_code in enumerate(step.error_contract or []):
@@ -2148,7 +2377,7 @@ def _validate_pipeline_step(step: PipelineTemplateStep) -> list[PipelineValidati
                     expected="UPPER_SNAKE_CASE token",
                     actual=str(error_code),
                     suggestion="Use UPPER_SNAKE_CASE, e.g. SNAPSHOT_MANIFEST_MISSING.",
-                )
+                ),
             )
 
     if step.executor and not isinstance(step.executor, str):
@@ -2161,7 +2390,7 @@ def _validate_pipeline_step(step: PipelineTemplateStep) -> list[PipelineValidati
                 expected="string",
                 actual=type(step.executor).__name__,
                 suggestion="Use a string identifier such as builtin:knowledge.snapshot_raw.",
-            )
+            ),
         )
 
     step_prompt = (step.prompt or "").strip()
@@ -2186,9 +2415,9 @@ def _validate_pipeline_step(step: PipelineTemplateStep) -> list[PipelineValidati
                 expected="non-empty prompt or script",
                 actual="",
                 suggestion="Provide prompt, script, or both for executable step kinds.",
-            )
+            ),
         )
-    
+
     return errors
 
 
@@ -2215,7 +2444,7 @@ def _validate_pipeline_dependency_graph(
                         expected="upstream step id different from self",
                         actual=dep_id,
                         suggestion="Remove self reference from depends_on.",
-                    )
+                    ),
                 )
                 continue
             if dep_id not in step_ids:
@@ -2228,11 +2457,15 @@ def _validate_pipeline_dependency_graph(
                         expected="existing step id",
                         actual=dep_id,
                         suggestion="Add the missing upstream step or fix the dependency id.",
-                    )
+                    ),
                 )
 
     graph: dict[str, list[str]] = {
-        step.id: [dep for dep in step.depends_on if dep in step_ids and dep != step.id]
+        step.id: [
+            dep
+            for dep in step.depends_on
+            if dep in step_ids and dep != step.id
+        ]
         for step in steps
     }
     visiting: set[str] = set()
@@ -2250,7 +2483,7 @@ def _validate_pipeline_dependency_graph(
                     expected="acyclic dependency graph",
                     actual=cycle,
                     suggestion="Break the cycle by removing at least one dependency edge.",
-                )
+                ),
             )
             return
         if node in visited:
@@ -2268,11 +2501,16 @@ def _validate_pipeline_dependency_graph(
     return errors
 
 
-def _parse_step_output_ref(raw_value: str) -> tuple[str, str] | None | tuple[()]:
+def _parse_step_output_ref(
+    raw_value: str,
+) -> tuple[str, str] | None | tuple[()]:
     value = (raw_value or "").strip()
     if not value.startswith("$"):
         return None
-    match = re.match(r"^\$([a-z][a-z0-9_-]{0,63})\.([A-Za-z][A-Za-z0-9_]*)$", value)
+    match = re.match(
+        r"^\$([a-z][a-z0-9_-]{0,63})\.([A-Za-z][A-Za-z0-9_]*)$",
+        value,
+    )
     if match is None:
         return ()
     return match.group(1), match.group(2)
@@ -2282,7 +2520,9 @@ def _validate_pipeline_input_references(
     steps: list[PipelineTemplateStep],
 ) -> list[PipelineValidationError]:
     errors: list[PipelineValidationError] = []
-    step_map: dict[str, PipelineTemplateStep] = {step.id: step for step in steps}
+    step_map: dict[str, PipelineTemplateStep] = {
+        step.id: step for step in steps
+    }
 
     for idx, step in enumerate(steps):
         for field_name, bindings in (
@@ -2307,7 +2547,7 @@ def _validate_pipeline_input_references(
                             expected="$upstream_step.output_key",
                             actual=raw_value,
                             suggestion="Use $step_id.output_name format for upstream output references.",
-                        )
+                        ),
                     )
                     continue
 
@@ -2323,7 +2563,7 @@ def _validate_pipeline_input_references(
                             expected="existing upstream step id",
                             actual=upstream_step_id,
                             suggestion="Fix reference step id or add the missing upstream step.",
-                        )
+                        ),
                     )
                     continue
                 if upstream_output_key not in (upstream_step.outputs or {}):
@@ -2336,7 +2576,7 @@ def _validate_pipeline_input_references(
                             expected=f"one of {sorted((upstream_step.outputs or {}).keys())}",
                             actual=upstream_output_key,
                             suggestion="Declare output on upstream step or fix the referenced output key.",
-                        )
+                        ),
                     )
                 if upstream_step_id not in (step.depends_on or []):
                     errors.append(
@@ -2346,9 +2586,12 @@ def _validate_pipeline_input_references(
                             field_path=f"steps[{idx}].depends_on",
                             step_id=step.id,
                             expected=f"includes '{upstream_step_id}'",
-                            actual=json.dumps(step.depends_on or [], ensure_ascii=False),
+                            actual=json.dumps(
+                                step.depends_on or [],
+                                ensure_ascii=False,
+                            ),
                             suggestion="Add upstream step id to depends_on to make execution order explicit.",
-                        )
+                        ),
                     )
 
     return errors
@@ -2361,13 +2604,13 @@ def _update_step_in_markdown(
     operation: str = "update",
 ) -> tuple[str, bool]:
     """Add, update, or delete a step in markdown content.
-    
+
     Args:
         md_content: Current markdown content
         step_id: ID of the step to target
         step: New step data (for add/update operations)
         operation: 'add', 'update', or 'delete'
-    
+
     Returns:
         (new_markdown_content, step_was_present)
     """
@@ -2376,7 +2619,7 @@ def _update_step_in_markdown(
     new_lines: list[str] = []
     step_start_idx = -1
     step_end_idx = -1
-    
+
     # Find step location
     for idx, line in enumerate(lines):
         match = _STEP_HEADING_RE.match(line.rstrip())
@@ -2391,7 +2634,7 @@ def _update_step_in_markdown(
             if step_end_idx < 0:
                 step_end_idx = len(lines)
             break
-    
+
     if operation == "delete":
         if step_found:
             # Remove step section
@@ -2399,14 +2642,14 @@ def _update_step_in_markdown(
         else:
             new_lines = lines
         return "".join(new_lines), step_found
-    
+
     if operation == "add":
         if step is None:
             raise ValueError("step is required for add operation")
         if step_found:
             raise HTTPException(
                 status_code=400,
-                detail=f"Step '{step_id}' already exists"
+                detail=f"Step '{step_id}' already exists",
             )
         # Add at end of file
         new_content = "".join(lines).rstrip() + "\n\n"
@@ -2414,28 +2657,28 @@ def _update_step_in_markdown(
         if step.description:
             new_content += step.description.strip() + "\n\n"
         return new_content, False
-    
+
     if operation == "update":
         if step is None:
             raise ValueError("step is required for update operation")
         if not step_found:
             raise HTTPException(
                 status_code=404,
-                detail=f"Step '{step_id}' not found"
+                detail=f"Step '{step_id}' not found",
             )
         # Replace step section
         heading = f"## {step.name} [{step.id}] ({step.kind})\n\n"
         description = ""
         if step.description:
             description = step.description.strip() + "\n\n"
-        
+
         new_lines = (
             lines[:step_start_idx]
             + [heading, description]
             + (lines[step_end_idx:] if step_end_idx < len(lines) else [])
         )
         return "".join(new_lines), True
-    
+
     return md_content, step_found
 
 
@@ -2448,7 +2691,7 @@ def _apply_step_operation(
     expected_revision: int | None = None,
 ) -> PipelineTemplateInfo:
     """Apply a single step operation in pipeline markdown.
-    
+
     Args:
         workspace_dir: Agent workspace directory
         template_id: Pipeline template ID
@@ -2456,7 +2699,7 @@ def _apply_step_operation(
         step_id: Step id for delete or explicit targeting
         operation: 'add', 'update', or 'delete'
         expected_revision: Optional concurrency check
-    
+
     Returns:
         Updated PipelineTemplateInfo
     """
@@ -2466,19 +2709,27 @@ def _apply_step_operation(
 
     if operation in ("add", "update"):
         if step is None:
-            raise HTTPException(status_code=400, detail="step payload is required")
+            raise HTTPException(
+                status_code=400,
+                detail="step payload is required",
+            )
         validation_errors = _validate_pipeline_step(step)
         if validation_errors:
             raise HTTPException(
                 status_code=422,
                 detail={
-                    "validation_errors": [e.model_dump() for e in validation_errors],
+                    "validation_errors": [
+                        e.model_dump() for e in validation_errors
+                    ],
                     "code": "step_validation_failed",
-                }
+                },
             )
     elif operation != "delete":
-        raise HTTPException(status_code=400, detail="operation must be add, update, or delete")
-    
+        raise HTTPException(
+            status_code=400,
+            detail="operation must be add, update, or delete",
+        )
+
     # Load current template and markdown
     current = _load_agent_pipeline_template(workspace_dir, template_id)
     if (
@@ -2487,20 +2738,34 @@ def _apply_step_operation(
         and current is not None
         and current.revision != expected_revision
     ):
-        raise _build_pipeline_revision_conflict_exception(expected_revision, current)
-    
+        raise _build_pipeline_revision_conflict_exception(
+            expected_revision,
+            current,
+        )
+
     md_path = _pipeline_md_path(workspace_dir, template_id)
     if not md_path.exists():
-        raise HTTPException(status_code=404, detail=f"Pipeline '{template_id}' not found")
-    
+        raise HTTPException(
+            status_code=404,
+            detail=f"Pipeline '{template_id}' not found",
+        )
+
     md_content = md_path.read_text(encoding="utf-8")
-    
+
     # Modify markdown
-    new_md_content, step_found = _update_step_in_markdown(md_content, target_step_id, step, operation)
+    new_md_content, step_found = _update_step_in_markdown(
+        md_content,
+        target_step_id,
+        step,
+        operation,
+    )
 
     if operation == "delete" and not step_found:
-        raise HTTPException(status_code=404, detail=f"Step '{target_step_id}' not found")
-    
+        raise HTTPException(
+            status_code=404,
+            detail=f"Step '{target_step_id}' not found",
+        )
+
     # Parse and validate full pipeline
     frontmatter, body = _parse_md_frontmatter(new_md_content)
     parsed_template, errors = _parse_pipeline_md_strict(
@@ -2510,13 +2775,16 @@ def _apply_step_operation(
         fallback_version=current.version if current else "0.1.0",
         fallback_description=current.description if current else "",
     )
-    
+
     if errors:
-        raise _build_pipeline_validation_exception(errors, _pipeline_md_relative_path(template_id))
-    
+        raise _build_pipeline_validation_exception(
+            errors,
+            _pipeline_md_relative_path(template_id),
+        )
+
     # Update markdown file
     md_path.write_text(new_md_content, encoding="utf-8")
-    
+
     # Update JSON and revision
     parsed_template.md_mtime = md_path.stat().st_mtime
     parsed_template.content_hash = _template_content_hash(parsed_template)
@@ -2526,7 +2794,7 @@ def _apply_step_operation(
         parsed_template.revision = (current.revision if current else 0) + 1
     parsed_template.compilation_status = "ready"
     parsed_template.validation_errors = []
-    
+
     # Save JSON template
     template_doc = {
         "id": parsed_template.id,
@@ -2555,13 +2823,16 @@ def _apply_step_operation(
         "validation_errors": [],
         "compilation_status": parsed_template.compilation_status,
     }
-    
-    target = _agent_pipeline_templates_dir(workspace_dir) / f"{parsed_template.id}.json"
+
+    target = (
+        _agent_pipeline_templates_dir(workspace_dir)
+        / f"{parsed_template.id}.json"
+    )
     target.write_text(
         json.dumps(template_doc, ensure_ascii=False, indent=2) + "\n",
         encoding="utf-8",
     )
-    
+
     return parsed_template
 
 
@@ -2600,12 +2871,18 @@ def _delete_step(
     )
 
 
-def _resolve_pipeline_template(project_dir: Path, template_id: str) -> PipelineTemplateInfo:
+def _resolve_pipeline_template(
+    project_dir: Path,
+    template_id: str,
+) -> PipelineTemplateInfo:
     templates = _list_project_pipeline_templates(project_dir)
     for template in templates:
         if template.id == template_id:
             return template
-    raise HTTPException(status_code=404, detail=f"Pipeline template '{template_id}' not found")
+    raise HTTPException(
+        status_code=404,
+        detail=f"Pipeline template '{template_id}' not found",
+    )
 
 
 def _load_project_template_doc(
@@ -2669,7 +2946,7 @@ def _append_collab_event(
             message=message,
             evidence=evidence or [],
             metrics=event_metrics,
-        )
+        ),
     )
 
 
@@ -2689,11 +2966,16 @@ def _run_dir_paths(runs_dir: Path, run_id: str) -> tuple[Path, Path, Path]:
     return run_dir, manifest_path, steps_dir
 
 
-def _build_run_output_snapshot_relpath(step_id: str, published_path: str) -> str:
+def _build_run_output_snapshot_relpath(
+    step_id: str,
+    published_path: str,
+) -> str:
     step_storage = _step_storage_name(step_id)
     normalized = Path(published_path).as_posix().strip().lstrip("/")
     normalized = normalized.lstrip(".")
-    normalized = normalized.lstrip("/") or Path(published_path).name or "artifact"
+    normalized = (
+        normalized.lstrip("/") or Path(published_path).name or "artifact"
+    )
     return f"steps/{step_storage}/outputs/{normalized}"
 
 
@@ -2770,7 +3052,7 @@ def _write_step_manifests(
                 "role": "preview",
                 "format": output_format,
                 "human_readable": output_format != "bin",
-            }
+            },
         )
 
     artifact_manifest = {
@@ -2821,7 +3103,10 @@ def _write_step_manifests(
 def _sample_project_artifacts(project_dir: Path, limit: int = 20) -> list[str]:
     project_root = project_dir.resolve()
     artifacts: list[str] = []
-    for path in sorted(project_root.rglob("*"), key=lambda item: item.as_posix().lower()):
+    for path in sorted(
+        project_root.rglob("*"),
+        key=lambda item: item.as_posix().lower(),
+    ):
         if not path.is_file():
             continue
         rel = path.resolve().relative_to(project_root).as_posix()
@@ -2862,10 +3147,16 @@ def _run_builtin_project_knowledge_pipeline(
     setattr(knowledge_config, "nlp", config.nlp.model_copy(deep=True))
     running_config = config.agents.running
 
-    processing_mode = _normalize_processing_mode(parameters.get("processing_mode"))
-    quantization_stage = _normalize_quantization_stage(parameters.get("quantization_stage"))
+    processing_mode = _normalize_processing_mode(
+        parameters.get("processing_mode"),
+    )
+    quantization_stage = _normalize_quantization_stage(
+        parameters.get("quantization_stage"),
+    )
 
-    if processing_mode in {"nlp", "agentic"} and not bool(getattr(knowledge_config, "memify_enabled", False)):
+    if processing_mode in {"nlp", "agentic"} and not bool(
+        getattr(knowledge_config, "memify_enabled", False),
+    ):
         raise ValueError("MEMIFY_DISABLED")
 
     workspace_dir = project_dir.parent.parent.resolve()
@@ -2893,7 +3184,9 @@ def _run_builtin_project_knowledge_pipeline(
     state = manager.get_state(project_id)
     status = str((state or {}).get("status") or "").strip().lower()
     if status == "failed":
-        reason = str((state or {}).get("error") or "PROJECT_KNOWLEDGE_PIPELINE_FAILED").strip()
+        reason = str(
+            (state or {}).get("error") or "PROJECT_KNOWLEDGE_PIPELINE_FAILED",
+        ).strip()
         raise RuntimeError(reason)
     return state if isinstance(state, dict) else {}
 
@@ -2905,7 +3198,10 @@ def _list_project_data_files(project_dir: Path) -> list[str]:
         return []
 
     files: list[str] = []
-    for path in sorted(data_dir.rglob("*"), key=lambda item: item.as_posix().lower()):
+    for path in sorted(
+        data_dir.rglob("*"),
+        key=lambda item: item.as_posix().lower(),
+    ):
         if not path.is_file():
             continue
         files.append(path.resolve().relative_to(project_root).as_posix())
@@ -2919,7 +3215,10 @@ def _list_project_knowledge_files(project_dir: Path) -> list[str]:
         return []
 
     files: list[str] = []
-    for path in sorted(knowledge_dir.rglob("*"), key=lambda item: item.as_posix().lower()):
+    for path in sorted(
+        knowledge_dir.rglob("*"),
+        key=lambda item: item.as_posix().lower(),
+    ):
         if not path.is_file():
             continue
         files.append(path.resolve().relative_to(project_root).as_posix())
@@ -2960,7 +3259,12 @@ def _compute_project_knowledge_step_outputs(
         )
         return outputs, {
             "index_outputs": len(outputs),
-            "index_count": len(_match_project_artifacts(knowledge_files, ".knowledge/sources/*/index.json")),
+            "index_count": len(
+                _match_project_artifacts(
+                    knowledge_files,
+                    ".knowledge/sources/*/index.json",
+                ),
+            ),
         }
 
     if step_id == "build_interlinear":
@@ -2971,7 +3275,12 @@ def _compute_project_knowledge_step_outputs(
         )
         return outputs, {
             "interlinear_outputs": len(outputs),
-            "has_interlinear_manifest": int(_has_artifact_match(outputs, ".knowledge/sources/*/interlinear-manifest.json")),
+            "has_interlinear_manifest": int(
+                _has_artifact_match(
+                    outputs,
+                    ".knowledge/sources/*/interlinear-manifest.json",
+                ),
+            ),
         }
 
     if step_id == "tokenize":
@@ -2983,7 +3292,12 @@ def _compute_project_knowledge_step_outputs(
         )
         return outputs, {
             "tokenize_outputs": len(outputs),
-            "has_tokenize_manifest": int(_has_artifact_match(outputs, ".knowledge/sources/*/tokenize-manifest.json")),
+            "has_tokenize_manifest": int(
+                _has_artifact_match(
+                    outputs,
+                    ".knowledge/sources/*/tokenize-manifest.json",
+                ),
+            ),
         }
 
     if step_id == "pos_tagging":
@@ -2994,7 +3308,12 @@ def _compute_project_knowledge_step_outputs(
         )
         return outputs, {
             "pos_tagging_outputs": len(outputs),
-            "has_ner_manifest": int(_has_artifact_match(outputs, ".knowledge/sources/*/ner-manifest.json")),
+            "has_ner_manifest": int(
+                _has_artifact_match(
+                    outputs,
+                    ".knowledge/sources/*/ner-manifest.json",
+                ),
+            ),
         }
 
     if step_id == "syntax_parse":
@@ -3006,8 +3325,18 @@ def _compute_project_knowledge_step_outputs(
         )
         return outputs, {
             "syntax_outputs": len(outputs),
-            "has_graph": int(_has_artifact_match(outputs, ".knowledge/graphify-out/graph.json")),
-            "has_enriched_graph": int(_has_artifact_match(outputs, ".knowledge/graphify-out/graph.enriched.json")),
+            "has_graph": int(
+                _has_artifact_match(
+                    outputs,
+                    ".knowledge/graphify-out/graph.json",
+                ),
+            ),
+            "has_enriched_graph": int(
+                _has_artifact_match(
+                    outputs,
+                    ".knowledge/graphify-out/graph.enriched.json",
+                ),
+            ),
         }
 
     if step_id == "semantic_role_labeling":
@@ -3020,7 +3349,10 @@ def _compute_project_knowledge_step_outputs(
         return outputs, {
             "semantic_role_labeling_outputs": len(outputs),
             "has_quality_report": int(
-                _has_artifact_match(outputs, ".knowledge/graphify-out/enrichment-quality-report.json")
+                _has_artifact_match(
+                    outputs,
+                    ".knowledge/graphify-out/enrichment-quality-report.json",
+                ),
             ),
         }
 
@@ -3034,7 +3366,10 @@ def _compute_step_outputs(
     knowledge_files: list[str],
 ) -> tuple[list[str], dict[str, Any]]:
     if template_id == _PROJECT_KNOWLEDGE_PLATFORM_TEMPLATE_ID:
-        return _compute_project_knowledge_step_outputs(step_id, knowledge_files)
+        return _compute_project_knowledge_step_outputs(
+            step_id,
+            knowledge_files,
+        )
 
     markdown_inputs = _match_project_artifacts(
         data_files,
@@ -3044,7 +3379,8 @@ def _compute_step_outputs(
         {
             path.rsplit("/", 1)[0]
             for path in data_files
-            if path.startswith(f"{_PROJECT_DATA_DIRNAME}/term-workbench-") and "/" in path
+            if path.startswith(f"{_PROJECT_DATA_DIRNAME}/term-workbench-")
+            and "/" in path
         },
     )
 
@@ -3145,18 +3481,26 @@ def _enrich_run_with_guidance(
     template: PipelineTemplateInfo,
 ) -> None:
     """Compute convergence and next actions from run state and produced artifacts."""
-    if template.id in {_KNOWLEDGE_WORKFLOW_TEMPLATE_ID, _PROJECT_KNOWLEDGE_PLATFORM_TEMPLATE_ID}:
+    if template.id in {
+        _KNOWLEDGE_WORKFLOW_TEMPLATE_ID,
+        _PROJECT_KNOWLEDGE_PLATFORM_TEMPLATE_ID,
+    }:
         _enrich_knowledge_run_with_guidance(run, template)
         return
 
     template_step_ids = [step.id for step in template.steps]
     step_status_by_id = {
-        step.id: _normalize_step_status(step.status)
-        for step in run.steps
+        step.id: _normalize_step_status(step.status) for step in run.steps
     }
-    missing_steps = [step_id for step_id in template_step_ids if step_id not in step_status_by_id]
+    missing_steps = [
+        step_id
+        for step_id in template_step_ids
+        if step_id not in step_status_by_id
+    ]
     failed_steps = [
-        step_id for step_id, status in step_status_by_id.items() if status in {"failed", "blocked"}
+        step_id
+        for step_id, status in step_status_by_id.items()
+        if status in {"failed", "blocked"}
     ]
     unfinished_steps = [
         step_id
@@ -3164,7 +3508,9 @@ def _enrich_run_with_guidance(
         if status not in {"succeeded", "failed", "blocked", "cancelled"}
     ]
     unsucceeded_steps = [
-        step_id for step_id, status in step_status_by_id.items() if status != "succeeded"
+        step_id
+        for step_id, status in step_status_by_id.items()
+        if status != "succeeded"
     ]
 
     artifacts = run.artifacts or []
@@ -3201,12 +3547,16 @@ def _enrich_run_with_guidance(
     ]
     passed_checks = sum(1 for _, ok in checks if ok)
     total_checks = len(checks)
-    score = int(round((passed_checks / total_checks) * 100)) if total_checks else 0
+    score = (
+        int(round((passed_checks / total_checks) * 100)) if total_checks else 0
+    )
 
     blocking_issues: list[str] = []
     highlights: list[str] = []
     if missing_steps:
-        blocking_issues.append(f"Missing step records: {', '.join(missing_steps)}")
+        blocking_issues.append(
+            f"Missing step records: {', '.join(missing_steps)}",
+        )
     if failed_steps:
         blocking_issues.append(f"Failed steps: {', '.join(failed_steps)}")
     if not has_term_workbench:
@@ -3352,21 +3702,37 @@ def _enrich_knowledge_run_with_guidance(
 ) -> None:
     template_step_ids = [step.id for step in template.steps]
     step_status_by_id = {
-        step.id: _normalize_step_status(step.status)
-        for step in run.steps
+        step.id: _normalize_step_status(step.status) for step in run.steps
     }
-    missing_steps = [step_id for step_id in template_step_ids if step_id not in step_status_by_id]
+    missing_steps = [
+        step_id
+        for step_id in template_step_ids
+        if step_id not in step_status_by_id
+    ]
     failed_steps = [
-        step_id for step_id, status in step_status_by_id.items() if status in {"failed", "blocked"}
+        step_id
+        for step_id, status in step_status_by_id.items()
+        if status in {"failed", "blocked"}
     ]
     pending_steps = [
-        step_id for step_id, status in step_status_by_id.items() if status in {"pending", "running"}
+        step_id
+        for step_id, status in step_status_by_id.items()
+        if status in {"pending", "running"}
     ]
 
     artifacts = run.artifacts or []
-    has_index = _has_artifact_match(artifacts, ".knowledge/sources/*/index.json")
-    has_graph = _has_artifact_match(artifacts, ".knowledge/graphify-out/graph.json")
-    has_enriched_graph = _has_artifact_match(artifacts, ".knowledge/graphify-out/graph.enriched.json")
+    has_index = _has_artifact_match(
+        artifacts,
+        ".knowledge/sources/*/index.json",
+    )
+    has_graph = _has_artifact_match(
+        artifacts,
+        ".knowledge/graphify-out/graph.json",
+    )
+    has_enriched_graph = _has_artifact_match(
+        artifacts,
+        ".knowledge/graphify-out/graph.enriched.json",
+    )
     has_quality_report = _has_artifact_match(
         artifacts,
         ".knowledge/graphify-out/enrichment-quality-report.json",
@@ -3382,12 +3748,16 @@ def _enrich_knowledge_run_with_guidance(
     ]
     passed_checks = sum(1 for _, ok in checks if ok)
     total_checks = len(checks)
-    score = int(round((passed_checks / total_checks) * 100)) if total_checks else 0
+    score = (
+        int(round((passed_checks / total_checks) * 100)) if total_checks else 0
+    )
 
     blocking_issues: list[str] = []
     highlights: list[str] = []
     if missing_steps:
-        blocking_issues.append(f"Missing step records: {', '.join(missing_steps)}")
+        blocking_issues.append(
+            f"Missing step records: {', '.join(missing_steps)}",
+        )
     if failed_steps:
         blocking_issues.append(f"Failed steps: {', '.join(failed_steps)}")
     if pending_steps:
@@ -3432,7 +3802,7 @@ def _enrich_knowledge_run_with_guidance(
                 severity="info",
                 status="active",
                 suggested_prompt="Continue monitoring this knowledge processing workflow and summarize each stage when it completes.",
-            )
+            ),
         )
     if failed_steps:
         next_actions.append(
@@ -3444,7 +3814,7 @@ def _enrich_knowledge_run_with_guidance(
                 status="pending",
                 target_step_id=failed_steps[0],
                 suggested_prompt="Summarize why this knowledge workflow step failed and provide a rerun-ready fix checklist.",
-            )
+            ),
         )
     if not has_index:
         next_actions.append(
@@ -3456,7 +3826,7 @@ def _enrich_knowledge_run_with_guidance(
                 status="pending",
                 target_step_id="build_chunks",
                 suggested_prompt="Check why the knowledge index was not produced and propose the minimal fix.",
-            )
+            ),
         )
     if has_index and not has_graph:
         next_actions.append(
@@ -3468,7 +3838,7 @@ def _enrich_knowledge_run_with_guidance(
                 status="pending",
                 target_step_id="syntax_parse",
                 suggested_prompt="Rebuild the project knowledge graph and explain any missing graph output.",
-            )
+            ),
         )
     if has_graph and not has_quality_report:
         next_actions.append(
@@ -3480,7 +3850,7 @@ def _enrich_knowledge_run_with_guidance(
                 status="pending",
                 target_step_id="semantic_role_labeling",
                 suggested_prompt="Complete semantic role labeling and summarize remaining risks.",
-            )
+            ),
         )
     if run_status == "succeeded" and has_quality_report:
         next_actions.append(
@@ -3491,7 +3861,7 @@ def _enrich_knowledge_run_with_guidance(
                 severity="info",
                 status="suggested",
                 suggested_prompt="Summarize the refreshed project knowledge graph and suggest the next downstream automation step.",
-            )
+            ),
         )
 
     run.convergence = PipelineRunConvergence(
@@ -3527,19 +3897,30 @@ def _apply_real_step_results(
             **runtime_metrics,
             "warning_count": 0,
         }
-        step.evidence = runtime_evidence[:20] or outputs[:20] or ["rpa-runtime"]
+        step.evidence = (
+            runtime_evidence[:20] or outputs[:20] or ["rpa-runtime"]
+        )
         return outputs
 
     data_files = _list_project_data_files(project_dir)
     knowledge_files = _list_project_knowledge_files(project_dir)
-    outputs, metrics = _compute_step_outputs(template_id, step.id, data_files, knowledge_files)
+    outputs, metrics = _compute_step_outputs(
+        template_id,
+        step.id,
+        data_files,
+        knowledge_files,
+    )
 
     warning_count = 0
     if template_id == _PROJECT_KNOWLEDGE_PLATFORM_TEMPLATE_ID:
         if not knowledge_files:
-            raise ValueError("Project knowledge directory is missing or contains no files")
+            raise ValueError(
+                "Project knowledge directory is missing or contains no files",
+            )
     elif not data_files:
-        raise ValueError("Project data directory is missing or contains no files")
+        raise ValueError(
+            "Project data directory is missing or contains no files",
+        )
     if not outputs:
         warning_count = 1
 
@@ -3548,11 +3929,17 @@ def _apply_real_step_results(
         **metrics,
         "warning_count": warning_count,
     }
-    step.evidence = outputs[:20] or ([".knowledge"] if template_id == _PROJECT_KNOWLEDGE_PLATFORM_TEMPLATE_ID else ["PROJECT.md"])
+    step.evidence = outputs[:20] or (
+        [".knowledge"]
+        if template_id == _PROJECT_KNOWLEDGE_PLATFORM_TEMPLATE_ID
+        else ["PROJECT.md"]
+    )
     return outputs
 
 
-def _build_run_observability(run: PipelineRunDetail) -> PipelineRunObservability:
+def _build_run_observability(
+    run: PipelineRunDetail,
+) -> PipelineRunObservability:
     total = len(run.steps)
     succeeded = sum(
         1
@@ -3570,12 +3957,30 @@ def _build_run_observability(run: PipelineRunDetail) -> PipelineRunObservability
         if _normalize_step_status(step.status) in {"running", "pending"}
     )
 
-    start_times = [_parse_pipeline_iso(step.started_at) for step in run.steps if step.started_at]
-    end_times = [_parse_pipeline_iso(step.ended_at) for step in run.steps if step.ended_at]
+    start_times = [
+        _parse_pipeline_iso(step.started_at)
+        for step in run.steps
+        if step.started_at
+    ]
+    end_times = [
+        _parse_pipeline_iso(step.ended_at)
+        for step in run.steps
+        if step.ended_at
+    ]
     fallback_start = _parse_pipeline_iso(run.created_at)
     fallback_end = _parse_pipeline_iso(run.updated_at)
-    first_ts = min([ts for ts in [*start_times, fallback_start] if ts is not None], default=None)
-    last_ts = max([ts for ts in [*end_times, fallback_end, fallback_start] if ts is not None], default=None)
+    first_ts = min(
+        [ts for ts in [*start_times, fallback_start] if ts is not None],
+        default=None,
+    )
+    last_ts = max(
+        [
+            ts
+            for ts in [*end_times, fallback_end, fallback_start]
+            if ts is not None
+        ],
+        default=None,
+    )
     duration = 0.0
     if first_ts is not None and last_ts is not None:
         duration = max((last_ts - first_ts).total_seconds(), 0.0)
@@ -3594,7 +3999,11 @@ def _build_run_observability(run: PipelineRunDetail) -> PipelineRunObservability
         if evidence:
             sample = str(evidence[0])
             if ":" in sample:
-                error_class = sample.split(":", 2)[1] if sample.startswith("error:") else sample.split(":", 1)[0]
+                error_class = (
+                    sample.split(":", 2)[1]
+                    if sample.startswith("error:")
+                    else sample.split(":", 1)[0]
+                )
             else:
                 error_class = sample
 
@@ -3616,8 +4025,12 @@ def _build_run_observability(run: PipelineRunDetail) -> PipelineRunObservability
             continue
         rpa_runtime_steps += 1
         rpa_actions_executed += int(metrics.get("rpa_actions_executed") or 0)
-        rpa_stop_condition_failures += int(metrics.get("rpa_stop_condition_failures") or 0)
-        rpa_action_duration_ms_total += float(metrics.get("rpa_action_duration_ms_total") or 0.0)
+        rpa_stop_condition_failures += int(
+            metrics.get("rpa_stop_condition_failures") or 0,
+        )
+        rpa_action_duration_ms_total += float(
+            metrics.get("rpa_action_duration_ms_total") or 0.0,
+        )
 
         per_kind = metrics.get("rpa_action_count_by_kind")
         if isinstance(per_kind, dict):
@@ -3629,7 +4042,9 @@ def _build_run_observability(run: PipelineRunDetail) -> PipelineRunObservability
                     inc = int(value)
                 except Exception:
                     continue
-                rpa_action_count_by_kind[kind] = rpa_action_count_by_kind.get(kind, 0) + inc
+                rpa_action_count_by_kind[kind] = (
+                    rpa_action_count_by_kind.get(kind, 0) + inc
+                )
 
     return PipelineRunObservability(
         stage=stage,
@@ -3648,7 +4063,11 @@ def _build_run_observability(run: PipelineRunDetail) -> PipelineRunObservability
     )
 
 
-def _persist_project_pipeline_run(project_dir: Path, run: PipelineRunDetail, template: PipelineTemplateInfo) -> None:
+def _persist_project_pipeline_run(
+    project_dir: Path,
+    run: PipelineRunDetail,
+    template: PipelineTemplateInfo,
+) -> None:
     _enrich_run_with_guidance(run, template)
     run.observability = _build_run_observability(run)
     _, _, runs_dir = _project_pipeline_dirs(project_dir)
@@ -3660,7 +4079,11 @@ def _persist_project_pipeline_run(project_dir: Path, run: PipelineRunDetail, tem
     shared_artifacts = run.artifacts[:8]
     for idx, step in enumerate(run.steps):
         output_paths = shared_artifacts if idx == len(run.steps) - 1 else []
-        artifact_manifest_rel, metric_pack_rel, snapshot_paths = _write_step_manifests(
+        (
+            artifact_manifest_rel,
+            metric_pack_rel,
+            snapshot_paths,
+        ) = _write_step_manifests(
             project_dir,
             run_dir,
             run.id,
@@ -3673,7 +4096,7 @@ def _persist_project_pipeline_run(project_dir: Path, run: PipelineRunDetail, tem
                 run_dir / artifact_manifest_rel,
                 run_dir / metric_pack_rel,
                 *snapshot_paths,
-            ]
+            ],
         )
 
         manifest_steps.append(
@@ -3693,7 +4116,10 @@ def _persist_project_pipeline_run(project_dir: Path, run: PipelineRunDetail, tem
                 "contract_retry_policy": step.retry_policy,
                 "contract_artifact_schema_ref": step.artifact_schema_ref,
                 "contract_error_contract": step.error_contract,
-                "resolved_inputs": cast(dict[str, Any], step.metrics.get("resolved_inputs") or {}),
+                "resolved_inputs": cast(
+                    dict[str, Any],
+                    step.metrics.get("resolved_inputs") or {},
+                ),
                 "artifact_manifest": artifact_manifest_rel,
                 "metric_pack": metric_pack_rel,
                 "logs": [],
@@ -3714,14 +4140,14 @@ def _persist_project_pipeline_run(project_dir: Path, run: PipelineRunDetail, tem
         "started_at": run.created_at,
         "ended_at": (
             run.updated_at
-            if _normalize_run_status(run.status) in {"succeeded", "failed", "cancelled"}
+            if _normalize_run_status(run.status)
+            in {"succeeded", "failed", "cancelled"}
             else None
         ),
         "params": run.parameters,
         "steps": manifest_steps,
         "collaboration_events": [
-            item.model_dump()
-            for item in run.collaboration_events
+            item.model_dump() for item in run.collaboration_events
         ],
         "convergence": run.convergence.model_dump(),
         "observability": run.observability.model_dump(),
@@ -3758,19 +4184,31 @@ def _build_pipeline_artifact_records(
             continue
         step_id = str(node.get("step_id") or "").strip()
         artifact_path = node.get("artifact_manifest")
-        if not step_id or not isinstance(artifact_path, str) or not _is_safe_relative_path(artifact_path):
+        if (
+            not step_id
+            or not isinstance(artifact_path, str)
+            or not _is_safe_relative_path(artifact_path)
+        ):
             continue
 
         artifact_file = (run_dir / artifact_path).resolve()
-        if not artifact_file.exists() or not artifact_file.is_file() or not str(artifact_file).startswith(str(run_dir)):
+        if (
+            not artifact_file.exists()
+            or not artifact_file.is_file()
+            or not str(artifact_file).startswith(str(run_dir))
+        ):
             continue
 
         artifact_doc = json.loads(artifact_file.read_text(encoding="utf-8"))
         outputs = artifact_doc.get("outputs") or []
         consumer_step_ids = [
-            step.id for step in template.steps if step_id in (step.depends_on or [])
+            step.id
+            for step in template.steps
+            if step_id in (step.depends_on or [])
         ]
-        consumer_step_names = [step_name_by_id.get(dep, dep) for dep in consumer_step_ids]
+        consumer_step_names = [
+            step_name_by_id.get(dep, dep) for dep in consumer_step_ids
+        ]
 
         for output in outputs:
             if not isinstance(output, dict):
@@ -3778,8 +4216,14 @@ def _build_pipeline_artifact_records(
             output_path = str(output.get("path") or "").strip()
             if not output_path:
                 continue
-            published_path = str(output.get("published_path") or "").strip() or None
-            logical_key = str(output.get("logical_key") or "").strip() or published_path or output_path
+            published_path = (
+                str(output.get("published_path") or "").strip() or None
+            )
+            logical_key = (
+                str(output.get("logical_key") or "").strip()
+                or published_path
+                or output_path
+            )
             produced_paths.add(output_path)
             records.append(
                 PipelineArtifactRecord(
@@ -3788,20 +4232,29 @@ def _build_pipeline_artifact_records(
                     logical_key=logical_key,
                     published_path=published_path,
                     name=Path(output_path).name,
-                    kind="final" if step_id == terminal_step_id else "intermediate",
-                    format=str(output.get("format") or _infer_output_format(output_path)),
+                    kind="final"
+                    if step_id == terminal_step_id
+                    else "intermediate",
+                    format=str(
+                        output.get("format")
+                        or _infer_output_format(output_path),
+                    ),
                     human_readable=bool(output.get("human_readable", False)),
                     run_id=run_id,
                     producer_step_id=step_id,
                     producer_step_name=step_name_by_id.get(step_id, step_id),
                     consumer_step_ids=consumer_step_ids,
                     consumer_step_names=consumer_step_names,
-                    created_at=str(artifact_doc.get("generated_at") or generated_at),
-                )
+                    created_at=str(
+                        artifact_doc.get("generated_at") or generated_at,
+                    ),
+                ),
             )
 
     root_step_ids = [step.id for step in template.steps if not step.depends_on]
-    root_step_names = [step_name_by_id.get(step_id, step_id) for step_id in root_step_ids]
+    root_step_names = [
+        step_name_by_id.get(step_id, step_id) for step_id in root_step_ids
+    ]
     for source_path in _sample_project_artifacts(project_dir, limit=200):
         if source_path in produced_paths:
             continue
@@ -3821,7 +4274,7 @@ def _build_pipeline_artifact_records(
                 consumer_step_ids=root_step_ids,
                 consumer_step_names=root_step_names,
                 created_at=generated_at,
-            )
+            ),
         )
 
     return sorted(records, key=lambda item: (item.kind, item.path.lower()))
@@ -3853,7 +4306,9 @@ def _execute_project_pipeline_run(
         return run
 
     for step in run.steps:
-        if _normalize_step_status(step.status) == "succeeded" and bool(step.metrics.get("carried_forward")):
+        if _normalize_step_status(step.status) == "succeeded" and bool(
+            step.metrics.get("carried_forward"),
+        ):
             _append_collab_event(
                 run,
                 "step.carried_forward",
@@ -3894,7 +4349,11 @@ def _execute_project_pipeline_run(
             status="running",
             message=f"Step {step.id} progress update",
             metrics={
-                "progress_pct": int(round((completed_steps / len(run.steps)) * 100)) if run.steps else 0,
+                "progress_pct": int(
+                    round((completed_steps / len(run.steps)) * 100),
+                )
+                if run.steps
+                else 0,
                 "completed_steps": completed_steps,
                 "total_steps": len(run.steps),
                 "phase": "start",
@@ -3903,7 +4362,9 @@ def _execute_project_pipeline_run(
         _persist_project_pipeline_run(project_dir, run, template)
 
         try:
-            step_started_dt = _parse_pipeline_iso(started_at) or datetime.now(timezone.utc)
+            step_started_dt = _parse_pipeline_iso(started_at) or datetime.now(
+                timezone.utc,
+            )
             step_outputs = _apply_real_step_results(
                 project_dir,
                 template.id,
@@ -3911,8 +4372,13 @@ def _execute_project_pipeline_run(
                 run.parameters,
             )
             ended_at = _pipeline_now_iso()
-            step_ended_dt = _parse_pipeline_iso(ended_at) or datetime.now(timezone.utc)
-            duration_sec = max((step_ended_dt - step_started_dt).total_seconds(), 0.0)
+            step_ended_dt = _parse_pipeline_iso(ended_at) or datetime.now(
+                timezone.utc,
+            )
+            duration_sec = max(
+                (step_ended_dt - step_started_dt).total_seconds(),
+                0.0,
+            )
 
             step.status = _transition_step_status(step.status, "succeeded")
             step.ended_at = ended_at
@@ -3922,7 +4388,9 @@ def _execute_project_pipeline_run(
             }
             step.evidence = step.evidence or ["PROJECT.md"]
             if step_outputs:
-                merged_artifacts = list(dict.fromkeys([*run.artifacts, *step_outputs]))
+                merged_artifacts = list(
+                    dict.fromkeys([*run.artifacts, *step_outputs]),
+                )
                 run.artifacts = merged_artifacts[:200]
 
             _append_collab_event(
@@ -3941,7 +4409,8 @@ def _execute_project_pipeline_run(
             completed_steps = sum(
                 1
                 for item in run.steps
-                if _normalize_step_status(item.status) in {"succeeded", "skipped"}
+                if _normalize_step_status(item.status)
+                in {"succeeded", "skipped"}
             )
             _append_collab_event(
                 run,
@@ -3951,7 +4420,11 @@ def _execute_project_pipeline_run(
                 status="succeeded",
                 message=f"Step {step.id} progress update",
                 metrics={
-                    "progress_pct": int(round((completed_steps / len(run.steps)) * 100)) if run.steps else 100,
+                    "progress_pct": int(
+                        round((completed_steps / len(run.steps)) * 100),
+                    )
+                    if run.steps
+                    else 100,
                     "completed_steps": completed_steps,
                     "total_steps": len(run.steps),
                     "phase": "finish",
@@ -3967,7 +4440,10 @@ def _execute_project_pipeline_run(
                 **step.metrics,
                 "error_count": 1,
             }
-            step.evidence = [*step.evidence[:19], f"error:{type(exc).__name__}: {exc}"]
+            step.evidence = [
+                *step.evidence[:19],
+                f"error:{type(exc).__name__}: {exc}",
+            ]
             run.status = _transition_run_status(run.status, "failed")
             run.updated_at = ended_at
             _append_collab_event(
@@ -3983,7 +4459,8 @@ def _execute_project_pipeline_run(
             completed_steps = sum(
                 1
                 for item in run.steps
-                if _normalize_step_status(item.status) in {"succeeded", "skipped"}
+                if _normalize_step_status(item.status)
+                in {"succeeded", "skipped"}
             )
             _append_collab_event(
                 run,
@@ -3993,7 +4470,11 @@ def _execute_project_pipeline_run(
                 status="failed",
                 message=f"Step {step.id} progress update",
                 metrics={
-                    "progress_pct": int(round((completed_steps / len(run.steps)) * 100)) if run.steps else 0,
+                    "progress_pct": int(
+                        round((completed_steps / len(run.steps)) * 100),
+                    )
+                    if run.steps
+                    else 0,
                     "completed_steps": completed_steps,
                     "total_steps": len(run.steps),
                     "phase": "failed",
@@ -4020,19 +4501,33 @@ def _execute_project_pipeline_run(
     return run
 
 
-def _load_pipeline_run_from_manifest(project_dir: Path, run_id: str) -> PipelineRunDetail:
+def _load_pipeline_run_from_manifest(
+    project_dir: Path,
+    run_id: str,
+) -> PipelineRunDetail:
     _, _, runs_dir = _project_pipeline_dirs(project_dir)
     run_dir, manifest_path, _ = _run_dir_paths(runs_dir, run_id)
     if not manifest_path.exists() or not manifest_path.is_file():
-        raise HTTPException(status_code=404, detail=f"Pipeline run '{run_id}' not found")
+        raise HTTPException(
+            status_code=404,
+            detail=f"Pipeline run '{run_id}' not found",
+        )
 
     raw = json.loads(manifest_path.read_text(encoding="utf-8"))
     if not isinstance(raw, dict):
-        raise HTTPException(status_code=400, detail=f"Pipeline run '{run_id}' is invalid")
+        raise HTTPException(
+            status_code=400,
+            detail=f"Pipeline run '{run_id}' is invalid",
+        )
 
-    template = _resolve_pipeline_template(project_dir, str(raw.get("pipeline_id") or ""))
+    template = _resolve_pipeline_template(
+        project_dir,
+        str(raw.get("pipeline_id") or ""),
+    )
 
-    raw_steps = [item for item in (raw.get("steps") or []) if isinstance(item, dict)]
+    raw_steps = [
+        item for item in (raw.get("steps") or []) if isinstance(item, dict)
+    ]
     all_artifacts: list[str] = []
     steps: list[PipelineRunStep] = []
     for node in raw_steps:
@@ -4048,10 +4543,18 @@ def _load_pipeline_run_from_manifest(project_dir: Path, run_id: str) -> Pipeline
         metrics: dict[str, Any] = {}
         evidence: list[str] = []
 
-        if isinstance(metric_path, str) and _is_safe_relative_path(metric_path):
+        if isinstance(metric_path, str) and _is_safe_relative_path(
+            metric_path,
+        ):
             metric_file = (run_dir / metric_path).resolve()
-            if metric_file.exists() and metric_file.is_file() and str(metric_file).startswith(str(run_dir)):
-                metric_doc = json.loads(metric_file.read_text(encoding="utf-8"))
+            if (
+                metric_file.exists()
+                and metric_file.is_file()
+                and str(metric_file).startswith(str(run_dir))
+            ):
+                metric_doc = json.loads(
+                    metric_file.read_text(encoding="utf-8"),
+                )
                 for metric in metric_doc.get("metrics") or []:
                     if not isinstance(metric, dict):
                         continue
@@ -4061,12 +4564,23 @@ def _load_pipeline_run_from_manifest(project_dir: Path, run_id: str) -> Pipeline
                         metrics[key] = value
 
         if isinstance(node.get("resolved_inputs"), dict):
-            metrics["resolved_inputs"] = cast(dict[str, Any], node.get("resolved_inputs") or {})
+            metrics["resolved_inputs"] = cast(
+                dict[str, Any],
+                node.get("resolved_inputs") or {},
+            )
 
-        if isinstance(artifact_path, str) and _is_safe_relative_path(artifact_path):
+        if isinstance(artifact_path, str) and _is_safe_relative_path(
+            artifact_path,
+        ):
             artifact_file = (run_dir / artifact_path).resolve()
-            if artifact_file.exists() and artifact_file.is_file() and str(artifact_file).startswith(str(run_dir)):
-                artifact_doc = json.loads(artifact_file.read_text(encoding="utf-8"))
+            if (
+                artifact_file.exists()
+                and artifact_file.is_file()
+                and str(artifact_file).startswith(str(run_dir))
+            ):
+                artifact_doc = json.loads(
+                    artifact_file.read_text(encoding="utf-8"),
+                )
                 for output in artifact_doc.get("outputs") or []:
                     if not isinstance(output, dict):
                         continue
@@ -4080,7 +4594,10 @@ def _load_pipeline_run_from_manifest(project_dir: Path, run_id: str) -> Pipeline
                     if source:
                         evidence.append(source)
 
-        template_step = next((item for item in template.steps if item.id == step_id), None)
+        template_step = next(
+            (item for item in template.steps if item.id == step_id),
+            None,
+        )
         step_name = template_step.name if template_step else step_id
         step_kind = template_step.kind if template_step else "task"
 
@@ -4089,46 +4606,96 @@ def _load_pipeline_run_from_manifest(project_dir: Path, run_id: str) -> Pipeline
                 id=step_id,
                 name=step_name,
                 kind=step_kind,
-                description=str(node.get("description") or (template_step.description if template_step else "")).strip(),
+                description=str(
+                    node.get("description")
+                    or (template_step.description if template_step else ""),
+                ).strip(),
                 inputs=(
                     cast(dict[str, Any], node.get("contract_inputs"))
                     if isinstance(node.get("contract_inputs"), dict)
                     else (dict(template_step.inputs) if template_step else {})
                 ),
-                prompt=str(node.get("contract_prompt") or (template_step.prompt if template_step else "")).strip(),
-                script=str(node.get("contract_script") or (template_step.script if template_step else "")).strip(),
-                executor=str(node.get("contract_executor") or (template_step.executor if template_step else "")).strip(),
+                prompt=str(
+                    node.get("contract_prompt")
+                    or (template_step.prompt if template_step else ""),
+                ).strip(),
+                script=str(
+                    node.get("contract_script")
+                    or (template_step.script if template_step else ""),
+                ).strip(),
+                executor=str(
+                    node.get("contract_executor")
+                    or (template_step.executor if template_step else ""),
+                ).strip(),
                 outputs=(
                     cast(dict[str, Any], node.get("contract_outputs"))
                     if isinstance(node.get("contract_outputs"), dict)
                     else (dict(template_step.outputs) if template_step else {})
                 ),
                 depends_on=(
-                    [str(item).strip() for item in cast(list[Any], node.get("contract_depends_on")) if str(item).strip()]
+                    [
+                        str(item).strip()
+                        for item in cast(
+                            list[Any],
+                            node.get("contract_depends_on"),
+                        )
+                        if str(item).strip()
+                    ]
                     if isinstance(node.get("contract_depends_on"), list)
                     else (template_step.depends_on[:] if template_step else [])
                 ),
                 input_bindings=(
-                    {str(key): str(value) for key, value in cast(dict[str, Any], node.get("contract_input_bindings")).items()}
+                    {
+                        str(key): str(value)
+                        for key, value in cast(
+                            dict[str, Any],
+                            node.get("contract_input_bindings"),
+                        ).items()
+                    }
                     if isinstance(node.get("contract_input_bindings"), dict)
-                    else (dict(template_step.input_bindings) if template_step else {})
+                    else (
+                        dict(template_step.input_bindings)
+                        if template_step
+                        else {}
+                    )
                 ),
                 retry_policy=(
                     cast(dict[str, Any], node.get("contract_retry_policy"))
                     if isinstance(node.get("contract_retry_policy"), dict)
-                    else (dict(template_step.retry_policy) if template_step else {})
+                    else (
+                        dict(template_step.retry_policy)
+                        if template_step
+                        else {}
+                    )
                 ),
                 artifact_schema_ref=str(
                     node.get("contract_artifact_schema_ref")
-                    or (template_step.artifact_schema_ref if template_step else "")
-                    or ""
+                    or (
+                        template_step.artifact_schema_ref
+                        if template_step
+                        else ""
+                    )
+                    or "",
                 ).strip(),
                 error_contract=(
-                    [str(item).strip() for item in cast(list[Any], node.get("contract_error_contract")) if str(item).strip()]
+                    [
+                        str(item).strip()
+                        for item in cast(
+                            list[Any],
+                            node.get("contract_error_contract"),
+                        )
+                        if str(item).strip()
+                    ]
                     if isinstance(node.get("contract_error_contract"), list)
-                    else (list(template_step.error_contract) if template_step else [])
+                    else (
+                        list(template_step.error_contract)
+                        if template_step
+                        else []
+                    )
                 ),
-                status=_normalize_step_status(str(node.get("status") or "pending")),
+                status=_normalize_step_status(
+                    str(node.get("status") or "pending"),
+                ),
                 started_at=node.get("started_at"),
                 ended_at=node.get("ended_at"),
                 metrics=metrics,
@@ -4159,20 +4726,27 @@ def _load_pipeline_run_from_manifest(project_dir: Path, run_id: str) -> Pipeline
             raw_steps,
             run_dir,
         ),
-        flow_version=str(raw.get("flow_version") or raw.get("pipeline_version") or ""),
+        flow_version=str(
+            raw.get("flow_version") or raw.get("pipeline_version") or "",
+        ),
         source_platform_template_id=(
             str(raw.get("source_platform_template_id") or "").strip() or None
         ),
         source_platform_template_version=(
-            str(raw.get("source_platform_template_version") or "").strip() or None
+            str(raw.get("source_platform_template_version") or "").strip()
+            or None
         ),
         collaboration_events=[
             PipelineCollaborationEvent.model_validate(item)
             for item in (raw.get("collaboration_events") or [])
             if isinstance(item, dict)
         ],
-        convergence=PipelineRunConvergence.model_validate(raw.get("convergence") or {}),
-        observability=PipelineRunObservability.model_validate(raw.get("observability") or {}),
+        convergence=PipelineRunConvergence.model_validate(
+            raw.get("convergence") or {},
+        ),
+        observability=PipelineRunObservability.model_validate(
+            raw.get("observability") or {},
+        ),
         next_actions=[
             PipelineRunNextAction.model_validate(item)
             for item in (raw.get("next_actions") or [])
@@ -4183,7 +4757,10 @@ def _load_pipeline_run_from_manifest(project_dir: Path, run_id: str) -> Pipeline
     return run_detail
 
 
-def _load_legacy_pipeline_run(project_dir: Path, run_id: str) -> PipelineRunDetail:
+def _load_legacy_pipeline_run(
+    project_dir: Path,
+    run_id: str,
+) -> PipelineRunDetail:
     _, _, runs_dir = _project_pipeline_dirs(project_dir)
     if not _is_safe_relative_path(f"{run_id}.json"):
         raise HTTPException(status_code=400, detail="Invalid run id")
@@ -4192,7 +4769,10 @@ def _load_legacy_pipeline_run(project_dir: Path, run_id: str) -> PipelineRunDeta
     if not str(path).startswith(str(runs_dir.resolve())):
         raise HTTPException(status_code=400, detail="Invalid run id")
     if not path.exists() or not path.is_file():
-        raise HTTPException(status_code=404, detail=f"Pipeline run '{run_id}' not found")
+        raise HTTPException(
+            status_code=404,
+            detail=f"Pipeline run '{run_id}' not found",
+        )
 
     raw = json.loads(path.read_text(encoding="utf-8"))
     run = PipelineRunDetail.model_validate(raw)
@@ -4239,14 +4819,20 @@ def _list_project_pipeline_runs(project_dir: Path) -> list[PipelineRunSummary]:
     _, _, runs_dir = _project_pipeline_dirs(project_dir)
     runs: list[PipelineRunSummary] = []
 
-    for run_dir in sorted(runs_dir.iterdir(), key=lambda item: item.name.lower()):
+    for run_dir in sorted(
+        runs_dir.iterdir(),
+        key=lambda item: item.name.lower(),
+    ):
         if not run_dir.is_dir():
             continue
         manifest_path = run_dir / "run_manifest.json"
         if not manifest_path.exists() or not manifest_path.is_file():
             continue
         try:
-            run_detail = _load_pipeline_run_from_manifest(project_dir, run_dir.name)
+            run_detail = _load_pipeline_run_from_manifest(
+                project_dir,
+                run_dir.name,
+            )
             runs.append(
                 PipelineRunSummary(
                     id=run_detail.id,
@@ -4260,9 +4846,16 @@ def _list_project_pipeline_runs(project_dir: Path) -> list[PipelineRunSummary]:
                 ),
             )
         except Exception as exc:
-            logger.warning("Skip invalid pipeline run manifest %s: %s", manifest_path, exc)
+            logger.warning(
+                "Skip invalid pipeline run manifest %s: %s",
+                manifest_path,
+                exc,
+            )
 
-    for path in sorted(runs_dir.glob("*.json"), key=lambda item: item.name.lower()):
+    for path in sorted(
+        runs_dir.glob("*.json"),
+        key=lambda item: item.name.lower(),
+    ):
         try:
             raw = json.loads(path.read_text(encoding="utf-8"))
             if not isinstance(raw, dict):
@@ -4286,13 +4879,20 @@ def _list_project_pipeline_runs(project_dir: Path) -> list[PipelineRunSummary]:
                 ),
             )
         except Exception as exc:
-            logger.warning("Skip invalid legacy pipeline run %s: %s", path, exc)
+            logger.warning(
+                "Skip invalid legacy pipeline run %s: %s",
+                path,
+                exc,
+            )
 
     runs.sort(key=lambda item: item.updated_at, reverse=True)
     return runs
 
 
-def _load_project_pipeline_run(project_dir: Path, run_id: str) -> PipelineRunDetail:
+def _load_project_pipeline_run(
+    project_dir: Path,
+    run_id: str,
+) -> PipelineRunDetail:
     try:
         return _load_pipeline_run_from_manifest(project_dir, run_id)
     except HTTPException as exc:
@@ -4322,11 +4922,19 @@ def _create_project_pipeline_run(
                 knowledge_pipeline_snapshot = {
                     "status": str(pipeline_state.get("status") or "").strip(),
                     "current_stage": str(
-                        pipeline_state.get("current_stage") or pipeline_state.get("stage") or ""
+                        pipeline_state.get("current_stage")
+                        or pipeline_state.get("stage")
+                        or "",
                     ).strip(),
                     "progress": int(pipeline_state.get("progress") or 0),
-                    "updated_at": str(pipeline_state.get("updated_at") or "").strip() or None,
-                    "last_error": str(pipeline_state.get("last_error") or "").strip() or None,
+                    "updated_at": str(
+                        pipeline_state.get("updated_at") or "",
+                    ).strip()
+                    or None,
+                    "last_error": str(
+                        pipeline_state.get("last_error") or "",
+                    ).strip()
+                    or None,
                 }
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -4336,7 +4944,9 @@ def _create_project_pipeline_run(
             raise HTTPException(status_code=502, detail=str(exc)) from exc
 
     if knowledge_pipeline_snapshot:
-        run_parameters["knowledge_pipeline_snapshot"] = knowledge_pipeline_snapshot
+        run_parameters[
+            "knowledge_pipeline_snapshot"
+        ] = knowledge_pipeline_snapshot
 
     now = _pipeline_now_iso()
     run_id = f"run-{generate_short_agent_id()}"
@@ -4379,10 +4989,13 @@ def _create_project_pipeline_run(
         artifacts=artifacts,
         flow_version=(template.version or "0.1.0"),
         source_platform_template_id=(
-            str(template_doc.get("source_platform_template_id") or "").strip() or None
+            str(template_doc.get("source_platform_template_id") or "").strip()
+            or None
         ),
         source_platform_template_version=(
-            str(template_doc.get("source_platform_template_version") or "").strip()
+            str(
+                template_doc.get("source_platform_template_version") or "",
+            ).strip()
             or None
         ),
         collaboration_events=[],
@@ -4432,14 +5045,26 @@ def _build_continuation_run(
                     input_bindings=dict(template_step.input_bindings),
                     retry_policy=dict(template_step.retry_policy),
                     status="succeeded",
-                    started_at=(source_step.started_at if source_step else source_run.created_at),
-                    ended_at=(source_step.ended_at if source_step and source_step.ended_at else now),
+                    started_at=(
+                        source_step.started_at
+                        if source_step
+                        else source_run.created_at
+                    ),
+                    ended_at=(
+                        source_step.ended_at
+                        if source_step and source_step.ended_at
+                        else now
+                    ),
                     metrics={
                         **(source_step.metrics if source_step else {}),
                         "carried_forward": True,
                         "source_run_id": source_run.id,
                     },
-                    evidence=(source_step.evidence[:] if source_step and source_step.evidence else [f"continued-from:{source_run.id}"]),
+                    evidence=(
+                        source_step.evidence[:]
+                        if source_step and source_step.evidence
+                        else [f"continued-from:{source_run.id}"]
+                    ),
                 ),
             )
             continue
@@ -4464,7 +5089,9 @@ def _build_continuation_run(
                     "continued_from_run_id": source_run.id,
                     "continued_from_step_id": target_step_id,
                 },
-                evidence=[f"continued-from:{source_run.id}"] if idx == target_index else [],
+                evidence=[f"continued-from:{source_run.id}"]
+                if idx == target_index
+                else [],
             ),
         )
 
@@ -4483,7 +5110,11 @@ def _build_continuation_run(
         updated_at=now,
         parameters=parameters,
         steps=steps,
-        artifacts=list(dict.fromkeys(source_run.artifacts or _sample_project_artifacts(project_dir)))[:200],
+        artifacts=list(
+            dict.fromkeys(
+                source_run.artifacts or _sample_project_artifacts(project_dir),
+            ),
+        )[:200],
         flow_version=(template.version or source_run.flow_version or "0.1.0"),
         source_platform_template_id=(
             str(template_doc.get("source_platform_template_id") or "").strip()
@@ -4491,7 +5122,9 @@ def _build_continuation_run(
             or None
         ),
         source_platform_template_version=(
-            str(template_doc.get("source_platform_template_version") or "").strip()
+            str(
+                template_doc.get("source_platform_template_version") or "",
+            ).strip()
             or source_run.source_platform_template_version
             or None
         ),
@@ -4523,14 +5156,18 @@ def _retry_project_pipeline_run(
         (
             step.id
             for step in source_run.steps
-            if _normalize_step_status(step.status) in {"failed", "blocked", "pending", "running", "cancelled"}
+            if _normalize_step_status(step.status)
+            in {"failed", "blocked", "pending", "running", "cancelled"}
         ),
         "",
     )
     if not target_step_id:
         target_step_id = template.steps[-1].id if template.steps else ""
     if not target_step_id:
-        raise HTTPException(status_code=400, detail="Pipeline template has no steps to continue")
+        raise HTTPException(
+            status_code=400,
+            detail="Pipeline template has no steps to continue",
+        )
 
     run = _build_continuation_run(
         project_id,

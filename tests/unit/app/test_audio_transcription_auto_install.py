@@ -1,4 +1,7 @@
-from qwenpaw.agents.utils import audio_transcription as audio_transcription_module
+# -*- coding: utf-8 -*-
+from qwenpaw.agents.utils import (
+    audio_transcription as audio_transcription_module,
+)
 
 
 def test_auto_install_local_whisper_dependencies_installs_python_package(

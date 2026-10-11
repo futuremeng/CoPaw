@@ -38,15 +38,21 @@ class SQLiteFlowEngineRepository:
     def _ensure_agent_id_columns(cls, conn: sqlite3.Connection) -> None:
         run_columns = cls._table_columns(conn, "flow_runs")
         if "agent_id" not in run_columns:
-            conn.execute("ALTER TABLE flow_runs ADD COLUMN agent_id TEXT NOT NULL DEFAULT ''")
+            conn.execute(
+                "ALTER TABLE flow_runs ADD COLUMN agent_id TEXT NOT NULL DEFAULT ''",
+            )
 
         event_columns = cls._table_columns(conn, "flow_events")
         if "agent_id" not in event_columns:
-            conn.execute("ALTER TABLE flow_events ADD COLUMN agent_id TEXT NOT NULL DEFAULT ''")
+            conn.execute(
+                "ALTER TABLE flow_events ADD COLUMN agent_id TEXT NOT NULL DEFAULT ''",
+            )
 
         command_columns = cls._table_columns(conn, "flow_commands")
         if "agent_id" not in command_columns:
-            conn.execute("ALTER TABLE flow_commands ADD COLUMN agent_id TEXT NOT NULL DEFAULT ''")
+            conn.execute(
+                "ALTER TABLE flow_commands ADD COLUMN agent_id TEXT NOT NULL DEFAULT ''",
+            )
 
     @staticmethod
     def _json_dumps(payload: dict | list | None) -> str:
@@ -132,7 +138,7 @@ class SQLiteFlowEngineRepository:
                     ON flow_commands(run_id, created_at ASC);
                 CREATE INDEX IF NOT EXISTS idx_flow_commands_agent_run
                     ON flow_commands(agent_id, run_id, created_at ASC);
-                """
+                """,
             )
             self._ensure_agent_id_columns(conn)
             conn.execute(
@@ -148,9 +154,11 @@ class SQLiteFlowEngineRepository:
         self.ensure_schema()
         with self._connect() as conn:
             row = conn.execute(
-                "SELECT meta_value FROM flow_meta WHERE meta_key = 'schema_version'"
+                "SELECT meta_value FROM flow_meta WHERE meta_key = 'schema_version'",
             ).fetchone()
-        return int(str(row["meta_value"]) if row else FLOW_ENGINE_SCHEMA_VERSION)
+        return int(
+            str(row["meta_value"]) if row else FLOW_ENGINE_SCHEMA_VERSION,
+        )
 
     def upsert_definition(self, definition: FlowDefinition) -> FlowDefinition:
         self.ensure_schema()
@@ -167,7 +175,12 @@ class SQLiteFlowEngineRepository:
                     definition.name,
                     definition.version,
                     definition.description,
-                    self._json_dumps([step.model_dump(mode="json") for step in definition.steps]),
+                    self._json_dumps(
+                        [
+                            step.model_dump(mode="json")
+                            for step in definition.steps
+                        ],
+                    ),
                     self._json_dumps(definition.tags),
                     1 if definition.system_owned else 0,
                     definition.created_at,
@@ -185,8 +198,12 @@ class SQLiteFlowEngineRepository:
             ).fetchone()
         if row is None:
             return None
-        steps_raw = json.loads(str(row["steps_json"])) if row["steps_json"] else []
-        tags_raw = json.loads(str(row["tags_json"])) if row["tags_json"] else []
+        steps_raw = (
+            json.loads(str(row["steps_json"])) if row["steps_json"] else []
+        )
+        tags_raw = (
+            json.loads(str(row["tags_json"])) if row["tags_json"] else []
+        )
         return FlowDefinition.model_validate(
             {
                 "id": row["id"],
@@ -198,19 +215,23 @@ class SQLiteFlowEngineRepository:
                 "system_owned": bool(row["system_owned"]),
                 "created_at": row["created_at"],
                 "updated_at": row["updated_at"],
-            }
+            },
         )
 
     def list_definitions(self) -> list[FlowDefinition]:
         self.ensure_schema()
         with self._connect() as conn:
             rows = conn.execute(
-                "SELECT * FROM flow_definitions ORDER BY updated_at DESC"
+                "SELECT * FROM flow_definitions ORDER BY updated_at DESC",
             ).fetchall()
         definitions: list[FlowDefinition] = []
         for row in rows:
-            steps_raw = json.loads(str(row["steps_json"])) if row["steps_json"] else []
-            tags_raw = json.loads(str(row["tags_json"])) if row["tags_json"] else []
+            steps_raw = (
+                json.loads(str(row["steps_json"])) if row["steps_json"] else []
+            )
+            tags_raw = (
+                json.loads(str(row["tags_json"])) if row["tags_json"] else []
+            )
             definitions.append(
                 FlowDefinition.model_validate(
                     {
@@ -218,13 +239,15 @@ class SQLiteFlowEngineRepository:
                         "name": row["name"],
                         "version": row["version"],
                         "description": row["description"],
-                        "steps": steps_raw if isinstance(steps_raw, list) else [],
+                        "steps": steps_raw
+                        if isinstance(steps_raw, list)
+                        else [],
                         "tags": tags_raw if isinstance(tags_raw, list) else [],
                         "system_owned": bool(row["system_owned"]),
                         "created_at": row["created_at"],
                         "updated_at": row["updated_at"],
-                    }
-                )
+                    },
+                ),
             )
         return definitions
 
@@ -254,7 +277,12 @@ class SQLiteFlowEngineRepository:
             )
         return run
 
-    def get_run(self, run_id: str, *, agent_id: str | None = None) -> FlowRunRecord | None:
+    def get_run(
+        self,
+        run_id: str,
+        *,
+        agent_id: str | None = None,
+    ) -> FlowRunRecord | None:
         self.ensure_schema()
         params: list[str] = [run_id]
         sql = "SELECT * FROM flow_runs WHERE id = ?"
@@ -289,7 +317,13 @@ class SQLiteFlowEngineRepository:
                 ORDER BY created_at DESC
                 LIMIT 1
                 """,
-                [agent_id, definition_id, scope_kind, scope_id, idempotency_key],
+                [
+                    agent_id,
+                    definition_id,
+                    scope_kind,
+                    scope_id,
+                    idempotency_key,
+                ],
             ).fetchone()
         if row is None:
             return None
@@ -364,7 +398,14 @@ class SQLiteFlowEngineRepository:
                 SET status = ?, current_step_id = ?, updated_at = ?
                 WHERE id = ? AND agent_id = ? AND status = ?
                 """,
-                [status, current_step_id, updated_at, run_id, agent_id, expected_current_status],
+                [
+                    status,
+                    current_step_id,
+                    updated_at,
+                    run_id,
+                    agent_id,
+                    expected_current_status,
+                ],
             )
             if int(cursor.rowcount or 0) <= 0:
                 return None
@@ -394,7 +435,12 @@ class SQLiteFlowEngineRepository:
             )
         return event
 
-    def list_events(self, run_id: str, *, agent_id: str | None = None) -> list[FlowEventRecord]:
+    def list_events(
+        self,
+        run_id: str,
+        *,
+        agent_id: str | None = None,
+    ) -> list[FlowEventRecord]:
         self.ensure_schema()
         params: list[str] = [run_id]
         sql = "SELECT * FROM flow_events WHERE run_id = ?"
@@ -415,7 +461,7 @@ class SQLiteFlowEngineRepository:
                     "step_id": row["step_id"],
                     "payload": self._json_loads(row["payload_json"]),
                     "created_at": row["created_at"],
-                }
+                },
             )
             for row in rows
         ]
@@ -441,7 +487,12 @@ class SQLiteFlowEngineRepository:
             )
         return command
 
-    def list_commands(self, run_id: str, *, agent_id: str | None = None) -> list[FlowCommandRecord]:
+    def list_commands(
+        self,
+        run_id: str,
+        *,
+        agent_id: str | None = None,
+    ) -> list[FlowCommandRecord]:
         self.ensure_schema()
         params: list[str] = [run_id]
         sql = "SELECT * FROM flow_commands WHERE run_id = ?"
@@ -462,7 +513,7 @@ class SQLiteFlowEngineRepository:
                     "status": row["status"],
                     "created_at": row["created_at"],
                     "updated_at": row["updated_at"],
-                }
+                },
             )
             for row in rows
         ]

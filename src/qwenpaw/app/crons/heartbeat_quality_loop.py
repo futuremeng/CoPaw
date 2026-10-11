@@ -59,9 +59,7 @@ def _build_quality_loop_recommended_actions(
 
     reflection_artifacts = latest_job.get("reflection_artifacts")
     artifact_paths = (
-        reflection_artifacts
-        if isinstance(reflection_artifacts, dict)
-        else {}
+        reflection_artifacts if isinstance(reflection_artifacts, dict) else {}
     )
     lessons_path = str(artifact_paths.get("lessons_path") or "").strip()
     params_path = str(artifact_paths.get("params_path") or "").strip()
@@ -82,9 +80,7 @@ def _build_quality_loop_recommended_actions(
 
     if lessons_path or params_path or rounds_dir:
         references = ", ".join(
-            path
-            for path in [lessons_path, params_path, rounds_dir]
-            if path
+            path for path in [lessons_path, params_path, rounds_dir] if path
         )
         if references:
             actions.append(f"  References: {references}")

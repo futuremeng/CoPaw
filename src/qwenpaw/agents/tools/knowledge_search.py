@@ -65,7 +65,10 @@ async def knowledge_search(
 
     try:
         config, running, workspace_dir = _resolve_knowledge_tool_context()
-        if not getattr(config, "knowledge", None) or not config.knowledge.enabled:
+        if (
+            not getattr(config, "knowledge", None)
+            or not config.knowledge.enabled
+        ):
             return ToolResponse(
                 content=[
                     TextBlock(
@@ -84,8 +87,7 @@ async def knowledge_search(
                 ],
             )
         if not bool(
-            running
-            and getattr(running, "knowledge_retrieval_enabled", True)
+            running and getattr(running, "knowledge_retrieval_enabled", True),
         ):
             return ToolResponse(
                 content=[

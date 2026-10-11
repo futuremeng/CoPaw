@@ -15,9 +15,12 @@ def sync_knowledge_module_skills(enabled: bool) -> None:
     for skill_name in KNOWLEDGE_MODULE_SKILL_NAMES:
         if enabled:
             skill_dir = KNOWLEDGE_MODULE_SKILLS_DIR / skill_name
-            if not skills_manager.sync_skill_dir_to_active(skill_dir, force=True):
+            if not skills_manager.sync_skill_dir_to_active(
+                skill_dir,
+                force=True,
+            ):
                 raise RuntimeError(
-                    f"Failed to enable knowledge module skill: {skill_name}"
+                    f"Failed to enable knowledge module skill: {skill_name}",
                 )
             continue
 

@@ -12,7 +12,9 @@ from threading import Thread
 from typing import Any
 
 
-_PLACEHOLDER_RE = re.compile(r"\{\{\s*([a-zA-Z_][a-zA-Z0-9_]*)(?::([^}]+))?\s*\}\}")
+_PLACEHOLDER_RE = re.compile(
+    r"\{\{\s*([a-zA-Z_][a-zA-Z0-9_]*)(?::([^}]+))?\s*\}\}",
+)
 
 
 def _extract_text_from_tool_response(resp: Any) -> str:
@@ -160,7 +162,9 @@ def _execute_rpa_action(
             ref=str(rendered.get("ref") or ""),
         )
     elif action_kind == "browser.wait":
-        wait_seconds = float(_to_int(rendered.get("wait_time_ms"), default=0)) / 1000.0
+        wait_seconds = (
+            float(_to_int(rendered.get("wait_time_ms"), default=0)) / 1000.0
+        )
         result = invoke_browser_use(
             "wait_for",
             page_id=str(rendered.get("page_id") or "default"),
@@ -191,7 +195,9 @@ def _execute_rpa_action(
         raise ValueError(f"Unsupported RPA action kind: {action_kind}")
 
     if not result.get("ok", False):
-        raise RuntimeError(str(result.get("error") or f"RPA action failed: {action_kind}"))
+        raise RuntimeError(
+            str(result.get("error") or f"RPA action failed: {action_kind}"),
+        )
     duration_ms = max((time.perf_counter() - started) * 1000.0, 0.0)
     if action_kind == "browser.screenshot" and outputs:
         evidence.append(f"{action_kind}:ok:{outputs[-1]}:{duration_ms:.1f}ms")
@@ -208,16 +214,38 @@ def _check_loop_stop_condition(
     if not isinstance(stop_condition, dict) or not stop_condition:
         return True, ""
 
-    condition_type = str(_render_template(stop_condition.get("type") or "", context)).strip().lower()
+    condition_type = (
+        str(_render_template(stop_condition.get("type") or "", context))
+        .strip()
+        .lower()
+    )
     if not condition_type:
         return True, ""
 
     if condition_type == "page_number_reached":
-        selector = str(_render_template(stop_condition.get("selector") or "", context)).strip()
-        expected_value = str(_render_template(stop_condition.get("expected_value") or "", context)).strip()
-        page_id = str(_render_template(stop_condition.get("page_id") or "default", context)).strip() or "default"
+        selector = str(
+            _render_template(stop_condition.get("selector") or "", context),
+        ).strip()
+        expected_value = str(
+            _render_template(
+                stop_condition.get("expected_value") or "",
+                context,
+            ),
+        ).strip()
+        page_id = (
+            str(
+                _render_template(
+                    stop_condition.get("page_id") or "default",
+                    context,
+                ),
+            ).strip()
+            or "default"
+        )
         if not selector or not expected_value:
-            return False, "page_number_reached requires selector and expected_value"
+            return (
+                False,
+                "page_number_reached requires selector and expected_value",
+            )
 
         code = (
             "() => {"
@@ -227,14 +255,23 @@ def _check_loop_stop_condition(
         )
         result = invoke_browser_use("run_code", page_id=page_id, code=code)
         if not result.get("ok", False):
-            return False, str(result.get("error") or "failed to evaluate page number selector")
+            return False, str(
+                result.get("error")
+                or "failed to evaluate page number selector",
+            )
 
         actual_value = str(result.get("result") or "").strip()
         expected_num = _extract_first_int(expected_value)
         actual_num = _extract_first_int(actual_value)
         if expected_num is not None and actual_num is not None:
-            return (actual_num == expected_num, f"expected={expected_num}, actual={actual_num}")
-        return (actual_value == expected_value, f"expected='{expected_value}', actual='{actual_value}'")
+            return (
+                actual_num == expected_num,
+                f"expected={expected_num}, actual={actual_num}",
+            )
+        return (
+            actual_value == expected_value,
+            f"expected='{expected_value}', actual='{actual_value}'",
+        )
 
     return True, f"unsupported_stop_condition:{condition_type}:ignored"
 
@@ -281,8 +318,14 @@ def execute_rpa_script_step(
         if mode != "range":
             raise ValueError(f"Unsupported rpa loop mode: {mode}")
 
-        start = _to_int(_render_template(loop_raw.get("start", 1), context), default=1)
-        end = _to_int(_render_template(loop_raw.get("end", start), context), default=start)
+        start = _to_int(
+            _render_template(loop_raw.get("start", 1), context),
+            default=1,
+        )
+        end = _to_int(
+            _render_template(loop_raw.get("end", start), context),
+            default=start,
+        )
         actions = loop_raw.get("actions") or []
         if not isinstance(actions, list):
             raise ValueError("rpa loop actions must be a list")
@@ -292,7 +335,10 @@ def execute_rpa_script_step(
             stop_condition = {}
         max_iterations = _to_int(
             _render_template(
-                stop_condition.get("max_iterations", loop_raw.get("max_iterations", 0)),
+                stop_condition.get(
+                    "max_iterations",
+                    loop_raw.get("max_iterations", 0),
+                ),
                 context,
             ),
             default=0,
@@ -300,7 +346,9 @@ def execute_rpa_script_step(
 
         for index in range(start, end + 1):
             if max_iterations > 0 and loop_iterations >= max_iterations:
-                evidence.append(f"flow.loop:stop:max_iterations:{max_iterations}")
+                evidence.append(
+                    f"flow.loop:stop:max_iterations:{max_iterations}",
+                )
                 break
             loop_iterations += 1
             loop_context = {**context, iterator: index}
@@ -320,10 +368,13 @@ def execute_rpa_script_step(
                 action_count += 1
                 action_duration_total_ms += duration_ms
                 action_duration_by_kind[executed_kind] = round(
-                    action_duration_by_kind.get(executed_kind, 0.0) + duration_ms,
+                    action_duration_by_kind.get(executed_kind, 0.0)
+                    + duration_ms,
                     3,
                 )
-                action_count_by_kind[executed_kind] = action_count_by_kind.get(executed_kind, 0) + 1
+                action_count_by_kind[executed_kind] = (
+                    action_count_by_kind.get(executed_kind, 0) + 1
+                )
 
             if stop_condition:
                 stop_checks += 1
@@ -332,16 +383,26 @@ def execute_rpa_script_step(
                     context=loop_context,
                 )
                 if not passed:
-                    on_failure = str(
-                        _render_template(stop_condition.get("on_failure", "fail"), loop_context) or "fail"
-                    ).strip().lower()
+                    on_failure = (
+                        str(
+                            _render_template(
+                                stop_condition.get("on_failure", "fail"),
+                                loop_context,
+                            )
+                            or "fail",
+                        )
+                        .strip()
+                        .lower()
+                    )
                     if on_failure in {"continue", "ignore"}:
                         stop_failures += 1
                         evidence.append(
-                            f"flow.loop:stop_condition_failed:{on_failure}:{reason or 'condition_mismatch'}"
+                            f"flow.loop:stop_condition_failed:{on_failure}:{reason or 'condition_mismatch'}",
                         )
                     else:
-                        raise RuntimeError(f"RPA loop stop_condition check failed: {reason}")
+                        raise RuntimeError(
+                            f"RPA loop stop_condition check failed: {reason}",
+                        )
                 if reason and reason.startswith("unsupported_stop_condition"):
                     evidence.append(reason)
     else:

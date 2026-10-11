@@ -35,8 +35,8 @@ _REPO_ROOT = Path(__file__).resolve().parents[3]
 def _fact_releases_url() -> str:
     fact = json.loads(
         (_REPO_ROOT / "src/copaw/release_channel.json").read_text(
-            encoding="utf-8"
-        )
+            encoding="utf-8",
+        ),
     )
     return f"https://github.com/{fact['github_repository']}/releases"
 

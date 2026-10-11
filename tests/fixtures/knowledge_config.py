@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """Test helpers for the CoPaw knowledge configuration."""
 
 from __future__ import annotations

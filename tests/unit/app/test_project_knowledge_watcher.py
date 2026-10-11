@@ -37,8 +37,14 @@ async def test_project_knowledge_watcher_triggers_bootstrap_sync(
         "---\nid: project-a\nname: Project A\nproject_auto_knowledge_sink: true\nproject_agent_knowledge_registered: true\n---\n",
         encoding="utf-8",
     )
-    (project_dir / "original" / "brief.md").parent.mkdir(parents=True, exist_ok=True)
-    (project_dir / "original" / "brief.md").write_text("hello", encoding="utf-8")
+    (project_dir / "original" / "brief.md").parent.mkdir(
+        parents=True,
+        exist_ok=True,
+    )
+    (project_dir / "original" / "brief.md").write_text(
+        "hello",
+        encoding="utf-8",
+    )
 
     config = Config()
     config.knowledge.enabled = True
@@ -52,7 +58,11 @@ async def test_project_knowledge_watcher_triggers_bootstrap_sync(
     monkeypatch.setattr(
         watcher_module,
         "load_agent_config",
-        lambda _agent_id: type("AgentCfg", (), {"running": config.agents.running})(),
+        lambda _agent_id: type(
+            "AgentCfg",
+            (),
+            {"running": config.agents.running},
+        )(),
     )
     monkeypatch.setattr(
         "qwenpaw.config.utils.save_config",
@@ -61,7 +71,11 @@ async def test_project_knowledge_watcher_triggers_bootstrap_sync(
 
     def fake_start_sync(self, **kwargs):
         calls.append(kwargs)
-        return {"accepted": True, "reason": "STARTED", "state": {"project_id": kwargs["project_id"]}}
+        return {
+            "accepted": True,
+            "reason": "STARTED",
+            "state": {"project_id": kwargs["project_id"]},
+        }
 
     monkeypatch.setattr(
         watcher_module.ProjectKnowledgePipelineManager,
@@ -86,13 +100,22 @@ async def test_project_knowledge_watcher_triggers_bootstrap_sync(
     assert calls[0]["project_id"] == "project-a"
     assert calls[0]["trigger"] == "project_watcher_bootstrap"
     assert calls[0]["force"] is True
-    assert calls[0]["debounce_seconds"] == watcher_module.DEFAULT_CHANGE_DEBOUNCE_SECONDS
-    assert calls[0]["cooldown_seconds"] == watcher_module.DEFAULT_SYNC_COOLDOWN_SECONDS
+    assert (
+        calls[0]["debounce_seconds"]
+        == watcher_module.DEFAULT_CHANGE_DEBOUNCE_SECONDS
+    )
+    assert (
+        calls[0]["cooldown_seconds"]
+        == watcher_module.DEFAULT_SYNC_COOLDOWN_SECONDS
+    )
     assert saved["called"] == 1
     assert info_logs
     assert info_logs[0][0].startswith("ProjectKnowledgeWatcher triggered sync")
     assert str(info_logs[0][1][3]).startswith("ps-")
-    assert info_logs[0][1][4] == "watcher-start:project-a:project_watcher_bootstrap"
+    assert (
+        info_logs[0][1][4]
+        == "watcher-start:project-a:project_watcher_bootstrap"
+    )
 
 
 @pytest.mark.asyncio
@@ -112,8 +135,14 @@ async def test_project_knowledge_watcher_skips_idle_projects_before_first_file_a
         "---\n",
         encoding="utf-8",
     )
-    (project_dir / "original" / "brief.md").parent.mkdir(parents=True, exist_ok=True)
-    (project_dir / "original" / "brief.md").write_text("hello", encoding="utf-8")
+    (project_dir / "original" / "brief.md").parent.mkdir(
+        parents=True,
+        exist_ok=True,
+    )
+    (project_dir / "original" / "brief.md").write_text(
+        "hello",
+        encoding="utf-8",
+    )
 
     config = Config()
     config.knowledge.enabled = True
@@ -125,9 +154,16 @@ async def test_project_knowledge_watcher_skips_idle_projects_before_first_file_a
     monkeypatch.setattr(
         watcher_module,
         "load_agent_config",
-        lambda _agent_id: type("AgentCfg", (), {"running": config.agents.running})(),
+        lambda _agent_id: type(
+            "AgentCfg",
+            (),
+            {"running": config.agents.running},
+        )(),
     )
-    monkeypatch.setattr("qwenpaw.config.utils.save_config", lambda _config: None)
+    monkeypatch.setattr(
+        "qwenpaw.config.utils.save_config",
+        lambda _config: None,
+    )
     monkeypatch.setattr(
         watcher_module.ProjectKnowledgePipelineManager,
         "start_sync",
@@ -162,8 +198,14 @@ async def test_project_knowledge_watcher_skips_unregistered_project_sources(
         "---\n",
         encoding="utf-8",
     )
-    (project_dir / "original" / "brief.md").parent.mkdir(parents=True, exist_ok=True)
-    (project_dir / "original" / "brief.md").write_text("hello", encoding="utf-8")
+    (project_dir / "original" / "brief.md").parent.mkdir(
+        parents=True,
+        exist_ok=True,
+    )
+    (project_dir / "original" / "brief.md").write_text(
+        "hello",
+        encoding="utf-8",
+    )
 
     config = Config()
     config.knowledge.enabled = True
@@ -175,9 +217,16 @@ async def test_project_knowledge_watcher_skips_unregistered_project_sources(
     monkeypatch.setattr(
         watcher_module,
         "load_agent_config",
-        lambda _agent_id: type("AgentCfg", (), {"running": config.agents.running})(),
+        lambda _agent_id: type(
+            "AgentCfg",
+            (),
+            {"running": config.agents.running},
+        )(),
     )
-    monkeypatch.setattr("qwenpaw.config.utils.save_config", lambda _config: None)
+    monkeypatch.setattr(
+        "qwenpaw.config.utils.save_config",
+        lambda _config: None,
+    )
     monkeypatch.setattr(
         watcher_module.ProjectKnowledgePipelineManager,
         "start_sync",
@@ -206,8 +255,14 @@ async def test_project_knowledge_watcher_resume_syncs_on_startup(
         "---\nid: project-resume\nname: Project Resume\nproject_auto_knowledge_sink: true\nproject_agent_knowledge_registered: true\n---\n",
         encoding="utf-8",
     )
-    (project_dir / "original" / "note.md").parent.mkdir(parents=True, exist_ok=True)
-    (project_dir / "original" / "note.md").write_text("hello", encoding="utf-8")
+    (project_dir / "original" / "note.md").parent.mkdir(
+        parents=True,
+        exist_ok=True,
+    )
+    (project_dir / "original" / "note.md").write_text(
+        "hello",
+        encoding="utf-8",
+    )
 
     config = Config()
     config.knowledge.enabled = True
@@ -219,13 +274,21 @@ async def test_project_knowledge_watcher_resume_syncs_on_startup(
     monkeypatch.setattr(
         watcher_module,
         "load_agent_config",
-        lambda _agent_id: type("AgentCfg", (), {"running": config.agents.running})(),
+        lambda _agent_id: type(
+            "AgentCfg",
+            (),
+            {"running": config.agents.running},
+        )(),
     )
-    monkeypatch.setattr("qwenpaw.config.utils.save_config", lambda _config: None)
+    monkeypatch.setattr(
+        "qwenpaw.config.utils.save_config",
+        lambda _config: None,
+    )
     monkeypatch.setattr(
         watcher_module.ProjectKnowledgePipelineManager,
         "resume_sync_if_needed",
-        lambda self, **kwargs: resumed.append(kwargs) or {"accepted": True, "reason": "RESUMED"},
+        lambda self, **kwargs: resumed.append(kwargs)
+        or {"accepted": True, "reason": "RESUMED"},
     )
 
     watcher = watcher_module.ProjectKnowledgeWatcher(
@@ -263,9 +326,16 @@ async def test_project_knowledge_watcher_bootstrap_writes_project_chunks_automat
     monkeypatch.setattr(
         watcher_module,
         "load_agent_config",
-        lambda _agent_id: type("AgentCfg", (), {"running": config.agents.running})(),
+        lambda _agent_id: type(
+            "AgentCfg",
+            (),
+            {"running": config.agents.running},
+        )(),
     )
-    monkeypatch.setattr("qwenpaw.config.utils.save_config", lambda _config: None)
+    monkeypatch.setattr(
+        "qwenpaw.config.utils.save_config",
+        lambda _config: None,
+    )
 
     def run_worker_inline(self, **kwargs):
         self._run_sync_loop(**kwargs)
@@ -328,7 +398,9 @@ async def test_project_knowledge_watcher_bootstrap_writes_project_chunks_automat
     assert chunk_path.exists()
     chunk_text = chunk_path.read_text(encoding="utf-8")
     assert "project bootstrap body" in chunk_text
-    chunk_paths = [item.get("chunk_path") for item in payload.get("chunks") or []]
+    chunk_paths = [
+        item.get("chunk_path") for item in payload.get("chunks") or []
+    ]
     assert all(str(path or "").startswith("chunks/") for path in chunk_paths)
     assert "text" not in project_chunk
 
@@ -354,9 +426,16 @@ async def test_project_knowledge_watcher_change_updates_project_chunks_automatic
     monkeypatch.setattr(
         watcher_module,
         "load_agent_config",
-        lambda _agent_id: type("AgentCfg", (), {"running": config.agents.running})(),
+        lambda _agent_id: type(
+            "AgentCfg",
+            (),
+            {"running": config.agents.running},
+        )(),
     )
-    monkeypatch.setattr("qwenpaw.config.utils.save_config", lambda _config: None)
+    monkeypatch.setattr(
+        "qwenpaw.config.utils.save_config",
+        lambda _config: None,
+    )
     monkeypatch.setattr(watcher_module, "DEFAULT_CHANGE_DEBOUNCE_SECONDS", 0)
     monkeypatch.setattr(watcher_module, "DEFAULT_SYNC_COOLDOWN_SECONDS", 0)
 
@@ -431,7 +510,11 @@ async def test_project_knowledge_watcher_change_updates_project_chunks_automatic
     os.utime(project_md_path, (bumped, bumped))
     current = watcher._collect_snapshots()
     project_snapshot = current.get("project-change-chunks") or {}
-    file_map = project_snapshot.get("files") if isinstance(project_snapshot, dict) else None
+    file_map = (
+        project_snapshot.get("files")
+        if isinstance(project_snapshot, dict)
+        else None
+    )
     if isinstance(file_map, dict) and "PROJECT.md" in file_map:
         file_map["PROJECT.md"] = f"{file_map['PROJECT.md']}:changed"
     await watcher._handle_snapshot_changes(current)
@@ -478,15 +561,26 @@ async def test_project_knowledge_watcher_triggers_on_file_change(
     monkeypatch.setattr(
         watcher_module,
         "load_agent_config",
-        lambda _agent_id: type("AgentCfg", (), {"running": config.agents.running})(),
+        lambda _agent_id: type(
+            "AgentCfg",
+            (),
+            {"running": config.agents.running},
+        )(),
     )
-    monkeypatch.setattr("qwenpaw.config.utils.save_config", lambda _config: None)
+    monkeypatch.setattr(
+        "qwenpaw.config.utils.save_config",
+        lambda _config: None,
+    )
 
     calls: list[dict] = []
 
     def fake_start_sync(self, **kwargs):
         calls.append(kwargs)
-        return {"accepted": True, "reason": "STARTED", "state": {"project_id": kwargs["project_id"]}}
+        return {
+            "accepted": True,
+            "reason": "STARTED",
+            "state": {"project_id": kwargs["project_id"]},
+        }
 
     monkeypatch.setattr(
         watcher_module.ProjectKnowledgePipelineManager,
@@ -516,8 +610,14 @@ async def test_project_knowledge_watcher_triggers_on_file_change(
     assert calls[0]["project_id"] == "project-b"
     assert calls[0]["trigger"] == "project_watcher_change"
     assert calls[0]["force"] is False
-    assert calls[0]["debounce_seconds"] == watcher_module.DEFAULT_CHANGE_DEBOUNCE_SECONDS
-    assert calls[0]["cooldown_seconds"] == watcher_module.DEFAULT_SYNC_COOLDOWN_SECONDS
+    assert (
+        calls[0]["debounce_seconds"]
+        == watcher_module.DEFAULT_CHANGE_DEBOUNCE_SECONDS
+    )
+    assert (
+        calls[0]["cooldown_seconds"]
+        == watcher_module.DEFAULT_SYNC_COOLDOWN_SECONDS
+    )
     assert "PROJECT.md" in calls[0]["changed_paths"]
 
 
@@ -543,13 +643,24 @@ async def test_project_knowledge_watcher_records_recent_updates_for_visible_chan
     monkeypatch.setattr(
         watcher_module,
         "load_agent_config",
-        lambda _agent_id: type("AgentCfg", (), {"running": config.agents.running})(),
+        lambda _agent_id: type(
+            "AgentCfg",
+            (),
+            {"running": config.agents.running},
+        )(),
     )
-    monkeypatch.setattr("qwenpaw.config.utils.save_config", lambda _config: None)
+    monkeypatch.setattr(
+        "qwenpaw.config.utils.save_config",
+        lambda _config: None,
+    )
     monkeypatch.setattr(
         watcher_module.ProjectKnowledgePipelineManager,
         "start_sync",
-        lambda self, **kwargs: {"accepted": True, "reason": "STARTED", "state": {"project_id": kwargs["project_id"]}},
+        lambda self, **kwargs: {
+            "accepted": True,
+            "reason": "STARTED",
+            "state": {"project_id": kwargs["project_id"]},
+        },
     )
 
     watcher = watcher_module.ProjectKnowledgeWatcher(
@@ -619,9 +730,21 @@ async def test_project_knowledge_watcher_poll_loop_offloads_snapshot_collection(
 
     snapshots = iter(
         [
-            {"project-a": {"project_id": "project-a", "files": {}, "auto_enabled": True}},
-            {"project-a": {"project_id": "project-a", "files": {}, "auto_enabled": True}},
-        ]
+            {
+                "project-a": {
+                    "project_id": "project-a",
+                    "files": {},
+                    "auto_enabled": True,
+                },
+            },
+            {
+                "project-a": {
+                    "project_id": "project-a",
+                    "files": {},
+                    "auto_enabled": True,
+                },
+            },
+        ],
     )
     original_to_thread = watcher_module.asyncio.to_thread
     calls: list[tuple[object, tuple[object, ...]]] = []
@@ -673,15 +796,26 @@ async def test_project_knowledge_watcher_triggers_on_processing_config_change(
     monkeypatch.setattr(
         watcher_module,
         "load_agent_config",
-        lambda _agent_id: type("AgentCfg", (), {"running": config.agents.running})(),
+        lambda _agent_id: type(
+            "AgentCfg",
+            (),
+            {"running": config.agents.running},
+        )(),
     )
-    monkeypatch.setattr("qwenpaw.config.utils.save_config", lambda _config: None)
+    monkeypatch.setattr(
+        "qwenpaw.config.utils.save_config",
+        lambda _config: None,
+    )
 
     calls: list[dict] = []
 
     def fake_start_sync(self, **kwargs):
         calls.append(kwargs)
-        return {"accepted": True, "reason": "STARTED", "state": {"project_id": kwargs["project_id"]}}
+        return {
+            "accepted": True,
+            "reason": "STARTED",
+            "state": {"project_id": kwargs["project_id"]},
+        }
 
     monkeypatch.setattr(
         watcher_module.ProjectKnowledgePipelineManager,
@@ -740,7 +874,11 @@ async def test_runtime_context_load_is_offloaded_and_cached(
         return await original_to_thread(func, *args, **kwargs)
 
     monkeypatch.setattr(watcher_module, "load_config", fake_load_config)
-    monkeypatch.setattr(watcher_module, "load_agent_config", fake_load_agent_config)
+    monkeypatch.setattr(
+        watcher_module,
+        "load_agent_config",
+        fake_load_agent_config,
+    )
     monkeypatch.setattr(watcher_module.asyncio, "to_thread", fake_to_thread)
 
     watcher = watcher_module.ProjectKnowledgeWatcher(

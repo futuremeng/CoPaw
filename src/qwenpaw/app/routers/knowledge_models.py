@@ -18,17 +18,38 @@ class ProjectPipelineRuntimeMetaPayload(BaseModel):
                 "control_updated_at": "2026-05-26T12:00:00+00:00",
                 "flow_run_id": "flow-run-abc123",
                 "deduplicated": False,
-            }
-        }
+            },
+        },
     )
 
-    operation_id: str = Field(default="", description="Latest operation id recorded for project pipeline runtime events.")
-    idempotency_key: str = Field(default="", description="Idempotency key associated with the latest operation.")
-    last_action: str = Field(default="", description="Latest runtime action label, for example start_sync or flow_resume.")
-    recent_control_command: str = Field(default="", description="Latest explicit control command, for example pause/resume/cancel.")
-    control_updated_at: str = Field(default="", description="UTC timestamp when recent_control_command was last updated.")
-    flow_run_id: str = Field(default="", description="Bridged flow engine run id for this project pipeline.")
-    deduplicated: bool = Field(default=False, description="Whether the latest operation was deduplicated.")
+    operation_id: str = Field(
+        default="",
+        description="Latest operation id recorded for project pipeline runtime events.",
+    )
+    idempotency_key: str = Field(
+        default="",
+        description="Idempotency key associated with the latest operation.",
+    )
+    last_action: str = Field(
+        default="",
+        description="Latest runtime action label, for example start_sync or flow_resume.",
+    )
+    recent_control_command: str = Field(
+        default="",
+        description="Latest explicit control command, for example pause/resume/cancel.",
+    )
+    control_updated_at: str = Field(
+        default="",
+        description="UTC timestamp when recent_control_command was last updated.",
+    )
+    flow_run_id: str = Field(
+        default="",
+        description="Bridged flow engine run id for this project pipeline.",
+    )
+    deduplicated: bool = Field(
+        default=False,
+        description="Whether the latest operation was deduplicated.",
+    )
 
 
 class ProjectPipelineCommandResponse(BaseModel):
@@ -51,15 +72,22 @@ class ProjectPipelineCommandResponse(BaseModel):
                     "flow_run_id": "flow-run-abc123",
                     "deduplicated": False,
                 },
-            }
-        }
+            },
+        },
     )
 
     project_id: str = Field(description="Target project id.")
     flow_run_id: str = Field(description="Bridged flow engine run id.")
-    command_type: str = Field(description="Control command type: pause/resume/cancel.")
-    run: dict[str, object] = Field(default_factory=dict, description="Updated flow run snapshot returned by flow engine.")
-    runtime_meta: ProjectPipelineRuntimeMetaPayload = Field(description="Latest project pipeline runtime metadata.")
+    command_type: str = Field(
+        description="Control command type: pause/resume/cancel.",
+    )
+    run: dict[str, object] = Field(
+        default_factory=dict,
+        description="Updated flow run snapshot returned by flow engine.",
+    )
+    runtime_meta: ProjectPipelineRuntimeMetaPayload = Field(
+        description="Latest project pipeline runtime metadata.",
+    )
 
 
 class ProjectPipelineStatusResponse(BaseModel):
@@ -98,26 +126,58 @@ class ProjectPipelineStatusResponse(BaseModel):
                     "l2": {},
                     "l3": {},
                 },
-            }
+            },
         },
     )
 
     project_id: str = Field(default="", description="Target project id.")
-    status: str = Field(default="", description="Current project pipeline status.")
+    status: str = Field(
+        default="",
+        description="Current project pipeline status.",
+    )
     operation_id: str = Field(default="", description="Latest operation id.")
-    idempotency_key: str = Field(default="", description="Latest idempotency key.")
-    deduplicated: bool = Field(default=False, description="Whether the latest operation was deduplicated.")
-    last_action: str = Field(default="", description="Latest runtime action label.")
-    operation_updated_at: str = Field(default="", description="UTC timestamp of latest runtime event update.")
-    flow_run_id: str = Field(default="", description="Bridged flow engine run id.")
-    recent_control_command: str = Field(default="", description="Latest control command issued through commands endpoint.")
-    control_updated_at: str = Field(default="", description="UTC timestamp of latest control command update.")
+    idempotency_key: str = Field(
+        default="",
+        description="Latest idempotency key.",
+    )
+    deduplicated: bool = Field(
+        default=False,
+        description="Whether the latest operation was deduplicated.",
+    )
+    last_action: str = Field(
+        default="",
+        description="Latest runtime action label.",
+    )
+    operation_updated_at: str = Field(
+        default="",
+        description="UTC timestamp of latest runtime event update.",
+    )
+    flow_run_id: str = Field(
+        default="",
+        description="Bridged flow engine run id.",
+    )
+    recent_control_command: str = Field(
+        default="",
+        description="Latest control command issued through commands endpoint.",
+    )
+    control_updated_at: str = Field(
+        default="",
+        description="UTC timestamp of latest control command update.",
+    )
     step_outputs: dict[str, dict[str, object]] = Field(
         default_factory=dict,
         description="Latest per-step output payloads keyed by step id.",
     )
-    recent_error_code: str = Field(default="", description="Latest pipeline error code if available.")
-    recent_error_source: Literal["", "workflow_step", "execution_loop", "flow_control"] = Field(
+    recent_error_code: str = Field(
+        default="",
+        description="Latest pipeline error code if available.",
+    )
+    recent_error_source: Literal[
+        "",
+        "workflow_step",
+        "execution_loop",
+        "flow_control",
+    ] = Field(
         default="",
         description="Source category of latest pipeline error code.",
     )
@@ -140,18 +200,39 @@ class ProjectPipelineRunResponse(BaseModel):
                     "project_id": "project-alpha",
                     "status": "queued",
                 },
-            }
+            },
         },
     )
 
-    accepted: bool = Field(default=False, description="Whether the run request was accepted.")
-    reason: str = Field(default="", description="Reason code/message for acceptance decision.")
-    status: str = Field(default="", description="Current project pipeline status after run request.")
+    accepted: bool = Field(
+        default=False,
+        description="Whether the run request was accepted.",
+    )
+    reason: str = Field(
+        default="",
+        description="Reason code/message for acceptance decision.",
+    )
+    status: str = Field(
+        default="",
+        description="Current project pipeline status after run request.",
+    )
     project_id: str = Field(default="", description="Target project id.")
-    operation_id: str = Field(default="", description="Operation id generated for this run request.")
-    idempotency_key: str = Field(default="", description="Idempotency key used for this run request.")
-    deduplicated: bool = Field(default=False, description="Whether this run request was deduplicated.")
-    flow_run_id: str = Field(default="", description="Bridged flow engine run id created/reused for this run.")
+    operation_id: str = Field(
+        default="",
+        description="Operation id generated for this run request.",
+    )
+    idempotency_key: str = Field(
+        default="",
+        description="Idempotency key used for this run request.",
+    )
+    deduplicated: bool = Field(
+        default=False,
+        description="Whether this run request was deduplicated.",
+    )
+    flow_run_id: str = Field(
+        default="",
+        description="Bridged flow engine run id created/reused for this run.",
+    )
 
 
 class ProjectPipelineSourcesResponse(BaseModel):
@@ -171,19 +252,34 @@ class ProjectPipelineSourcesResponse(BaseModel):
                         "content_type": "md",
                         "size_bytes": 1024,
                         "modified_time": "2026-05-28T12:00:00Z",
-                    }
+                    },
                 ],
-            }
-        }
+            },
+        },
     )
 
     class SourceItem(BaseModel):
-        path: str = Field(default="", description="Project-relative file path.")
-        category: str = Field(default="document", description="Normalized category: document|structured|image.")
-        stage: str = Field(default="other", description="Inferred project file stage.")
-        content_type: str = Field(default="", description="File extension based content type label.")
+        path: str = Field(
+            default="",
+            description="Project-relative file path.",
+        )
+        category: str = Field(
+            default="document",
+            description="Normalized category: document|structured|image.",
+        )
+        stage: str = Field(
+            default="other",
+            description="Inferred project file stage.",
+        )
+        content_type: str = Field(
+            default="",
+            description="File extension based content type label.",
+        )
         size_bytes: int = Field(default=0, description="File size in bytes.")
-        modified_time: str = Field(default="", description="File modified timestamp in ISO format when available.")
+        modified_time: str = Field(
+            default="",
+            description="File modified timestamp in ISO format when available.",
+        )
 
     project_id: str = Field(default="", description="Target project id.")
     manual_source_paths: list[str] = Field(
@@ -219,17 +315,32 @@ class ProjectPipelineSourceCandidatesResponse(BaseModel):
                         "modified_time": "2026-05-28T12:10:00Z",
                     },
                 ],
-            }
-        }
+            },
+        },
     )
 
     class CandidateItem(BaseModel):
-        path: str = Field(default="", description="Project-relative file path.")
-        category: str = Field(default="document", description="Normalized category: document|structured|image.")
-        stage: str = Field(default="other", description="Inferred project file stage.")
-        content_type: str = Field(default="", description="File extension based content type label.")
+        path: str = Field(
+            default="",
+            description="Project-relative file path.",
+        )
+        category: str = Field(
+            default="document",
+            description="Normalized category: document|structured|image.",
+        )
+        stage: str = Field(
+            default="other",
+            description="Inferred project file stage.",
+        )
+        content_type: str = Field(
+            default="",
+            description="File extension based content type label.",
+        )
         size_bytes: int = Field(default=0, description="File size in bytes.")
-        modified_time: str = Field(default="", description="File modified timestamp in ISO format when available.")
+        modified_time: str = Field(
+            default="",
+            description="File modified timestamp in ISO format when available.",
+        )
 
     project_id: str = Field(default="", description="Target project id.")
     candidates: list[CandidateItem] = Field(

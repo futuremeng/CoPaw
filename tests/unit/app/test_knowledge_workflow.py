@@ -7,7 +7,9 @@ from types import SimpleNamespace
 import pytest
 
 from copaw.config.config import KnowledgeConfig, KnowledgeSourceSpec
-from qwenpaw.knowledge.project_pipeline_manager import ProjectKnowledgePipelineManager
+from qwenpaw.knowledge.project_pipeline_manager import (
+    ProjectKnowledgePipelineManager,
+)
 from qwenpaw.app.knowledge_workflow import (
     KNOWLEDGE_WORKFLOW_TEMPLATE_ID,
     KnowledgeWorkflowOrchestrator,
@@ -29,7 +31,7 @@ def _write_project_metadata(project_dir: Path, project_id: str) -> None:
                 "---",
                 "",
                 "# Knowledge Project",
-            ]
+            ],
         ),
         encoding="utf-8",
     )
@@ -66,7 +68,10 @@ def test_knowledge_workflow_orchestrator_persists_pipeline_run(
     data_dir = project_dir / "data"
     data_dir.mkdir(parents=True, exist_ok=True)
     _write_project_metadata(project_dir, project_id)
-    (data_dir / "sample.md").write_text("# Sample\n\nKnowledge workflow content.", encoding="utf-8")
+    (data_dir / "sample.md").write_text(
+        "# Sample\n\nKnowledge workflow content.",
+        encoding="utf-8",
+    )
 
     def fake_execute_memify_once(self, **kwargs):
         if kwargs.get("progress_callback") is not None:
@@ -76,12 +81,21 @@ def test_knowledge_workflow_orchestrator_persists_pipeline_run(
                     "stage_message": "Building graph",
                     "current": 1,
                     "total": 2,
-                }
+                },
             )
         self.local_graph_path.parent.mkdir(parents=True, exist_ok=True)
-        self.local_graph_path.write_text('{"nodes": [], "edges": []}', encoding="utf-8")
-        self.enriched_graph_path.write_text('{"nodes": [], "edges": []}', encoding="utf-8")
-        self.enrichment_quality_report_path.write_text('{"quality_score": 0.95}', encoding="utf-8")
+        self.local_graph_path.write_text(
+            '{"nodes": [], "edges": []}',
+            encoding="utf-8",
+        )
+        self.enriched_graph_path.write_text(
+            '{"nodes": [], "edges": []}',
+            encoding="utf-8",
+        )
+        self.enrichment_quality_report_path.write_text(
+            '{"quality_score": 0.95}',
+            encoding="utf-8",
+        )
         return {
             "status": "succeeded",
             "relation_count": 3,
@@ -89,7 +103,9 @@ def test_knowledge_workflow_orchestrator_persists_pipeline_run(
             "document_count": 1,
             "graph_path": str(self.local_graph_path),
             "enriched_graph_path": str(self.enriched_graph_path),
-            "enrichment_quality_report_path": str(self.enrichment_quality_report_path),
+            "enrichment_quality_report_path": str(
+                self.enrichment_quality_report_path,
+            ),
         }
 
     monkeypatch.setattr(
@@ -126,7 +142,12 @@ def test_knowledge_workflow_orchestrator_persists_pipeline_run(
         changed_paths=["data/sample.md"],
     )
 
-    template_path = project_dir / ".pipelines" / "templates" / f"{KNOWLEDGE_WORKFLOW_TEMPLATE_ID}.json"
+    template_path = (
+        project_dir
+        / ".pipelines"
+        / "templates"
+        / f"{KNOWLEDGE_WORKFLOW_TEMPLATE_ID}.json"
+    )
     assert template_path.exists()
 
     run = _load_project_pipeline_run(project_dir, result["run_id"])
@@ -145,21 +166,62 @@ def test_knowledge_workflow_orchestrator_persists_pipeline_run(
     ]
     assert all(step.status == "succeeded" for step in run.steps)
     assert run.steps[0].artifact_schema_ref == "knowledge/snapshot-manifest.v1"
-    assert run.steps[0].outputs["snapshot_manifest_path"].endswith("snapshot-manifest.json")
-    assert run.steps[1].metrics["resolved_inputs"]["snapshot_manifest_path"] == run.steps[0].outputs["snapshot_manifest_path"]
-    assert run.steps[1].outputs["chunk_manifest_path"].endswith("chunk-manifest.json")
-    assert run.steps[2].metrics["resolved_inputs"]["snapshot_manifest_path"] == run.steps[0].outputs["snapshot_manifest_path"]
-    assert run.steps[2].outputs["interlinear_manifest_path"].endswith("interlinear-manifest.json")
-    assert run.steps[3].metrics["resolved_inputs"]["interlinear_manifest_path"] == run.steps[2].outputs["interlinear_manifest_path"]
-    assert run.steps[3].outputs["tokenize_manifest_path"].endswith("tokenize-manifest.json")
-    assert run.steps[4].metrics["resolved_inputs"]["tokenize_manifest_path"] == run.steps[3].outputs["tokenize_manifest_path"]
-    assert run.steps[5].metrics["resolved_inputs"]["tokenize_manifest_path"] == run.steps[3].outputs["tokenize_manifest_path"]
-    assert run.steps[6].metrics["resolved_inputs"]["tokenize_manifest_path"] == run.steps[3].outputs["tokenize_manifest_path"]
-    assert any(path.endswith("graphify-out/graph.enriched.json") for path in run.artifacts)
+    assert (
+        run.steps[0]
+        .outputs["snapshot_manifest_path"]
+        .endswith("snapshot-manifest.json")
+    )
+    assert (
+        run.steps[1].metrics["resolved_inputs"]["snapshot_manifest_path"]
+        == run.steps[0].outputs["snapshot_manifest_path"]
+    )
+    assert (
+        run.steps[1]
+        .outputs["chunk_manifest_path"]
+        .endswith("chunk-manifest.json")
+    )
+    assert (
+        run.steps[2].metrics["resolved_inputs"]["snapshot_manifest_path"]
+        == run.steps[0].outputs["snapshot_manifest_path"]
+    )
+    assert (
+        run.steps[2]
+        .outputs["interlinear_manifest_path"]
+        .endswith("interlinear-manifest.json")
+    )
+    assert (
+        run.steps[3].metrics["resolved_inputs"]["interlinear_manifest_path"]
+        == run.steps[2].outputs["interlinear_manifest_path"]
+    )
+    assert (
+        run.steps[3]
+        .outputs["tokenize_manifest_path"]
+        .endswith("tokenize-manifest.json")
+    )
+    assert (
+        run.steps[4].metrics["resolved_inputs"]["tokenize_manifest_path"]
+        == run.steps[3].outputs["tokenize_manifest_path"]
+    )
+    assert (
+        run.steps[5].metrics["resolved_inputs"]["tokenize_manifest_path"]
+        == run.steps[3].outputs["tokenize_manifest_path"]
+    )
+    assert (
+        run.steps[6].metrics["resolved_inputs"]["tokenize_manifest_path"]
+        == run.steps[3].outputs["tokenize_manifest_path"]
+    )
+    assert any(
+        path.endswith("graphify-out/graph.enriched.json")
+        for path in run.artifacts
+    )
     assert (project_dir / ".knowledge" / "content.md").exists()
     assert (project_dir / ".knowledge" / "chunk-manifest.json").exists()
-    assert not (project_dir / ".knowledge" / f"{source.id}--content.md").exists()
-    assert not (project_dir / ".knowledge" / f"{source.id}--chunk-manifest.json").exists()
+    assert not (
+        project_dir / ".knowledge" / f"{source.id}--content.md"
+    ).exists()
+    assert not (
+        project_dir / ".knowledge" / f"{source.id}--chunk-manifest.json"
+    ).exists()
 
 
 def test_project_pipeline_manager_records_pipeline_run_metadata(
@@ -170,7 +232,10 @@ def test_project_pipeline_manager_records_pipeline_run_metadata(
     project_dir = tmp_path / "projects" / project_id
     (project_dir / "data").mkdir(parents=True, exist_ok=True)
     _write_project_metadata(project_dir, project_id)
-    (project_dir / "data" / "sample.md").write_text("# Sample", encoding="utf-8")
+    (project_dir / "data" / "sample.md").write_text(
+        "# Sample",
+        encoding="utf-8",
+    )
 
     manager = ProjectKnowledgePipelineManager(
         tmp_path,
@@ -195,7 +260,10 @@ def test_project_pipeline_manager_records_pipeline_run_metadata(
             "latest_job_id": "job-123",
             "index": {"document_count": 1},
             "memify": {"status": "succeeded"},
-            "quality_loop": {"accepted": False, "reason": "QUALITY_TARGET_MET"},
+            "quality_loop": {
+                "accepted": False,
+                "reason": "QUALITY_TARGET_MET",
+            },
         },
     )
     monkeypatch.setattr(
@@ -225,9 +293,16 @@ def test_project_pipeline_manager_records_pipeline_run_metadata(
     assert state["status"] == "succeeded"
     assert state["latest_pipeline_run_id"] == "run-knowledge-123"
     assert state["indexed_processing_fingerprint"] == "fp-123"
-    assert state["last_result"]["pipeline_run"]["template_id"] == KNOWLEDGE_WORKFLOW_TEMPLATE_ID
+    assert (
+        state["last_result"]["pipeline_run"]["template_id"]
+        == KNOWLEDGE_WORKFLOW_TEMPLATE_ID
+    )
     assert state["last_result"]["pipeline_run"]["mode"] == "agentic"
-    assert [item["mode"] for item in state["processing_modes"]] == ["fast", "nlp", "agentic"]
+    assert [item["mode"] for item in state["processing_modes"]] == [
+        "fast",
+        "nlp",
+        "agentic",
+    ]
     assert state["processing_modes"][0]["available"] is True
     assert state["processing_modes"][1]["available"] is False
     assert state["processing_modes"][2]["available"] is False
@@ -258,7 +333,10 @@ def test_knowledge_workflow_orchestrator_fast_mode_stops_before_memify(
     data_dir = project_dir / "data"
     data_dir.mkdir(parents=True, exist_ok=True)
     _write_project_metadata(project_dir, project_id)
-    (data_dir / "sample.md").write_text("# Sample\n\nKnowledge workflow content.", encoding="utf-8")
+    (data_dir / "sample.md").write_text(
+        "# Sample\n\nKnowledge workflow content.",
+        encoding="utf-8",
+    )
 
     called = {"memify": False}
 
@@ -304,16 +382,28 @@ def test_knowledge_workflow_quantization_stage_l2_runs_nlp_slice(
     data_dir = project_dir / "data"
     data_dir.mkdir(parents=True, exist_ok=True)
     _write_project_metadata(project_dir, project_id)
-    (data_dir / "sample.md").write_text("# Sample\n\nKnowledge workflow content.", encoding="utf-8")
+    (data_dir / "sample.md").write_text(
+        "# Sample\n\nKnowledge workflow content.",
+        encoding="utf-8",
+    )
 
     called = {"memify": False, "quality": False}
 
     def fake_execute_memify_once(self, **kwargs):
         called["memify"] = True
         self.local_graph_path.parent.mkdir(parents=True, exist_ok=True)
-        self.local_graph_path.write_text('{"nodes": [], "edges": []}', encoding="utf-8")
-        self.enriched_graph_path.write_text('{"nodes": [], "edges": []}', encoding="utf-8")
-        self.enrichment_quality_report_path.write_text('{"quality_score": 0.95}', encoding="utf-8")
+        self.local_graph_path.write_text(
+            '{"nodes": [], "edges": []}',
+            encoding="utf-8",
+        )
+        self.enriched_graph_path.write_text(
+            '{"nodes": [], "edges": []}',
+            encoding="utf-8",
+        )
+        self.enrichment_quality_report_path.write_text(
+            '{"quality_score": 0.95}',
+            encoding="utf-8",
+        )
         return {
             "status": "succeeded",
             "relation_count": 3,
@@ -365,7 +455,10 @@ def test_knowledge_workflow_orchestrator_rejects_executor_drift_in_project_templ
     data_dir = project_dir / "data"
     data_dir.mkdir(parents=True, exist_ok=True)
     _write_project_metadata(project_dir, project_id)
-    (data_dir / "sample.md").write_text("# Sample\n\nKnowledge workflow content.", encoding="utf-8")
+    (data_dir / "sample.md").write_text(
+        "# Sample\n\nKnowledge workflow content.",
+        encoding="utf-8",
+    )
 
     template_dir = project_dir / ".pipelines" / "templates"
     template_dir.mkdir(parents=True, exist_ok=True)
@@ -378,10 +471,13 @@ def test_knowledge_workflow_orchestrator_rejects_executor_drift_in_project_templ
             / "app"
             / "pipelines"
             / f"{KNOWLEDGE_WORKFLOW_TEMPLATE_ID}.json"
-        ).read_text(encoding="utf-8")
+        ).read_text(encoding="utf-8"),
     )
     template_doc["steps"][0]["executor"] = "builtin:knowledge.invalid"
-    template_path.write_text(json.dumps(template_doc, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    template_path.write_text(
+        json.dumps(template_doc, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
 
     with pytest.raises(RuntimeError, match="executor mismatch"):
         KnowledgeWorkflowOrchestrator(
@@ -400,7 +496,10 @@ def test_knowledge_workflow_quantization_stage_l1_stays_fast_slice(
     data_dir = project_dir / "data"
     data_dir.mkdir(parents=True, exist_ok=True)
     _write_project_metadata(project_dir, project_id)
-    (data_dir / "sample.md").write_text("# Sample\n\nKnowledge workflow content.", encoding="utf-8")
+    (data_dir / "sample.md").write_text(
+        "# Sample\n\nKnowledge workflow content.",
+        encoding="utf-8",
+    )
 
     called = {"memify": False}
 
@@ -447,7 +546,10 @@ def test_knowledge_workflow_rerun_tokenize_skips_snapshot_slice(
     data_dir = project_dir / "data"
     data_dir.mkdir(parents=True, exist_ok=True)
     _write_project_metadata(project_dir, project_id)
-    (data_dir / "sample.md").write_text("# Sample\n\nKnowledge workflow content.", encoding="utf-8")
+    (data_dir / "sample.md").write_text(
+        "# Sample\n\nKnowledge workflow content.",
+        encoding="utf-8",
+    )
 
     orchestrator = KnowledgeWorkflowOrchestrator(
         workspace_dir=tmp_path,
@@ -470,7 +572,10 @@ def test_knowledge_workflow_rerun_tokenize_skips_snapshot_slice(
     )
     monkeypatch.setattr(
         "copaw.knowledge.graph_ops.GraphOpsManager.maybe_start_quality_self_drive",
-        lambda self, **kwargs: {"accepted": False, "reason": "QUALITY_TARGET_MET"},
+        lambda self, **kwargs: {
+            "accepted": False,
+            "reason": "QUALITY_TARGET_MET",
+        },
     )
 
     # Warm once to ensure index payload exists; rerun should then skip snapshot slice.
@@ -485,7 +590,9 @@ def test_knowledge_workflow_rerun_tokenize_skips_snapshot_slice(
 
     monkeypatch.setattr(
         "copaw.knowledge.manager.KnowledgeManager.index_source",
-        lambda self, *args, **kwargs: (_ for _ in ()).throw(AssertionError("index_source should be skipped")),
+        lambda self, *args, **kwargs: (_ for _ in ()).throw(
+            AssertionError("index_source should be skipped"),
+        ),
     )
 
     result = orchestrator.run(
@@ -516,7 +623,10 @@ def test_knowledge_workflow_status_callback_emits_lane_ready_transitions(
     data_dir = project_dir / "data"
     data_dir.mkdir(parents=True, exist_ok=True)
     _write_project_metadata(project_dir, project_id)
-    (data_dir / "sample.md").write_text("# Sample\n\nKnowledge workflow content.", encoding="utf-8")
+    (data_dir / "sample.md").write_text(
+        "# Sample\n\nKnowledge workflow content.",
+        encoding="utf-8",
+    )
 
     def fake_execute_memify_once(self, **kwargs):
         if kwargs.get("progress_callback") is not None:
@@ -526,12 +636,21 @@ def test_knowledge_workflow_status_callback_emits_lane_ready_transitions(
                     "stage_message": "Building graph",
                     "current": 1,
                     "total": 2,
-                }
+                },
             )
         self.local_graph_path.parent.mkdir(parents=True, exist_ok=True)
-        self.local_graph_path.write_text('{"nodes": [], "edges": []}', encoding="utf-8")
-        self.enriched_graph_path.write_text('{"nodes": [], "edges": []}', encoding="utf-8")
-        self.enrichment_quality_report_path.write_text('{"quality_score": 0.95}', encoding="utf-8")
+        self.local_graph_path.write_text(
+            '{"nodes": [], "edges": []}',
+            encoding="utf-8",
+        )
+        self.enriched_graph_path.write_text(
+            '{"nodes": [], "edges": []}',
+            encoding="utf-8",
+        )
+        self.enrichment_quality_report_path.write_text(
+            '{"quality_score": 0.95}',
+            encoding="utf-8",
+        )
         return {
             "status": "succeeded",
             "relation_count": 3,
@@ -576,15 +695,22 @@ def test_knowledge_workflow_status_callback_emits_lane_ready_transitions(
     )
 
     assert any(
-        patch.get("processing_mode_overrides", {}).get("fast", {}).get("status") == "ready"
+        patch.get("processing_mode_overrides", {})
+        .get("fast", {})
+        .get("status")
+        == "ready"
         for patch in patches
     )
     assert any(
-        patch.get("processing_mode_overrides", {}).get("nlp", {}).get("status") == "ready"
+        patch.get("processing_mode_overrides", {}).get("nlp", {}).get("status")
+        == "ready"
         for patch in patches
     )
     assert any(
-        patch.get("processing_mode_overrides", {}).get("agentic", {}).get("status") == "ready"
+        patch.get("processing_mode_overrides", {})
+        .get("agentic", {})
+        .get("status")
+        == "ready"
         for patch in patches
     )
 
@@ -616,8 +742,12 @@ def test_execute_source_scan_writes_project_step_stats(tmp_path: Path):
     )
 
     assert result["metrics"]["data_file_count"] == 1
-    latest_path = project_dir / ".knowledge" / "stats" / "snapshot_raw" / "latest.json"
-    history_path = project_dir / ".knowledge" / "stats" / "snapshot_raw" / "history.jsonl"
+    latest_path = (
+        project_dir / ".knowledge" / "stats" / "snapshot_raw" / "latest.json"
+    )
+    history_path = (
+        project_dir / ".knowledge" / "stats" / "snapshot_raw" / "history.jsonl"
+    )
     assert latest_path.exists()
     assert history_path.exists()
     payload = json.loads(latest_path.read_text(encoding="utf-8"))
@@ -628,14 +758,19 @@ def test_execute_source_scan_writes_project_step_stats(tmp_path: Path):
     assert payload["changed_paths"] == ["output/sample.md"]
 
 
-def test_execute_source_scan_counts_project_root_files_and_skips_builtin_hidden_dirs(tmp_path: Path):
+def test_execute_source_scan_counts_project_root_files_and_skips_builtin_hidden_dirs(
+    tmp_path: Path,
+):
     project_id = "project-root-source-scan"
     project_dir = tmp_path / "projects" / project_id
     project_dir.mkdir(parents=True, exist_ok=True)
     _write_project_metadata(project_dir, project_id)
     (project_dir / "sample.md").write_text("# Sample\n", encoding="utf-8")
     (project_dir / ".cache").mkdir(parents=True, exist_ok=True)
-    (project_dir / ".cache" / "README.md").write_text("builtin\n", encoding="utf-8")
+    (project_dir / ".cache" / "README.md").write_text(
+        "builtin\n",
+        encoding="utf-8",
+    )
 
     orchestrator = KnowledgeWorkflowOrchestrator(
         workspace_dir=tmp_path,
@@ -657,7 +792,9 @@ def test_execute_source_scan_counts_project_root_files_and_skips_builtin_hidden_
     )
 
     assert result["metrics"]["data_file_count"] == 1
-    latest_path = project_dir / ".knowledge" / "stats" / "snapshot_raw" / "latest.json"
+    latest_path = (
+        project_dir / ".knowledge" / "stats" / "snapshot_raw" / "latest.json"
+    )
     payload = json.loads(latest_path.read_text(encoding="utf-8"))
     assert payload["data_files"] == ["sample.md"]
 
@@ -678,10 +815,22 @@ def test_run_memify_creates_graph_files(tmp_path: Path, monkeypatch):
     quality_report_path = orchestrator.graph_ops.enrichment_quality_report_path
 
     def fake_execute_memify_once(**kwargs):
-        orchestrator.graph_ops.local_graph_path.parent.mkdir(parents=True, exist_ok=True)
-        orchestrator.graph_ops.local_graph_path.write_text('{"nodes": [], "edges": []}', encoding="utf-8")
-        orchestrator.graph_ops.enriched_graph_path.write_text('{"nodes": [], "edges": []}', encoding="utf-8")
-        quality_report_path.write_text('{"quality_score": 0.95}', encoding="utf-8")
+        orchestrator.graph_ops.local_graph_path.parent.mkdir(
+            parents=True,
+            exist_ok=True,
+        )
+        orchestrator.graph_ops.local_graph_path.write_text(
+            '{"nodes": [], "edges": []}',
+            encoding="utf-8",
+        )
+        orchestrator.graph_ops.enriched_graph_path.write_text(
+            '{"nodes": [], "edges": []}',
+            encoding="utf-8",
+        )
+        quality_report_path.write_text(
+            '{"quality_score": 0.95}',
+            encoding="utf-8",
+        )
         return {
             "status": "succeeded",
             "relation_count": 3,
@@ -689,7 +838,11 @@ def test_run_memify_creates_graph_files(tmp_path: Path, monkeypatch):
             "document_count": 1,
         }
 
-    monkeypatch.setattr(orchestrator.graph_ops, "execute_memify_once", fake_execute_memify_once)
+    monkeypatch.setattr(
+        orchestrator.graph_ops,
+        "execute_memify_once",
+        fake_execute_memify_once,
+    )
 
     result = orchestrator._run_memify(
         config=KnowledgeConfig(enabled=True, memify_enabled=True),
@@ -772,7 +925,10 @@ def test_extract_recent_error_code_prefers_step_reason_code(tmp_path: Path):
     code, source = orchestrator._extract_recent_error_details(run)
     assert code == "TOKENIZE_ENGINE_TIMEOUT"
     assert source == "workflow_step"
-    assert orchestrator._extract_recent_error_code(run) == "TOKENIZE_ENGINE_TIMEOUT"
+    assert (
+        orchestrator._extract_recent_error_code(run)
+        == "TOKENIZE_ENGINE_TIMEOUT"
+    )
 
 
 def test_patch_step_failure_sets_reason_code_from_contract(tmp_path: Path):
@@ -810,4 +966,7 @@ def test_patch_step_failure_sets_reason_code_from_contract(tmp_path: Path):
     code, source = orchestrator._extract_recent_error_details(run)
     assert code == "SNAPSHOT_SOURCE_NOT_FOUND"
     assert source == "workflow_step"
-    assert orchestrator._extract_recent_error_code(run) == "SNAPSHOT_SOURCE_NOT_FOUND"
+    assert (
+        orchestrator._extract_recent_error_code(run)
+        == "SNAPSHOT_SOURCE_NOT_FOUND"
+    )

@@ -45,9 +45,9 @@ if [[ $CURRENT_BRANCH == "feat/"* ]]; then
   else
     BASE="fork/main"
   fi
-  
+
   echo "🔍 检查与 $BASE 的冲突风险..."
-  
+
   # 干运行 merge 检查冲突
   if git merge --no-commit --no-ff "$BASE" > /dev/null 2>&1; then
     echo "✅ 无冲突风险"

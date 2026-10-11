@@ -72,8 +72,7 @@ def test_pypi_name_exists_while_pending(rc, data):
 def test_urls_derive_from_the_repository_field(rc, data):
     assert rc.repository_url(data) == "https://github.com/futuremeng/CoPaw"
     assert (
-        rc.releases_url(data)
-        == "https://github.com/futuremeng/CoPaw/releases"
+        rc.releases_url(data) == "https://github.com/futuremeng/CoPaw/releases"
     )
 
 

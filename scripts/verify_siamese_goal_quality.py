@@ -32,7 +32,11 @@ def flatten_spans(result: Any) -> list[dict[str, Any]]:
     return spans
 
 
-def evaluate(task: str, payload: dict[str, Any], response: dict[str, Any]) -> tuple[bool, str]:
+def evaluate(
+    task: str,
+    payload: dict[str, Any],
+    response: dict[str, Any],
+) -> tuple[bool, str]:
     result = response.get("result")
     spans = flatten_spans(result)
     span_texts = [str(item.get("span") or "") for item in spans]
@@ -49,7 +53,9 @@ def evaluate(task: str, payload: dict[str, Any], response: dict[str, Any]) -> tu
         return ok, f"spans={span_texts}"
 
     if task == "event_extraction":
-        ok = len(spans) > 0 and any(s in span_join for s in ["发布", "2026年5月", "九录科技", "Copaw 2.0"])
+        ok = len(spans) > 0 and any(
+            s in span_join for s in ["发布", "2026年5月", "九录科技", "Copaw 2.0"]
+        )
         return ok, f"spans={span_texts}"
 
     if task == "aspect_sentiment_extraction":
@@ -93,7 +99,13 @@ def build_cases() -> dict[str, dict[str, Any]]:
         "named_entity_recognition": {
             "payload": {
                 "text": "北京九录科技有限公司推出产品 Copaw。Copaw 是公司面向知识生产和加工场景打造的产品，致力于以智能化技术推动知识服务领域的全流程数字化转型，并持续支持多个开源项目。",
-                "schema": {"人物": None, "地理位置": None, "组织机构": None, "公司": None, "产品": None},
+                "schema": {
+                    "人物": None,
+                    "地理位置": None,
+                    "组织机构": None,
+                    "公司": None,
+                    "产品": None,
+                },
             },
             "goal": "至少识别公司或产品实体",
         },
@@ -107,14 +119,22 @@ def build_cases() -> dict[str, dict[str, Any]]:
         "event_extraction": {
             "payload": {
                 "text": "2026年5月，九录科技在北京发布 Copaw 2.0，吸引多家机构参与试点。",
-                "schema": {"发布": {"时间": None, "地点": None, "发布方": None, "产品": None}},
+                "schema": {
+                    "发布": {"时间": None, "地点": None, "发布方": None, "产品": None},
+                },
             },
             "goal": "抽取出事件及至少一个论元",
         },
         "aspect_sentiment_extraction": {
             "payload": {
                 "text": "这款耳机音质很好，但续航一般，价格偏高。",
-                "schema": {"属性词": {"正向情感(情感词)": None, "负向情感(情感词)": None, "中性情感(情感词)": None}},
+                "schema": {
+                    "属性词": {
+                        "正向情感(情感词)": None,
+                        "负向情感(情感词)": None,
+                        "中性情感(情感词)": None,
+                    },
+                },
             },
             "goal": "抽取方面词及其情感词",
         },
@@ -182,9 +202,19 @@ def build_cases() -> dict[str, dict[str, Any]]:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Verify Siamese task output quality goals.")
-    parser.add_argument("--base-url", default="http://127.0.0.1:8088", help="Backend base URL")
-    parser.add_argument("--output", default="", help="Optional output JSON file path")
+    parser = argparse.ArgumentParser(
+        description="Verify Siamese task output quality goals.",
+    )
+    parser.add_argument(
+        "--base-url",
+        default="http://127.0.0.1:8088",
+        help="Backend base URL",
+    )
+    parser.add_argument(
+        "--output",
+        default="",
+        help="Optional output JSON file path",
+    )
     args = parser.parse_args()
 
     cases = build_cases()

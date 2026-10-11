@@ -68,7 +68,9 @@ def test_invasive_allow_list_is_a_ratchet() -> None:
     """Every recorded file must still be invasive; stale entries must be dropped."""
     resolved = INVASIVE_COPAW_IMPORT_ALLOWLIST - _invasive_files()
     assert resolved == set()
-    stale_refs = INVASIVE_COPAW_MODULE_REF_ALLOWLIST - _dynamic_invasive_files()
+    stale_refs = (
+        INVASIVE_COPAW_MODULE_REF_ALLOWLIST - _dynamic_invasive_files()
+    )
     assert stale_refs == set()
 
 
@@ -106,7 +108,7 @@ def _dynamic_invasive_files() -> set[str]:
 
 def test_qwenpaw_does_not_import_copaw_modules_dynamically() -> None:
     unrecorded = sorted(
-        _dynamic_invasive_files() - INVASIVE_COPAW_MODULE_REF_ALLOWLIST
+        _dynamic_invasive_files() - INVASIVE_COPAW_MODULE_REF_ALLOWLIST,
     )
     assert unrecorded == []
 
@@ -169,9 +171,9 @@ def test_uvicorn_target_swap_is_scoped(monkeypatch) -> None:
 
 
 def test_copaw_app_entry_extends_qwenpaw_app_object() -> None:
-    source_text = (
-        REPO_ROOT / "src" / "copaw" / "app" / "_app.py"
-    ).read_text(encoding="utf-8")
+    source_text = (REPO_ROOT / "src" / "copaw" / "app" / "_app.py").read_text(
+        encoding="utf-8",
+    )
 
     assert "from qwenpaw.app._app import app" in source_text
     assert "app.include_router(" in source_text
@@ -182,7 +184,7 @@ def test_copaw_app_entry_extends_qwenpaw_app_object() -> None:
 # probe blocks every ``copaw*`` import instead of renaming the directory, so it
 # also catches lazy ``import_module`` calls, and it runs in a subprocess because
 # this test module already imported copaw.
-_COPAW_ABSENT_SNIPPET = '''
+_COPAW_ABSENT_SNIPPET = """
 import sys
 
 
@@ -204,7 +206,7 @@ from qwenpaw.app._app import app
 from qwenpaw.cli.main import cli
 
 print(len(app.routes), len(cli.list_commands(click.Context(cli))))
-'''
+"""
 
 
 def test_qwenpaw_starts_with_copaw_removed() -> None:

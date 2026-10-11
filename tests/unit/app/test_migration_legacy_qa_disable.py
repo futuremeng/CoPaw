@@ -31,7 +31,10 @@ def test_no_legacy_profile_is_a_noop() -> None:
 def test_legacy_profile_is_disabled_once() -> None:
     legacy = _ref(LEGACY_QA_AGENT_ID)
     config = _config(
-        {LEGACY_QA_AGENT_ID: legacy, BUILTIN_QA_AGENT_ID: _ref(BUILTIN_QA_AGENT_ID)},
+        {
+            LEGACY_QA_AGENT_ID: legacy,
+            BUILTIN_QA_AGENT_ID: _ref(BUILTIN_QA_AGENT_ID),
+        },
     )
     migration._apply_legacy_qa_disable_for_migration(config)
     assert legacy.enabled is False
@@ -59,19 +62,24 @@ def test_fallback_skips_disabled_candidates() -> None:
         },
     )
     assert (
-        migration._fallback_active_agent_id(config, LEGACY_QA_AGENT_ID) == "default"
+        migration._fallback_active_agent_id(config, LEGACY_QA_AGENT_ID)
+        == "default"
     )
 
 
 def test_fallback_returns_default_when_nothing_else_usable() -> None:
     config = _config({LEGACY_QA_AGENT_ID: _ref(LEGACY_QA_AGENT_ID)})
-    assert migration._fallback_active_agent_id(config, LEGACY_QA_AGENT_ID) == "default"
+    assert (
+        migration._fallback_active_agent_id(config, LEGACY_QA_AGENT_ID)
+        == "default"
+    )
 
 
 def test_fallback_never_returns_the_excluded_id() -> None:
     config = _config({}, active_agent=LEGACY_QA_AGENT_ID)
     assert (
-        migration._fallback_active_agent_id(config, LEGACY_QA_AGENT_ID) != LEGACY_QA_AGENT_ID
+        migration._fallback_active_agent_id(config, LEGACY_QA_AGENT_ID)
+        != LEGACY_QA_AGENT_ID
     )
 
 

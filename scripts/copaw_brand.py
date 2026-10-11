@@ -22,7 +22,10 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from check_p1_invariants import DEFAULT_BASE_REF, rename_pairs_by_path  # noqa: E402
+from check_p1_invariants import (
+    DEFAULT_BASE_REF,
+    rename_pairs_by_path,
+)  # noqa: E402
 
 DEFAULT_LEDGER = "scripts/copaw_brand.json"
 DEFAULT_TARGET_REF = "v1-fork-final-2026-09-29"
@@ -94,7 +97,11 @@ def _rewrite(args: argparse.Namespace, *, forward: bool) -> int:
             total_missing += len(entry["pairs"])
             continue
         lines = path.read_text().splitlines(keepends=True)
-        out, done, missing = _apply_pairs(lines, entry["pairs"], forward=forward)
+        out, done, missing = _apply_pairs(
+            lines,
+            entry["pairs"],
+            forward=forward,
+        )
         if done:
             path.write_text("".join(out))
         total_done += done
@@ -158,7 +165,10 @@ def main() -> int:
     parser.add_argument("--ledger", default=DEFAULT_LEDGER)
     parser.add_argument("--base-ref", default=DEFAULT_BASE_REF)
     parser.add_argument("--target-ref", default=DEFAULT_TARGET_REF)
-    parser.add_argument("command", choices=("export", "apply", "strip", "verify"))
+    parser.add_argument(
+        "command",
+        choices=("export", "apply", "strip", "verify"),
+    )
     args = parser.parse_args()
     return {
         "export": cmd_export,

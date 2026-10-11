@@ -52,7 +52,9 @@ def _voice_message_placeholder(kind: str) -> str:
             return "（音声変換に失敗しました。ネイティブ音声を有効にするには ffmpeg をインストールしてください）"
         if lang == "ru":
             return "(сбой конвертации аудио; установите ffmpeg для нативного аудио)"
-        return "(audio conversion failed, install ffmpeg to enable native audio)"
+        return (
+            "(audio conversion failed, install ffmpeg to enable native audio)"
+        )
 
     if kind == "file_received":
         if lang == "zh":

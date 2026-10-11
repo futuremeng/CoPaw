@@ -51,31 +51,47 @@ def _migrate_knowledge_automation_to_running(config) -> bool:
         changed = True
 
     if (
-        running.knowledge_auto_collect_chat_files == defaults.knowledge_auto_collect_chat_files
-        and legacy.knowledge_auto_collect_chat_files != defaults.knowledge_auto_collect_chat_files
+        running.knowledge_auto_collect_chat_files
+        == defaults.knowledge_auto_collect_chat_files
+        and legacy.knowledge_auto_collect_chat_files
+        != defaults.knowledge_auto_collect_chat_files
     ):
-        running.knowledge_auto_collect_chat_files = legacy.knowledge_auto_collect_chat_files
+        running.knowledge_auto_collect_chat_files = (
+            legacy.knowledge_auto_collect_chat_files
+        )
         changed = True
 
     if (
-        running.knowledge_auto_collect_chat_urls == defaults.knowledge_auto_collect_chat_urls
-        and legacy.knowledge_auto_collect_chat_urls != defaults.knowledge_auto_collect_chat_urls
+        running.knowledge_auto_collect_chat_urls
+        == defaults.knowledge_auto_collect_chat_urls
+        and legacy.knowledge_auto_collect_chat_urls
+        != defaults.knowledge_auto_collect_chat_urls
     ):
-        running.knowledge_auto_collect_chat_urls = legacy.knowledge_auto_collect_chat_urls
+        running.knowledge_auto_collect_chat_urls = (
+            legacy.knowledge_auto_collect_chat_urls
+        )
         changed = True
 
     if (
-        running.knowledge_auto_collect_long_text == defaults.knowledge_auto_collect_long_text
-        and legacy.knowledge_auto_collect_long_text != defaults.knowledge_auto_collect_long_text
+        running.knowledge_auto_collect_long_text
+        == defaults.knowledge_auto_collect_long_text
+        and legacy.knowledge_auto_collect_long_text
+        != defaults.knowledge_auto_collect_long_text
     ):
-        running.knowledge_auto_collect_long_text = legacy.knowledge_auto_collect_long_text
+        running.knowledge_auto_collect_long_text = (
+            legacy.knowledge_auto_collect_long_text
+        )
         changed = True
 
     if (
-        running.knowledge_long_text_min_chars == defaults.knowledge_long_text_min_chars
-        and legacy.knowledge_long_text_min_chars != defaults.knowledge_long_text_min_chars
+        running.knowledge_long_text_min_chars
+        == defaults.knowledge_long_text_min_chars
+        and legacy.knowledge_long_text_min_chars
+        != defaults.knowledge_long_text_min_chars
     ):
-        running.knowledge_long_text_min_chars = legacy.knowledge_long_text_min_chars
+        running.knowledge_long_text_min_chars = (
+            legacy.knowledge_long_text_min_chars
+        )
         changed = True
 
     knowledge_index = getattr(config.knowledge, "index", None)
@@ -97,10 +113,18 @@ def _sync_running_to_knowledge_automation(config) -> None:
         return
     running = config.agents.running
     config.knowledge.enabled = running.knowledge_enabled
-    legacy.knowledge_auto_collect_chat_files = running.knowledge_auto_collect_chat_files
-    legacy.knowledge_auto_collect_chat_urls = running.knowledge_auto_collect_chat_urls
-    legacy.knowledge_auto_collect_long_text = running.knowledge_auto_collect_long_text
-    legacy.knowledge_long_text_min_chars = running.knowledge_long_text_min_chars
+    legacy.knowledge_auto_collect_chat_files = (
+        running.knowledge_auto_collect_chat_files
+    )
+    legacy.knowledge_auto_collect_chat_urls = (
+        running.knowledge_auto_collect_chat_urls
+    )
+    legacy.knowledge_auto_collect_long_text = (
+        running.knowledge_auto_collect_long_text
+    )
+    legacy.knowledge_long_text_min_chars = (
+        running.knowledge_long_text_min_chars
+    )
     config.knowledge.index.chunk_size = running.knowledge_chunk_size
 
 
@@ -142,7 +166,11 @@ class NLPStrategyUpdateBody(BaseModel):
 class NLPStrategyDryRunBody(BaseModel):
     """Request body for NLP strategy decision dry-run."""
 
-    text: str = Field(..., min_length=1, description="Input text used to evaluate routing strategy")
+    text: str = Field(
+        ...,
+        min_length=1,
+        description="Input text used to evaluate routing strategy",
+    )
     task_key: str = Field(default="ner", description="Task key, e.g. ner/dep")
 
 
@@ -195,14 +223,22 @@ def _build_nlp_strategy_payload(nlp_cfg) -> dict:
     auto_cfg = getattr(strategy_cfg, "auto_classical_chinese", None)
     return {
         "mode": str(getattr(strategy_cfg, "mode", "auto") or "auto"),
-        "default_model_id": str(getattr(strategy_cfg, "default_model_id", "") or ""),
-        "task_overrides": dict(getattr(strategy_cfg, "task_overrides", {}) or {}),
+        "default_model_id": str(
+            getattr(strategy_cfg, "default_model_id", "") or "",
+        ),
+        "task_overrides": dict(
+            getattr(strategy_cfg, "task_overrides", {}) or {},
+        ),
         "auto_classical_chinese": {
-            "enabled": bool(getattr(auto_cfg, "enabled", False)) if auto_cfg is not None else False,
+            "enabled": bool(getattr(auto_cfg, "enabled", False))
+            if auto_cfg is not None
+            else False,
             "threshold": float(getattr(auto_cfg, "threshold", 0.22) or 0.22)
             if auto_cfg is not None
             else 0.22,
-            "model_id": str(getattr(auto_cfg, "model_id", "") or "") if auto_cfg is not None else "",
+            "model_id": str(getattr(auto_cfg, "model_id", "") or "")
+            if auto_cfg is not None
+            else "",
         },
     }
 
@@ -223,12 +259,18 @@ def _build_hanlp_api_snapshot(payload: dict) -> dict:
         return str(task.get("status") or "") == "ready"
 
     status = str(sidecar.get("status") or "unavailable")
-    reason_code = str(sidecar.get("reason_code") or "HANLP_SIDECAR_UNCONFIGURED")
+    reason_code = str(
+        sidecar.get("reason_code") or "HANLP_SIDECAR_UNCONFIGURED",
+    )
     reason = str(sidecar.get("reason") or "HanLP sidecar is not configured.")
     if status == "ready" and str(model.get("status") or "") != "ready":
         status = str(model.get("status") or "unavailable")
-        reason_code = str(model.get("reason_code") or "HANLP_MODEL_LOAD_FAILED")
-        reason = str(model.get("reason") or "HanLP tokenizer model is unavailable.")
+        reason_code = str(
+            model.get("reason_code") or "HANLP_MODEL_LOAD_FAILED",
+        )
+        reason = str(
+            model.get("reason") or "HanLP tokenizer model is unavailable.",
+        )
 
     return {
         "engine": "hanlp",
@@ -238,11 +280,18 @@ def _build_hanlp_api_snapshot(payload: dict) -> dict:
         "python_version": str(sidecar.get("python_version") or ""),
         "hanlp_version": "",
         "has_coreference_resolution": _task_ready("cor"),
-        "has_parse": _task_ready("dep") or _task_ready("sdp") or _task_ready("con"),
+        "has_parse": _task_ready("dep")
+        or _task_ready("sdp")
+        or _task_ready("con"),
         "has_pipeline": status == "ready",
         "has_load": status == "ready",
         "pretrained_categories": [],
-        "task_ready_count": sum(1 for task in task_entries if isinstance(task, dict) and str(task.get("status") or "") == "ready"),
+        "task_ready_count": sum(
+            1
+            for task in task_entries
+            if isinstance(task, dict)
+            and str(task.get("status") or "") == "ready"
+        ),
     }
 
 
@@ -286,7 +335,10 @@ def _classical_detection_score(text: str) -> float:
     for token in _MODERN_HINT_TOKENS:
         modern_hits += normalized.count(token)
     density_score = min(1.0, (classical_hits / max(len(normalized), 1)) * 10.0)
-    contrast_score = max(0.0, (classical_hits - modern_hits) / max(classical_hits + modern_hits, 1))
+    contrast_score = max(
+        0.0,
+        (classical_hits - modern_hits) / max(classical_hits + modern_hits, 1),
+    )
     score = (density_score * 0.65) + (contrast_score * 0.35)
     return max(0.0, min(score, 1.0))
 
@@ -300,28 +352,47 @@ def _resolve_nlp_model_decision(task_key: str, text: str, nlp_cfg) -> dict:
     detected_style = "modern"
     detection_score = 0.0
     matched_rules: list[str] = []
-    mode = str(getattr(strategy, "mode", "auto") or "auto").strip().lower() or "auto"
+    mode = (
+        str(getattr(strategy, "mode", "auto") or "auto").strip().lower()
+        or "auto"
+    )
 
-    default_model = str(getattr(strategy, "default_model_id", "") or "").strip() if strategy else ""
+    default_model = (
+        str(getattr(strategy, "default_model_id", "") or "").strip()
+        if strategy
+        else ""
+    )
     if default_model:
         selected_model = default_model
         matched_rules.append("strategy.default_model_id")
 
-    task_overrides = getattr(strategy, "task_overrides", {}) if strategy is not None else {}
+    task_overrides = (
+        getattr(strategy, "task_overrides", {}) if strategy is not None else {}
+    )
     if isinstance(task_overrides, dict):
-        override_model = str(task_overrides.get(normalized_task_key) or "").strip()
+        override_model = str(
+            task_overrides.get(normalized_task_key) or "",
+        ).strip()
         if override_model:
             selected_model = override_model
-            matched_rules.append(f"strategy.task_overrides.{normalized_task_key}")
+            matched_rules.append(
+                f"strategy.task_overrides.{normalized_task_key}",
+            )
 
     auto_cfg = getattr(strategy, "auto_classical_chinese", None)
-    auto_enabled = bool(getattr(auto_cfg, "enabled", False)) if auto_cfg is not None else False
+    auto_enabled = (
+        bool(getattr(auto_cfg, "enabled", False))
+        if auto_cfg is not None
+        else False
+    )
     if mode in {"auto", "hybrid"} and auto_enabled:
         detection_score = _classical_detection_score(text)
         threshold = float(getattr(auto_cfg, "threshold", 0.22) or 0.22)
         if detection_score >= max(0.0, min(threshold, 1.0)):
             detected_style = "classical_chinese"
-            classical_model = str(getattr(auto_cfg, "model_id", "") or "").strip()
+            classical_model = str(
+                getattr(auto_cfg, "model_id", "") or "",
+            ).strip()
             if classical_model:
                 selected_model = classical_model
                 matched_rules.append("strategy.auto_classical_chinese")
@@ -729,9 +800,18 @@ async def put_nlp_preload(
     config.nlp.preload_scope = str(body.scope)
     save_config(config)
 
-    from ...agents.utils.hanlp_sidecar import get_hanlp_preload_status, kickoff_hanlp_preload
+    from ...agents.utils.hanlp_sidecar import (
+        get_hanlp_preload_status,
+        kickoff_hanlp_preload,
+    )
 
-    if body.enabled and str(getattr(config.nlp, "provider", "hanlp") or "hanlp").strip().lower() == "hanlp":
+    if (
+        body.enabled
+        and str(getattr(config.nlp, "provider", "hanlp") or "hanlp")
+        .strip()
+        .lower()
+        == "hanlp"
+    ):
         await asyncio.to_thread(kickoff_hanlp_preload, True)
 
     return {
@@ -753,7 +833,10 @@ async def post_nlp_preload(
     from ...agents.utils.hanlp_sidecar import kickoff_hanlp_preload
 
     return {
-        "preload": await asyncio.to_thread(kickoff_hanlp_preload, bool(body.force)),
+        "preload": await asyncio.to_thread(
+            kickoff_hanlp_preload,
+            bool(body.force),
+        ),
     }
 
 
@@ -775,7 +858,9 @@ async def put_nlp_strategy(
     strategy.mode = str(body.mode)
     strategy.default_model_id = str(body.default_model_id or "").strip()
     strategy.task_overrides = _normalize_task_overrides(body.task_overrides)
-    strategy.auto_classical_chinese.enabled = bool(body.auto_classical_chinese.enabled)
+    strategy.auto_classical_chinese.enabled = bool(
+        body.auto_classical_chinese.enabled,
+    )
     strategy.auto_classical_chinese.threshold = max(
         0.0,
         min(1.0, float(body.auto_classical_chinese.threshold)),
@@ -803,7 +888,11 @@ async def post_nlp_strategy_dry_run(
 ) -> dict:
     """Preview model routing strategy decision for input text/task."""
     config = load_config()
-    decision = _resolve_nlp_model_decision(body.task_key, body.text, config.nlp)
+    decision = _resolve_nlp_model_decision(
+        body.task_key,
+        body.text,
+        config.nlp,
+    )
     return {
         "decision": decision,
         "strategy": _build_nlp_strategy_payload(config.nlp),
@@ -970,7 +1059,9 @@ async def put_agents_running_config(
     """Update agent running configuration."""
     workspace = await get_agent_for_request(request)
     agent_config = load_agent_config(workspace.agent_id)
-    previous_enabled = bool(getattr(agent_config.running, "knowledge_enabled", True))
+    previous_enabled = bool(
+        getattr(agent_config.running, "knowledge_enabled", True),
+    )
     agent_config.running = running_config
     workspace.config.running = running_config
 

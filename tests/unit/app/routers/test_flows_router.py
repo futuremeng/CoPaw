@@ -6,7 +6,11 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from qwenpaw.app.flow_engine import FlowDefinition, FlowEngineService, FlowStepDefinition
+from qwenpaw.app.flow_engine import (
+    FlowDefinition,
+    FlowEngineService,
+    FlowStepDefinition,
+)
 from qwenpaw.app.routers import flows as flows_router_module
 from qwenpaw.app.routers import flows_global as flows_global_router_module
 
@@ -29,7 +33,7 @@ def flow_api_client(
                 name="Raw Snapshot",
                 kind="ingest",
                 executor="builtin:knowledge.snapshot_raw",
-            )
+            ),
         ],
     )
     service.register_definition(definition)
@@ -85,8 +89,12 @@ def test_scoped_flows_create_run_and_pause_resume(
     )
     assert pause_again_resp.status_code == 409
     pause_again_detail = pause_again_resp.json().get("detail") or {}
-    assert pause_again_detail.get("error_code") == "FLOW_TRANSITION_NOT_ALLOWED"
-    assert "transition not allowed" in str(pause_again_detail.get("message") or "")
+    assert (
+        pause_again_detail.get("error_code") == "FLOW_TRANSITION_NOT_ALLOWED"
+    )
+    assert "transition not allowed" in str(
+        pause_again_detail.get("message") or "",
+    )
 
     resume_resp = client.post(
         f"/flows/runs/{run_id}/commands",
@@ -124,7 +132,10 @@ def test_global_flow_routes_can_filter_by_agent(
     assert all_resp.status_code == 200
     assert len(all_resp.json()) == 2
 
-    agent_a_resp = client.get("/flows/global/runs", params={"agent_id": "agent-a"})
+    agent_a_resp = client.get(
+        "/flows/global/runs",
+        params={"agent_id": "agent-a"},
+    )
     assert agent_a_resp.status_code == 200
     payload = agent_a_resp.json()
     assert len(payload) == 1

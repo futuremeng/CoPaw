@@ -20,7 +20,11 @@ async def list_runs_global(
     scope_id: str | None = Query(default=None),
 ):
     service = await _get_service()
-    runs = service.list_runs(agent_id=agent_id, scope_kind=scope_kind, scope_id=scope_id)
+    runs = service.list_runs(
+        agent_id=agent_id,
+        scope_kind=scope_kind,
+        scope_id=scope_id,
+    )
     return [item.model_dump(mode="json") for item in runs]
 
 
@@ -33,7 +37,9 @@ async def get_run_global(run_id: str):
     return {
         "run": detail["run"].model_dump(mode="json"),
         "events": [item.model_dump(mode="json") for item in detail["events"]],
-        "commands": [item.model_dump(mode="json") for item in detail["commands"]],
+        "commands": [
+            item.model_dump(mode="json") for item in detail["commands"]
+        ],
     }
 
 

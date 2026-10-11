@@ -9,13 +9,21 @@ from types import SimpleNamespace
 
 from copaw.config.config import Config, KnowledgeSourceSpec
 from qwenpaw.knowledge import project_pipeline_dispatch
-from qwenpaw.knowledge.project_pipeline_manager import ProjectKnowledgePipelineManager
+from qwenpaw.knowledge.project_pipeline_manager import (
+    ProjectKnowledgePipelineManager,
+)
 
 
-def test_run_sync_loop_failure_preserves_l2_snapshot(tmp_path: Path, monkeypatch):
+def test_run_sync_loop_failure_preserves_l2_snapshot(
+    tmp_path: Path,
+    monkeypatch,
+):
     project_id = "project-pipeline-failure-preserve"
     source_id = "project-source-1"
-    manager = ProjectKnowledgePipelineManager(tmp_path, knowledge_dirname="knowledge")
+    manager = ProjectKnowledgePipelineManager(
+        tmp_path,
+        knowledge_dirname="knowledge",
+    )
 
     state = manager._default_state(project_id)
     state["latest_source_id"] = source_id
@@ -44,7 +52,11 @@ def test_run_sync_loop_failure_preserves_l2_snapshot(tmp_path: Path, monkeypatch
             raise RuntimeError("boom")
 
     fake_workflow_module.KnowledgeWorkflowOrchestrator = _FailingOrchestrator
-    monkeypatch.setitem(sys.modules, "qwenpaw.app.knowledge_workflow", fake_workflow_module)
+    monkeypatch.setitem(
+        sys.modules,
+        "qwenpaw.app.knowledge_workflow",
+        fake_workflow_module,
+    )
 
     source = KnowledgeSourceSpec(
         id=source_id,
@@ -80,12 +92,21 @@ def test_run_sync_loop_failure_preserves_l2_snapshot(tmp_path: Path, monkeypatch
     assert failed_state["recent_error_code"] == "RUNTIME_ERROR_FAILED"
     assert failed_state["recent_error_source"] == "execution_loop"
     assert failed_state["last_result"]["pipeline_run"]["status"] == "failed"
-    assert failed_state["last_result"]["pipeline_run"]["recent_error_code"] == "RUNTIME_ERROR_FAILED"
-    assert failed_state["last_result"]["pipeline_run"]["recent_error_source"] == "execution_loop"
+    assert (
+        failed_state["last_result"]["pipeline_run"]["recent_error_code"]
+        == "RUNTIME_ERROR_FAILED"
+    )
+    assert (
+        failed_state["last_result"]["pipeline_run"]["recent_error_source"]
+        == "execution_loop"
+    )
 
 
 def test_build_pipeline_trace_includes_stage_artifacts(tmp_path: Path):
-    manager = ProjectKnowledgePipelineManager(tmp_path, knowledge_dirname="knowledge")
+    manager = ProjectKnowledgePipelineManager(
+        tmp_path,
+        knowledge_dirname="knowledge",
+    )
 
     trace = manager._build_pipeline_trace(  # type: ignore[attr-defined]
         {
@@ -93,23 +114,48 @@ def test_build_pipeline_trace_includes_stage_artifacts(tmp_path: Path):
             "updated_at": "2026-05-10T10:00:00Z",
         },
         [
-            {"mode": "fast", "status": "ready", "available": True, "summary": "L1 ready"},
-            {"mode": "nlp", "status": "ready", "available": True, "summary": "L2 ready"},
-            {"mode": "agentic", "status": "blocked", "available": False, "summary": "L3 pending"},
+            {
+                "mode": "fast",
+                "status": "ready",
+                "available": True,
+                "summary": "L1 ready",
+            },
+            {
+                "mode": "nlp",
+                "status": "ready",
+                "available": True,
+                "summary": "L2 ready",
+            },
+            {
+                "mode": "agentic",
+                "status": "blocked",
+                "available": False,
+                "summary": "L3 pending",
+            },
         ],
         {
             "fast": {
                 "mode": "fast",
                 "source": "indexed-preview",
                 "summary_lines": ["Documents: 2", "Chunks: 4"],
-                "artifacts": [{"kind": "index", "label": "Index", "path": "projects/p1/.knowledge/index.json"}],
+                "artifacts": [
+                    {
+                        "kind": "index",
+                        "label": "Index",
+                        "path": "projects/p1/.knowledge/index.json",
+                    },
+                ],
             },
             "nlp": {
                 "mode": "nlp",
                 "source": "graph-artifacts",
                 "summary_lines": ["Document graphify payloads: 1"],
                 "artifacts": [
-                    {"kind": "ner_stats", "label": "NER stats", "path": "projects/p1/.knowledge/ner-stats.json"},
+                    {
+                        "kind": "ner_stats",
+                        "label": "NER stats",
+                        "path": "projects/p1/.knowledge/ner-stats.json",
+                    },
                 ],
             },
             "agentic": {
@@ -142,12 +188,18 @@ def test_build_pipeline_trace_includes_stage_artifacts(tmp_path: Path):
     assert trace["stages"][1]["metrics"]["ner_entity_count"] == 8
     assert trace["stages"][1]["metrics"]["syntax_pos_count"] == 19
     assert trace["stages"][1]["metrics"]["syntax_pos_tag_type_count"] == 7
-    assert trace["stages"][1]["metrics"]["pos_coverage_on_syntax_tokens"] == 0.9048
+    assert (
+        trace["stages"][1]["metrics"]["pos_coverage_on_syntax_tokens"]
+        == 0.9048
+    )
     assert trace["stages"][1]["artifacts"][0]["kind"] == "ner_stats"
 
 
 def test_build_nlp_progress_contains_phrase_placeholder_stage(tmp_path: Path):
-    manager = ProjectKnowledgePipelineManager(tmp_path, knowledge_dirname="knowledge")
+    manager = ProjectKnowledgePipelineManager(
+        tmp_path,
+        knowledge_dirname="knowledge",
+    )
 
     payload = manager._build_nlp_progress(  # type: ignore[attr-defined]
         [
@@ -183,7 +235,10 @@ def test_build_nlp_progress_contains_phrase_placeholder_stage(tmp_path: Path):
     assert phrase_stage.get("reason_code") == "PHRASE_LAYER_NOT_IMPLEMENTED"
 
 
-def test_project_pipeline_start_captures_task_aware_semantic_engine_state(tmp_path: Path, monkeypatch):
+def test_project_pipeline_start_captures_task_aware_semantic_engine_state(
+    tmp_path: Path,
+    monkeypatch,
+):
     project_id = "project-semantic-state"
     project_dir = tmp_path / "projects" / project_id
     project_dir.mkdir(parents=True, exist_ok=True)
@@ -222,13 +277,21 @@ def test_project_pipeline_start_captures_task_aware_semantic_engine_state(tmp_pa
             "engine": "hanlp",
             "task_key": task_key,
             "status": "ready" if task_key == "tokenize" else "unavailable",
-            "reason_code": "HANLP_TASK_READY" if task_key == "tokenize" else "HANLP_TASK_UNAVAILABLE",
-            "reason": "tokenize ready" if task_key == "tokenize" else "NER model is unavailable.",
+            "reason_code": "HANLP_TASK_READY"
+            if task_key == "tokenize"
+            else "HANLP_TASK_UNAVAILABLE",
+            "reason": "tokenize ready"
+            if task_key == "tokenize"
+            else "NER model is unavailable.",
         },
     )
 
     scheduled: list[datetime] = []
-    monkeypatch.setattr(manager, "_schedule_dispatch", lambda run_at, **_: scheduled.append(run_at))
+    monkeypatch.setattr(
+        manager,
+        "_schedule_dispatch",
+        lambda run_at, **_: scheduled.append(run_at),
+    )
     monkeypatch.setattr(manager, "_start_worker", lambda **_: None)
 
     manager.start_sync(
@@ -247,12 +310,22 @@ def test_project_pipeline_start_captures_task_aware_semantic_engine_state(tmp_pa
     state = manager.get_state(project_id)
     semantic_engine = state.get("semantic_engine") or {}
     assert semantic_engine.get("status") == "unavailable"
-    assert semantic_engine.get("task_states", {}).get("tokenize", {}).get("status") == "ready"
+    assert (
+        semantic_engine.get("task_states", {})
+        .get("tokenize", {})
+        .get("status")
+        == "ready"
+    )
     assert scheduled
 
 
-def test_build_processing_modes_keeps_nlp_queued_when_tokenize_task_is_ready(tmp_path: Path):
-    manager = ProjectKnowledgePipelineManager(tmp_path, knowledge_dirname="knowledge")
+def test_build_processing_modes_keeps_nlp_queued_when_tokenize_task_is_ready(
+    tmp_path: Path,
+):
+    manager = ProjectKnowledgePipelineManager(
+        tmp_path,
+        knowledge_dirname="knowledge",
+    )
 
     semantic_engine = {
         "engine": "hanlp",
@@ -267,7 +340,7 @@ def test_build_processing_modes_keeps_nlp_queued_when_tokenize_task_is_ready(tmp
                 "status": "ready",
                 "reason_code": "HANLP_TASK_READY",
                 "reason": "Tokenize task ready.",
-            }
+            },
         },
     }
 
@@ -283,8 +356,12 @@ def test_build_processing_modes_keeps_nlp_queued_when_tokenize_task_is_ready(tmp
             "syntax_relation_count": 0,
         },
     )
-    nlp_mode = next(item for item in processing_modes if item.get("mode") == "nlp")
-    agentic_mode = next(item for item in processing_modes if item.get("mode") == "agentic")
+    nlp_mode = next(
+        item for item in processing_modes if item.get("mode") == "nlp"
+    )
+    agentic_mode = next(
+        item for item in processing_modes if item.get("mode") == "agentic"
+    )
     resolution = manager._build_output_resolution(processing_modes, semantic_engine)  # type: ignore[attr-defined]
 
     assert nlp_mode["status"] == "queued"
@@ -292,8 +369,14 @@ def test_build_processing_modes_keeps_nlp_queued_when_tokenize_task_is_ready(tmp
     assert resolution["reason_code"] == "HIGH_ORDER_PENDING"
 
 
-def test_build_semantic_engine_state_prefers_current_snapshot(tmp_path: Path, monkeypatch):
-    manager = ProjectKnowledgePipelineManager(tmp_path, knowledge_dirname="knowledge")
+def test_build_semantic_engine_state_prefers_current_snapshot(
+    tmp_path: Path,
+    monkeypatch,
+):
+    manager = ProjectKnowledgePipelineManager(
+        tmp_path,
+        knowledge_dirname="knowledge",
+    )
 
     monkeypatch.setattr(
         manager._knowledge_manager,
@@ -322,17 +405,20 @@ def test_build_semantic_engine_state_prefers_current_snapshot(tmp_path: Path, mo
                         "status": "ready",
                         "reason_code": "HANLP_TASK_READY",
                         "reason": "HanLP task is ready.",
-                    }
+                    },
                 },
             },
-        }
+        },
     )
 
     assert payload["status"] == "ready"
     assert payload["task_states"]["tokenize"]["status"] == "ready"
 
 
-def test_dispatch_scheduled_sync_uses_workspace_agent_config(tmp_path: Path, monkeypatch):
+def test_dispatch_scheduled_sync_uses_workspace_agent_config(
+    tmp_path: Path,
+    monkeypatch,
+):
     project_id = "project-scheduled-config"
     project_dir = tmp_path / "projects" / project_id
     project_dir.mkdir(parents=True, exist_ok=True)
@@ -342,14 +428,20 @@ def test_dispatch_scheduled_sync_uses_workspace_agent_config(tmp_path: Path, mon
     )
 
     state = manager.get_state(project_id)
-    state.update({
-        "latest_requested_mode": "nlp",
-        "quantization_stage": "l2",
-    })
+    state.update(
+        {
+            "latest_requested_mode": "nlp",
+            "quantization_stage": "l2",
+        },
+    )
     manager._save_state(state)
 
     started: list[dict[str, object]] = []
-    monkeypatch.setattr(manager, "_start_worker", lambda **kwargs: started.append(kwargs))
+    monkeypatch.setattr(
+        manager,
+        "_start_worker",
+        lambda **kwargs: started.append(kwargs),
+    )
 
     root_config = Config()
     root_config.nlp.sidecar_enabled = False
@@ -363,10 +455,21 @@ def test_dispatch_scheduled_sync_uses_workspace_agent_config(tmp_path: Path, mon
     )
     agent_config = SimpleNamespace(running=agent_running)
 
-    monkeypatch.setattr(project_pipeline_dispatch, "load_config", lambda: root_config)
-    monkeypatch.setattr(project_pipeline_dispatch, "load_agent_config", lambda _agent_id: agent_config)
+    monkeypatch.setattr(
+        project_pipeline_dispatch,
+        "load_config",
+        lambda: root_config,
+    )
+    monkeypatch.setattr(
+        project_pipeline_dispatch,
+        "load_agent_config",
+        lambda _agent_id: agent_config,
+    )
 
-    project_pipeline_dispatch.dispatch_scheduled_sync(manager, project_id=project_id)
+    project_pipeline_dispatch.dispatch_scheduled_sync(
+        manager,
+        project_id=project_id,
+    )
 
     assert started
     scheduled_config = started[0]["config"]
@@ -375,7 +478,9 @@ def test_dispatch_scheduled_sync_uses_workspace_agent_config(tmp_path: Path, mon
     assert started[0]["running_config"] is agent_running
 
 
-def test_hydrate_processing_view_uses_project_file_analysis_stats(tmp_path: Path):
+def test_hydrate_processing_view_uses_project_file_analysis_stats(
+    tmp_path: Path,
+):
     project_id = "project-file-analysis-stats"
     project_root = tmp_path / "projects" / project_id
     project_root.mkdir(parents=True, exist_ok=True)
@@ -404,7 +509,10 @@ def test_hydrate_processing_view_uses_project_file_analysis_stats(tmp_path: Path
         encoding="utf-8",
     )
 
-    manager = ProjectKnowledgePipelineManager(tmp_path, knowledge_dirname="knowledge")
+    manager = ProjectKnowledgePipelineManager(
+        tmp_path,
+        knowledge_dirname="knowledge",
+    )
     manager._knowledge_manager.get_source_status = lambda *args, **kwargs: {}  # type: ignore[method-assign]
 
     hydrated = manager._hydrate_processing_view(
@@ -414,7 +522,7 @@ def test_hydrate_processing_view_uses_project_file_analysis_stats(tmp_path: Path
             "status": "idle",
             "updated_at": "2026-05-12T10:00:02Z",
             "last_result": {},
-        }
+        },
     )
 
     assert hydrated["file_analysis_stats"]["project_id"] == project_id

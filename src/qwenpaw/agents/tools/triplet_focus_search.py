@@ -54,18 +54,28 @@ async def triplet_focus_search(
                 TextBlock(
                     type="text",
                     text="Error: at least one of subject/predicate/object_text/query_text is required.",
-                )
+                ),
             ],
         )
 
     config, running, workspace_dir = _resolve_triplet_tool_context()
     if not getattr(config, "knowledge", None) or not config.knowledge.enabled:
         return ToolResponse(
-            content=[TextBlock(type="text", text="Error: knowledge is disabled in configuration.")],
+            content=[
+                TextBlock(
+                    type="text",
+                    text="Error: knowledge is disabled in configuration.",
+                ),
+            ],
         )
     if not bool(getattr(running, "knowledge_enabled", True)):
         return ToolResponse(
-            content=[TextBlock(type="text", text="Error: knowledge is disabled in agent runtime configuration.")],
+            content=[
+                TextBlock(
+                    type="text",
+                    text="Error: knowledge is disabled in agent runtime configuration.",
+                ),
+            ],
         )
     if not bool(getattr(config.knowledge, "triplet_search_enabled", False)):
         return ToolResponse(
@@ -73,7 +83,7 @@ async def triplet_focus_search(
                 TextBlock(
                     type="text",
                     text="Error: triplet-focused search is disabled in configuration.",
-                )
+                ),
             ],
         )
 
@@ -122,7 +132,9 @@ async def triplet_focus_search(
             }
             for item in filtered_records
         ]
-        scores = [float(item.get("score", 0) or 0) for item in filtered_records]
+        scores = [
+            float(item.get("score", 0) or 0) for item in filtered_records
+        ]
 
         payload = {
             "triplets": triplets,
@@ -134,9 +146,19 @@ async def triplet_focus_search(
             "warnings": base.warnings,
         }
         return ToolResponse(
-            content=[TextBlock(type="text", text=json.dumps(payload, ensure_ascii=False, indent=2))],
+            content=[
+                TextBlock(
+                    type="text",
+                    text=json.dumps(payload, ensure_ascii=False, indent=2),
+                ),
+            ],
         )
     except Exception as e:
         return ToolResponse(
-            content=[TextBlock(type="text", text=f"Error: triplet-focused search failed due to\n{e}")],
+            content=[
+                TextBlock(
+                    type="text",
+                    text=f"Error: triplet-focused search failed due to\n{e}",
+                ),
+            ],
         )

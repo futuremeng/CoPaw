@@ -58,7 +58,7 @@ def test_project_realtime_ws_emits_file_tree_updates(tmp_path: Path):
 
     with TestClient(app) as client:
         with client.websocket_connect(
-            f"/agents/default/projects/{project_id}/realtime/ws?interval_ms=750"
+            f"/agents/default/projects/{project_id}/realtime/ws?interval_ms=750",
         ) as websocket:
             first = websocket.receive_json()
             assert first["type"] == "snapshot"
@@ -68,14 +68,18 @@ def test_project_realtime_ws_emits_file_tree_updates(tmp_path: Path):
             assert first["changed_dirs"] == []
             assert first["changed_paths_truncated"] is False
             assert first["changed_count"] == 0
-            assert first["snapshot"]["file_tree"]["summary"]["total_files"] >= 1
+            assert (
+                first["snapshot"]["file_tree"]["summary"]["total_files"] >= 1
+            )
             assert (
                 first["snapshot"]["file_tree"]["summary"]["builtin_files"]
                 + first["snapshot"]["file_tree"]["summary"]["visible_files"]
             ) == first["snapshot"]["file_tree"]["summary"]["total_files"]
             first_fingerprint = first["snapshot"]["file_tree"]["fingerprint"]
 
-            target_file = tmp_path / "projects" / project_id / "original" / "note.md"
+            target_file = (
+                tmp_path / "projects" / project_id / "original" / "note.md"
+            )
             target_file.parent.mkdir(parents=True, exist_ok=True)
             target_file.write_text("hello realtime", encoding="utf-8")
 
@@ -87,10 +91,19 @@ def test_project_realtime_ws_emits_file_tree_updates(tmp_path: Path):
             assert "original" in second["changed_dirs"]
             assert second["changed_paths_truncated"] is False
             assert second["changed_count"] >= len(second["changed_paths"])
-            assert second["snapshot"]["file_tree"]["fingerprint"] != first_fingerprint
+            assert (
+                second["snapshot"]["file_tree"]["fingerprint"]
+                != first_fingerprint
+            )
             assert second["snapshot"]["file_tree"]["file_count"] >= 2
-            assert second["snapshot"]["file_tree"]["summary"]["original_files"] == 1
-            assert second["snapshot"]["file_tree"]["summary"]["visible_files"] >= 1
+            assert (
+                second["snapshot"]["file_tree"]["summary"]["original_files"]
+                == 1
+            )
+            assert (
+                second["snapshot"]["file_tree"]["summary"]["visible_files"]
+                >= 1
+            )
 
 
 def test_project_realtime_ws_emits_pipeline_updates(tmp_path: Path):
@@ -103,7 +116,7 @@ def test_project_realtime_ws_emits_pipeline_updates(tmp_path: Path):
 
     with TestClient(app) as client:
         with client.websocket_connect(
-            f"/agents/default/projects/{project_id}/realtime/ws?interval_ms=750"
+            f"/agents/default/projects/{project_id}/realtime/ws?interval_ms=750",
         ) as websocket:
             first = websocket.receive_json()
             assert first["type"] == "snapshot"
@@ -129,11 +142,17 @@ def test_project_realtime_ws_emits_pipeline_updates(tmp_path: Path):
             assert second["type"] == "snapshot"
             assert second["event_id"] == 2
             assert second["reason"] == "change"
-            assert ".pipelines/runs/run-1/run_manifest.json" in second["changed_paths"]
+            assert (
+                ".pipelines/runs/run-1/run_manifest.json"
+                in second["changed_paths"]
+            )
             assert ".pipelines" in second["changed_dirs"]
             assert ".pipelines/runs" in second["changed_dirs"]
             assert second["changed_paths_truncated"] is False
-            assert second["snapshot"]["pipeline"]["fingerprint"] != first_fingerprint
+            assert (
+                second["snapshot"]["pipeline"]["fingerprint"]
+                != first_fingerprint
+            )
             assert second["snapshot"]["pipeline"]["run_count"] == 1
 
 
@@ -147,7 +166,7 @@ def test_project_realtime_ws_emits_heartbeat_when_idle(tmp_path: Path):
 
     with TestClient(app) as client:
         with client.websocket_connect(
-            f"/agents/default/projects/{project_id}/realtime/ws?interval_ms=750&heartbeat_ms=750"
+            f"/agents/default/projects/{project_id}/realtime/ws?interval_ms=750&heartbeat_ms=750",
         ) as websocket:
             first = websocket.receive_json()
             assert first["type"] == "snapshot"
@@ -172,7 +191,7 @@ def test_project_realtime_ws_emits_explicit_tool_event_without_fingerprint_chang
 
     with TestClient(app) as client:
         with client.websocket_connect(
-            f"/agents/default/projects/{project_id}/realtime/ws?interval_ms=750"
+            f"/agents/default/projects/{project_id}/realtime/ws?interval_ms=750",
         ) as websocket:
             first = websocket.receive_json()
             assert first["type"] == "snapshot"
@@ -187,7 +206,10 @@ def test_project_realtime_ws_emits_explicit_tool_event_without_fingerprint_chang
             assert second["changed_paths_truncated"] is False
 
 
-def test_project_realtime_ws_marks_truncated_changed_paths(tmp_path: Path, monkeypatch):
+def test_project_realtime_ws_marks_truncated_changed_paths(
+    tmp_path: Path,
+    monkeypatch,
+):
     manager = _FakeManager(str(tmp_path))
     project_id = _seed_project(tmp_path)
 
@@ -198,13 +220,19 @@ def test_project_realtime_ws_marks_truncated_changed_paths(tmp_path: Path, monke
 
     with TestClient(app) as client:
         with client.websocket_connect(
-            f"/agents/default/projects/{project_id}/realtime/ws?interval_ms=750"
+            f"/agents/default/projects/{project_id}/realtime/ws?interval_ms=750",
         ) as websocket:
             first = websocket.receive_json()
             assert first["type"] == "snapshot"
 
             for index in range(3):
-                target_file = tmp_path / "projects" / project_id / "original" / f"note-{index}.md"
+                target_file = (
+                    tmp_path
+                    / "projects"
+                    / project_id
+                    / "original"
+                    / f"note-{index}.md"
+                )
                 target_file.parent.mkdir(parents=True, exist_ok=True)
                 target_file.write_text(f"hello {index}", encoding="utf-8")
 

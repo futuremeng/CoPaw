@@ -33,7 +33,10 @@ _TASK_MODEL_DEFAULTS = {
 
 def _normalize_siamese_python_executable(path: str) -> str:
     normalized = str(path or "").strip()
-    if normalized.replace("\\", "/").endswith("/.venv-hanlp/bin/python") or not normalized:
+    if (
+        normalized.replace("\\", "/").endswith("/.venv-hanlp/bin/python")
+        or not normalized
+    ):
         project_root = Path(__file__).resolve().parents[4]
         return str(project_root / ".venv-senta" / "bin" / "python")
     return normalized
@@ -80,7 +83,10 @@ def _resolve_hanlp_constant_url(model_id: str) -> str | None:
     return url if isinstance(url, str) and url else None
 
 
-def _host_has_local_model_artifact(model_id: str, hanlp_home: str = "") -> bool:
+def _host_has_local_model_artifact(
+    model_id: str,
+    hanlp_home: str = "",
+) -> bool:
     keys = _extract_model_cache_keys(model_id)
     resolved_url = _resolve_hanlp_constant_url(model_id)
     if resolved_url:
@@ -120,20 +126,39 @@ def _classical_local_item(config) -> dict[str, Any]:
         "task_key": "lzh_tok_fine",
         "task_name": "tok/fine",
         "model_id": _CLASSICAL_SINGLE_MODEL_ID,
-        "local_available": bool(_host_has_local_model_artifact(_CLASSICAL_SINGLE_MODEL_ID, model_home)),
+        "local_available": bool(
+            _host_has_local_model_artifact(
+                _CLASSICAL_SINGLE_MODEL_ID,
+                model_home,
+            ),
+        ),
     }
 
 
 def _require_local_models() -> bool:
-    value = str(os.environ.get("COPAW_HANLP_REQUIRE_LOCAL_MODELS", "1") or "1").strip().lower()
+    value = (
+        str(os.environ.get("COPAW_HANLP_REQUIRE_LOCAL_MODELS", "1") or "1")
+        .strip()
+        .lower()
+    )
     return value not in {"0", "false", "no", "off"}
 
 
-def _effective_task_model_id(task_key: str, task_cfg, default_model_id: str) -> str:
-    configured = str(getattr(task_cfg, "model_id", "") or "").strip() if task_cfg is not None else ""
+def _effective_task_model_id(
+    task_key: str,
+    task_cfg,
+    default_model_id: str,
+) -> str:
+    configured = (
+        str(getattr(task_cfg, "model_id", "") or "").strip()
+        if task_cfg is not None
+        else ""
+    )
     if configured:
         return configured
-    fallback = str(_TASK_MODEL_DEFAULTS.get(str(task_key or "").strip(), "") or "").strip()
+    fallback = str(
+        _TASK_MODEL_DEFAULTS.get(str(task_key or "").strip(), "") or "",
+    ).strip()
     if fallback:
         return fallback
     return default_model_id
@@ -144,7 +169,9 @@ def _build_local_models_payload(config) -> dict[str, Any]:
     model_home = str(getattr(nlp_cfg, "model_home", "") or "")
     default_model_id = str(getattr(nlp_cfg, "model_id", "") or "").strip()
     task_matrix = getattr(nlp_cfg, "task_matrix", None)
-    tasks = getattr(task_matrix, "tasks", {}) if task_matrix is not None else {}
+    tasks = (
+        getattr(task_matrix, "tasks", {}) if task_matrix is not None else {}
+    )
 
     items: list[dict[str, Any]] = []
     if default_model_id:
@@ -154,41 +181,61 @@ def _build_local_models_payload(config) -> dict[str, Any]:
                 "task_key": "tokenize",
                 "task_name": "tokenize",
                 "model_id": default_model_id,
-                "local_available": bool(_host_has_local_model_artifact(default_model_id, model_home)),
-            }
+                "local_available": bool(
+                    _host_has_local_model_artifact(
+                        default_model_id,
+                        model_home,
+                    ),
+                ),
+            },
         )
 
     if isinstance(tasks, dict):
         for task_key, task_cfg in tasks.items():
             if not bool(getattr(task_cfg, "enabled", True)):
                 continue
-            model_id = _effective_task_model_id(str(task_key), task_cfg, default_model_id)
+            model_id = _effective_task_model_id(
+                str(task_key),
+                task_cfg,
+                default_model_id,
+            )
             if not model_id:
                 continue
-            task_name = str(getattr(task_cfg, "task_name", task_key) or task_key).strip()
+            task_name = str(
+                getattr(task_cfg, "task_name", task_key) or task_key,
+            ).strip()
             items.append(
                 {
                     "scope": "task",
                     "task_key": str(task_key),
                     "task_name": task_name,
                     "model_id": model_id,
-                    "local_available": bool(_host_has_local_model_artifact(model_id, model_home)),
-                }
+                    "local_available": bool(
+                        _host_has_local_model_artifact(model_id, model_home),
+                    ),
+                },
             )
 
     # Ensure classical single-model availability is always represented.
     classical_item = _classical_local_item(config)
     if not any(
-        str(item.get("task_key") or "").strip() == str(classical_item.get("task_key") or "").strip()
+        str(item.get("task_key") or "").strip()
+        == str(classical_item.get("task_key") or "").strip()
         for item in items
     ):
         items.append(classical_item)
 
-    all_local = all(bool(item.get("local_available")) for item in items) if items else True
+    all_local = (
+        all(bool(item.get("local_available")) for item in items)
+        if items
+        else True
+    )
     return {
         "engine": "hanlp",
         "status": "ready" if all_local else "unavailable",
-        "reason_code": "HANLP_LOCAL_MODELS_READY" if all_local else "HANLP_MODEL_NOT_LOCAL",
+        "reason_code": "HANLP_LOCAL_MODELS_READY"
+        if all_local
+        else "HANLP_MODEL_NOT_LOCAL",
         "reason": (
             "All required HanLP models are present in local cache."
             if all_local
@@ -201,7 +248,10 @@ def _build_local_models_payload(config) -> dict[str, Any]:
     }
 
 
-def _augment_local_models_payload(payload: dict[str, Any], config) -> dict[str, Any]:
+def _augment_local_models_payload(
+    payload: dict[str, Any],
+    config,
+) -> dict[str, Any]:
     result = dict(payload or {})
     items = [dict(item) for item in list(result.get("items") or [])]
     seen_ids = {
@@ -212,10 +262,16 @@ def _augment_local_models_payload(payload: dict[str, Any], config) -> dict[str, 
     if _CLASSICAL_SINGLE_MODEL_ID not in seen_ids:
         items.append(_classical_local_item(config))
 
-    all_local = all(bool(item.get("local_available")) for item in items) if items else True
+    all_local = (
+        all(bool(item.get("local_available")) for item in items)
+        if items
+        else True
+    )
     result["items"] = items
     result["status"] = "ready" if all_local else "unavailable"
-    result["reason_code"] = "HANLP_LOCAL_MODELS_READY" if all_local else "HANLP_MODEL_NOT_LOCAL"
+    result["reason_code"] = (
+        "HANLP_LOCAL_MODELS_READY" if all_local else "HANLP_MODEL_NOT_LOCAL"
+    )
     result["reason"] = (
         "All required HanLP models are present in local cache."
         if all_local
@@ -231,44 +287,73 @@ def _runtime_knowledge_config(config) -> Any:
     return knowledge_cfg
 
 
-def _build_hanlp_status_payload(config, include_runtime_api: bool, strategy_payload: dict[str, Any]) -> dict[str, Any]:
+def _build_hanlp_status_payload(
+    config,
+    include_runtime_api: bool,
+    strategy_payload: dict[str, Any],
+) -> dict[str, Any]:
     from ...agents.utils.hanlp_sidecar import get_hanlp_sidecar_status
 
     payload = get_hanlp_sidecar_status(include_task_status=False)
-    sidecar_payload = payload.get("sidecar") if isinstance(payload.get("sidecar"), dict) else {}
+    sidecar_payload = (
+        payload.get("sidecar")
+        if isinstance(payload.get("sidecar"), dict)
+        else {}
+    )
     if isinstance(sidecar_payload, dict):
-        python_version = str(sidecar_payload.get("python_version") or "").strip()
+        python_version = str(
+            sidecar_payload.get("python_version") or "",
+        ).strip()
         if not python_version:
-            python_version = _detect_python_version(str(sidecar_payload.get("python_executable") or ""))
+            python_version = _detect_python_version(
+                str(sidecar_payload.get("python_executable") or ""),
+            )
         sidecar_payload["python_version"] = python_version
     payload["provider"] = "hanlp"
     payload["strategy"] = strategy_payload
     if include_runtime_api:
-        payload["api"] = NLPRuntime().api_status(_runtime_knowledge_config(config))
+        payload["api"] = NLPRuntime().api_status(
+            _runtime_knowledge_config(config),
+        )
     else:
         payload["api"] = _build_hanlp_api_snapshot(payload)
     return payload
 
 
-def _build_siamese_status_payload(config, strategy_payload: dict[str, Any]) -> dict[str, Any]:
+def _build_siamese_status_payload(
+    config,
+    strategy_payload: dict[str, Any],
+) -> dict[str, Any]:
     nlp_cfg = config.nlp
     model_home = str(getattr(nlp_cfg, "model_home", "") or "")
     siamese_python = _normalize_siamese_python_executable(
-        str(getattr(nlp_cfg, "siamese_python_executable", "") or "")
+        str(getattr(nlp_cfg, "siamese_python_executable", "") or ""),
     )
     try:
         from ...knowledge.siamese_uninlu_runtime import SiameseUniNLURuntime
 
         probe = SiameseUniNLURuntime.probe(config)
         probe_status = str(probe.get("status") or "unavailable")
-        model_id = str(probe.get("model_id") or getattr(nlp_cfg, "siamese_model_id", "") or "")
-        task_status = "ready" if probe_status == "ready" else ("disabled" if probe_status == "disabled" else "unavailable")
+        model_id = str(
+            probe.get("model_id")
+            or getattr(nlp_cfg, "siamese_model_id", "")
+            or "",
+        )
+        task_status = (
+            "ready"
+            if probe_status == "ready"
+            else ("disabled" if probe_status == "disabled" else "unavailable")
+        )
         tasks = {
             item["task_key"]: {
                 "enabled": probe_status != "disabled",
                 "status": task_status,
-                "reason_code": str(probe.get("reason_code") or "SIAMESE_UNAVAILABLE"),
-                "reason": str(probe.get("reason") or "Siamese UniNLU unavailable."),
+                "reason_code": str(
+                    probe.get("reason_code") or "SIAMESE_UNAVAILABLE",
+                ),
+                "reason": str(
+                    probe.get("reason") or "Siamese UniNLU unavailable.",
+                ),
             }
             for item in SiameseUniNLURuntime.methods_catalog()
         }
@@ -277,9 +362,15 @@ def _build_siamese_status_payload(config, strategy_payload: dict[str, Any]) -> d
             "strategy": strategy_payload,
             "sidecar": {
                 "status": probe_status,
-                "reason_code": str(probe.get("reason_code") or "SIAMESE_UNAVAILABLE"),
-                "reason": str(probe.get("reason") or "Siamese UniNLU unavailable."),
-                "enabled": bool(getattr(nlp_cfg, "siamese_sidecar_enabled", False)),
+                "reason_code": str(
+                    probe.get("reason_code") or "SIAMESE_UNAVAILABLE",
+                ),
+                "reason": str(
+                    probe.get("reason") or "Siamese UniNLU unavailable.",
+                ),
+                "enabled": bool(
+                    getattr(nlp_cfg, "siamese_sidecar_enabled", False),
+                ),
                 "python_executable": siamese_python,
                 "python_version": _detect_python_version(siamese_python),
                 "managed": False,
@@ -290,15 +381,23 @@ def _build_siamese_status_payload(config, strategy_payload: dict[str, Any]) -> d
             },
             "model": {
                 "status": "ready" if probe_status == "ready" else probe_status,
-                "reason_code": str(probe.get("reason_code") or "SIAMESE_UNAVAILABLE"),
-                "reason": str(probe.get("reason") or "Siamese UniNLU unavailable."),
+                "reason_code": str(
+                    probe.get("reason_code") or "SIAMESE_UNAVAILABLE",
+                ),
+                "reason": str(
+                    probe.get("reason") or "Siamese UniNLU unavailable.",
+                ),
                 "model_id": model_id,
             },
             "tasks": tasks,
             "api": {
                 "status": "ready" if probe_status == "ready" else probe_status,
-                "reason_code": str(probe.get("reason_code") or "SIAMESE_UNAVAILABLE"),
-                "reason": str(probe.get("reason") or "Siamese API unavailable."),
+                "reason_code": str(
+                    probe.get("reason_code") or "SIAMESE_UNAVAILABLE",
+                ),
+                "reason": str(
+                    probe.get("reason") or "Siamese API unavailable.",
+                ),
             },
             "preload": {
                 "enabled": False,
@@ -318,7 +417,9 @@ def _build_siamese_status_payload(config, strategy_payload: dict[str, Any]) -> d
                 "status": "unavailable",
                 "reason_code": "SIAMESE_RUNTIME_IMPORT_FAILED",
                 "reason": str(exc),
-                "enabled": bool(getattr(nlp_cfg, "siamese_sidecar_enabled", False)),
+                "enabled": bool(
+                    getattr(nlp_cfg, "siamese_sidecar_enabled", False),
+                ),
                 "python_executable": siamese_python,
                 "python_version": _detect_python_version(siamese_python),
                 "managed": False,
@@ -331,7 +432,9 @@ def _build_siamese_status_payload(config, strategy_payload: dict[str, Any]) -> d
                 "status": "unavailable",
                 "reason_code": "SIAMESE_RUNTIME_IMPORT_FAILED",
                 "reason": str(exc),
-                "model_id": str(getattr(nlp_cfg, "siamese_model_id", "") or ""),
+                "model_id": str(
+                    getattr(nlp_cfg, "siamese_model_id", "") or "",
+                ),
             },
             "tasks": {},
             "api": {
@@ -372,12 +475,22 @@ def _build_hanlp_methods_catalog(config) -> list[dict[str, Any]]:
     }
     nlp_cfg = config.nlp
     task_matrix = getattr(nlp_cfg, "task_matrix", None)
-    task_cfgs = getattr(task_matrix, "tasks", {}) if task_matrix is not None else {}
+    task_cfgs = (
+        getattr(task_matrix, "tasks", {}) if task_matrix is not None else {}
+    )
 
     keys: list[str] = ["tokenize"]
     if isinstance(task_cfgs, dict):
         keys.extend(str(key) for key in task_cfgs.keys())
-    for item in ["lzh_tok_fine", "lzh_tok_coarse", "lzh_lem", "lzh_pos_upos", "lzh_pos_xpos", "lzh_pos_pku", "lzh_dep"]:
+    for item in [
+        "lzh_tok_fine",
+        "lzh_tok_coarse",
+        "lzh_lem",
+        "lzh_pos_upos",
+        "lzh_pos_xpos",
+        "lzh_pos_pku",
+        "lzh_dep",
+    ]:
         if item not in keys:
             keys.append(item)
 
@@ -416,7 +529,9 @@ async def get_sidecar_nlp_status(
     """Return provider-aware NLP sidecar runtime status."""
     config = load_config()
     nlp_cfg = config.nlp
-    provider = str(getattr(nlp_cfg, "provider", "hanlp") or "hanlp").strip().lower()
+    provider = (
+        str(getattr(nlp_cfg, "provider", "hanlp") or "hanlp").strip().lower()
+    )
 
     strategy_payload = _build_nlp_strategy_payload(nlp_cfg)
 
@@ -455,7 +570,9 @@ async def get_sidecar_nlp_local_models() -> dict:
     """Return local model readiness for current NLP configuration."""
     config = load_config()
     nlp_cfg = config.nlp
-    provider = str(getattr(nlp_cfg, "provider", "hanlp") or "hanlp").strip().lower()
+    provider = (
+        str(getattr(nlp_cfg, "provider", "hanlp") or "hanlp").strip().lower()
+    )
 
     if provider != "hanlp":
         return {
@@ -487,7 +604,9 @@ async def download_missing_local_models() -> dict:
     """Download all currently missing local models in sequence."""
     config = load_config()
     nlp_cfg = config.nlp
-    provider = str(getattr(nlp_cfg, "provider", "hanlp") or "hanlp").strip().lower()
+    provider = (
+        str(getattr(nlp_cfg, "provider", "hanlp") or "hanlp").strip().lower()
+    )
 
     if provider != "hanlp":
         return {
@@ -512,7 +631,11 @@ async def download_missing_local_models() -> dict:
     runtime = NLPRuntime()
     before = _build_local_models_payload(config)
     before_items = list(before.get("items") or [])
-    missing_items = [item for item in before_items if not bool(item.get("local_available", False))]
+    missing_items = [
+        item
+        for item in before_items
+        if not bool(item.get("local_available", False))
+    ]
 
     model_ids: list[str] = []
     for item in missing_items:
@@ -529,13 +652,19 @@ async def download_missing_local_models() -> dict:
             {
                 "model_id": model_id,
                 "status": str(result.get("status") or "unavailable"),
-                "reason_code": str(result.get("reason_code") or "HANLP_MODEL_LOAD_FAILED"),
+                "reason_code": str(
+                    result.get("reason_code") or "HANLP_MODEL_LOAD_FAILED",
+                ),
                 "reason": str(result.get("reason") or "Model ensure failed."),
-            }
+            },
         )
 
     after = _build_local_models_payload(config)
-    remaining = [item for item in list(after.get("items") or []) if not bool(item.get("local_available", False))]
+    remaining = [
+        item
+        for item in list(after.get("items") or [])
+        if not bool(item.get("local_available", False))
+    ]
 
     return {
         "provider": provider,
@@ -544,12 +673,17 @@ async def download_missing_local_models() -> dict:
         "attempts": attempts,
         "before": {
             "status": str(before.get("status") or "unavailable"),
-            "reason_code": str(before.get("reason_code") or "HANLP_LOCAL_MODELS_STATUS_FAILED"),
+            "reason_code": str(
+                before.get("reason_code")
+                or "HANLP_LOCAL_MODELS_STATUS_FAILED",
+            ),
             "missing_count": len(missing_items),
         },
         "after": {
             "status": str(after.get("status") or "unavailable"),
-            "reason_code": str(after.get("reason_code") or "HANLP_LOCAL_MODELS_STATUS_FAILED"),
+            "reason_code": str(
+                after.get("reason_code") or "HANLP_LOCAL_MODELS_STATUS_FAILED",
+            ),
             "missing_count": len(remaining),
         },
         "remaining": remaining,
@@ -566,7 +700,9 @@ async def get_sidecar_nlp_methods_catalog() -> dict[str, Any]:
     """Return provider-scoped NLP method catalog used by the settings UI."""
     config = load_config()
     nlp_cfg = config.nlp
-    selected_provider = str(getattr(nlp_cfg, "provider", "hanlp") or "hanlp").strip().lower()
+    selected_provider = (
+        str(getattr(nlp_cfg, "provider", "hanlp") or "hanlp").strip().lower()
+    )
     hanlp_methods = _build_hanlp_methods_catalog(config)
     try:
         from ...knowledge.siamese_uninlu_runtime import SiameseUniNLURuntime

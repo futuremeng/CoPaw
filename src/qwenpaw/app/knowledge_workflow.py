@@ -12,7 +12,9 @@ from fastapi import HTTPException
 from ..config.config import KnowledgeConfig
 from ..knowledge.graph_ops import GraphOpsManager
 from ..knowledge.manager import KnowledgeManager
-from ..knowledge.project_pipeline_manager import DEFAULT_PROJECT_PIPELINE_QUALITY_LOOP_ROUNDS
+from ..knowledge.project_pipeline_manager import (
+    DEFAULT_PROJECT_PIPELINE_QUALITY_LOOP_ROUNDS,
+)
 from .builtin_agents import (
     BUILTIN_UNDERSTAND_DOMAIN_ANALYZER_ID,
     BUILTIN_UNDERSTAND_FILE_ANALYZER_ID,
@@ -44,7 +46,9 @@ KNOWLEDGE_WORKFLOW_TEMPLATE_NAME = "Knowledge Processing Workflow"
 KNOWLEDGE_WORKFLOW_TEMPLATE_VERSION = "2.0.0"
 KNOWLEDGE_PROCESSING_MODES = {"fast", "nlp", "agentic"}
 _WORKFLOW_STEP_ORDER = tuple(KNOWLEDGE_WORKFLOW_STEP_IDS)
-_WORKFLOW_STEP_INDEX = {step_id: index for index, step_id in enumerate(_WORKFLOW_STEP_ORDER)}
+_WORKFLOW_STEP_INDEX = {
+    step_id: index for index, step_id in enumerate(_WORKFLOW_STEP_ORDER)
+}
 _BUILTIN_KNOWLEDGE_STEP_EXECUTORS = {
     "snapshot_raw": "builtin:knowledge.snapshot_raw",
     "build_chunks": "builtin:knowledge.build_chunks",
@@ -67,7 +71,7 @@ def _lane_overrides(
             "fast": fast,
             "nlp": nlp,
             "agentic": agentic,
-        }
+        },
     }
 
 
@@ -80,7 +84,9 @@ def _knowledge_workflow_steps() -> list[PipelineTemplateStep]:
     ]
 
 
-def _knowledge_workflow_steps_from_doc(doc: dict[str, Any]) -> list[PipelineTemplateStep]:
+def _knowledge_workflow_steps_from_doc(
+    doc: dict[str, Any],
+) -> list[PipelineTemplateStep]:
     _fields = {f for f in PipelineTemplateStep.model_fields}
     raw_steps = doc.get("steps") or []
     if not isinstance(raw_steps, list):
@@ -93,9 +99,14 @@ def _knowledge_workflow_steps_from_doc(doc: dict[str, Any]) -> list[PipelineTemp
 
 
 def _template_from_doc(doc: dict[str, Any]) -> PipelineTemplateInfo:
-    version = str(doc.get("version") or KNOWLEDGE_WORKFLOW_TEMPLATE_VERSION).strip()
+    version = str(
+        doc.get("version") or KNOWLEDGE_WORKFLOW_TEMPLATE_VERSION,
+    ).strip()
     description = str(doc.get("description") or "").strip()
-    name = str(doc.get("name") or KNOWLEDGE_WORKFLOW_TEMPLATE_NAME).strip() or KNOWLEDGE_WORKFLOW_TEMPLATE_NAME
+    name = (
+        str(doc.get("name") or KNOWLEDGE_WORKFLOW_TEMPLATE_NAME).strip()
+        or KNOWLEDGE_WORKFLOW_TEMPLATE_NAME
+    )
     return PipelineTemplateInfo(
         id=KNOWLEDGE_WORKFLOW_TEMPLATE_ID,
         name=name,
@@ -165,7 +176,9 @@ def ensure_project_flow_run_bridge(
 
     normalized_idempotency_key = (idempotency_key or "").strip()
     if not normalized_idempotency_key:
-        normalized_idempotency_key = f"knowledge:{project_id}:{trigger}:{processing_mode}"
+        normalized_idempotency_key = (
+            f"knowledge:{project_id}:{trigger}:{processing_mode}"
+        )
 
     run = service.enqueue_run(
         agent_id=(agent_id or "default").strip() or "default",
@@ -178,7 +191,9 @@ def ensure_project_flow_run_bridge(
     return run.id
 
 
-def ensure_knowledge_workflow_template(project_dir: Path) -> PipelineTemplateInfo:
+def ensure_knowledge_workflow_template(
+    project_dir: Path,
+) -> PipelineTemplateInfo:
     template = build_knowledge_workflow_template()
     pipelines_dir = project_dir / ".pipelines" / "templates"
     pipelines_dir.mkdir(parents=True, exist_ok=True)
@@ -244,9 +259,15 @@ def _collect_project_source_files(
     pattern = "**/*" if recursive else "*"
     return [
         _relative_to_project(project_dir, path)
-        for path in sorted(source_dir.glob(pattern), key=lambda item: item.as_posix().lower())
+        for path in sorted(
+            source_dir.glob(pattern),
+            key=lambda item: item.as_posix().lower(),
+        )
         if path.is_file()
-        if KnowledgeManager._is_allowed_path(path.relative_to(source_dir).as_posix(), filter_config)
+        if KnowledgeManager._is_allowed_path(
+            path.relative_to(source_dir).as_posix(),
+            filter_config,
+        )
     ]
 
 
@@ -337,12 +358,22 @@ def _mode_for_start_step(start_step: str, current_mode: str) -> str:
     return mode
 
 
-def _resolve_project_dir_with_fallback(workspace_dir: Path, project_id: str) -> Path:
+def _resolve_project_dir_with_fallback(
+    workspace_dir: Path,
+    project_id: str,
+) -> Path:
     fallback = (workspace_dir / "projects" / project_id).resolve()
     projects_root = (workspace_dir / "projects").resolve()
-    if fallback.exists() and fallback.is_dir() and str(fallback).startswith(str(projects_root)):
+    if (
+        fallback.exists()
+        and fallback.is_dir()
+        and str(fallback).startswith(str(projects_root))
+    ):
         return fallback
-    raise HTTPException(status_code=404, detail=f"Project '{project_id}' not found")
+    raise HTTPException(
+        status_code=404,
+        detail=f"Project '{project_id}' not found",
+    )
 
 
 class KnowledgeWorkflowOrchestrator:
@@ -378,29 +409,43 @@ class KnowledgeWorkflowOrchestrator:
             expected_executor = _BUILTIN_KNOWLEDGE_STEP_EXECUTORS.get(step.id)
             actual_executor = str(step.executor or "").strip()
             if expected_executor is None:
-                raise RuntimeError(f"Unsupported knowledge workflow step '{step.id}' in template")
+                raise RuntimeError(
+                    f"Unsupported knowledge workflow step '{step.id}' in template",
+                )
             if not actual_executor:
-                raise RuntimeError(f"Knowledge workflow step '{step.id}' is missing executor")
+                raise RuntimeError(
+                    f"Knowledge workflow step '{step.id}' is missing executor",
+                )
             if actual_executor != expected_executor:
                 raise RuntimeError(
                     f"Knowledge workflow step '{step.id}' executor mismatch: "
-                    f"expected '{expected_executor}', got '{actual_executor}'"
+                    f"expected '{expected_executor}', got '{actual_executor}'",
                 )
             seen_step_ids.add(step.id)
-        missing_step_ids = [step_id for step_id in _WORKFLOW_STEP_ORDER if step_id not in seen_step_ids]
+        missing_step_ids = [
+            step_id
+            for step_id in _WORKFLOW_STEP_ORDER
+            if step_id not in seen_step_ids
+        ]
         if missing_step_ids:
             raise RuntimeError(
                 "Knowledge workflow template is missing required steps: "
-                + ", ".join(missing_step_ids)
+                + ", ".join(missing_step_ids),
             )
 
     def _template_step_by_id(self, step_id: str) -> PipelineTemplateStep:
         for step in self.template.steps:
             if step.id == step_id:
                 return step
-        raise RuntimeError(f"Knowledge workflow template step '{step_id}' missing")
+        raise RuntimeError(
+            f"Knowledge workflow template step '{step_id}' missing",
+        )
 
-    def _resolve_output_reference(self, run: PipelineRunDetail, raw_value: Any) -> Any:
+    def _resolve_output_reference(
+        self,
+        run: PipelineRunDetail,
+        raw_value: Any,
+    ) -> Any:
         if not isinstance(raw_value, str):
             return raw_value
         value = raw_value.strip()
@@ -411,14 +456,21 @@ class KnowledgeWorkflowOrchestrator:
         upstream_step_id, output_key = value[1:].split(".", 1)
         upstream_step = self._step_by_id(run, upstream_step_id)
         runtime_outputs = dict(upstream_step.outputs or {})
-        result_outputs = dict((upstream_step.metrics or {}).get("result", {}).get("outputs", {}) or {})
+        result_outputs = dict(
+            (upstream_step.metrics or {}).get("result", {}).get("outputs", {})
+            or {},
+        )
         if output_key in result_outputs:
             return result_outputs[output_key]
         if output_key in runtime_outputs:
             return runtime_outputs[output_key]
         return raw_value
 
-    def _resolve_step_inputs(self, run: PipelineRunDetail, step: PipelineRunStep) -> dict[str, Any]:
+    def _resolve_step_inputs(
+        self,
+        run: PipelineRunDetail,
+        step: PipelineRunStep,
+    ) -> dict[str, Any]:
         resolved: dict[str, Any] = {}
         for key, value in dict(step.inputs or {}).items():
             resolved[str(key)] = self._resolve_output_reference(run, value)
@@ -427,12 +479,22 @@ class KnowledgeWorkflowOrchestrator:
         return resolved
 
     def _manifest_output(self, path: Path) -> str:
-        return _relative_to_project(self.project_dir, path) if path.exists() else ""
+        return (
+            _relative_to_project(self.project_dir, path)
+            if path.exists()
+            else ""
+        )
 
-    def _upstream_result_for_step(self, run: PipelineRunDetail, step: PipelineRunStep) -> dict[str, Any]:
+    def _upstream_result_for_step(
+        self,
+        run: PipelineRunDetail,
+        step: PipelineRunStep,
+    ) -> dict[str, Any]:
         for upstream_step_id in list(step.depends_on or []):
             upstream_step = self._step_by_id(run, upstream_step_id)
-            payload = dict((upstream_step.metrics or {}).get("result", {}) or {})
+            payload = dict(
+                (upstream_step.metrics or {}).get("result", {}) or {},
+            )
             if payload:
                 return payload
         return {}
@@ -445,34 +507,57 @@ class KnowledgeWorkflowOrchestrator:
         if step_id == "build_chunks":
             return {
                 "chunk_count": int(upstream_result.get("chunk_count") or 0),
-                "document_count": int(upstream_result.get("document_count") or 0),
+                "document_count": int(
+                    upstream_result.get("document_count") or 0,
+                ),
             }
         if step_id == "build_interlinear":
             return {
-                "tokenize_line_count": int(upstream_result.get("tokenize_line_count") or 0),
-                "sentence_count": int(upstream_result.get("sentence_count") or 0),
+                "tokenize_line_count": int(
+                    upstream_result.get("tokenize_line_count") or 0,
+                ),
+                "sentence_count": int(
+                    upstream_result.get("sentence_count") or 0,
+                ),
             }
         if step_id == "pos_tagging":
             return {
-                "pos_count": int(upstream_result.get("pos_count") or upstream_result.get("syntax_pos_count") or 0),
+                "pos_count": int(
+                    upstream_result.get("pos_count")
+                    or upstream_result.get("syntax_pos_count")
+                    or 0,
+                ),
                 "pos_tag_type_count": int(
                     upstream_result.get("pos_tag_type_count")
                     or upstream_result.get("syntax_pos_tag_type_count")
-                    or 0
+                    or 0,
                 ),
-                "syntax_pos_count": int(upstream_result.get("syntax_pos_count") or upstream_result.get("pos_count") or 0),
+                "syntax_pos_count": int(
+                    upstream_result.get("syntax_pos_count")
+                    or upstream_result.get("pos_count")
+                    or 0,
+                ),
                 "syntax_pos_tag_type_count": int(
                     upstream_result.get("syntax_pos_tag_type_count")
                     or upstream_result.get("pos_tag_type_count")
-                    or 0
+                    or 0,
                 ),
-                "pos_coverage_on_syntax_tokens": float(upstream_result.get("pos_coverage_on_syntax_tokens") or 0.0),
+                "pos_coverage_on_syntax_tokens": float(
+                    upstream_result.get("pos_coverage_on_syntax_tokens")
+                    or 0.0,
+                ),
             }
         if step_id == "syntax_parse":
             return {
-                "syntax_relation_count": int(upstream_result.get("syntax_relation_count") or 0),
-                "syntax_sentence_count": int(upstream_result.get("syntax_sentence_count") or 0),
-                "syntax_token_count": int(upstream_result.get("syntax_token_count") or 0),
+                "syntax_relation_count": int(
+                    upstream_result.get("syntax_relation_count") or 0,
+                ),
+                "syntax_sentence_count": int(
+                    upstream_result.get("syntax_sentence_count") or 0,
+                ),
+                "syntax_token_count": int(
+                    upstream_result.get("syntax_token_count") or 0,
+                ),
             }
         return {}
 
@@ -487,34 +572,46 @@ class KnowledgeWorkflowOrchestrator:
         if step_id == "build_chunks":
             return {
                 "chunk_manifest_path": self._manifest_output(
-                    self.knowledge_manager._source_chunk_manifest_path(source_id)
+                    self.knowledge_manager._source_chunk_manifest_path(
+                        source_id,
+                    ),
                 ),
                 "chunk_count": int(upstream_result.get("chunk_count") or 0),
             }
         if step_id == "build_interlinear":
             return {
                 "interlinear_manifest_path": self._manifest_output(
-                    self.knowledge_manager._source_interlinear_manifest_path(source_id)
+                    self.knowledge_manager._source_interlinear_manifest_path(
+                        source_id,
+                    ),
                 ),
-                "line_count": int(upstream_result.get("tokenize_line_count") or 0),
+                "line_count": int(
+                    upstream_result.get("tokenize_line_count") or 0,
+                ),
             }
         if step_id == "pos_tagging":
             return {
                 "pos_manifest_path": self._manifest_output(
-                    self.knowledge_manager._source_pos_manifest_path(source_id)
+                    self.knowledge_manager._source_pos_manifest_path(
+                        source_id,
+                    ),
                 ),
                 "pos_tag_type_count": int(
                     upstream_result.get("pos_tag_type_count")
                     or upstream_result.get("syntax_pos_tag_type_count")
-                    or 0
+                    or 0,
                 ),
             }
         if step_id == "syntax_parse":
             return {
                 "syntax_manifest_path": self._manifest_output(
-                    self.knowledge_manager._source_syntax_manifest_path(source_id)
+                    self.knowledge_manager._source_syntax_manifest_path(
+                        source_id,
+                    ),
                 ),
-                "relation_count": int(upstream_result.get("syntax_relation_count") or 0),
+                "relation_count": int(
+                    upstream_result.get("syntax_relation_count") or 0,
+                ),
             }
         return {}
 
@@ -553,7 +650,7 @@ class KnowledgeWorkflowOrchestrator:
             if actual_executor != expected_executor:
                 raise RuntimeError(
                     f"Workflow run step '{step.id}' executor mismatch: "
-                    f"expected '{expected_executor}', got '{actual_executor}'"
+                    f"expected '{expected_executor}', got '{actual_executor}'",
                 )
             if step_id == "snapshot_raw":
                 return self._execute_snapshot_raw(
@@ -561,7 +658,8 @@ class KnowledgeWorkflowOrchestrator:
                     config=config,
                     running_config=running_config,
                     changed_paths=changed_paths or [],
-                    index_path=index_path or self.knowledge_manager._source_index_path(source.id),
+                    index_path=index_path
+                    or self.knowledge_manager._source_index_path(source.id),
                     resolved_inputs=resolved_inputs,
                 )
             if step_id == "tokenize":
@@ -572,7 +670,9 @@ class KnowledgeWorkflowOrchestrator:
                     resolved_inputs=resolved_inputs,
                 )
             if step_id == "semantic_role_labeling":
-                return self._execute_semantic_role_labeling(resolved_inputs=resolved_inputs)
+                return self._execute_semantic_role_labeling(
+                    resolved_inputs=resolved_inputs,
+                )
             return self._execute_passthrough(
                 run=run,
                 step=step,
@@ -599,10 +699,18 @@ class KnowledgeWorkflowOrchestrator:
         execution_context: dict[str, Any] | None = None,
         status_callback: Callable[[dict[str, Any]], None] | None = None,
     ) -> dict[str, Any]:
-        normalized_mode = str(processing_mode or "agentic").strip().lower() or "agentic"
-        quant_stage = (quantization_stage or "").strip().lower() if quantization_stage else None
+        normalized_mode = (
+            str(processing_mode or "agentic").strip().lower() or "agentic"
+        )
+        quant_stage = (
+            (quantization_stage or "").strip().lower()
+            if quantization_stage
+            else None
+        )
         if normalized_mode not in KNOWLEDGE_PROCESSING_MODES:
-            raise ValueError(f"Unsupported knowledge processing mode: {normalized_mode}")
+            raise ValueError(
+                f"Unsupported knowledge processing mode: {normalized_mode}",
+            )
         if quant_stage == "l1":
             normalized_mode = "fast"
         elif quant_stage == "l2":
@@ -615,7 +723,10 @@ class KnowledgeWorkflowOrchestrator:
             str(execution_ctx.get("rerun_layer") or ""),
         )
         if requested_start_step:
-            normalized_mode = _mode_for_start_step(requested_start_step, normalized_mode)
+            normalized_mode = _mode_for_start_step(
+                requested_start_step,
+                normalized_mode,
+            )
             if normalized_mode == "nlp" and quant_stage == "l1":
                 quant_stage = "l2"
             elif normalized_mode == "agentic" and quant_stage in {"l1", "l2"}:
@@ -649,11 +760,18 @@ class KnowledgeWorkflowOrchestrator:
         nlp_result: dict[str, Any] | None = None
         memify_result: dict[str, Any] | None = None
         quality_loop_result: dict[str, Any] | None = None
-        start_step = self._resolve_effective_start_step(source.id, requested_start_step)
+        start_step = self._resolve_effective_start_step(
+            source.id,
+            requested_start_step,
+        )
         start_index = _WORKFLOW_STEP_INDEX.get(start_step, 0)
         if start_index > 0:
             for step_id in _WORKFLOW_STEP_ORDER[:start_index]:
-                self._mark_step_skipped(run, step_id, reason=f"rerun-from:{start_step}")
+                self._mark_step_skipped(
+                    run,
+                    step_id,
+                    reason=f"rerun-from:{start_step}",
+                )
             self._persist(run)
 
         index_path = self.knowledge_manager._source_index_path(source.id)
@@ -662,45 +780,75 @@ class KnowledgeWorkflowOrchestrator:
         # ── Step 1 of 7: snapshot_raw ──────────────────────────────────────
         if start_index <= _WORKFLOW_STEP_INDEX["snapshot_raw"]:
             self._patch_step(
-            run,
-            "snapshot_raw",
-            actor=BUILTIN_UNDERSTAND_PROJECT_SCANNER_ID,
-            status_callback=status_callback,
-            sync_patch={
-                "status": "indexing",
-                "stage": "indexing",
-                "stage_message": "Snapshotting source files",
-                "progress": 5,
-                "current": 0,
-                "total": 7,
-                **_lane_overrides(
-                    fast={"status": "running", "available": False, "progress": 5, "stage": "Snapshotting sources"},
-                    nlp={"status": "running", "available": False, "progress": 5, "stage": "Snapshotting sources"},
-                    agentic={"status": "running", "available": False, "progress": 5, "stage": "Snapshotting sources"},
-                ),
-            },
-            completed_sync_patch={
-                "status": "indexing",
-                "stage": "indexing",
-                "stage_message": "Raw snapshots ready",
-                "progress": 20,
-                "current": 0,
-                "total": 7,
-                **_lane_overrides(
-                    fast={"status": "running", "available": False, "progress": 20, "stage": "Building chunks"},
-                    nlp={"status": "running", "available": False, "progress": 20, "stage": "Building chunks"},
-                    agentic={"status": "running", "available": False, "progress": 20, "stage": "Building chunks"},
-                ),
-            },
-            executor=self._dispatch_step_executor(
+                run,
                 "snapshot_raw",
-                run=run,
-                source=source,
-                config=config,
-                running_config=running_config,
-                changed_paths=normalized_changed_paths,
-                index_path=index_path,
-            ),
+                actor=BUILTIN_UNDERSTAND_PROJECT_SCANNER_ID,
+                status_callback=status_callback,
+                sync_patch={
+                    "status": "indexing",
+                    "stage": "indexing",
+                    "stage_message": "Snapshotting source files",
+                    "progress": 5,
+                    "current": 0,
+                    "total": 7,
+                    **_lane_overrides(
+                        fast={
+                            "status": "running",
+                            "available": False,
+                            "progress": 5,
+                            "stage": "Snapshotting sources",
+                        },
+                        nlp={
+                            "status": "running",
+                            "available": False,
+                            "progress": 5,
+                            "stage": "Snapshotting sources",
+                        },
+                        agentic={
+                            "status": "running",
+                            "available": False,
+                            "progress": 5,
+                            "stage": "Snapshotting sources",
+                        },
+                    ),
+                },
+                completed_sync_patch={
+                    "status": "indexing",
+                    "stage": "indexing",
+                    "stage_message": "Raw snapshots ready",
+                    "progress": 20,
+                    "current": 0,
+                    "total": 7,
+                    **_lane_overrides(
+                        fast={
+                            "status": "running",
+                            "available": False,
+                            "progress": 20,
+                            "stage": "Building chunks",
+                        },
+                        nlp={
+                            "status": "running",
+                            "available": False,
+                            "progress": 20,
+                            "stage": "Building chunks",
+                        },
+                        agentic={
+                            "status": "running",
+                            "available": False,
+                            "progress": 20,
+                            "stage": "Building chunks",
+                        },
+                    ),
+                },
+                executor=self._dispatch_step_executor(
+                    "snapshot_raw",
+                    run=run,
+                    source=source,
+                    config=config,
+                    running_config=running_config,
+                    changed_paths=normalized_changed_paths,
+                    index_path=index_path,
+                ),
             )
             index_result = dict(run.steps[0].metrics.get("result") or {})
         else:
@@ -709,79 +857,137 @@ class KnowledgeWorkflowOrchestrator:
         # ── Step 2 of 7: build_chunks (pass-through from snapshot_raw) ────
         if start_index <= _WORKFLOW_STEP_INDEX["build_chunks"]:
             self._patch_step(
-            run,
-            "build_chunks",
-            actor=BUILTIN_UNDERSTAND_FILE_ANALYZER_ID,
-            status_callback=status_callback,
-            sync_patch={
-                "status": "indexing",
-                "stage": "indexing",
-                "stage_message": "Building content chunks",
-                "progress": 22,
-                "current": 1,
-                "total": 7,
-                **_lane_overrides(
-                    fast={"status": "running", "available": False, "progress": 22, "stage": "Chunking content"},
-                    nlp={"status": "running", "available": False, "progress": 22, "stage": "Chunking content"},
-                    agentic={"status": "running", "available": False, "progress": 22, "stage": "Chunking content"},
-                ),
-            },
-            completed_sync_patch={
-                "status": "indexing",
-                "stage": "indexing",
-                "stage_message": "Chunks ready",
-                "progress": 28,
-                "current": 1,
-                "total": 7,
-                **_lane_overrides(
-                    fast={"status": "running", "available": False, "progress": 28, "stage": "Building interlinear"},
-                    nlp={"status": "running", "available": False, "progress": 28, "stage": "Building interlinear"},
-                    agentic={"status": "running", "available": False, "progress": 28, "stage": "Building interlinear"},
-                ),
-            },
-            executor=self._dispatch_step_executor(
+                run,
                 "build_chunks",
-                run=run,
-            ),
+                actor=BUILTIN_UNDERSTAND_FILE_ANALYZER_ID,
+                status_callback=status_callback,
+                sync_patch={
+                    "status": "indexing",
+                    "stage": "indexing",
+                    "stage_message": "Building content chunks",
+                    "progress": 22,
+                    "current": 1,
+                    "total": 7,
+                    **_lane_overrides(
+                        fast={
+                            "status": "running",
+                            "available": False,
+                            "progress": 22,
+                            "stage": "Chunking content",
+                        },
+                        nlp={
+                            "status": "running",
+                            "available": False,
+                            "progress": 22,
+                            "stage": "Chunking content",
+                        },
+                        agentic={
+                            "status": "running",
+                            "available": False,
+                            "progress": 22,
+                            "stage": "Chunking content",
+                        },
+                    ),
+                },
+                completed_sync_patch={
+                    "status": "indexing",
+                    "stage": "indexing",
+                    "stage_message": "Chunks ready",
+                    "progress": 28,
+                    "current": 1,
+                    "total": 7,
+                    **_lane_overrides(
+                        fast={
+                            "status": "running",
+                            "available": False,
+                            "progress": 28,
+                            "stage": "Building interlinear",
+                        },
+                        nlp={
+                            "status": "running",
+                            "available": False,
+                            "progress": 28,
+                            "stage": "Building interlinear",
+                        },
+                        agentic={
+                            "status": "running",
+                            "available": False,
+                            "progress": 28,
+                            "stage": "Building interlinear",
+                        },
+                    ),
+                },
+                executor=self._dispatch_step_executor(
+                    "build_chunks",
+                    run=run,
+                ),
             )
 
         # ── Step 3 of 7: build_interlinear (pass-through from snapshot_raw)
         if start_index <= _WORKFLOW_STEP_INDEX["build_interlinear"]:
             self._patch_step(
-            run,
-            "build_interlinear",
-            actor=BUILTIN_UNDERSTAND_FILE_ANALYZER_ID,
-            status_callback=status_callback,
-            sync_patch={
-                "status": "indexing",
-                "stage": "indexing",
-                "stage_message": "Building interlinear text",
-                "progress": 30,
-                "current": 2,
-                "total": 7,
-                **_lane_overrides(
-                    fast={"status": "running", "available": False, "progress": 30, "stage": "Building interlinear"},
-                    nlp={"status": "running", "available": False, "progress": 30, "stage": "Building interlinear"},
-                    agentic={"status": "running", "available": False, "progress": 30, "stage": "Building interlinear"},
-                ),
-            },
-            completed_sync_patch={
-                "status": "indexing",
-                "stage": "indexing",
-                "stage_message": "Interlinear text ready",
-                "progress": 38,
-                "current": 2,
-                "total": 7,
-                **_lane_overrides(
-                    fast={"status": "ready", "available": True, "progress": 100, "stage": "Fast preview ready"},
-                    nlp={"status": "queued", "available": False, "stage": "Waiting for tokenize"},
-                    agentic={"status": "queued", "available": False, "stage": "Waiting for tokenize"},
-                ),
-            },
-            executor=self._dispatch_step_executor(
+                run,
                 "build_interlinear",
-                run=run,
-            ),
+                actor=BUILTIN_UNDERSTAND_FILE_ANALYZER_ID,
+                status_callback=status_callback,
+                sync_patch={
+                    "status": "indexing",
+                    "stage": "indexing",
+                    "stage_message": "Building interlinear text",
+                    "progress": 30,
+                    "current": 2,
+                    "total": 7,
+                    **_lane_overrides(
+                        fast={
+                            "status": "running",
+                            "available": False,
+                            "progress": 30,
+                            "stage": "Building interlinear",
+                        },
+                        nlp={
+                            "status": "running",
+                            "available": False,
+                            "progress": 30,
+                            "stage": "Building interlinear",
+                        },
+                        agentic={
+                            "status": "running",
+                            "available": False,
+                            "progress": 30,
+                            "stage": "Building interlinear",
+                        },
+                    ),
+                },
+                completed_sync_patch={
+                    "status": "indexing",
+                    "stage": "indexing",
+                    "stage_message": "Interlinear text ready",
+                    "progress": 38,
+                    "current": 2,
+                    "total": 7,
+                    **_lane_overrides(
+                        fast={
+                            "status": "ready",
+                            "available": True,
+                            "progress": 100,
+                            "stage": "Fast preview ready",
+                        },
+                        nlp={
+                            "status": "queued",
+                            "available": False,
+                            "stage": "Waiting for tokenize",
+                        },
+                        agentic={
+                            "status": "queued",
+                            "available": False,
+                            "stage": "Waiting for tokenize",
+                        },
+                    ),
+                },
+                executor=self._dispatch_step_executor(
+                    "build_interlinear",
+                    run=run,
+                ),
             )
 
         if normalized_mode == "fast":
@@ -810,66 +1016,128 @@ class KnowledgeWorkflowOrchestrator:
                 percent = int(float(raw_progress or 60))
             except (TypeError, ValueError):
                 percent = 60
-            l2_progress = payload.get("l2_progress") if isinstance(payload.get("l2_progress"), dict) else {}
-            l2_metrics = payload.get("l2_metrics") if isinstance(payload.get("l2_metrics"), dict) else {}
+            l2_progress = (
+                payload.get("l2_progress")
+                if isinstance(payload.get("l2_progress"), dict)
+                else {}
+            )
+            l2_metrics = (
+                payload.get("l2_metrics")
+                if isinstance(payload.get("l2_metrics"), dict)
+                else {}
+            )
             status_callback(
                 {
                     "status": "graphifying",
                     "stage": "graphifying",
-                    "stage_message": str(payload.get("stage_message") or "Running NLP enrichment"),
+                    "stage_message": str(
+                        payload.get("stage_message")
+                        or "Running NLP enrichment",
+                    ),
                     "progress": max(40, min(85, percent)),
                     "current": 3,
                     "total": 7,
-                    "eta_seconds": payload.get("eta_seconds") if isinstance(payload.get("eta_seconds"), (int, float)) else None,
+                    "eta_seconds": payload.get("eta_seconds")
+                    if isinstance(payload.get("eta_seconds"), (int, float))
+                    else None,
                     "l2_progress": l2_progress,
                     "l2_metrics": l2_metrics,
                     **_lane_overrides(
-                        fast={"status": "ready", "available": True, "progress": 100, "stage": "Fast preview ready"},
-                        nlp={"status": "running", "available": False, "progress": max(40, min(85, percent)), "stage": str(payload.get("stage_message") or "Running NLP")},
-                        agentic={"status": "running", "available": False, "progress": max(40, min(85, percent)), "stage": str(payload.get("stage_message") or "Running NLP")},
+                        fast={
+                            "status": "ready",
+                            "available": True,
+                            "progress": 100,
+                            "stage": "Fast preview ready",
+                        },
+                        nlp={
+                            "status": "running",
+                            "available": False,
+                            "progress": max(40, min(85, percent)),
+                            "stage": str(
+                                payload.get("stage_message") or "Running NLP",
+                            ),
+                        },
+                        agentic={
+                            "status": "running",
+                            "available": False,
+                            "progress": max(40, min(85, percent)),
+                            "stage": str(
+                                payload.get("stage_message") or "Running NLP",
+                            ),
+                        },
                     ),
-                }
+                },
             )
 
         if start_index <= _WORKFLOW_STEP_INDEX["tokenize"]:
             self._patch_step(
-            run,
-            "tokenize",
-            actor=BUILTIN_UNDERSTAND_DOMAIN_ANALYZER_ID,
-            status_callback=status_callback,
-            sync_patch={
-                "status": "graphifying",
-                "stage": "graphifying",
-                "stage_message": "Running tokenization and NLP enrichment",
-                "progress": 45,
-                "current": 3,
-                "total": 7,
-                **_lane_overrides(
-                    fast={"status": "ready", "available": True, "progress": 100, "stage": "Fast preview ready"},
-                    nlp={"status": "running", "available": False, "progress": 45, "stage": "Tokenizing content"},
-                    agentic={"status": "running", "available": False, "progress": 45, "stage": "Tokenizing content"},
-                ),
-            },
-            completed_sync_patch={
-                "status": "graphifying",
-                "stage": "graphifying",
-                "stage_message": "Tokenization complete",
-                "progress": 70,
-                "current": 3,
-                "total": 7,
-                **_lane_overrides(
-                    fast={"status": "ready", "available": True, "progress": 100, "stage": "Fast preview ready"},
-                    nlp={"status": "running", "available": False, "progress": 70, "stage": "Running POS tagging"},
-                    agentic={"status": "running", "available": False, "progress": 70, "stage": "Running POS tagging"},
-                ),
-            },
-            executor=self._dispatch_step_executor(
+                run,
                 "tokenize",
-                run=run,
-                source=source,
-                config=config,
-                progress_callback=_nlp_progress,
-            ),
+                actor=BUILTIN_UNDERSTAND_DOMAIN_ANALYZER_ID,
+                status_callback=status_callback,
+                sync_patch={
+                    "status": "graphifying",
+                    "stage": "graphifying",
+                    "stage_message": "Running tokenization and NLP enrichment",
+                    "progress": 45,
+                    "current": 3,
+                    "total": 7,
+                    **_lane_overrides(
+                        fast={
+                            "status": "ready",
+                            "available": True,
+                            "progress": 100,
+                            "stage": "Fast preview ready",
+                        },
+                        nlp={
+                            "status": "running",
+                            "available": False,
+                            "progress": 45,
+                            "stage": "Tokenizing content",
+                        },
+                        agentic={
+                            "status": "running",
+                            "available": False,
+                            "progress": 45,
+                            "stage": "Tokenizing content",
+                        },
+                    ),
+                },
+                completed_sync_patch={
+                    "status": "graphifying",
+                    "stage": "graphifying",
+                    "stage_message": "Tokenization complete",
+                    "progress": 70,
+                    "current": 3,
+                    "total": 7,
+                    **_lane_overrides(
+                        fast={
+                            "status": "ready",
+                            "available": True,
+                            "progress": 100,
+                            "stage": "Fast preview ready",
+                        },
+                        nlp={
+                            "status": "running",
+                            "available": False,
+                            "progress": 70,
+                            "stage": "Running POS tagging",
+                        },
+                        agentic={
+                            "status": "running",
+                            "available": False,
+                            "progress": 70,
+                            "stage": "Running POS tagging",
+                        },
+                    ),
+                },
+                executor=self._dispatch_step_executor(
+                    "tokenize",
+                    run=run,
+                    source=source,
+                    config=config,
+                    progress_callback=_nlp_progress,
+                ),
             )
             nlp_result = dict(run.steps[3].metrics.get("result") or {})
         else:
@@ -878,79 +1146,139 @@ class KnowledgeWorkflowOrchestrator:
         # ── Step 5 of 7: pos_tagging (pass-through from tokenize) ─────────
         if start_index <= _WORKFLOW_STEP_INDEX["pos_tagging"]:
             self._patch_step(
-            run,
-            "pos_tagging",
-            actor=BUILTIN_UNDERSTAND_DOMAIN_ANALYZER_ID,
-            status_callback=status_callback,
-            sync_patch={
-                "status": "graphifying",
-                "stage": "graphifying",
-                "stage_message": "Applying POS tags",
-                "progress": 72,
-                "current": 4,
-                "total": 7,
-                **_lane_overrides(
-                    fast={"status": "ready", "available": True, "progress": 100, "stage": "Fast preview ready"},
-                    nlp={"status": "running", "available": False, "progress": 72, "stage": "POS tagging"},
-                    agentic={"status": "running", "available": False, "progress": 72, "stage": "POS tagging"},
-                ),
-            },
-            completed_sync_patch={
-                "status": "graphifying",
-                "stage": "graphifying",
-                "stage_message": "POS tagging complete",
-                "progress": 78,
-                "current": 4,
-                "total": 7,
-                **_lane_overrides(
-                    fast={"status": "ready", "available": True, "progress": 100, "stage": "Fast preview ready"},
-                    nlp={"status": "running", "available": False, "progress": 78, "stage": "Running syntax parse"},
-                    agentic={"status": "running", "available": False, "progress": 78, "stage": "Running syntax parse"},
-                ),
-            },
-            executor=self._dispatch_step_executor(
+                run,
                 "pos_tagging",
-                run=run,
-            ),
+                actor=BUILTIN_UNDERSTAND_DOMAIN_ANALYZER_ID,
+                status_callback=status_callback,
+                sync_patch={
+                    "status": "graphifying",
+                    "stage": "graphifying",
+                    "stage_message": "Applying POS tags",
+                    "progress": 72,
+                    "current": 4,
+                    "total": 7,
+                    **_lane_overrides(
+                        fast={
+                            "status": "ready",
+                            "available": True,
+                            "progress": 100,
+                            "stage": "Fast preview ready",
+                        },
+                        nlp={
+                            "status": "running",
+                            "available": False,
+                            "progress": 72,
+                            "stage": "POS tagging",
+                        },
+                        agentic={
+                            "status": "running",
+                            "available": False,
+                            "progress": 72,
+                            "stage": "POS tagging",
+                        },
+                    ),
+                },
+                completed_sync_patch={
+                    "status": "graphifying",
+                    "stage": "graphifying",
+                    "stage_message": "POS tagging complete",
+                    "progress": 78,
+                    "current": 4,
+                    "total": 7,
+                    **_lane_overrides(
+                        fast={
+                            "status": "ready",
+                            "available": True,
+                            "progress": 100,
+                            "stage": "Fast preview ready",
+                        },
+                        nlp={
+                            "status": "running",
+                            "available": False,
+                            "progress": 78,
+                            "stage": "Running syntax parse",
+                        },
+                        agentic={
+                            "status": "running",
+                            "available": False,
+                            "progress": 78,
+                            "stage": "Running syntax parse",
+                        },
+                    ),
+                },
+                executor=self._dispatch_step_executor(
+                    "pos_tagging",
+                    run=run,
+                ),
             )
 
         # ── Step 6 of 7: syntax_parse (pass-through from tokenize) ────────
         if start_index <= _WORKFLOW_STEP_INDEX["syntax_parse"]:
             self._patch_step(
-            run,
-            "syntax_parse",
-            actor=BUILTIN_UNDERSTAND_DOMAIN_ANALYZER_ID,
-            status_callback=status_callback,
-            sync_patch={
-                "status": "graphifying",
-                "stage": "graphifying",
-                "stage_message": "Parsing syntax dependencies",
-                "progress": 80,
-                "current": 5,
-                "total": 7,
-                **_lane_overrides(
-                    fast={"status": "ready", "available": True, "progress": 100, "stage": "Fast preview ready"},
-                    nlp={"status": "running", "available": False, "progress": 80, "stage": "Syntax parsing"},
-                    agentic={"status": "running", "available": False, "progress": 80, "stage": "Syntax parsing"},
-                ),
-            },
-            completed_sync_patch={
-                "status": "graphifying",
-                "stage": "graphifying",
-                "stage_message": "Syntax parse complete",
-                "progress": 86,
-                "current": 5,
-                "total": 7,
-                **_lane_overrides(
-                    fast={"status": "ready", "available": True, "progress": 100, "stage": "Fast preview ready"},
-                    nlp={"status": "ready", "available": True, "progress": 100, "stage": "NLP enrichment ready"},
-                    agentic={"status": "running", "available": False, "progress": 86, "stage": "Semantic role labeling"},
-                ),
-            },
-            executor=self._dispatch_step_executor(
+                run,
                 "syntax_parse",
-                run=run,
-            ),
+                actor=BUILTIN_UNDERSTAND_DOMAIN_ANALYZER_ID,
+                status_callback=status_callback,
+                sync_patch={
+                    "status": "graphifying",
+                    "stage": "graphifying",
+                    "stage_message": "Parsing syntax dependencies",
+                    "progress": 80,
+                    "current": 5,
+                    "total": 7,
+                    **_lane_overrides(
+                        fast={
+                            "status": "ready",
+                            "available": True,
+                            "progress": 100,
+                            "stage": "Fast preview ready",
+                        },
+                        nlp={
+                            "status": "running",
+                            "available": False,
+                            "progress": 80,
+                            "stage": "Syntax parsing",
+                        },
+                        agentic={
+                            "status": "running",
+                            "available": False,
+                            "progress": 80,
+                            "stage": "Syntax parsing",
+                        },
+                    ),
+                },
+                completed_sync_patch={
+                    "status": "graphifying",
+                    "stage": "graphifying",
+                    "stage_message": "Syntax parse complete",
+                    "progress": 86,
+                    "current": 5,
+                    "total": 7,
+                    **_lane_overrides(
+                        fast={
+                            "status": "ready",
+                            "available": True,
+                            "progress": 100,
+                            "stage": "Fast preview ready",
+                        },
+                        nlp={
+                            "status": "ready",
+                            "available": True,
+                            "progress": 100,
+                            "stage": "NLP enrichment ready",
+                        },
+                        agentic={
+                            "status": "running",
+                            "available": False,
+                            "progress": 86,
+                            "stage": "Semantic role labeling",
+                        },
+                    ),
+                },
+                executor=self._dispatch_step_executor(
+                    "syntax_parse",
+                    run=run,
+                ),
             )
 
         if normalized_mode == "nlp":
@@ -972,37 +1300,70 @@ class KnowledgeWorkflowOrchestrator:
         # ── Step 7 of 7: semantic_role_labeling (placeholder) ─────────────
         if start_index <= _WORKFLOW_STEP_INDEX["semantic_role_labeling"]:
             self._patch_step(
-            run,
-            "semantic_role_labeling",
-            actor=BUILTIN_UNDERSTAND_DOMAIN_ANALYZER_ID,
-            status_callback=status_callback,
-            sync_patch={
-                "status": "graphifying",
-                "stage": "graphifying",
-                "stage_message": "Semantic role labeling",
-                "progress": 88,
-                "current": 6,
-                "total": 7,
-                **_lane_overrides(
-                    fast={"status": "ready", "available": True, "progress": 100, "stage": "Fast preview ready"},
-                    nlp={"status": "ready", "available": True, "progress": 100, "stage": "NLP enrichment ready"},
-                    agentic={"status": "running", "available": False, "progress": 88, "stage": "Semantic role labeling"},
+                run,
+                "semantic_role_labeling",
+                actor=BUILTIN_UNDERSTAND_DOMAIN_ANALYZER_ID,
+                status_callback=status_callback,
+                sync_patch={
+                    "status": "graphifying",
+                    "stage": "graphifying",
+                    "stage_message": "Semantic role labeling",
+                    "progress": 88,
+                    "current": 6,
+                    "total": 7,
+                    **_lane_overrides(
+                        fast={
+                            "status": "ready",
+                            "available": True,
+                            "progress": 100,
+                            "stage": "Fast preview ready",
+                        },
+                        nlp={
+                            "status": "ready",
+                            "available": True,
+                            "progress": 100,
+                            "stage": "NLP enrichment ready",
+                        },
+                        agentic={
+                            "status": "running",
+                            "available": False,
+                            "progress": 88,
+                            "stage": "Semantic role labeling",
+                        },
+                    ),
+                },
+                completed_sync_patch={
+                    "status": "graphifying",
+                    "stage": "graphifying",
+                    "stage_message": "NLP enrichment pipeline complete",
+                    "progress": 92,
+                    "current": 6,
+                    "total": 7,
+                    **_lane_overrides(
+                        fast={
+                            "status": "ready",
+                            "available": True,
+                            "progress": 100,
+                            "stage": "Fast preview ready",
+                        },
+                        nlp={
+                            "status": "ready",
+                            "available": True,
+                            "progress": 100,
+                            "stage": "NLP enrichment ready",
+                        },
+                        agentic={
+                            "status": "running",
+                            "available": False,
+                            "progress": 92,
+                            "stage": "Building knowledge graph",
+                        },
+                    ),
+                },
+                executor=self._dispatch_step_executor(
+                    "semantic_role_labeling",
+                    run=run,
                 ),
-            },
-            completed_sync_patch={
-                "status": "graphifying",
-                "stage": "graphifying",
-                "stage_message": "NLP enrichment pipeline complete",
-                "progress": 92,
-                "current": 6,
-                "total": 7,
-                **_lane_overrides(
-                    fast={"status": "ready", "available": True, "progress": 100, "stage": "Fast preview ready"},
-                    nlp={"status": "ready", "available": True, "progress": 100, "stage": "NLP enrichment ready"},
-                    agentic={"status": "running", "available": False, "progress": 92, "stage": "Building knowledge graph"},
-                ),
-            },
-            executor=self._dispatch_step_executor("semantic_role_labeling", run=run),
             )
 
         return self._finalize_run(
@@ -1020,7 +1381,11 @@ class KnowledgeWorkflowOrchestrator:
             status_callback=status_callback,
         )
 
-    def _resolve_effective_start_step(self, source_id: str, requested_step: str) -> str:
+    def _resolve_effective_start_step(
+        self,
+        source_id: str,
+        requested_step: str,
+    ) -> str:
         if not requested_step:
             return "snapshot_raw"
         if requested_step == "snapshot_raw":
@@ -1037,7 +1402,10 @@ class KnowledgeWorkflowOrchestrator:
             return "tokenize" if has_chunks else "snapshot_raw"
         return "snapshot_raw"
 
-    def _load_index_result_from_payload(self, source_id: str) -> dict[str, Any]:
+    def _load_index_result_from_payload(
+        self,
+        source_id: str,
+    ) -> dict[str, Any]:
         payload = self.knowledge_manager._load_index_payload_safe(source_id)
         if not isinstance(payload, dict):
             return {}
@@ -1046,7 +1414,9 @@ class KnowledgeWorkflowOrchestrator:
             "snapshot_count": int(payload.get("snapshot_count") or 0),
             "chunk_count": int(payload.get("chunk_count") or 0),
             "sentence_count": int(payload.get("sentence_count") or 0),
-            "tokenize_line_count": int(payload.get("tokenize_line_count") or 0),
+            "tokenize_line_count": int(
+                payload.get("tokenize_line_count") or 0,
+            ),
         }
 
     def _load_nlp_result_from_payload(self, source_id: str) -> dict[str, Any]:
@@ -1054,23 +1424,53 @@ class KnowledgeWorkflowOrchestrator:
         if not isinstance(payload, dict):
             return {}
         return {
-            "tokenize_ready_chunk_count": int(payload.get("tokenize_ready_chunk_count") or 0),
-            "tokenize_line_count": int(payload.get("tokenize_line_count") or 0),
-            "tokenize_token_count": int(payload.get("tokenize_token_count") or 0),
-            "pos_ready_chunk_count": int(payload.get("pos_ready_chunk_count") or 0),
+            "tokenize_ready_chunk_count": int(
+                payload.get("tokenize_ready_chunk_count") or 0,
+            ),
+            "tokenize_line_count": int(
+                payload.get("tokenize_line_count") or 0,
+            ),
+            "tokenize_token_count": int(
+                payload.get("tokenize_token_count") or 0,
+            ),
+            "pos_ready_chunk_count": int(
+                payload.get("pos_ready_chunk_count") or 0,
+            ),
             "pos_line_count": int(payload.get("pos_line_count") or 0),
             "pos_token_count": int(payload.get("pos_token_count") or 0),
-            "pos_count": int(payload.get("pos_count") or payload.get("syntax_pos_count") or 0),
-            "pos_tag_type_count": int(payload.get("pos_tag_type_count") or payload.get("syntax_pos_tag_type_count") or 0),
+            "pos_count": int(
+                payload.get("pos_count")
+                or payload.get("syntax_pos_count")
+                or 0,
+            ),
+            "pos_tag_type_count": int(
+                payload.get("pos_tag_type_count")
+                or payload.get("syntax_pos_tag_type_count")
+                or 0,
+            ),
             "syntax_pos_count": int(payload.get("syntax_pos_count") or 0),
-            "syntax_pos_tag_type_count": int(payload.get("syntax_pos_tag_type_count") or 0),
-            "pos_coverage_on_syntax_tokens": float(payload.get("pos_coverage_on_syntax_tokens") or 0.0),
-            "syntax_relation_count": int(payload.get("syntax_relation_count") or 0),
-            "syntax_sentence_count": int(payload.get("syntax_sentence_count") or 0),
+            "syntax_pos_tag_type_count": int(
+                payload.get("syntax_pos_tag_type_count") or 0,
+            ),
+            "pos_coverage_on_syntax_tokens": float(
+                payload.get("pos_coverage_on_syntax_tokens") or 0.0,
+            ),
+            "syntax_relation_count": int(
+                payload.get("syntax_relation_count") or 0,
+            ),
+            "syntax_sentence_count": int(
+                payload.get("syntax_sentence_count") or 0,
+            ),
             "syntax_token_count": int(payload.get("syntax_token_count") or 0),
         }
 
-    def _mark_step_skipped(self, run: PipelineRunDetail, step_id: str, *, reason: str) -> None:
+    def _mark_step_skipped(
+        self,
+        run: PipelineRunDetail,
+        step_id: str,
+        *,
+        reason: str,
+    ) -> None:
         step = self._step_by_id(run, step_id)
         if step.status in {"succeeded", "skipped"}:
             return
@@ -1113,18 +1513,31 @@ class KnowledgeWorkflowOrchestrator:
                     token = []
         if token:
             parts.append("".join(token))
-        normalized = "_".join(part.upper() for part in parts if part).strip("_")
+        normalized = "_".join(part.upper() for part in parts if part).strip(
+            "_",
+        )
         if not normalized:
             return "WORKFLOW_STEP_EXECUTION_FAILED"
-        return f"{normalized}_FAILED" if not normalized.endswith("_FAILED") else normalized
+        return (
+            f"{normalized}_FAILED"
+            if not normalized.endswith("_FAILED")
+            else normalized
+        )
 
-    def _extract_recent_error_details(self, run: PipelineRunDetail) -> tuple[str, str]:
+    def _extract_recent_error_details(
+        self,
+        run: PipelineRunDetail,
+    ) -> tuple[str, str]:
         for step in reversed(run.steps):
             if str(step.status or "").strip().lower() != "failed":
                 continue
             metrics = step.metrics if isinstance(step.metrics, dict) else {}
             outputs = step.outputs if isinstance(step.outputs, dict) else {}
-            result = metrics.get("result") if isinstance(metrics.get("result"), dict) else {}
+            result = (
+                metrics.get("result")
+                if isinstance(metrics.get("result"), dict)
+                else {}
+            )
             for candidate in [
                 metrics.get("reason_code"),
                 metrics.get("error_code"),
@@ -1166,7 +1579,9 @@ class KnowledgeWorkflowOrchestrator:
         if processing_mode == "agentic":
             try:
                 memify_result = self._run_memify(
-                    config=config, source=source, quality_report_path=quality_report_path
+                    config=config,
+                    source=source,
+                    quality_report_path=quality_report_path,
                 )
                 quality_loop_result = self._run_quality_loop(
                     config=config,
@@ -1192,11 +1607,26 @@ class KnowledgeWorkflowOrchestrator:
                             "stage_message": "Knowledge graph built",
                             "progress": 100,
                             **_lane_overrides(
-                                fast={"status": "ready", "available": True, "progress": 100, "stage": "Fast preview ready"},
-                                nlp={"status": "ready", "available": True, "progress": 100, "stage": "NLP enrichment ready"},
-                                agentic={"status": "ready", "available": True, "progress": 100, "stage": "Knowledge graph ready"},
+                                fast={
+                                    "status": "ready",
+                                    "available": True,
+                                    "progress": 100,
+                                    "stage": "Fast preview ready",
+                                },
+                                nlp={
+                                    "status": "ready",
+                                    "available": True,
+                                    "progress": 100,
+                                    "stage": "NLP enrichment ready",
+                                },
+                                agentic={
+                                    "status": "ready",
+                                    "available": True,
+                                    "progress": 100,
+                                    "stage": "Knowledge graph ready",
+                                },
                             ),
-                        }
+                        },
                     )
             except Exception as exc:
                 run.status = "failed"
@@ -1222,11 +1652,16 @@ class KnowledgeWorkflowOrchestrator:
         )
         self._persist(run)
 
-        processing_fingerprint = self.knowledge_manager.compute_processing_fingerprint(
-            config,
-            running_config,
+        processing_fingerprint = (
+            self.knowledge_manager.compute_processing_fingerprint(
+                config,
+                running_config,
+            )
         )
-        recent_error_code, recent_error_source = self._extract_recent_error_details(run)
+        (
+            recent_error_code,
+            recent_error_source,
+        ) = self._extract_recent_error_details(run)
         pipeline_run_payload = {
             "run_id": run.id,
             "status": run.status,
@@ -1235,8 +1670,7 @@ class KnowledgeWorkflowOrchestrator:
             "processing_fingerprint": processing_fingerprint,
             "artifacts": run.artifacts[:],
             "step_outputs": {
-                step.id: dict(step.outputs or {})
-                for step in run.steps
+                step.id: dict(step.outputs or {}) for step in run.steps
             },
             "recent_error_code": recent_error_code,
             "recent_error_source": recent_error_source,
@@ -1251,7 +1685,7 @@ class KnowledgeWorkflowOrchestrator:
             "latest_job_id": str(
                 (quality_loop_result or {}).get("job_id")
                 or (memify_result or {}).get("job_id")
-                or ""
+                or "",
             ).strip(),
             "index": index_result or {},
             "nlp": nlp_result or {},
@@ -1288,11 +1722,18 @@ class KnowledgeWorkflowOrchestrator:
             metrics=metrics or {},
         )
 
-    def _step_by_id(self, run: PipelineRunDetail, step_id: str) -> PipelineRunStep:
+    def _step_by_id(
+        self,
+        run: PipelineRunDetail,
+        step_id: str,
+    ) -> PipelineRunStep:
         for step in run.steps:
             if step.id == step_id:
                 return step
-        raise HTTPException(status_code=500, detail=f"Workflow step '{step_id}' missing")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Workflow step '{step_id}' missing",
+        )
 
     def _patch_step(
         self,
@@ -1339,7 +1780,9 @@ class KnowledgeWorkflowOrchestrator:
             }
             step.evidence = result.get("evidence", [])[:20]
             if result.get("artifacts"):
-                merged_artifacts = list(dict.fromkeys([*run.artifacts, *result["artifacts"]]))
+                merged_artifacts = list(
+                    dict.fromkeys([*run.artifacts, *result["artifacts"]]),
+                )
                 run.artifacts = merged_artifacts[:200]
             run.updated_at = ended_at
             self._append_run_event(
@@ -1350,10 +1793,17 @@ class KnowledgeWorkflowOrchestrator:
                 step_id=step.id,
                 message=f"{step.name} completed",
                 evidence=step.evidence[:5],
-                metrics={key: value for key, value in step.metrics.items() if isinstance(value, (int, float, str, bool))},
+                metrics={
+                    key: value
+                    for key, value in step.metrics.items()
+                    if isinstance(value, (int, float, str, bool))
+                },
             )
             self._persist(run)
-            if status_callback is not None and completed_sync_patch is not None:
+            if (
+                status_callback is not None
+                and completed_sync_patch is not None
+            ):
                 status_callback(completed_sync_patch)
         except Exception as exc:
             ended_at = _pipeline_now_iso()
@@ -1428,7 +1878,9 @@ class KnowledgeWorkflowOrchestrator:
             "snapshot_count": int(index_result.get("snapshot_count") or 0),
             "chunk_count": int(index_result.get("chunk_count") or 0),
             "sentence_count": int(index_result.get("sentence_count") or 0),
-            "tokenize_line_count": int(index_result.get("tokenize_line_count") or 0),
+            "tokenize_line_count": int(
+                index_result.get("tokenize_line_count") or 0,
+            ),
         }
         self.knowledge_manager.write_project_step_stats(
             project_id=self.project_id,
@@ -1437,11 +1889,16 @@ class KnowledgeWorkflowOrchestrator:
             source_id=source.id,
             source_location=str(source.location or "").strip(),
             metrics=metrics,
-            extra_fields={"changed_paths": changed_paths, "data_files": data_files[:20]},
+            extra_fields={
+                "changed_paths": changed_paths,
+                "data_files": data_files[:20],
+            },
         )
         outputs = {
             "snapshot_manifest_path": self._manifest_output(
-                self.knowledge_manager._source_snapshot_manifest_path(source.id)
+                self.knowledge_manager._source_snapshot_manifest_path(
+                    source.id,
+                ),
             ),
             "snapshot_count": int(index_result.get("snapshot_count") or 0),
         }
@@ -1469,11 +1926,20 @@ class KnowledgeWorkflowOrchestrator:
         """Pass-through executor for steps whose work is done by a preceding step."""
         source_id = str((run.parameters or {}).get("source_id") or "").strip()
         upstream_result = self._upstream_result_for_step(run, step)
-        default_metrics = self._default_passthrough_metrics(step_id, upstream_result)
-        default_outputs = self._default_passthrough_outputs(step_id, source_id, upstream_result)
+        default_metrics = self._default_passthrough_metrics(
+            step_id,
+            upstream_result,
+        )
+        default_outputs = self._default_passthrough_outputs(
+            step_id,
+            source_id,
+            upstream_result,
+        )
         merged_metrics = {**default_metrics, **dict(metrics or {})}
         merged_outputs = {**default_outputs, **dict(outputs or {})}
-        merged_evidence = list(evidence or self._default_passthrough_evidence(run, step))
+        merged_evidence = list(
+            evidence or self._default_passthrough_evidence(run, step),
+        )
         merged_artifacts = list(artifacts or [])
         return {
             "metrics": merged_metrics,
@@ -1499,29 +1965,59 @@ class KnowledgeWorkflowOrchestrator:
             progress_callback=progress_callback,
         )
         # Re-read the index payload to pick up freshly written NLP metrics.
-        nlp_payload = self.knowledge_manager._load_index_payload_safe(source.id)
+        nlp_payload = self.knowledge_manager._load_index_payload_safe(
+            source.id,
+        )
         if not isinstance(nlp_payload, dict):
             nlp_payload = {}
         metrics = {
-            "tokenize_ready_chunk_count": int(nlp_payload.get("tokenize_ready_chunk_count") or 0),
-            "tokenize_line_count": int(nlp_payload.get("tokenize_line_count") or 0),
-            "tokenize_token_count": int(nlp_payload.get("tokenize_token_count") or 0),
-            "pos_ready_chunk_count": int(nlp_payload.get("pos_ready_chunk_count") or 0),
+            "tokenize_ready_chunk_count": int(
+                nlp_payload.get("tokenize_ready_chunk_count") or 0,
+            ),
+            "tokenize_line_count": int(
+                nlp_payload.get("tokenize_line_count") or 0,
+            ),
+            "tokenize_token_count": int(
+                nlp_payload.get("tokenize_token_count") or 0,
+            ),
+            "pos_ready_chunk_count": int(
+                nlp_payload.get("pos_ready_chunk_count") or 0,
+            ),
             "pos_line_count": int(nlp_payload.get("pos_line_count") or 0),
             "pos_token_count": int(nlp_payload.get("pos_token_count") or 0),
-            "pos_count": int(nlp_payload.get("pos_count") or nlp_payload.get("syntax_pos_count") or 0),
-            "pos_tag_type_count": int(nlp_payload.get("pos_tag_type_count") or nlp_payload.get("syntax_pos_tag_type_count") or 0),
+            "pos_count": int(
+                nlp_payload.get("pos_count")
+                or nlp_payload.get("syntax_pos_count")
+                or 0,
+            ),
+            "pos_tag_type_count": int(
+                nlp_payload.get("pos_tag_type_count")
+                or nlp_payload.get("syntax_pos_tag_type_count")
+                or 0,
+            ),
             "syntax_pos_count": int(nlp_payload.get("syntax_pos_count") or 0),
-            "syntax_pos_tag_type_count": int(nlp_payload.get("syntax_pos_tag_type_count") or 0),
-            "pos_coverage_on_syntax_tokens": float(nlp_payload.get("pos_coverage_on_syntax_tokens") or 0.0),
-            "syntax_relation_count": int(nlp_payload.get("syntax_relation_count") or 0),
-            "syntax_sentence_count": int(nlp_payload.get("syntax_sentence_count") or 0),
-            "syntax_token_count": int(nlp_payload.get("syntax_token_count") or 0),
+            "syntax_pos_tag_type_count": int(
+                nlp_payload.get("syntax_pos_tag_type_count") or 0,
+            ),
+            "pos_coverage_on_syntax_tokens": float(
+                nlp_payload.get("pos_coverage_on_syntax_tokens") or 0.0,
+            ),
+            "syntax_relation_count": int(
+                nlp_payload.get("syntax_relation_count") or 0,
+            ),
+            "syntax_sentence_count": int(
+                nlp_payload.get("syntax_sentence_count") or 0,
+            ),
+            "syntax_token_count": int(
+                nlp_payload.get("syntax_token_count") or 0,
+            ),
         }
         evidence: list[str] = []
         tokenize_dir = self.knowledge_manager.tokenize_dir
         if tokenize_dir.exists():
-            evidence.append(_relative_to_project(self.project_dir, tokenize_dir))
+            evidence.append(
+                _relative_to_project(self.project_dir, tokenize_dir),
+            )
         self.knowledge_manager.write_project_step_stats(
             project_id=self.project_id,
             project_workspace_dir=self.project_dir,
@@ -1533,7 +2029,9 @@ class KnowledgeWorkflowOrchestrator:
         )
         outputs = {
             "tokenize_manifest_path": self._manifest_output(
-                self.knowledge_manager._source_tokenize_manifest_path(source.id)
+                self.knowledge_manager._source_tokenize_manifest_path(
+                    source.id,
+                ),
             ),
             "token_count": int(nlp_payload.get("tokenize_token_count") or 0),
         }
@@ -1590,7 +2088,12 @@ class KnowledgeWorkflowOrchestrator:
             progress_callback=None,
         )
         if str(memify_result.get("status") or "") != "succeeded":
-            raise RuntimeError(str(memify_result.get("error") or "Knowledge graph build failed"))
+            raise RuntimeError(
+                str(
+                    memify_result.get("error")
+                    or "Knowledge graph build failed",
+                ),
+            )
         return memify_result
 
     def _run_quality_loop(
@@ -1625,5 +2128,7 @@ class KnowledgeWorkflowOrchestrator:
                 time.sleep(0.2)
         status = str(quality_result.get("status") or "succeeded").strip()
         if status == "failed":
-            raise RuntimeError(str(quality_result.get("error") or "Quality review failed"))
+            raise RuntimeError(
+                str(quality_result.get("error") or "Quality review failed"),
+            )
         return quality_result

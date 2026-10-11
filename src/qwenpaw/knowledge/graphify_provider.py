@@ -86,20 +86,20 @@ def _load_graph_json(graph_path: str) -> Any:
         from networkx.readwrite import json_graph
     except ImportError as exc:
         raise GraphifyLoadError(
-            "networkx is not installed. Run: pip install networkx"
+            "networkx is not installed. Run: pip install networkx",
         ) from exc
 
     path = Path(graph_path)
     if not path.is_file():
         raise GraphifyLoadError(
             f"graph.json not found at '{graph_path}'. "
-            "Run 'graphify <dataset_dir>' to build it first."
+            "Run 'graphify <dataset_dir>' to build it first.",
         )
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:
         raise GraphifyLoadError(
-            f"Failed to read graph.json at '{graph_path}': {exc}"
+            f"Failed to read graph.json at '{graph_path}': {exc}",
         ) from exc
 
     try:
@@ -109,7 +109,7 @@ def _load_graph_json(graph_path: str) -> Any:
             return json_graph.node_link_graph(data)
     except Exception as exc:
         raise GraphifyLoadError(
-            f"Failed to parse graph.json: {exc}"
+            f"Failed to parse graph.json: {exc}",
         ) from exc
 
 
@@ -126,7 +126,11 @@ def _score_nodes(G: Any, terms: list[str]) -> list[tuple[float, str]]:
     return sorted(scored, reverse=True)
 
 
-def _bfs(G: Any, start_nodes: list[str], depth: int) -> tuple[set[str], list[tuple]]:
+def _bfs(
+    G: Any,
+    start_nodes: list[str],
+    depth: int,
+) -> tuple[set[str], list[tuple]]:
     visited: set[str] = set(start_nodes)
     frontier = set(start_nodes)
     edges_seen: list[tuple] = []
@@ -156,7 +160,9 @@ def _subgraph_to_records(
             edge_index[(u, v)] = G.edges[u, v]
 
     # Sort by degree so highest-degree nodes come first
-    sorted_nodes = sorted(nodes, key=lambda n: G.degree(n), reverse=True)[:top_k]
+    sorted_nodes = sorted(nodes, key=lambda n: G.degree(n), reverse=True)[
+        :top_k
+    ]
 
     records: list[dict[str, Any]] = []
     for nid in sorted_nodes:
@@ -175,14 +181,19 @@ def _subgraph_to_records(
                 tgt = G.nodes[neighbor].get("label", neighbor)
                 if rel:
                     out_edges.append(
-                        f"{label} --{rel}[{conf}]--> {tgt}"
+                        f"{label} --{rel}[{conf}]--> {tgt}",
                     )
 
         snippet = "; ".join(out_edges) if out_edges else label
         records.append(
             {
                 "subject": label,
-                "subject_type": str(d.get("node_type") or d.get("type") or d.get("file_type") or "entity"),
+                "subject_type": str(
+                    d.get("node_type")
+                    or d.get("type")
+                    or d.get("file_type")
+                    or "entity",
+                ),
                 "predicate": "graph_node",
                 "object": snippet,
                 "object_type": "entity",
@@ -190,8 +201,10 @@ def _subgraph_to_records(
                 "source_id": source_file,
                 "source_type": d.get("file_type") or "graph",
                 "document_path": source_file,
-                "document_title": f"{label} @ {source_loc}" if source_loc else label,
-            }
+                "document_title": f"{label} @ {source_loc}"
+                if source_loc
+                else label,
+            },
         )
     return records
 
@@ -275,7 +288,7 @@ def _build_internal_graph(
     total_files = len(files)
     if total_files == 0:
         raise GraphifyLoadError(
-            f"No eligible source files found under '{dataset_path}'."
+            f"No eligible source files found under '{dataset_path}'.",
         )
 
     node_labels: dict[str, dict[str, Any]] = {}
@@ -407,20 +420,26 @@ def _normalize_remote_query_records(payload: Any) -> list[dict[str, Any]]:
             raw_records = payload.get("data")
         else:
             raise GraphifyRemoteError(
-                "Graphify remote query response missing records/data list."
+                "Graphify remote query response missing records/data list.",
             )
     elif isinstance(payload, list):
         raw_records = payload
     else:
-        raise GraphifyRemoteError("Graphify remote query response is invalid JSON.")
+        raise GraphifyRemoteError(
+            "Graphify remote query response is invalid JSON.",
+        )
 
     records: list[dict[str, Any]] = []
     for idx, item in enumerate(raw_records):
         if not isinstance(item, dict):
             continue
         subject = item.get("subject") or item.get("node") or f"node-{idx}"
-        predicate = item.get("predicate") or item.get("relation") or "graph_node"
-        obj = item.get("object") or item.get("snippet") or item.get("text") or ""
+        predicate = (
+            item.get("predicate") or item.get("relation") or "graph_node"
+        )
+        obj = (
+            item.get("object") or item.get("snippet") or item.get("text") or ""
+        )
         records.append(
             {
                 "subject": str(subject),
@@ -431,7 +450,7 @@ def _normalize_remote_query_records(payload: Any) -> list[dict[str, Any]]:
                 "source_type": item.get("source_type") or "graph",
                 "document_path": item.get("document_path") or "",
                 "document_title": item.get("document_title") or str(subject),
-            }
+            },
         )
     return records
 
@@ -461,7 +480,12 @@ def _graphify_query_remote(
     for path in ("/query", "/graph/query"):
         url = f"{base_url}{path}"
         try:
-            response = httpx.post(url, json=payload, headers=headers, timeout=timeout_sec)
+            response = httpx.post(
+                url,
+                json=payload,
+                headers=headers,
+                timeout=timeout_sec,
+            )
             response.raise_for_status()
             return _normalize_remote_query_records(response.json())
         except httpx.TimeoutException as exc:
@@ -470,18 +494,18 @@ def _graphify_query_remote(
         except httpx.HTTPStatusError as exc:
             detail = (exc.response.text or "")[:300]
             raise GraphifyRemoteError(
-                f"Graphify remote query failed ({exc.response.status_code}): {detail}"
+                f"Graphify remote query failed ({exc.response.status_code}): {detail}",
             ) from exc
         except httpx.HTTPError as exc:
             last_error = exc
             continue
         except ValueError as exc:
             raise GraphifyRemoteError(
-                "Graphify remote query returned invalid JSON payload."
+                "Graphify remote query returned invalid JSON payload.",
             ) from exc
 
     raise GraphifyRemoteError(
-        f"Graphify remote query request failed: {last_error}"
+        f"Graphify remote query request failed: {last_error}",
     )
 
 
@@ -508,7 +532,12 @@ def _graphify_memify_remote(
     for path in ("/memify", "/graph/memify"):
         url = f"{base_url}{path}"
         try:
-            response = httpx.post(url, json=payload, headers=headers, timeout=timeout_sec)
+            response = httpx.post(
+                url,
+                json=payload,
+                headers=headers,
+                timeout=timeout_sec,
+            )
             response.raise_for_status()
             body = response.json()
             if isinstance(body, dict):
@@ -518,8 +547,16 @@ def _graphify_memify_remote(
                     status = "running"
                 else:
                     status = "succeeded" if dry_run else "running"
-                warnings = body.get("warnings") if isinstance(body.get("warnings"), list) else []
-                error = body.get("error") if isinstance(body.get("error"), str) else None
+                warnings = (
+                    body.get("warnings")
+                    if isinstance(body.get("warnings"), list)
+                    else []
+                )
+                error = (
+                    body.get("error")
+                    if isinstance(body.get("error"), str)
+                    else None
+                )
                 if status == "running":
                     warnings = [*warnings, "GRAPHIFY_REMOTE_MEMIFY_ACCEPTED"]
                 return {
@@ -527,7 +564,9 @@ def _graphify_memify_remote(
                     "error": error,
                     "warnings": warnings,
                 }
-            raise GraphifyRemoteError("Graphify remote memify returned invalid JSON payload.")
+            raise GraphifyRemoteError(
+                "Graphify remote memify returned invalid JSON payload.",
+            )
         except httpx.TimeoutException as exc:
             last_error = exc
             continue
@@ -589,7 +628,7 @@ def graphify_query(
         raise GraphifyNotConfiguredError(
             "GraphifyConfig.graph_path is empty. "
             "Set it to the path of your graphify-out/graph.json file, "
-            "or set COPAW_GRAPHIFY_GRAPH_PATH environment variable."
+            "or set COPAW_GRAPHIFY_GRAPH_PATH environment variable.",
         )
 
     G = _load_graph_json(config.graph_path)
@@ -655,7 +694,7 @@ def graphify_memify(
         raise GraphifyNotConfiguredError(
             "GraphifyConfig.dataset_dir is empty. "
             "Set it to the directory you want graphify to index, "
-            "or set COPAW_GRAPHIFY_DATASET_DIR environment variable."
+            "or set COPAW_GRAPHIFY_DATASET_DIR environment variable.",
         )
 
     dataset_path = Path(config.dataset_dir)
@@ -686,12 +725,22 @@ def graphify_memify(
         }
 
     try:
-        graph_payload, node_count, relation_count, document_count, warnings = _build_internal_graph(
+        (
+            graph_payload,
+            node_count,
+            relation_count,
+            document_count,
+            warnings,
+        ) = _build_internal_graph(
             dataset_path,
             progress_callback=progress_callback,
         )
         graph_path_text = str(config.graph_path or "").strip()
-        graph_path = Path(graph_path_text) if graph_path_text else dataset_path / "graphify-out" / "graph.json"
+        graph_path = (
+            Path(graph_path_text)
+            if graph_path_text
+            else dataset_path / "graphify-out" / "graph.json"
+        )
         graph_path.parent.mkdir(parents=True, exist_ok=True)
         graph_path.write_text(
             json.dumps(graph_payload, ensure_ascii=False, indent=2),

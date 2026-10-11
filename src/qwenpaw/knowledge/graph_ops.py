@@ -54,19 +54,40 @@ class GraphOpsManager:
         self.knowledge_dirname = knowledge_dirname
         self.knowledge_root = self.working_dir / knowledge_dirname
         self.memify_jobs_path = self.knowledge_root / "memify-jobs.json"
-        self.quality_loop_jobs_path = self.knowledge_root / "quality-loop-jobs.json"
-        self.local_graph_path = self.knowledge_root / "graphify-out" / "graph.json"
-        self.enriched_graph_path = self.knowledge_root / "graphify-out" / "graph.enriched.json"
+        self.quality_loop_jobs_path = (
+            self.knowledge_root / "quality-loop-jobs.json"
+        )
+        self.local_graph_path = (
+            self.knowledge_root / "graphify-out" / "graph.json"
+        )
+        self.enriched_graph_path = (
+            self.knowledge_root / "graphify-out" / "graph.enriched.json"
+        )
         self.enrichment_quality_report_path = (
-            self.knowledge_root / "graphify-out" / "enrichment-quality-report.json"
+            self.knowledge_root
+            / "graphify-out"
+            / "enrichment-quality-report.json"
         )
         self._jobs_lock = threading.Lock()
         self._quality_jobs_lock = threading.Lock()
 
     @staticmethod
     def _normalize_quality_loop_patch(patch: dict[str, Any]) -> dict[str, Any]:
-        stage = str(patch.get("stage") or patch.get("current_stage") or "pending").strip() or "pending"
-        percent = int(max(0, min(100, int(patch.get("progress", patch.get("percent", 0)) or 0))))
+        stage = (
+            str(
+                patch.get("stage") or patch.get("current_stage") or "pending",
+            ).strip()
+            or "pending"
+        )
+        percent = int(
+            max(
+                0,
+                min(
+                    100,
+                    int(patch.get("progress", patch.get("percent", 0)) or 0),
+                ),
+            ),
+        )
         normalized = {
             **patch,
             "task_type": "quality_loop",
@@ -99,48 +120,117 @@ class GraphOpsManager:
         relation_scale = math.log10(max(10, relation_count))
         entity_scale = math.log10(max(10, entity_count))
         return {
-            "relation_normalization_threshold": self._clamp(0.48 + relation_scale * 0.08, 0.5, 0.82),
-            "entity_canonical_threshold": self._clamp(0.45 + entity_scale * 0.08, 0.48, 0.8),
-            "low_confidence_threshold": self._clamp(0.28 - relation_scale * 0.03, 0.12, 0.28),
-            "missing_evidence_threshold": self._clamp(0.30 - relation_scale * 0.03, 0.15, 0.30),
+            "relation_normalization_threshold": self._clamp(
+                0.48 + relation_scale * 0.08,
+                0.5,
+                0.82,
+            ),
+            "entity_canonical_threshold": self._clamp(
+                0.45 + entity_scale * 0.08,
+                0.48,
+                0.8,
+            ),
+            "low_confidence_threshold": self._clamp(
+                0.28 - relation_scale * 0.03,
+                0.12,
+                0.28,
+            ),
+            "missing_evidence_threshold": self._clamp(
+                0.30 - relation_scale * 0.03,
+                0.15,
+                0.30,
+            ),
         }
 
-    def _build_quality_snapshot(self, payload: dict[str, Any]) -> dict[str, Any]:
+    def _build_quality_snapshot(
+        self,
+        payload: dict[str, Any],
+    ) -> dict[str, Any]:
         relation_count = int(payload.get("relation_count") or 0)
-        entity_count = int(payload.get("node_count") or payload.get("entity_count") or 0)
+        entity_count = int(
+            payload.get("node_count") or payload.get("entity_count") or 0,
+        )
         document_count = int(payload.get("document_count") or 0)
         enrichment_metrics = payload.get("enrichment_metrics") or {}
         if not isinstance(enrichment_metrics, dict):
             enrichment_metrics = {}
 
-        edge_count = int(enrichment_metrics.get("edge_count") or relation_count)
+        edge_count = int(
+            enrichment_metrics.get("edge_count") or relation_count,
+        )
         node_count = int(enrichment_metrics.get("node_count") or entity_count)
-        relation_normalized_count = int(enrichment_metrics.get("relation_normalized_count") or 0)
-        entity_canonicalized_count = int(enrichment_metrics.get("entity_canonicalized_count") or 0)
-        low_confidence_edges = int(enrichment_metrics.get("low_confidence_edges") or 0)
-        missing_evidence_edges = int(enrichment_metrics.get("missing_evidence_edges") or 0)
+        relation_normalized_count = int(
+            enrichment_metrics.get("relation_normalized_count") or 0,
+        )
+        entity_canonicalized_count = int(
+            enrichment_metrics.get("entity_canonicalized_count") or 0,
+        )
+        low_confidence_edges = int(
+            enrichment_metrics.get("low_confidence_edges") or 0,
+        )
+        missing_evidence_edges = int(
+            enrichment_metrics.get("missing_evidence_edges") or 0,
+        )
 
-        relation_normalization_coverage = self._safe_ratio(relation_normalized_count, edge_count)
-        entity_canonical_coverage = self._safe_ratio(entity_canonicalized_count, node_count)
-        low_confidence_ratio = self._safe_ratio(low_confidence_edges, edge_count)
-        missing_evidence_ratio = self._safe_ratio(missing_evidence_edges, edge_count)
+        relation_normalization_coverage = self._safe_ratio(
+            relation_normalized_count,
+            edge_count,
+        )
+        entity_canonical_coverage = self._safe_ratio(
+            entity_canonicalized_count,
+            node_count,
+        )
+        low_confidence_ratio = self._safe_ratio(
+            low_confidence_edges,
+            edge_count,
+        )
+        missing_evidence_ratio = self._safe_ratio(
+            missing_evidence_edges,
+            edge_count,
+        )
 
         thresholds = self._derive_adaptive_thresholds(
             relation_count=relation_count,
             entity_count=entity_count,
         )
         pass_flags = {
-            "relation_normalization": relation_normalization_coverage >= thresholds["relation_normalization_threshold"],
-            "entity_canonical": entity_canonical_coverage >= thresholds["entity_canonical_threshold"],
-            "low_confidence": low_confidence_ratio <= thresholds["low_confidence_threshold"],
-            "missing_evidence": missing_evidence_ratio <= thresholds["missing_evidence_threshold"],
+            "relation_normalization": relation_normalization_coverage
+            >= thresholds["relation_normalization_threshold"],
+            "entity_canonical": entity_canonical_coverage
+            >= thresholds["entity_canonical_threshold"],
+            "low_confidence": low_confidence_ratio
+            <= thresholds["low_confidence_threshold"],
+            "missing_evidence": missing_evidence_ratio
+            <= thresholds["missing_evidence_threshold"],
         }
 
         normalized_scores = [
-            self._safe_ratio(relation_normalization_coverage, thresholds["relation_normalization_threshold"]),
-            self._safe_ratio(entity_canonical_coverage, thresholds["entity_canonical_threshold"]),
-            self._clamp(1 - self._safe_ratio(low_confidence_ratio, thresholds["low_confidence_threshold"]), 0.0, 1.0),
-            self._clamp(1 - self._safe_ratio(missing_evidence_ratio, thresholds["missing_evidence_threshold"]), 0.0, 1.0),
+            self._safe_ratio(
+                relation_normalization_coverage,
+                thresholds["relation_normalization_threshold"],
+            ),
+            self._safe_ratio(
+                entity_canonical_coverage,
+                thresholds["entity_canonical_threshold"],
+            ),
+            self._clamp(
+                1
+                - self._safe_ratio(
+                    low_confidence_ratio,
+                    thresholds["low_confidence_threshold"],
+                ),
+                0.0,
+                1.0,
+            ),
+            self._clamp(
+                1
+                - self._safe_ratio(
+                    missing_evidence_ratio,
+                    thresholds["missing_evidence_threshold"],
+                ),
+                0.0,
+                1.0,
+            ),
         ]
         quality_score = sum(normalized_scores) / len(normalized_scores)
 
@@ -158,7 +248,9 @@ class GraphOpsManager:
         }
 
     @staticmethod
-    def _build_quality_actions(snapshot: dict[str, Any]) -> list[dict[str, Any]]:
+    def _build_quality_actions(
+        snapshot: dict[str, Any],
+    ) -> list[dict[str, Any]]:
         thresholds = snapshot.get("thresholds") or {}
         pass_flags = snapshot.get("pass_flags") or {}
         actions: list[dict[str, Any]] = []
@@ -167,8 +259,10 @@ class GraphOpsManager:
                 {
                     "action": "strengthen_relation_normalization",
                     "expected_metric": "relation_normalization_coverage",
-                    "target": thresholds.get("relation_normalization_threshold"),
-                }
+                    "target": thresholds.get(
+                        "relation_normalization_threshold",
+                    ),
+                },
             )
         if not bool(pass_flags.get("entity_canonical")):
             actions.append(
@@ -176,7 +270,7 @@ class GraphOpsManager:
                     "action": "strengthen_entity_canonicalization",
                     "expected_metric": "entity_canonical_coverage",
                     "target": thresholds.get("entity_canonical_threshold"),
-                }
+                },
             )
         if not bool(pass_flags.get("low_confidence")):
             actions.append(
@@ -184,7 +278,7 @@ class GraphOpsManager:
                     "action": "prune_low_confidence_edges",
                     "expected_metric": "low_confidence_ratio",
                     "target": thresholds.get("low_confidence_threshold"),
-                }
+                },
             )
         if not bool(pass_flags.get("missing_evidence")):
             actions.append(
@@ -192,7 +286,7 @@ class GraphOpsManager:
                     "action": "backfill_missing_evidence",
                     "expected_metric": "missing_evidence_ratio",
                     "target": thresholds.get("missing_evidence_threshold"),
-                }
+                },
             )
         return actions
 
@@ -208,7 +302,10 @@ class GraphOpsManager:
     def _normalize_project_id(project_id: str | None) -> str:
         return str(project_id or "").strip().lower()
 
-    def _project_quality_skills_dir(self, project_id: str | None) -> Path | None:
+    def _project_quality_skills_dir(
+        self,
+        project_id: str | None,
+    ) -> Path | None:
         normalized = self._normalize_project_id(project_id)
         if not normalized:
             return None
@@ -224,7 +321,10 @@ class GraphOpsManager:
                     return child / ".skills" / "quality-loop"
         return projects_dir / normalized / ".skills" / "quality-loop"
 
-    def _load_quality_reflection_hints(self, project_id: str | None) -> dict[str, Any]:
+    def _load_quality_reflection_hints(
+        self,
+        project_id: str | None,
+    ) -> dict[str, Any]:
         skills_dir = self._project_quality_skills_dir(project_id)
         if skills_dir is None:
             return {}
@@ -287,7 +387,7 @@ class GraphOpsManager:
                     f"- hypotheses: {', '.join(summary.get('problem_hypotheses') or [])}",
                     f"- next_plan: {', '.join(summary.get('next_round_plan') or [])}",
                     "",
-                ]
+                ],
             )
             round_path = rounds_dir / f"round-{round_no:02d}.json"
             round_payload = {
@@ -302,7 +402,10 @@ class GraphOpsManager:
                 encoding="utf-8",
             )
 
-        lessons_path.write_text("\n".join(lines).strip() + "\n", encoding="utf-8")
+        lessons_path.write_text(
+            "\n".join(lines).strip() + "\n",
+            encoding="utf-8",
+        )
         params_path.write_text(
             json.dumps(next_round_hints, ensure_ascii=False, indent=2) + "\n",
             encoding="utf-8",
@@ -345,7 +448,9 @@ Agent gate review is mandatory before automatic continuation.
         ]
         failed_metrics = [
             str(metric)
-            for metric, passed in (after_snapshot.get("pass_flags") or {}).items()
+            for metric, passed in (
+                after_snapshot.get("pass_flags") or {}
+            ).items()
             if not bool(passed)
         ]
         delta = float(round_summary.get("observed_delta") or 0.0)
@@ -365,8 +470,18 @@ Agent gate review is mandatory before automatic continuation.
                 "next_round_hints": {},
             }
 
-        pipeline_bias = str(previous_hints.get("pipeline_bias") or "").strip() or "balanced"
-        if any(name in {"strengthen_relation_normalization", "strengthen_entity_canonicalization"} for name in action_names):
+        pipeline_bias = (
+            str(previous_hints.get("pipeline_bias") or "").strip()
+            or "balanced"
+        )
+        if any(
+            name
+            in {
+                "strengthen_relation_normalization",
+                "strengthen_entity_canonicalization",
+            }
+            for name in action_names
+        ):
             pipeline_bias = "enrichment_focus"
 
         next_round_hints = {
@@ -408,7 +523,11 @@ Agent gate review is mandatory before automatic continuation.
             for key, value in (after_snapshot.get("pass_flags") or {}).items()
             if not bool(value)
         ]
-        action_names = [str(item.get("action") or "") for item in actions if str(item.get("action") or "").strip()]
+        action_names = [
+            str(item.get("action") or "")
+            for item in actions
+            if str(item.get("action") or "").strip()
+        ]
         continue_next = bool(failed_metrics) and delta <= 0.02
         return {
             "round": round_no,
@@ -434,21 +553,41 @@ Agent gate review is mandatory before automatic continuation.
         round_no: int,
         before_snapshot: dict[str, Any],
     ) -> dict[str, Any]:
-        action_names = [str(item.get("action") or "").strip() for item in actions if str(item.get("action") or "").strip()]
+        action_names = [
+            str(item.get("action") or "").strip()
+            for item in actions
+            if str(item.get("action") or "").strip()
+        ]
         previous_bias = str(previous_hints.get("pipeline_bias") or "").strip()
         low_conf_target = 0.35
         thresholds = before_snapshot.get("thresholds") or {}
         if isinstance(thresholds, dict):
             try:
-                low_conf_target = max(0.2, min(0.6, float(thresholds.get("low_confidence_threshold", 0.35))))
+                low_conf_target = max(
+                    0.2,
+                    min(
+                        0.6,
+                        float(
+                            thresholds.get("low_confidence_threshold", 0.35),
+                        ),
+                    ),
+                )
             except (TypeError, ValueError):
                 low_conf_target = 0.35
         should_prune_low_conf = "prune_low_confidence_edges" in action_names
         should_drop_missing = "backfill_missing_evidence" in action_names
-        bias = "enrichment_focus" if any(
-            name in {"strengthen_relation_normalization", "strengthen_entity_canonicalization"}
-            for name in action_names
-        ) else (previous_bias or "balanced")
+        bias = (
+            "enrichment_focus"
+            if any(
+                name
+                in {
+                    "strengthen_relation_normalization",
+                    "strengthen_entity_canonicalization",
+                }
+                for name in action_names
+            )
+            else (previous_bias or "balanced")
+        )
         return {
             "version": 1,
             "updated_at": datetime.now(UTC).isoformat(),
@@ -478,13 +617,28 @@ Agent gate review is mandatory before automatic continuation.
         for job in jobs:
             if str(job.get("status") or "") != "succeeded":
                 continue
-            if int(job.get("relation_count") or 0) <= 0 and int(job.get("node_count") or 0) <= 0:
+            if (
+                int(job.get("relation_count") or 0) <= 0
+                and int(job.get("node_count") or 0) <= 0
+            ):
                 continue
-            job_scope = set(self._normalize_dataset_scope(job.get("dataset_scope") if isinstance(job.get("dataset_scope"), list) else []))
-            if normalized_scope and job_scope and normalized_scope.isdisjoint(job_scope):
+            job_scope = set(
+                self._normalize_dataset_scope(
+                    job.get("dataset_scope")
+                    if isinstance(job.get("dataset_scope"), list)
+                    else [],
+                ),
+            )
+            if (
+                normalized_scope
+                and job_scope
+                and normalized_scope.isdisjoint(job_scope)
+            ):
                 continue
             if normalized_project_id:
-                if job_scope and not any(normalized_project_id in item.lower() for item in job_scope):
+                if job_scope and not any(
+                    normalized_project_id in item.lower() for item in job_scope
+                ):
                     continue
             return job
         return None
@@ -499,9 +653,13 @@ Agent gate review is mandatory before automatic continuation.
         dry_run: bool,
         baseline_result: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
-        payload = baseline_result if isinstance(baseline_result, dict) else self._pick_latest_memify_result(
-            dataset_scope=dataset_scope,
-            project_id=project_id,
+        payload = (
+            baseline_result
+            if isinstance(baseline_result, dict)
+            else self._pick_latest_memify_result(
+                dataset_scope=dataset_scope,
+                project_id=project_id,
+            )
         )
         if not isinstance(payload, dict):
             return {
@@ -589,7 +747,9 @@ Agent gate review is mandatory before automatic continuation.
                 "dry_run": bool(dry_run),
                 "dataset_scope": dataset_scope or [],
                 "project_id": str(project_id or ""),
-                "baseline_result": baseline_payload if isinstance(baseline_payload, dict) else None,
+                "baseline_result": baseline_payload
+                if isinstance(baseline_payload, dict)
+                else None,
                 "rounds": [],
                 "score_before": None,
                 "score_after": None,
@@ -636,7 +796,7 @@ Agent gate review is mandatory before automatic continuation.
                     "stage_message": "Collecting baseline quality snapshot",
                     "started_at": now,
                     "updated_at": now,
-                }
+                },
             ),
         )
 
@@ -669,7 +829,9 @@ Agent gate review is mandatory before automatic continuation.
 
         for round_index in range(max_rounds):
             round_no = round_index + 1
-            before_snapshot = baseline_snapshot if round_index == 0 else rounds[-1]["after"]
+            before_snapshot = (
+                baseline_snapshot if round_index == 0 else rounds[-1]["after"]
+            )
             actions = self._build_quality_actions(before_snapshot)
 
             stage_message = f"Round {round_no}: planning quality improvements"
@@ -685,7 +847,7 @@ Agent gate review is mandatory before automatic continuation.
                         "total": max_rounds,
                         "progress": progress,
                         "updated_at": datetime.now(UTC).isoformat(),
-                    }
+                    },
                 ),
             )
 
@@ -705,7 +867,8 @@ Agent gate review is mandatory before automatic continuation.
                 next_round_hints = dict(execution_hints)
                 effective_pipeline_type = (
                     "system-enrichment"
-                    if str(execution_hints.get("pipeline_bias") or "") == "enrichment_focus"
+                    if str(execution_hints.get("pipeline_bias") or "")
+                    == "enrichment_focus"
                     else "full"
                 )
                 execution_result = self.execute_memify_once(
@@ -722,9 +885,11 @@ Agent gate review is mandatory before automatic continuation.
                     warnings.extend(
                         [
                             str(item)
-                            for item in (execution_result.get("warnings") or [])
+                            for item in (
+                                execution_result.get("warnings") or []
+                            )
                             if str(item).strip()
-                        ]
+                        ],
                     )
                     rounds.append(
                         {
@@ -734,8 +899,9 @@ Agent gate review is mandatory before automatic continuation.
                             "after": before_snapshot,
                             "delta": 0.0,
                             "status": "failed",
-                            "error": execution_result.get("error") or "MEMIFY_EXECUTION_FAILED",
-                        }
+                            "error": execution_result.get("error")
+                            or "MEMIFY_EXECUTION_FAILED",
+                        },
                     )
                     break
                 after_snapshot = self._build_quality_snapshot(execution_result)
@@ -744,9 +910,15 @@ Agent gate review is mandatory before automatic continuation.
             before_score = float(before_snapshot.get("quality_score") or 0.0)
             delta = current_score - before_score
             round_stop_reason = "CONTINUE"
-            if all(bool(v) for v in (after_snapshot.get("pass_flags") or {}).values()):
+            if all(
+                bool(v)
+                for v in (after_snapshot.get("pass_flags") or {}).values()
+            ):
                 round_stop_reason = "QUALITY_TARGET_MET"
-            elif previous_score is not None and current_score <= previous_score + 0.005:
+            elif (
+                previous_score is not None
+                and current_score <= previous_score + 0.005
+            ):
                 round_stop_reason = "LOW_GAIN"
             round_summary = self._build_quality_round_summary(
                 round_no=round_no,
@@ -777,19 +949,30 @@ Agent gate review is mandatory before automatic continuation.
                     "status": "succeeded",
                     "summary": round_summary,
                     "agent_gate": agent_gate,
-                }
+                },
             )
 
             if str(agent_gate.get("status") or "") != "accepted":
                 stop_reason = "REVIEW_REQUIRED"
-                warnings.append(str(agent_gate.get("reason") or "AGENT_GATE_REVIEW_REQUIRED"))
+                warnings.append(
+                    str(
+                        agent_gate.get("reason")
+                        or "AGENT_GATE_REVIEW_REQUIRED",
+                    ),
+                )
                 break
 
-            if all(bool(v) for v in (after_snapshot.get("pass_flags") or {}).values()):
+            if all(
+                bool(v)
+                for v in (after_snapshot.get("pass_flags") or {}).values()
+            ):
                 stop_reason = "QUALITY_TARGET_MET"
                 break
 
-            if previous_score is not None and current_score <= previous_score + 0.005:
+            if (
+                previous_score is not None
+                and current_score <= previous_score + 0.005
+            ):
                 stagnation_rounds += 1
             else:
                 stagnation_rounds = 0
@@ -798,9 +981,16 @@ Agent gate review is mandatory before automatic continuation.
                 stop_reason = "QUALITY_STAGNATED"
                 break
 
-        score_after = float((rounds[-1]["after"]["quality_score"] if rounds else score_before) or 0.0)
+        score_after = float(
+            (rounds[-1]["after"]["quality_score"] if rounds else score_before)
+            or 0.0,
+        )
         delta_total = score_after - score_before
-        final_status = "failed" if stop_reason == "MEMIFY_EXECUTION_FAILED" else "succeeded"
+        final_status = (
+            "failed"
+            if stop_reason == "MEMIFY_EXECUTION_FAILED"
+            else "succeeded"
+        )
         final_summary = {
             "score_before": score_before,
             "score_after": score_after,
@@ -820,11 +1010,17 @@ Agent gate review is mandatory before automatic continuation.
             self._normalize_quality_loop_patch(
                 {
                     "status": final_status,
-                    "stage": "completed" if final_status == "succeeded" else "failed",
-                    "stage_message": "Quality loop finished" if final_status == "succeeded" else "Quality loop failed",
+                    "stage": "completed"
+                    if final_status == "succeeded"
+                    else "failed",
+                    "stage_message": "Quality loop finished"
+                    if final_status == "succeeded"
+                    else "Quality loop failed",
                     "current": len(rounds),
                     "total": max_rounds,
-                    "progress": 100 if final_status == "succeeded" else max(0, min(95, int(len(rounds) * 100 / max_rounds))),
+                    "progress": 100
+                    if final_status == "succeeded"
+                    else max(0, min(95, int(len(rounds) * 100 / max_rounds))),
                     "rounds": rounds,
                     "score_before": score_before,
                     "score_after": score_after,
@@ -836,11 +1032,15 @@ Agent gate review is mandatory before automatic continuation.
                     "reflection_artifacts": reflection_artifacts,
                     "finished_at": finished,
                     "updated_at": finished,
-                }
+                },
             ),
         )
 
-    def _patch_quality_loop_job(self, job_id: str, patch: dict[str, Any]) -> None:
+    def _patch_quality_loop_job(
+        self,
+        job_id: str,
+        patch: dict[str, Any],
+    ) -> None:
         with self._quality_jobs_lock:
             jobs = self._load_quality_loop_jobs()
             job = jobs.get(job_id)
@@ -870,9 +1070,14 @@ Agent gate review is mandatory before automatic continuation.
         ]
         if active_only:
             jobs = [
-                job for job in jobs if str(job.get("status") or "") in {"pending", "running"}
+                job
+                for job in jobs
+                if str(job.get("status") or "") in {"pending", "running"}
             ]
-        jobs.sort(key=lambda item: str(item.get("updated_at") or ""), reverse=True)
+        jobs.sort(
+            key=lambda item: str(item.get("updated_at") or ""),
+            reverse=True,
+        )
         if isinstance(limit, int) and limit > 0:
             jobs = jobs[:limit]
         return jobs
@@ -881,7 +1086,9 @@ Agent gate review is mandatory before automatic continuation.
         if not self.quality_loop_jobs_path.exists():
             return {}
         try:
-            payload = json.loads(self.quality_loop_jobs_path.read_text(encoding="utf-8"))
+            payload = json.loads(
+                self.quality_loop_jobs_path.read_text(encoding="utf-8"),
+            )
         except Exception:
             return {}
         if not isinstance(payload, dict):
@@ -895,7 +1102,10 @@ Agent gate review is mandatory before automatic continuation.
             encoding="utf-8",
         )
 
-    def _resolve_query_graph_path(self, config: KnowledgeConfig) -> tuple[Path, str]:
+    def _resolve_query_graph_path(
+        self,
+        config: KnowledgeConfig,
+    ) -> tuple[Path, str]:
         if self.enriched_graph_path.exists():
             return self.enriched_graph_path, "l2_enriched"
         return self.local_graph_path, "l1_raw"
@@ -926,7 +1136,9 @@ Agent gate review is mandatory before automatic continuation.
         config: KnowledgeConfig,
         graphify_cfg: Any,
     ) -> tuple[str, str]:
-        configured_graph_path = str(getattr(graphify_cfg, "graph_path", "") or "").strip()
+        configured_graph_path = str(
+            getattr(graphify_cfg, "graph_path", "") or "",
+        ).strip()
         if self.enriched_graph_path.exists():
             return str(self.enriched_graph_path), "l2_enriched"
         if configured_graph_path:
@@ -941,7 +1153,9 @@ Agent gate review is mandatory before automatic continuation.
         preferred_output_mode: str | None,
     ) -> tuple[str, str, str]:
         normalized = str(preferred_output_mode or "").strip().lower()
-        configured_graph_path = str(getattr(graphify_cfg, "graph_path", "") or "").strip()
+        configured_graph_path = str(
+            getattr(graphify_cfg, "graph_path", "") or "",
+        ).strip()
         if normalized == "agentic":
             if self.enriched_graph_path.exists():
                 return str(self.enriched_graph_path), "l2_enriched", "agentic"
@@ -958,14 +1172,30 @@ Agent gate review is mandatory before automatic continuation.
             return "", "lexical", "fast"
         if normalized == "fast":
             return "", "lexical", "fast"
-        graph_path, layer = self._resolve_graphify_query_graph_path(KnowledgeConfig(), graphify_cfg)
+        graph_path, layer = self._resolve_graphify_query_graph_path(
+            KnowledgeConfig(),
+            graphify_cfg,
+        )
         resolved_mode = "agentic" if layer == "l2_enriched" else "nlp"
         return graph_path, layer, resolved_mode
 
     @staticmethod
     def _normalize_progress_patch(patch: dict[str, Any]) -> dict[str, Any]:
-        stage = str(patch.get("stage") or patch.get("current_stage") or "pending").strip() or "pending"
-        percent = int(max(0, min(100, int(patch.get("progress", patch.get("percent", 0)) or 0))))
+        stage = (
+            str(
+                patch.get("stage") or patch.get("current_stage") or "pending",
+            ).strip()
+            or "pending"
+        )
+        percent = int(
+            max(
+                0,
+                min(
+                    100,
+                    int(patch.get("progress", patch.get("percent", 0)) or 0),
+                ),
+            ),
+        )
         current = patch.get("current")
         total = patch.get("total")
         eta_seconds = patch.get("eta_seconds")
@@ -977,14 +1207,21 @@ Agent gate review is mandatory before automatic continuation.
             "stage": stage,
             "progress": percent,
             "percent": percent,
-            "current": int(current) if isinstance(current, (int, float)) else 0,
+            "current": int(current)
+            if isinstance(current, (int, float))
+            else 0,
             "total": int(total) if isinstance(total, (int, float)) else 0,
-            "eta_seconds": int(eta_seconds) if isinstance(eta_seconds, (int, float)) else None,
+            "eta_seconds": int(eta_seconds)
+            if isinstance(eta_seconds, (int, float))
+            else None,
             "stage_message": stage_message,
         }
         return normalized
 
-    def _build_memify_progress_callback(self, job_id: str) -> Callable[[dict[str, Any]], None]:
+    def _build_memify_progress_callback(
+        self,
+        job_id: str,
+    ) -> Callable[[dict[str, Any]], None]:
         def _callback(payload: dict[str, Any]) -> None:
             now = datetime.now(UTC).isoformat()
             patch = self._normalize_progress_patch(
@@ -992,7 +1229,7 @@ Agent gate review is mandatory before automatic continuation.
                     **payload,
                     "status": "running",
                     "updated_at": now,
-                }
+                },
             )
             self._patch_memify_job(job_id, patch)
 
@@ -1081,9 +1318,13 @@ Agent gate review is mandatory before automatic continuation.
             snippet = (hit.get("snippet") or "").strip()
             records.append(
                 {
-                    "subject": hit.get("document_title") or hit.get("source_name") or hit.get("source_id") or "unknown",
+                    "subject": hit.get("document_title")
+                    or hit.get("source_name")
+                    or hit.get("source_id")
+                    or "unknown",
                     "predicate": "preview_match",
-                    "object": snippet or str(hit.get("document_path") or "preview"),
+                    "object": snippet
+                    or str(hit.get("document_path") or "preview"),
                     "score": float(hit.get("score", 0) or 0),
                     "source_id": hit.get("source_id"),
                     "source_type": hit.get("source_type"),
@@ -1093,7 +1334,7 @@ Agent gate review is mandatory before automatic continuation.
                     "scope_type": hit.get("scope_type"),
                     "scope_id": hit.get("scope_id"),
                     "scope_priority": hit.get("scope_priority"),
-                }
+                },
             )
         if not records:
             warnings.append("NO_PREVIEW_RECORDS")
@@ -1124,10 +1365,18 @@ Agent gate review is mandatory before automatic continuation.
         quality_summary = ""
         if self.enrichment_quality_report_path.exists():
             try:
-                payload = json.loads(self.enrichment_quality_report_path.read_text(encoding="utf-8"))
+                payload = json.loads(
+                    self.enrichment_quality_report_path.read_text(
+                        encoding="utf-8",
+                    ),
+                )
                 score = payload.get("quality_score")
-                quality_summary = f" Quality score: {score}." if score is not None else ""
-                result.provenance["quality_report_path"] = str(self.enrichment_quality_report_path)
+                quality_summary = (
+                    f" Quality score: {score}." if score is not None else ""
+                )
+                result.provenance["quality_report_path"] = str(
+                    self.enrichment_quality_report_path,
+                )
             except Exception:
                 warnings.append("AGENTIC_QUALITY_REPORT_UNREADABLE")
         result.summary = f"{result.summary} Agentic workflow semantics applied.{quality_summary}".strip()
@@ -1164,7 +1413,7 @@ Agent gate review is mandatory before automatic continuation.
             translated = self._translate_cypher_query_text(query_text)
             if not translated:
                 raise ValueError(
-                    "Cypher query is empty or unsupported for MVP translation."
+                    "Cypher query is empty or unsupported for MVP translation.",
                 )
             effective_query_text = translated
             warnings.append("CYPHER_MVP_TRANSLATED")
@@ -1172,18 +1421,29 @@ Agent gate review is mandatory before automatic continuation.
         if engine == "graphify":
             graphify_cfg = getattr(config, "graphify", None)
             try:
-                graph_path_for_query, graph_layer = self._resolve_graphify_query_graph_path(
+                (
+                    graph_path_for_query,
+                    graph_layer,
+                ) = self._resolve_graphify_query_graph_path(
                     config,
                     graphify_cfg,
                 )
-                resolved_mode = "agentic" if graph_layer == "l2_enriched" else "nlp"
+                resolved_mode = (
+                    "agentic" if graph_layer == "l2_enriched" else "nlp"
+                )
                 if preferred_output_mode:
-                    graph_path_for_query, graph_layer, resolved_mode = self._resolve_graphify_query_graph_path_for_mode(
+                    (
+                        graph_path_for_query,
+                        graph_layer,
+                        resolved_mode,
+                    ) = self._resolve_graphify_query_graph_path_for_mode(
                         graphify_cfg,
                         preferred_output_mode,
                     )
                 if graph_layer == "lexical":
-                    raise GraphifyNotConfiguredError("Preferred output mode resolved to lexical fallback")
+                    raise GraphifyNotConfiguredError(
+                        "Preferred output mode resolved to lexical fallback",
+                    )
                 graphify_cfg_for_query = graphify_cfg
                 if graphify_cfg is not None and graph_path_for_query:
                     graphify_cfg_for_query = graphify_cfg.model_copy(deep=True)
@@ -1214,7 +1474,8 @@ Agent gate review is mandatory before automatic continuation.
                     summary=f"Returned {len(records)} graph-like records via Graphify.",
                     provenance={
                         "scope_filter_applied": bool(scope_type or scope_id),
-                        "scope_type": str(scope_type or "").strip().lower() or None,
+                        "scope_type": str(scope_type or "").strip().lower()
+                        or None,
                         "scope_id": str(scope_id or "").strip() or None,
                         "engine": engine,
                         "layer": graph_layer,
@@ -1223,7 +1484,8 @@ Agent gate review is mandatory before automatic continuation.
                         "project_scope": project_scope or [],
                         "include_global": include_global,
                         "query_mode": query_mode,
-                        "output_mode": str(preferred_output_mode or "").strip() or resolved_mode,
+                        "output_mode": str(preferred_output_mode or "").strip()
+                        or resolved_mode,
                         "resolved_output_mode": resolved_mode,
                     },
                     warnings=warnings,
@@ -1264,7 +1526,11 @@ Agent gate review is mandatory before automatic continuation.
             )
 
         if engine == "local_lexical":
-            graph_path, graph_layer, resolved_mode = self._resolve_query_graph_path_for_mode(
+            (
+                graph_path,
+                graph_layer,
+                resolved_mode,
+            ) = self._resolve_query_graph_path_for_mode(
                 preferred_output_mode,
             )
             if graph_path is not None and graph_layer != "lexical":
@@ -1287,11 +1553,17 @@ Agent gate review is mandatory before automatic continuation.
                 )
                 if local_graph_records:
                     return GraphOpsResult(
-                        records=self._enrich_graph_records(local_graph_records, config=config),
+                        records=self._enrich_graph_records(
+                            local_graph_records,
+                            config=config,
+                        ),
                         summary=f"Returned {len(local_graph_records)} graph relations via local graph.",
                         provenance={
-                            "scope_filter_applied": bool(scope_type or scope_id),
-                            "scope_type": str(scope_type or "").strip().lower() or None,
+                            "scope_filter_applied": bool(
+                                scope_type or scope_id,
+                            ),
+                            "scope_type": str(scope_type or "").strip().lower()
+                            or None,
                             "scope_id": str(scope_id or "").strip() or None,
                             "engine": "local_graph",
                             "layer": graph_layer,
@@ -1300,7 +1572,10 @@ Agent gate review is mandatory before automatic continuation.
                             "project_scope": project_scope or [],
                             "include_global": include_global,
                             "query_mode": query_mode,
-                            "output_mode": str(preferred_output_mode or "").strip() or resolved_mode,
+                            "output_mode": str(
+                                preferred_output_mode or "",
+                            ).strip()
+                            or resolved_mode,
                             "resolved_output_mode": resolved_mode,
                         },
                         warnings=warnings,
@@ -1318,9 +1593,15 @@ Agent gate review is mandatory before automatic continuation.
             query_mode=query_mode,
             warnings=warnings,
         )
-        preview_result.provenance["scope_filter_applied"] = bool(scope_type or scope_id)
-        preview_result.provenance["scope_type"] = str(scope_type or "").strip().lower() or None
-        preview_result.provenance["scope_id"] = str(scope_id or "").strip() or None
+        preview_result.provenance["scope_filter_applied"] = bool(
+            scope_type or scope_id,
+        )
+        preview_result.provenance["scope_type"] = (
+            str(scope_type or "").strip().lower() or None
+        )
+        preview_result.provenance["scope_id"] = (
+            str(scope_id or "").strip() or None
+        )
         preview_result.provenance["dataset_scope"] = dataset_scope or []
         if normalized_mode == "agentic":
             return self._augment_agentic_result(result=preview_result)
@@ -1355,7 +1636,7 @@ Agent gate review is mandatory before automatic continuation.
                 str(record.get("subject") or ""),
                 str(record.get("predicate") or ""),
                 str(record.get("object") or ""),
-            ]
+            ],
         )
         return str(uuid.uuid5(uuid.NAMESPACE_URL, seed))
 
@@ -1380,12 +1661,19 @@ Agent gate review is mandatory before automatic continuation.
             inferred_scope_type = "agent"
             inferred_scope_id = ""
             if source_id in source_scope_map:
-                inferred_scope_type, inferred_scope_id = source_scope_map[source_id]
+                inferred_scope_type, inferred_scope_id = source_scope_map[
+                    source_id
+                ]
 
             item.setdefault("scope_type", inferred_scope_type)
             item.setdefault("scope_id", inferred_scope_id)
-            if "scope_priority" not in item or item.get("scope_priority") is None:
-                item["scope_priority"] = 100 if item.get("scope_type") == "agent" else 50
+            if (
+                "scope_priority" not in item
+                or item.get("scope_priority") is None
+            ):
+                item["scope_priority"] = (
+                    100 if item.get("scope_type") == "agent" else 50
+                )
 
             enriched.append(item)
         return enriched
@@ -1408,7 +1696,9 @@ Agent gate review is mandatory before automatic continuation.
 
         source_project_map: dict[str, str] = {}
         for source in config.sources:
-            source_project_map[source.id] = (getattr(source, "project_id", "") or "").strip()
+            source_project_map[source.id] = (
+                getattr(source, "project_id", "") or ""
+            ).strip()
 
         filtered: list[dict[str, Any]] = []
         for record in records:
@@ -1446,8 +1736,14 @@ Agent gate review is mandatory before automatic continuation.
             source_id = str(record.get("source_id") or "").strip()
             if not source_id:
                 continue
-            record_scope_type, record_scope_id = source_scope_map.get(source_id, ("agent", ""))
-            if normalized_scope_type and record_scope_type != normalized_scope_type:
+            record_scope_type, record_scope_id = source_scope_map.get(
+                source_id,
+                ("agent", ""),
+            )
+            if (
+                normalized_scope_type
+                and record_scope_type != normalized_scope_type
+            ):
                 continue
             if normalized_scope_id and record_scope_id != normalized_scope_id:
                 continue
@@ -1540,16 +1836,18 @@ Agent gate review is mandatory before automatic continuation.
     ) -> None:
         self._patch_memify_job(
             job_id,
-            self._normalize_progress_patch({
-                "status": "running",
-                "progress": 3,
-                "stage": "prepare",
-                "stage_message": "Preparing memify task",
-                "current": 0,
-                "total": 0,
-                "started_at": datetime.now(UTC).isoformat(),
-                "updated_at": datetime.now(UTC).isoformat(),
-            }),
+            self._normalize_progress_patch(
+                {
+                    "status": "running",
+                    "progress": 3,
+                    "stage": "prepare",
+                    "stage_message": "Preparing memify task",
+                    "current": 0,
+                    "total": 0,
+                    "started_at": datetime.now(UTC).isoformat(),
+                    "updated_at": datetime.now(UTC).isoformat(),
+                },
+            ),
         )
 
         progress_callback = self._build_memify_progress_callback(job_id)
@@ -1566,31 +1864,47 @@ Agent gate review is mandatory before automatic continuation.
         now = datetime.now(UTC).isoformat()
         self._patch_memify_job(
             job_id,
-            self._normalize_progress_patch({
-                "status": str(memify_result.get("status") or "failed"),
-                "progress": 100 if str(memify_result.get("status") or "") == "succeeded" else 0,
-                "stage": "completed" if str(memify_result.get("status") or "") == "succeeded" else "failed",
-                "stage_message": "Memify completed" if str(memify_result.get("status") or "") == "succeeded" else "Memify failed",
-                "current": memify_result.get("current") or 0,
-                "total": memify_result.get("total") or 0,
-                "eta_seconds": 0,
-                "error": memify_result.get("error"),
-                "warnings": memify_result.get("warnings") or [],
-                "engine": memify_result.get("engine"),
-                "graph_path": memify_result.get("graph_path"),
-                "relation_count": memify_result.get("relation_count"),
-                "node_count": memify_result.get("node_count"),
-                "document_count": memify_result.get("document_count"),
-                "enrichment_status": memify_result.get("enrichment_status"),
-                "enrichment_warnings": memify_result.get("enrichment_warnings"),
-                "enriched_graph_path": memify_result.get("enriched_graph_path"),
-                "enrichment_quality_report_path": memify_result.get(
-                    "enrichment_quality_report_path",
-                ),
-                "enrichment_metrics": memify_result.get("enrichment_metrics"),
-                "finished_at": now,
-                "updated_at": now,
-            }),
+            self._normalize_progress_patch(
+                {
+                    "status": str(memify_result.get("status") or "failed"),
+                    "progress": 100
+                    if str(memify_result.get("status") or "") == "succeeded"
+                    else 0,
+                    "stage": "completed"
+                    if str(memify_result.get("status") or "") == "succeeded"
+                    else "failed",
+                    "stage_message": "Memify completed"
+                    if str(memify_result.get("status") or "") == "succeeded"
+                    else "Memify failed",
+                    "current": memify_result.get("current") or 0,
+                    "total": memify_result.get("total") or 0,
+                    "eta_seconds": 0,
+                    "error": memify_result.get("error"),
+                    "warnings": memify_result.get("warnings") or [],
+                    "engine": memify_result.get("engine"),
+                    "graph_path": memify_result.get("graph_path"),
+                    "relation_count": memify_result.get("relation_count"),
+                    "node_count": memify_result.get("node_count"),
+                    "document_count": memify_result.get("document_count"),
+                    "enrichment_status": memify_result.get(
+                        "enrichment_status",
+                    ),
+                    "enrichment_warnings": memify_result.get(
+                        "enrichment_warnings",
+                    ),
+                    "enriched_graph_path": memify_result.get(
+                        "enriched_graph_path",
+                    ),
+                    "enrichment_quality_report_path": memify_result.get(
+                        "enrichment_quality_report_path",
+                    ),
+                    "enrichment_metrics": memify_result.get(
+                        "enrichment_metrics",
+                    ),
+                    "finished_at": now,
+                    "updated_at": now,
+                },
+            ),
         )
 
     def execute_memify_once(
@@ -1623,9 +1937,7 @@ Agent gate review is mandatory before automatic continuation.
                     progress_callback=progress_callback,
                 )
                 status = str(memify_result.get("status") or "failed")
-                error = (
-                    str(memify_result.get("error") or "").strip() or None
-                )
+                error = str(memify_result.get("error") or "").strip() or None
                 warnings = [
                     str(item)
                     for item in (memify_result.get("warnings") or [])
@@ -1646,7 +1958,7 @@ Agent gate review is mandatory before automatic continuation.
                         "current": 1,
                         "total": 2,
                         "eta_seconds": 1,
-                    }
+                    },
                 )
             manager = KnowledgeManager(
                 self.working_dir,
@@ -1675,7 +1987,7 @@ Agent gate review is mandatory before automatic continuation.
                         "current": 2,
                         "total": 2,
                         "eta_seconds": 0,
-                    }
+                    },
                 )
 
         response = {
@@ -1695,16 +2007,22 @@ Agent gate review is mandatory before automatic continuation.
                 source_graph_path = self.local_graph_path
             elif engine == "graphify":
                 graphify_cfg = getattr(config, "graphify", None)
-                configured_graph_path = str(getattr(graphify_cfg, "graph_path", "") or "").strip()
+                configured_graph_path = str(
+                    getattr(graphify_cfg, "graph_path", "") or "",
+                ).strip()
                 if configured_graph_path:
                     source_graph_path = Path(configured_graph_path)
 
             if source_graph_path is None or not source_graph_path.exists():
                 warnings.append("ENRICHMENT_SOURCE_GRAPH_NOT_FOUND")
-                response.update({
-                    "enrichment_status": "skipped",
-                    "enrichment_warnings": ["ENRICHMENT_SOURCE_GRAPH_NOT_FOUND"],
-                })
+                response.update(
+                    {
+                        "enrichment_status": "skipped",
+                        "enrichment_warnings": [
+                            "ENRICHMENT_SOURCE_GRAPH_NOT_FOUND",
+                        ],
+                    },
+                )
             else:
                 try:
                     enrichment_result = run_system_knowledge_enrichment(
@@ -1717,9 +2035,11 @@ Agent gate review is mandatory before automatic continuation.
                                 "enrichment_pipeline_id",
                                 "system-knowledge-enrichment-v1",
                             )
-                            or "system-knowledge-enrichment-v1"
+                            or "system-knowledge-enrichment-v1",
                         ),
-                        quality_policy=(quality_hints or {}).get("quality_policy")
+                        quality_policy=(quality_hints or {}).get(
+                            "quality_policy",
+                        )
                         if isinstance(quality_hints, dict)
                         else None,
                     )
@@ -1752,32 +2072,67 @@ Agent gate review is mandatory before automatic continuation.
             response.update(
                 {
                     "graph_path": str(self.local_graph_path),
-                    "document_graph_dir": str(memify_result.get("document_graph_dir") or ""),
-                    "document_graph_manifest_path": str(memify_result.get("document_graph_manifest_path") or ""),
-                    "document_graph_count": int(memify_result.get("document_graph_count") or 0),
-                    "relation_count": int(memify_result.get("relation_count") or 0),
+                    "document_graph_dir": str(
+                        memify_result.get("document_graph_dir") or "",
+                    ),
+                    "document_graph_manifest_path": str(
+                        memify_result.get("document_graph_manifest_path")
+                        or "",
+                    ),
+                    "document_graph_count": int(
+                        memify_result.get("document_graph_count") or 0,
+                    ),
+                    "relation_count": int(
+                        memify_result.get("relation_count") or 0,
+                    ),
                     "node_count": int(memify_result.get("node_count") or 0),
-                    "document_count": int(memify_result.get("document_count") or 0),
-                    "sentence_count": int(memify_result.get("sentence_count") or 0),
-                    "sentence_with_entities_count": int(memify_result.get("sentence_with_entities_count") or 0),
-                    "entity_mentions_count": int(memify_result.get("entity_mentions_count") or 0),
-                    "avg_entities_per_sentence": float(memify_result.get("avg_entities_per_sentence") or 0.0),
-                    "avg_entity_char_ratio": float(memify_result.get("avg_entity_char_ratio") or 0.0),
-                }
+                    "document_count": int(
+                        memify_result.get("document_count") or 0,
+                    ),
+                    "sentence_count": int(
+                        memify_result.get("sentence_count") or 0,
+                    ),
+                    "sentence_with_entities_count": int(
+                        memify_result.get("sentence_with_entities_count") or 0,
+                    ),
+                    "entity_mentions_count": int(
+                        memify_result.get("entity_mentions_count") or 0,
+                    ),
+                    "avg_entities_per_sentence": float(
+                        memify_result.get("avg_entities_per_sentence") or 0.0,
+                    ),
+                    "avg_entity_char_ratio": float(
+                        memify_result.get("avg_entity_char_ratio") or 0.0,
+                    ),
+                },
             )
         elif engine == "graphify":
             response.update(
                 {
                     "graph_path": str(memify_result.get("graph_path") or ""),
-                    "relation_count": int(memify_result.get("relation_count") or 0),
+                    "relation_count": int(
+                        memify_result.get("relation_count") or 0,
+                    ),
                     "node_count": int(memify_result.get("node_count") or 0),
-                    "document_count": int(memify_result.get("document_count") or 0),
-                    "sentence_count": int(memify_result.get("sentence_count") or 0),
-                    "sentence_with_entities_count": int(memify_result.get("sentence_with_entities_count") or 0),
-                    "entity_mentions_count": int(memify_result.get("entity_mentions_count") or 0),
-                    "avg_entities_per_sentence": float(memify_result.get("avg_entities_per_sentence") or 0.0),
-                    "avg_entity_char_ratio": float(memify_result.get("avg_entity_char_ratio") or 0.0),
-                }
+                    "document_count": int(
+                        memify_result.get("document_count") or 0,
+                    ),
+                    "sentence_count": int(
+                        memify_result.get("sentence_count") or 0,
+                    ),
+                    "sentence_with_entities_count": int(
+                        memify_result.get("sentence_with_entities_count") or 0,
+                    ),
+                    "entity_mentions_count": int(
+                        memify_result.get("entity_mentions_count") or 0,
+                    ),
+                    "avg_entities_per_sentence": float(
+                        memify_result.get("avg_entities_per_sentence") or 0.0,
+                    ),
+                    "avg_entity_char_ratio": float(
+                        memify_result.get("avg_entity_char_ratio") or 0.0,
+                    ),
+                },
             )
 
         if progress_callback is not None:
@@ -1789,7 +2144,7 @@ Agent gate review is mandatory before automatic continuation.
                     "current": 1,
                     "total": 1,
                     "eta_seconds": 0,
-                }
+                },
             )
         return response
 
@@ -1823,9 +2178,14 @@ Agent gate review is mandatory before automatic continuation.
         ]
         if active_only:
             jobs = [
-                job for job in jobs if str(job.get("status") or "") in {"pending", "running"}
+                job
+                for job in jobs
+                if str(job.get("status") or "") in {"pending", "running"}
             ]
-        jobs.sort(key=lambda item: str(item.get("updated_at") or ""), reverse=True)
+        jobs.sort(
+            key=lambda item: str(item.get("updated_at") or ""),
+            reverse=True,
+        )
         if isinstance(limit, int) and limit > 0:
             jobs = jobs[:limit]
         return jobs
@@ -1834,12 +2194,18 @@ Agent gate review is mandatory before automatic continuation.
         if not self.memify_jobs_path.exists():
             return {}
         try:
-            payload = json.loads(self.memify_jobs_path.read_text(encoding="utf-8"))
+            payload = json.loads(
+                self.memify_jobs_path.read_text(encoding="utf-8"),
+            )
         except Exception:
             return {}
         if not isinstance(payload, dict):
             return {}
-        return {str(key): value for key, value in payload.items() if isinstance(value, dict)}
+        return {
+            str(key): value
+            for key, value in payload.items()
+            if isinstance(value, dict)
+        }
 
     def _save_memify_jobs(self, jobs: dict[str, dict[str, Any]]) -> None:
         self.knowledge_root.mkdir(parents=True, exist_ok=True)

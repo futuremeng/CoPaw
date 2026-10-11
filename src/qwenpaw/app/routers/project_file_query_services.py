@@ -105,10 +105,16 @@ def get_project_files_metadata(
         if not normalized_rel_path or normalized_rel_path in seen_paths:
             continue
         if not is_safe_relative_path(normalized_rel_path):
-            raise http_exception_factory(status_code=400, detail="Invalid file path")
+            raise http_exception_factory(
+                status_code=400,
+                detail="Invalid file path",
+            )
         target = (project_dir / normalized_rel_path).resolve()
         if not str(target).startswith(str(project_root)):
-            raise http_exception_factory(status_code=400, detail="Invalid file path")
+            raise http_exception_factory(
+                status_code=400,
+                detail="Invalid file path",
+            )
         if not target.exists() or not target.is_file():
             continue
         try:
@@ -121,7 +127,7 @@ def get_project_files_metadata(
                 path=normalized_rel_path,
                 size=stat.st_size,
                 modified_time=format_iso_time(stat.st_mtime),
-            )
+            ),
         )
         seen_paths.add(normalized_rel_path)
 
@@ -149,13 +155,19 @@ def resolve_project_file_path(
     http_exception_factory: HttpExceptionFactory,
 ) -> Path:
     if not is_safe_relative_path(rel_path):
-        raise http_exception_factory(status_code=400, detail="Invalid file path")
+        raise http_exception_factory(
+            status_code=400,
+            detail="Invalid file path",
+        )
 
     target_rel_path = rel_path
     target = (project_dir / target_rel_path).resolve()
     project_root = project_dir.resolve()
     if not str(target).startswith(str(project_root)):
-        raise http_exception_factory(status_code=400, detail="Invalid file path")
+        raise http_exception_factory(
+            status_code=400,
+            detail="Invalid file path",
+        )
     if not target.exists() or not target.is_file():
         fallback_rel_path = rewrite_original_to_data_path(target_rel_path)
         if fallback_rel_path and is_safe_relative_path(fallback_rel_path):
@@ -169,7 +181,8 @@ def resolve_project_file_path(
                 target = fallback_target
     if not target.exists() or not target.is_file():
         raise http_exception_factory(
-            status_code=404, detail=f"File '{rel_path}' not found"
+            status_code=404,
+            detail=f"File '{rel_path}' not found",
         )
     return target
 
@@ -197,7 +210,8 @@ def read_project_text_file(
     raw = target.read_bytes()
     if b"\x00" in raw[:4096]:
         raise http_exception_factory(
-            status_code=400, detail="Binary file preview is not supported"
+            status_code=400,
+            detail="Binary file preview is not supported",
         )
     return raw.decode("utf-8", errors="replace")
 
@@ -324,11 +338,17 @@ def list_project_file_tree_nodes(
     project_root = project_dir.resolve()
     normalized_dir_path = normalize_project_tree_dir_path(dir_path)
     if normalized_dir_path and not is_safe_relative_path(normalized_dir_path):
-        raise http_exception_factory(status_code=400, detail="Invalid directory path")
+        raise http_exception_factory(
+            status_code=400,
+            detail="Invalid directory path",
+        )
     if normalized_dir_path and not is_visible_project_tree_path(
-        f"{normalized_dir_path}/"
+        f"{normalized_dir_path}/",
     ):
-        raise http_exception_factory(status_code=404, detail="Directory not found")
+        raise http_exception_factory(
+            status_code=404,
+            detail="Directory not found",
+        )
 
     target_dir = (
         project_root
@@ -336,9 +356,15 @@ def list_project_file_tree_nodes(
         else (project_root / normalized_dir_path).resolve()
     )
     if not str(target_dir).startswith(str(project_root)):
-        raise http_exception_factory(status_code=400, detail="Invalid directory path")
+        raise http_exception_factory(
+            status_code=400,
+            detail="Invalid directory path",
+        )
     if not target_dir.exists() or not target_dir.is_dir():
-        raise http_exception_factory(status_code=404, detail="Directory not found")
+        raise http_exception_factory(
+            status_code=404,
+            detail="Directory not found",
+        )
 
     nodes: list[Any] = []
     try:
@@ -386,7 +412,7 @@ def list_project_file_tree_nodes(
                     if is_directory
                     else False
                 ),
-            )
+            ),
         )
 
     return nodes
@@ -511,7 +537,9 @@ def is_skill_project_metric_file(rel_path: str) -> bool:
 def is_flow_project_metric_file(rel_path: str) -> bool:
     normalized = normalize_project_metric_path(rel_path)
     parts = [part for part in normalized.split("/") if part]
-    return len(parts) >= 4 and parts[0] == "pipelines" and parts[2] == "pipeline"
+    return (
+        len(parts) >= 4 and parts[0] == "pipelines" and parts[2] == "pipeline"
+    )
 
 
 def is_case_project_metric_file(rel_path: str) -> bool:
@@ -601,7 +629,10 @@ def build_project_file_summary(
                 text_like_files += 1
 
     derived_files = intermediate_files
-    recent_update_records = collect_recent_project_updates(project_root, project_id)
+    recent_update_records = collect_recent_project_updates(
+        project_root,
+        project_id,
+    )
     recent_updates: list[Any] = []
     for item in recent_update_records:
         path = str(item.get("path") or "").strip()
@@ -617,8 +648,11 @@ def build_project_file_summary(
                 filename=target.name,
                 path=path,
                 size=stat.st_size,
-                modified_time=str(item.get("modified_time") or format_iso_time(stat.st_mtime)),
-            )
+                modified_time=str(
+                    item.get("modified_time")
+                    or format_iso_time(stat.st_mtime),
+                ),
+            ),
         )
 
     return project_file_summary_factory(

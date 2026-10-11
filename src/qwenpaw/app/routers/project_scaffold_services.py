@@ -15,7 +15,10 @@ HttpExceptionFactory = Callable[..., Exception]
 Slugify = Callable[[str], str]
 GenerateShortAgentId = Callable[[], str]
 ListAgentProjects = Callable[[Path], list[Any]]
-ReadProjectMetadataWithBody = Callable[[Path], tuple[Path | None, dict[str, Any], str]]
+ReadProjectMetadataWithBody = Callable[
+    [Path],
+    tuple[Path | None, dict[str, Any], str],
+]
 WriteProjectMetadata = Callable[[Path, dict[str, Any], str], None]
 
 
@@ -40,9 +43,13 @@ def load_project_template_text(
             break
         for candidate in candidate_paths:
             try:
-                template_resource = importlib.resources.files(package_name).joinpath(
-                    "app"
-                ).joinpath("project_templates")
+                template_resource = (
+                    importlib.resources.files(package_name)
+                    .joinpath(
+                        "app",
+                    )
+                    .joinpath("project_templates")
+                )
                 for part in candidate.split("/"):
                     template_resource = template_resource.joinpath(part)
                 if template_resource.is_file():
@@ -62,7 +69,7 @@ def load_project_template_text(
         content = default_project_templates.get(relative_path)
         if content is None:
             raise FileNotFoundError(
-                f"Project template not found: {relative_path}"
+                f"Project template not found: {relative_path}",
             )
         logger.warning(
             "Project template missing from package and source tree; using builtin fallback: %s",
@@ -124,11 +131,16 @@ def scaffold_project_governance_files(
     runs_readme.parent.mkdir(parents=True, exist_ok=True)
     if not runs_readme.exists():
         runs_readme.write_text(
-            load_project_template_text("project/.pipelines/runs/README.md", None),
+            load_project_template_text(
+                "project/.pipelines/runs/README.md",
+                None,
+            ),
             encoding="utf-8",
         )
 
-    skill_md = project_dir / ".skills" / "project-artifact-governor" / "SKILL.md"
+    skill_md = (
+        project_dir / ".skills" / "project-artifact-governor" / "SKILL.md"
+    )
     skill_md.parent.mkdir(parents=True, exist_ok=True)
     if not skill_md.exists():
         skill_md.write_text(
@@ -186,10 +198,14 @@ def resolve_project_dir(
     projects_dir = workspace_dir / projects_dirname
     if not projects_dir.exists() or not projects_dir.is_dir():
         raise http_exception_factory(
-            status_code=404, detail="Projects directory not found"
+            status_code=404,
+            detail="Projects directory not found",
         )
 
-    for project_dir in sorted(projects_dir.iterdir(), key=lambda item: item.name.lower()):
+    for project_dir in sorted(
+        projects_dir.iterdir(),
+        key=lambda item: item.name.lower(),
+    ):
         if not project_dir.is_dir():
             continue
         summary = load_project_summary(project_dir)
@@ -199,7 +215,8 @@ def resolve_project_dir(
             return project_dir
 
     raise http_exception_factory(
-        status_code=404, detail=f"Project '{project_id}' not found"
+        status_code=404,
+        detail=f"Project '{project_id}' not found",
     )
 
 
@@ -279,7 +296,9 @@ def read_project_frontmatter_with_body(
     project_dir = metadata_file.parent
     if project_dir.name == ".agent":
         project_dir = project_dir.parent
-    resolved_file, metadata, body = read_project_metadata_with_body(project_dir)
+    resolved_file, metadata, body = read_project_metadata_with_body(
+        project_dir,
+    )
     if resolved_file is not None:
         return metadata, body
     if metadata_file.exists():
@@ -297,7 +316,9 @@ def write_project_frontmatter(
     write_project_metadata(metadata_file, metadata, body)
 
 
-def parse_markdown_frontmatter(path: Path) -> tuple[dict[str, Any], str] | None:
+def parse_markdown_frontmatter(
+    path: Path,
+) -> tuple[dict[str, Any], str] | None:
     raw = path.read_text(encoding="utf-8", errors="ignore")
     if not raw.startswith("---\n"):
         return None

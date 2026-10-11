@@ -31,10 +31,17 @@ def _read_file_safe(filepath: Path) -> Optional[str]:
     try:
         if not filepath.exists():
             return None
-        content = filepath.read_text(encoding="utf-8", errors="replace").strip()
+        content = filepath.read_text(
+            encoding="utf-8",
+            errors="replace",
+        ).strip()
         return content if content else None
     except OSError as e:
-        logger.warning("Failed to read project context file %s: %s", filepath, e)
+        logger.warning(
+            "Failed to read project context file %s: %s",
+            filepath,
+            e,
+        )
         return None
 
 
@@ -63,7 +70,9 @@ def load_project_context_blocks(
 
     if not agent_dir.is_dir():
         logger.debug(
-            "No .agent directory for project %s at %s", project_id, agent_dir,
+            "No .agent directory for project %s at %s",
+            project_id,
+            agent_dir,
         )
         return []
 
@@ -74,16 +83,20 @@ def load_project_context_blocks(
         if content is None:
             continue
 
-        blocks.append({
-            "role": "system",
-            "content": (
-                f"=== PROJECT CONTEXT: {filename} (Project: {project_id}) ===\n"
-                f"{content}"
-            ),
-        })
+        blocks.append(
+            {
+                "role": "system",
+                "content": (
+                    f"=== PROJECT CONTEXT: {filename} (Project: {project_id}) ===\n"
+                    f"{content}"
+                ),
+            },
+        )
         logger.info(
             "Loaded project context: %s for project %s (%d chars)",
-            filename, project_id, len(content),
+            filename,
+            project_id,
+            len(content),
         )
 
     return blocks

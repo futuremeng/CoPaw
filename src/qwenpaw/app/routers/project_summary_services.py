@@ -6,7 +6,10 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, Callable
 
-ReadProjectMetadataWithBody = Callable[[Path], tuple[Path | None, dict[str, Any], str]]
+ReadProjectMetadataWithBody = Callable[
+    [Path],
+    tuple[Path | None, dict[str, Any], str],
+]
 SafeProjectDataSubdir = Callable[[str], str]
 FirstNonemptyLine = Callable[[str], str]
 ParseProjectTags = Callable[[Any], list[str]]
@@ -38,7 +41,9 @@ def load_project_summary(
     format_iso_time: FormatIsoTime,
     project_summary_factory: ProjectSummaryFactory,
 ) -> Any | None:
-    metadata_file, metadata, body = read_project_metadata_with_body(project_dir)
+    metadata_file, metadata, body = read_project_metadata_with_body(
+        project_dir,
+    )
     if metadata_file is None:
         return None
 
@@ -49,10 +54,11 @@ def load_project_summary(
         str(metadata.get("id") or project_dir.name).strip() or project_dir.name
     )
     project_name = (
-        str(metadata.get("name") or project_dir.name).strip() or project_dir.name
+        str(metadata.get("name") or project_dir.name).strip()
+        or project_dir.name
     )
     description = str(
-        metadata.get("description") or first_nonempty_line(body)
+        metadata.get("description") or first_nonempty_line(body),
     ).strip()
     status = str(metadata.get("status") or "active").strip() or "active"
     tags = parse_project_tags(metadata.get("tags"))
@@ -63,8 +69,10 @@ def load_project_summary(
     project_auto_knowledge_sink = normalize_project_auto_knowledge_sink(
         metadata.get("project_auto_knowledge_sink"),
     )
-    project_agent_knowledge_registered = normalize_project_agent_knowledge_registered(
-        metadata.get("project_agent_knowledge_registered"),
+    project_agent_knowledge_registered = (
+        normalize_project_agent_knowledge_registered(
+            metadata.get("project_agent_knowledge_registered"),
+        )
     )
     file_monitoring_state = normalize_project_file_monitoring_state(
         metadata.get("file_monitoring_state"),
@@ -109,7 +117,8 @@ def list_agent_projects(
 
     projects: list[Any] = []
     for project_dir in sorted(
-        projects_dir.iterdir(), key=lambda item: item.name.lower()
+        projects_dir.iterdir(),
+        key=lambda item: item.name.lower(),
     ):
         if not project_dir.is_dir():
             continue

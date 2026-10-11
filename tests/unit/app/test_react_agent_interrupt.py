@@ -9,7 +9,10 @@ import pytest
 
 
 @pytest.mark.asyncio
-@pytest.mark.xfail(strict=True, reason="P1-BEHAVIOR-LOST: interrupt 文案按 agent 配置语言本地化的补丁随同步丢失（全仓已无 '已停止上一条回复'）")
+@pytest.mark.xfail(
+    strict=True,
+    reason="P1-BEHAVIOR-LOST: interrupt 文案按 agent 配置语言本地化的补丁随同步丢失（全仓已无 '已停止上一条回复'）",
+)
 async def test_handle_interrupt_uses_stored_agent_config_language() -> None:
     module = importlib.import_module("qwenpaw.agents.react_agent")
 

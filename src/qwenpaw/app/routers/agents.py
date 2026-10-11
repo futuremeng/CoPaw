@@ -134,13 +134,19 @@ from ..project_file_query import (
 from . import project_file_services as copaw_project_file_services
 from . import project_file_query_services as copaw_project_file_query_services
 from . import project_file_ops as copaw_project_file_ops
-from . import project_artifact_normalization_services as copaw_project_artifact_normalization_services
-from . import project_artifact_workflow_services as copaw_project_artifact_workflow_services
+from . import (
+    project_artifact_normalization_services as copaw_project_artifact_normalization_services,
+)
+from . import (
+    project_artifact_workflow_services as copaw_project_artifact_workflow_services,
+)
 from . import project_scaffold_services as copaw_project_scaffold_services
 from . import project_lifecycle_services as copaw_project_lifecycle_services
 from . import project_metadata_services as copaw_project_metadata_services
 from . import project_summary_services as copaw_project_summary_services
-from . import project_watch_artifact_services as copaw_project_watch_artifact_services
+from . import (
+    project_watch_artifact_services as copaw_project_watch_artifact_services,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -2479,8 +2485,12 @@ class ProjectFileQueryRequest(BaseModel):
 
     search: str = ""
     path_prefix: str = ""
-    stages: list[Literal["original", "intermediate", "artifact", "builtin", "other"]] = Field(default_factory=list)
-    content_types: list[Literal["markdown", "text", "script", "other"]] = Field(default_factory=list)
+    stages: list[
+        Literal["original", "intermediate", "artifact", "builtin", "other"]
+    ] = Field(default_factory=list)
+    content_types: list[
+        Literal["markdown", "text", "script", "other"]
+    ] = Field(default_factory=list)
     include_builtin: bool | None = None
     include_ignored: bool = False
     size_min: int | None = None
@@ -2650,7 +2660,10 @@ class MoveProjectPathRequest(BaseModel):
 
     source_path: str
     target_path: str
-    conflict_strategy: Literal["fail_if_exists", "overwrite"] = "fail_if_exists"
+    conflict_strategy: Literal[
+        "fail_if_exists",
+        "overwrite",
+    ] = "fail_if_exists"
 
 
 class MoveProjectPathResponse(BaseModel):
@@ -2937,7 +2950,8 @@ def _ensure_square_config_initialized() -> None:
 
     if _AGENTS_SQUARE_DEFAULT_PATH.exists():
         shutil.copyfile(
-            _AGENTS_SQUARE_DEFAULT_PATH, _AGENTS_SQUARE_CONFIG_PATH
+            _AGENTS_SQUARE_DEFAULT_PATH,
+            _AGENTS_SQUARE_CONFIG_PATH,
         )
         return
 
@@ -3017,7 +3031,8 @@ def _reset_current_square_config_to_default() -> AgentsSquareConfig:
 
     if _AGENTS_SQUARE_DEFAULT_PATH.exists():
         shutil.copyfile(
-            _AGENTS_SQUARE_DEFAULT_PATH, _AGENTS_SQUARE_CONFIG_PATH
+            _AGENTS_SQUARE_DEFAULT_PATH,
+            _AGENTS_SQUARE_CONFIG_PATH,
         )
         return _load_current_square_config()
 
@@ -3108,7 +3123,8 @@ def _normalize_project_created_time(raw_value: Any) -> str:
 
 
 def _resolve_project_created_time(
-    metadata: dict[str, Any], metadata_file: Path
+    metadata: dict[str, Any],
+    metadata_file: Path,
 ) -> str:
     return copaw_project_artifact_normalization_services.resolve_project_created_time(
         metadata,
@@ -3119,8 +3135,10 @@ def _resolve_project_created_time(
 
 
 def _safe_project_data_subdir(raw_value: str) -> str:
-    return copaw_project_artifact_normalization_services.safe_project_data_subdir(
-        raw_value,
+    return (
+        copaw_project_artifact_normalization_services.safe_project_data_subdir(
+            raw_value,
+        )
     )
 
 
@@ -3513,7 +3531,10 @@ def _update_project_agent_knowledge_registration(
             project_agent_knowledge_registered=project_agent_knowledge_registered,
             resolve_project_dir=_resolve_project_dir,
             load_project_summary=_load_project_summary,
-            sync_project_agent_knowledge_registration=lambda summary, enabled: _sync_project_agent_knowledge_registration(summary, enabled=enabled),
+            sync_project_agent_knowledge_registration=lambda summary, enabled: _sync_project_agent_knowledge_registration(
+                summary,
+                enabled=enabled,
+            ),
             read_project_frontmatter_with_body=_read_project_frontmatter_with_body,
             write_project_metadata=write_project_metadata,
             http_exception_factory=HTTPException,
@@ -3553,10 +3574,12 @@ def _build_promoted_skill_markdown(
     project_id: str,
     source_body: str,
 ) -> str:
-    return copaw_project_artifact_workflow_services.build_promoted_skill_markdown(
-        item,
-        project_id,
-        source_body,
+    return (
+        copaw_project_artifact_workflow_services.build_promoted_skill_markdown(
+            item,
+            project_id,
+            source_body,
+        )
     )
 
 
@@ -3589,7 +3612,10 @@ def _auto_distill_project_skills_to_draft(
             load_project_summary=_load_project_summary,
             read_project_frontmatter_with_body=_read_project_frontmatter_with_body,
             parse_project_artifact_profile=_parse_project_artifact_profile,
-            extract_project_conversation_skill_candidates=lambda project_dir, run_id: _extract_project_conversation_skill_candidates(project_dir, run_id=run_id),
+            extract_project_conversation_skill_candidates=lambda project_dir, run_id: _extract_project_conversation_skill_candidates(
+                project_dir,
+                run_id=run_id,
+            ),
             safe_artifact_slug=_safe_artifact_slug,
             generate_short_agent_id=generate_short_agent_id,
             read_text_file_with_encoding_fallback=read_text_file_with_encoding_fallback,
@@ -3632,7 +3658,10 @@ def _promote_project_skill_to_agent(
     artifact_id: str,
     body: PromoteProjectArtifactRequest,
 ) -> PromoteProjectArtifactResponse:
-    def _enable_promoted_skill(workspace_path: Path, skill_dir_name: str) -> None:
+    def _enable_promoted_skill(
+        workspace_path: Path,
+        skill_dir_name: str,
+    ) -> None:
         from ...agents.skills_manager import reconcile_workspace_manifest
 
         manifest = reconcile_workspace_manifest(workspace_path)
@@ -3659,7 +3688,8 @@ def _promote_project_skill_to_agent(
             build_promoted_skill_markdown=_build_promoted_skill_markdown,
             enable_promoted_skill=_enable_promoted_skill,
             warn_enable_promoted_skill=lambda exc: logger.warning(
-                "Failed to auto-enable promoted skill: %s", exc
+                "Failed to auto-enable promoted skill: %s",
+                exc,
             ),
             read_project_frontmatter_with_body=_read_project_frontmatter_with_body,
             parse_project_artifact_profile=_parse_project_artifact_profile,
@@ -3769,7 +3799,8 @@ def _create_project(
 
 
 def _delete_project(
-    workspace_dir: Path, project_id: str
+    workspace_dir: Path,
+    project_id: str,
 ) -> DeleteProjectResponse:
     return cast(
         DeleteProjectResponse,
@@ -3787,11 +3818,15 @@ def _is_safe_relative_path(rel_path: str) -> bool:
 
 
 def _rewrite_original_to_data_path(rel_path: str) -> str | None:
-    return copaw_project_file_query_services.rewrite_original_to_data_path(rel_path)
+    return copaw_project_file_query_services.rewrite_original_to_data_path(
+        rel_path,
+    )
 
 
 def _normalize_project_tree_dir_path(raw_value: str) -> str:
-    return copaw_project_file_query_services.normalize_project_tree_dir_path(raw_value)
+    return copaw_project_file_query_services.normalize_project_tree_dir_path(
+        raw_value,
+    )
 
 
 def _is_visible_project_tree_path(rel_path: str) -> bool:
@@ -3802,9 +3837,11 @@ def _is_visible_project_tree_path(rel_path: str) -> bool:
 
 
 def _count_visible_project_tree_children(target_dir: Path) -> int:
-    return copaw_project_file_query_services.count_visible_project_tree_children(
-        target_dir,
-        is_visible_project_tree_path=_is_visible_project_tree_path,
+    return (
+        copaw_project_file_query_services.count_visible_project_tree_children(
+            target_dir,
+            is_visible_project_tree_path=_is_visible_project_tree_path,
+        )
     )
 
 
@@ -3856,11 +3893,15 @@ def _list_project_files(project_dir: Path) -> list[ProjectFileInfo]:
 
 
 def _normalize_project_metric_path(rel_path: str) -> str:
-    return copaw_project_file_query_services.normalize_project_metric_path(rel_path)
+    return copaw_project_file_query_services.normalize_project_metric_path(
+        rel_path,
+    )
 
 
 def _extension_of_project_path(rel_path: str) -> str:
-    return copaw_project_file_query_services.extension_of_project_path(rel_path)
+    return copaw_project_file_query_services.extension_of_project_path(
+        rel_path,
+    )
 
 
 def _is_ignored_project_metric_file(rel_path: str) -> bool:
@@ -3878,31 +3919,47 @@ def _is_builtin_project_metric_file(rel_path: str) -> bool:
 
 
 def _is_original_project_metric_file(rel_path: str) -> bool:
-    return copaw_project_file_query_services.is_original_project_metric_file(rel_path)
+    return copaw_project_file_query_services.is_original_project_metric_file(
+        rel_path,
+    )
 
 
 def _is_intermediate_project_metric_file(rel_path: str) -> bool:
-    return copaw_project_file_query_services.is_intermediate_project_metric_file(rel_path)
+    return (
+        copaw_project_file_query_services.is_intermediate_project_metric_file(
+            rel_path,
+        )
+    )
 
 
 def _is_artifact_project_metric_file(rel_path: str) -> bool:
-    return copaw_project_file_query_services.is_artifact_project_metric_file(rel_path)
+    return copaw_project_file_query_services.is_artifact_project_metric_file(
+        rel_path,
+    )
 
 
 def _is_agent_project_metric_file(rel_path: str) -> bool:
-    return copaw_project_file_query_services.is_agent_project_metric_file(rel_path)
+    return copaw_project_file_query_services.is_agent_project_metric_file(
+        rel_path,
+    )
 
 
 def _is_skill_project_metric_file(rel_path: str) -> bool:
-    return copaw_project_file_query_services.is_skill_project_metric_file(rel_path)
+    return copaw_project_file_query_services.is_skill_project_metric_file(
+        rel_path,
+    )
 
 
 def _is_flow_project_metric_file(rel_path: str) -> bool:
-    return copaw_project_file_query_services.is_flow_project_metric_file(rel_path)
+    return copaw_project_file_query_services.is_flow_project_metric_file(
+        rel_path,
+    )
 
 
 def _is_case_project_metric_file(rel_path: str) -> bool:
-    return copaw_project_file_query_services.is_case_project_metric_file(rel_path)
+    return copaw_project_file_query_services.is_case_project_metric_file(
+        rel_path,
+    )
 
 
 def _build_project_file_summary(project_dir: Path) -> ProjectFileSummary:
@@ -4062,12 +4119,14 @@ def _read_project_text_file_for_workspace(
     project_id: str,
     rel_path: str,
 ) -> str:
-    return copaw_project_file_query_services.read_project_text_file_for_workspace(
-        workspace_dir,
-        project_id,
-        rel_path,
-        resolve_project_dir=_resolve_project_dir,
-        read_project_text_file=_read_project_text_file,
+    return (
+        copaw_project_file_query_services.read_project_text_file_for_workspace(
+            workspace_dir,
+            project_id,
+            rel_path,
+            resolve_project_dir=_resolve_project_dir,
+            read_project_text_file=_read_project_text_file,
+        )
     )
 
 
@@ -4098,7 +4157,10 @@ def _create_project_directory(
     project_dir: Path,
     rel_path: str,
 ) -> CreateProjectDirectoryResponse:
-    payload = copaw_project_file_ops.create_project_directory(project_dir, rel_path)
+    payload = copaw_project_file_ops.create_project_directory(
+        project_dir,
+        rel_path,
+    )
     return CreateProjectDirectoryResponse.model_validate(payload)
 
 
@@ -4107,7 +4169,10 @@ def _move_project_path(
     source_path: str,
     target_path: str,
     *,
-    conflict_strategy: Literal["fail_if_exists", "overwrite"] = "fail_if_exists",
+    conflict_strategy: Literal[
+        "fail_if_exists",
+        "overwrite",
+    ] = "fail_if_exists",
 ) -> MoveProjectPathResponse:
     payload = copaw_project_file_ops.move_project_path(
         project_dir,
@@ -4217,7 +4282,7 @@ def _collect_index_json_items(
 
         soul = str(node_doc.get("soul") or node_doc.get("SOUL") or "").strip()
         rules = str(
-            node_doc.get("rules") or node_doc.get("RULES") or ""
+            node_doc.get("rules") or node_doc.get("RULES") or "",
         ).strip()
         agents_md = str(
             node_doc.get("agents_md")
@@ -4333,7 +4398,7 @@ def _aggregate_square_items(
             source_root = (tmp_dir / (source.path or ".")).resolve()
             if not str(source_root).startswith(str(tmp_dir.resolve())):
                 raise ValueError(
-                    "SOURCE_INDEX_INVALID: path escapes repository"
+                    "SOURCE_INDEX_INVALID: path escapes repository",
                 )
             if not source_root.exists():
                 raise ValueError(
@@ -4392,7 +4457,7 @@ def _aggregate_square_items(
                 shutil.rmtree(tmp_dir, ignore_errors=True)
 
     items.sort(
-        key=lambda item: (item.source_id, item.name.lower(), item.agent_id)
+        key=lambda item: (item.source_id, item.name.lower(), item.agent_id),
     )
     duration_ms = int((time.time() - started) * 1000)
     meta: dict[str, object] = {
@@ -4433,7 +4498,7 @@ def _extract_install_urls(bundle: dict[str, Any]) -> list[str]:
                 urls.append(item.strip())
             elif isinstance(item, dict):
                 url = str(
-                    item.get("install_url") or item.get("url") or ""
+                    item.get("install_url") or item.get("url") or "",
                 ).strip()
                 if url:
                     urls.append(url)
@@ -4445,7 +4510,7 @@ def _extract_install_urls(bundle: dict[str, Any]) -> list[str]:
                 urls.append(item.strip())
             elif isinstance(item, dict):
                 url = str(
-                    item.get("url") or item.get("install_url") or ""
+                    item.get("url") or item.get("install_url") or "",
                 ).strip()
                 if url:
                     urls.append(url)
@@ -4607,7 +4672,7 @@ def _activate_import_bundle(
                 str(flow.get("version") or "v0-draft").strip() or "v0-draft"
             )
             flow_content = str(
-                flow.get("content") or flow.get("markdown") or ""
+                flow.get("content") or flow.get("markdown") or "",
             ).strip()
             if not flow_content:
                 flow_content = (
@@ -4678,7 +4743,8 @@ def _find_imported_agent(
 
 
 def _persist_import_metadata(
-    workspace_dir: Path, payload: dict[str, str]
+    workspace_dir: Path,
+    payload: dict[str, str],
 ) -> None:
     metadata_file = workspace_dir / "imported_from.json"
     metadata_file.write_text(
@@ -4860,7 +4926,8 @@ async def get_square_sources() -> AgentsSquareSourcesPayload:
 
 
 @router.get(
-    "/square/sources/defaults", response_model=AgentsSquareSourcesPayload
+    "/square/sources/defaults",
+    response_model=AgentsSquareSourcesPayload,
 )
 async def get_square_source_defaults() -> AgentsSquareSourcesPayload:
     """Get bundled Agents Square default source configuration from package."""
@@ -4895,7 +4962,8 @@ async def put_square_sources(
 
 
 @router.post(
-    "/square/sources/reset", response_model=AgentsSquareSourcesPayload
+    "/square/sources/reset",
+    response_model=AgentsSquareSourcesPayload,
 )
 async def reset_square_sources() -> AgentsSquareSourcesPayload:
     """Reset current square sources by copying bundled default.json."""
@@ -5072,7 +5140,7 @@ async def import_square_agent(
             )
 
         workspace_dir = Path(
-            f"{WORKING_DIR}/workspaces/{local_agent_id}"
+            f"{WORKING_DIR}/workspaces/{local_agent_id}",
         ).expanduser()
         workspace_dir.mkdir(parents=True, exist_ok=True)
 
@@ -5317,7 +5385,8 @@ async def create_agent_project(
         )
     except FileExistsError as e:
         raise HTTPException(
-            status_code=409, detail=f"Project already exists: {e}"
+            status_code=409,
+            detail=f"Project already exists: {e}",
         ) from e
     except HTTPException:
         raise
@@ -5523,7 +5592,7 @@ async def acquire_project_knowledge_watch_lease(
                 project_id=projectId,
                 resolve_project_dir=_resolve_project_dir,
                 acquire_watch_lease=acquire_project_watch_lease,
-            )
+            ),
         )
     except HTTPException:
         raise
@@ -5554,7 +5623,7 @@ async def release_project_knowledge_watch_lease(
                 lease_id=leaseId,
                 resolve_project_dir=_resolve_project_dir,
                 release_watch_lease=release_project_watch_lease,
-            )
+            ),
         )
     except HTTPException:
         raise
@@ -5704,7 +5773,8 @@ async def clone_agent_project(
         )
     except FileExistsError as e:
         raise HTTPException(
-            status_code=409, detail=f"Target project already exists: {e}"
+            status_code=409,
+            detail=f"Target project already exists: {e}",
         ) from e
     except HTTPException:
         raise
@@ -5821,16 +5891,18 @@ async def upload_agent_project_file(
     workspace_dir = _resolve_agent_workspace_dir(agentId)
 
     try:
-        payload = copaw_project_file_services.upload_project_file_for_workspace(
-            workspace_dir=workspace_dir,
-            project_id=projectId,
-            file=file,
-            target_dir=target_dir,
-            relative_path=relative_path,
-            resolve_project_dir=_resolve_project_dir,
-            update_monitoring_state=update_project_file_monitoring_state,
-            record_realtime_paths=record_project_realtime_paths,
-            monitoring_active=PROJECT_FILE_MONITORING_ACTIVE,
+        payload = (
+            copaw_project_file_services.upload_project_file_for_workspace(
+                workspace_dir=workspace_dir,
+                project_id=projectId,
+                file=file,
+                target_dir=target_dir,
+                relative_path=relative_path,
+                resolve_project_dir=_resolve_project_dir,
+                update_monitoring_state=update_project_file_monitoring_state,
+                record_realtime_paths=record_project_realtime_paths,
+                monitoring_active=PROJECT_FILE_MONITORING_ACTIVE,
+            )
         )
         return ProjectFileInfo.model_validate(payload)
     except HTTPException:
@@ -5856,14 +5928,16 @@ async def delete_agent_project_path(
     workspace_dir = _resolve_agent_workspace_dir(agentId)
 
     try:
-        payload = copaw_project_file_services.delete_project_path_for_workspace(
-            workspace_dir=workspace_dir,
-            project_id=projectId,
-            target_path=targetPath,
-            resolve_project_dir=_resolve_project_dir,
-            update_monitoring_state=update_project_file_monitoring_state,
-            record_realtime_paths=record_project_realtime_paths,
-            monitoring_active=PROJECT_FILE_MONITORING_ACTIVE,
+        payload = (
+            copaw_project_file_services.delete_project_path_for_workspace(
+                workspace_dir=workspace_dir,
+                project_id=projectId,
+                target_path=targetPath,
+                resolve_project_dir=_resolve_project_dir,
+                update_monitoring_state=update_project_file_monitoring_state,
+                record_realtime_paths=record_project_realtime_paths,
+                monitoring_active=PROJECT_FILE_MONITORING_ACTIVE,
+            )
         )
         return DeleteProjectPathResponse.model_validate(payload)
     except HTTPException:
@@ -5888,14 +5962,16 @@ async def create_agent_project_directory(
     workspace_dir = _resolve_agent_workspace_dir(agentId)
 
     try:
-        payload = copaw_project_file_services.create_project_directory_for_workspace(
-            workspace_dir=workspace_dir,
-            project_id=projectId,
-            directory_path=body.path,
-            resolve_project_dir=_resolve_project_dir,
-            update_monitoring_state=update_project_file_monitoring_state,
-            record_realtime_paths=record_project_realtime_paths,
-            monitoring_active=PROJECT_FILE_MONITORING_ACTIVE,
+        payload = (
+            copaw_project_file_services.create_project_directory_for_workspace(
+                workspace_dir=workspace_dir,
+                project_id=projectId,
+                directory_path=body.path,
+                resolve_project_dir=_resolve_project_dir,
+                update_monitoring_state=update_project_file_monitoring_state,
+                record_realtime_paths=record_project_realtime_paths,
+                monitoring_active=PROJECT_FILE_MONITORING_ACTIVE,
+            )
         )
         return CreateProjectDirectoryResponse.model_validate(payload)
     except HTTPException:

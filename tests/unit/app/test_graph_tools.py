@@ -22,7 +22,9 @@ async def _await_terminal_memify_status(module, job_id: str) -> dict:
         try:
             last = json.loads(text)
         except json.JSONDecodeError:
-            last = text  # "memify job not found" while the row is still landing
+            last = (
+                text  # "memify job not found" while the row is still landing
+            )
         else:
             if last.get("status") in {"succeeded", "failed"}:
                 return last
@@ -179,13 +181,18 @@ async def test_memify_status_handles_not_found(monkeypatch) -> None:
 
 
 async def test_triplet_focus_search_requires_enabled(monkeypatch) -> None:
-    module = importlib.import_module("qwenpaw.agents.tools.triplet_focus_search")
+    module = importlib.import_module(
+        "qwenpaw.agents.tools.triplet_focus_search",
+    )
 
     monkeypatch.setattr(
         module,
         "load_config",
         lambda: SimpleNamespace(
-            knowledge=SimpleNamespace(enabled=True, triplet_search_enabled=False),
+            knowledge=SimpleNamespace(
+                enabled=True,
+                triplet_search_enabled=False,
+            ),
         ),
     )
 
@@ -195,7 +202,9 @@ async def test_triplet_focus_search_requires_enabled(monkeypatch) -> None:
 
 
 async def test_triplet_focus_search_formats_payload(monkeypatch) -> None:
-    module = importlib.import_module("qwenpaw.agents.tools.triplet_focus_search")
+    module = importlib.import_module(
+        "qwenpaw.agents.tools.triplet_focus_search",
+    )
 
     class _FakeGraphOpsManager:
         def __init__(self, working_dir) -> None:
@@ -214,7 +223,7 @@ async def test_triplet_focus_search_formats_payload(monkeypatch) -> None:
                         "source_type": "text",
                         "document_path": "docs/a.md",
                         "document_title": "A",
-                    }
+                    },
                 ],
                 warnings=[],
             )
@@ -223,7 +232,10 @@ async def test_triplet_focus_search_formats_payload(monkeypatch) -> None:
         module,
         "load_config",
         lambda: SimpleNamespace(
-            knowledge=SimpleNamespace(enabled=True, triplet_search_enabled=True),
+            knowledge=SimpleNamespace(
+                enabled=True,
+                triplet_search_enabled=True,
+            ),
         ),
     )
     monkeypatch.setattr(module, "GraphOpsManager", _FakeGraphOpsManager)
@@ -239,10 +251,18 @@ async def test_graph_tool_chain_smoke_local_engine(
     monkeypatch,
     tmp_path,
 ) -> None:
-    graph_query_module = importlib.import_module("qwenpaw.agents.tools.graph_query")
-    memify_run_module = importlib.import_module("qwenpaw.agents.tools.memify_run")
-    memify_status_module = importlib.import_module("qwenpaw.agents.tools.memify_status")
-    triplet_module = importlib.import_module("qwenpaw.agents.tools.triplet_focus_search")
+    graph_query_module = importlib.import_module(
+        "qwenpaw.agents.tools.graph_query",
+    )
+    memify_run_module = importlib.import_module(
+        "qwenpaw.agents.tools.memify_run",
+    )
+    memify_status_module = importlib.import_module(
+        "qwenpaw.agents.tools.memify_status",
+    )
+    triplet_module = importlib.import_module(
+        "qwenpaw.agents.tools.triplet_focus_search",
+    )
 
     knowledge_config = make_knowledge_config()
     knowledge_config.enabled = True
@@ -265,7 +285,9 @@ async def test_graph_tool_chain_smoke_local_engine(
     manager.index_source(
         source,
         knowledge_config,
-        SimpleNamespace(knowledge_chunk_size=knowledge_config.index.chunk_size),
+        SimpleNamespace(
+            knowledge_chunk_size=knowledge_config.index.chunk_size,
+        ),
     )
 
     load_config_stub = lambda: SimpleNamespace(knowledge=knowledge_config)

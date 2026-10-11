@@ -115,7 +115,9 @@ def read_text_file_with_encoding_fallback(file_path: Path | str) -> str:
 
 def _default_download_dir() -> str:
     """Return the default download directory under the current focus/workspace."""
-    base_dir = get_current_focus_dir() or get_current_workspace_dir() or WORKING_DIR
+    base_dir = (
+        get_current_focus_dir() or get_current_workspace_dir() or WORKING_DIR
+    )
     return str(base_dir / "downloads")
 
 

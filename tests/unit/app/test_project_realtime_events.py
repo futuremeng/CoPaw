@@ -36,7 +36,9 @@ def test_record_project_realtime_paths_collects_unseen_changes(tmp_path: Path):
     assert changed_paths == ["original/note.md"]
 
 
-def test_record_project_realtime_paths_ignores_non_project_files(tmp_path: Path):
+def test_record_project_realtime_paths_ignores_non_project_files(
+    tmp_path: Path,
+):
     outside = tmp_path / "notes.txt"
     outside.write_text("hello", encoding="utf-8")
 
@@ -51,7 +53,9 @@ def test_record_project_realtime_paths_ignores_non_project_files(tmp_path: Path)
     assert changed_paths == []
 
 
-def test_record_project_realtime_paths_updates_recent_files_with_dedupe(tmp_path: Path):
+def test_record_project_realtime_paths_updates_recent_files_with_dedupe(
+    tmp_path: Path,
+):
     workspace_dir = tmp_path
     project_dir = workspace_dir / "projects" / "project-a"
     target = project_dir / "original" / "note.md"
@@ -69,7 +73,9 @@ def test_record_project_realtime_paths_updates_recent_files_with_dedupe(tmp_path
     assert recent[0]["recorded_at"]
 
 
-def test_record_project_realtime_paths_keeps_only_five_recent_files(tmp_path: Path):
+def test_record_project_realtime_paths_keeps_only_five_recent_files(
+    tmp_path: Path,
+):
     workspace_dir = tmp_path
     project_dir = workspace_dir / "projects" / "project-a"
     original_dir = project_dir / "original"
@@ -123,7 +129,7 @@ def test_persist_project_pipeline_run_records_manifest_changes(tmp_path: Path):
                 id="step-1",
                 name="Step 1",
                 kind="ingest",
-            )
+            ),
         ],
     )
     run = PipelineRunDetail(
@@ -141,7 +147,7 @@ def test_persist_project_pipeline_run_records_manifest_changes(tmp_path: Path):
                 status="succeeded",
                 started_at="2026-01-01T00:00:00Z",
                 ended_at="2026-01-01T00:00:01Z",
-            )
+            ),
         ],
         artifacts=["output/final-report.json"],
     )
@@ -156,12 +162,22 @@ def test_persist_project_pipeline_run_records_manifest_changes(tmp_path: Path):
 
     assert latest_event_id == 1
     assert ".pipelines/runs/run-1/run_manifest.json" in changed_paths
-    assert ".pipelines/runs/run-1/steps/step-1/artifact_manifest.json" in changed_paths
-    assert ".pipelines/runs/run-1/steps/step-1/metric_pack.json" in changed_paths
-    assert ".pipelines/runs/run-1/steps/step-1/outputs/output/final-report.json" in changed_paths
+    assert (
+        ".pipelines/runs/run-1/steps/step-1/artifact_manifest.json"
+        in changed_paths
+    )
+    assert (
+        ".pipelines/runs/run-1/steps/step-1/metric_pack.json" in changed_paths
+    )
+    assert (
+        ".pipelines/runs/run-1/steps/step-1/outputs/output/final-report.json"
+        in changed_paths
+    )
 
 
-def test_import_platform_template_to_project_records_template_change(tmp_path: Path):
+def test_import_platform_template_to_project_records_template_change(
+    tmp_path: Path,
+):
     project_dir = tmp_path / "projects" / "project-a"
     project_dir.mkdir(parents=True, exist_ok=True)
     template = PlatformFlowTemplateInfo(
@@ -174,7 +190,7 @@ def test_import_platform_template_to_project_records_template_change(tmp_path: P
                 id="step-1",
                 name="Step 1",
                 kind="ingest",
-            )
+            ),
         ],
     )
 

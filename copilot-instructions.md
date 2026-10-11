@@ -53,7 +53,7 @@ applyTo:
   - "git checkout"
   - "git rebase"
   - "git merge"
-  
+
 # 流程相关操作
   - "*pipeline*"
   - "*workflow*"
@@ -72,7 +72,7 @@ checklist:
   # 分支管理
   - "开发前：fetch/prune、更新镜像线、更新 fork 主线、按目标切分支"
   - "PR前：确认分支基于镜像线、无 fork 私有改动、测试通过、推送并创建 PR"
-  
+
   # 流程编排
   - "创建流程模板前：查阅流程规范、选择合适的 step kind、确保 ID 唯一性"
   - "流程测试前：验证 JSON 格式、检查步骤顺序、确认描述清晰"

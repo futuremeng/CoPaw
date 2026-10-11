@@ -12,6 +12,7 @@ from typing import Any, Dict, List
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+
 class KnowledgeSourceSpec(BaseModel):
     """Compatibility source spec for CoPaw knowledge modules."""
 

@@ -10,7 +10,9 @@ from fastapi.testclient import TestClient
 from qwenpaw.app.routers import providers as providers_router_module
 
 
-def test_get_active_models_effective_uses_agent_config_without_workspace(monkeypatch):
+def test_get_active_models_effective_uses_agent_config_without_workspace(
+    monkeypatch,
+):
     app = FastAPI()
     app.include_router(providers_router_module.router)
 
@@ -31,9 +33,11 @@ def test_get_active_models_effective_uses_agent_config_without_workspace(monkeyp
     )
 
     manager = MagicMock()
-    manager.get_active_model.return_value = providers_router_module.ModelSlotConfig(
-        provider_id="global",
-        model="model-global",
+    manager.get_active_model.return_value = (
+        providers_router_module.ModelSlotConfig(
+            provider_id="global",
+            model="model-global",
+        )
     )
     app.state.provider_manager = manager
 

@@ -111,7 +111,9 @@ def _validate_steps(detail: dict[str, Any], strict_status: bool) -> list[str]:
                 continue
             status = str(item.get("status") or "").lower()
             if status != "succeeded":
-                failures.append(f"Step {step_id} not succeeded (status={status})")
+                failures.append(
+                    f"Step {step_id} not succeeded (status={status})",
+                )
 
     return failures
 
@@ -155,7 +157,10 @@ def _max_depth_from_tree(node: Any, level: int = 1) -> int:
     return level
 
 
-def _validate_depth(project_dir: Path, min_depth: int) -> tuple[list[str], int]:
+def _validate_depth(
+    project_dir: Path,
+    min_depth: int,
+) -> tuple[list[str], int]:
     files = _find_concept_tree_files(project_dir)
     if not files:
         return (["No concept-tree*.json files found for depth validation"], 0)
@@ -171,26 +176,70 @@ def _validate_depth(project_dir: Path, min_depth: int) -> tuple[list[str], int]:
             failures.append(f"Failed to parse {path}: {exc}")
 
     if max_depth < min_depth:
-        failures.append(f"Concept tree depth too shallow: max_depth={max_depth}, required>={min_depth}")
+        failures.append(
+            f"Concept tree depth too shallow: max_depth={max_depth}, required>={min_depth}",
+        )
 
     return failures, max_depth
 
 
 def _count_pairwise_contrast(artifacts: list[str]) -> int:
-    return len([path for path in artifacts if fnmatch(path, "data/contrast-*.json")])
+    return len(
+        [path for path in artifacts if fnmatch(path, "data/contrast-*.json")],
+    )
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Validate multibook reproducibility run outputs")
-    parser.add_argument("--run-detail", default="", help="Path to run detail JSON")
-    parser.add_argument("--base-url", default="http://127.0.0.1:8088", help="CoPaw API base url")
-    parser.add_argument("--agent-id", default="", help="Agent ID (when fetching from API)")
-    parser.add_argument("--project-id", default="", help="Project ID (when fetching from API)")
-    parser.add_argument("--run-id", default="", help="Run ID (when fetching from API)")
-    parser.add_argument("--timeout", type=float, default=30.0, help="HTTP timeout seconds")
-    parser.add_argument("--project-dir", default="", help="Project directory for depth validation")
-    parser.add_argument("--min-depth", type=int, default=8, help="Minimum concept tree depth")
-    parser.add_argument("--strict-status", action="store_true", help="Require each required step status == succeeded")
+    parser = argparse.ArgumentParser(
+        description="Validate multibook reproducibility run outputs",
+    )
+    parser.add_argument(
+        "--run-detail",
+        default="",
+        help="Path to run detail JSON",
+    )
+    parser.add_argument(
+        "--base-url",
+        default="http://127.0.0.1:8088",
+        help="CoPaw API base url",
+    )
+    parser.add_argument(
+        "--agent-id",
+        default="",
+        help="Agent ID (when fetching from API)",
+    )
+    parser.add_argument(
+        "--project-id",
+        default="",
+        help="Project ID (when fetching from API)",
+    )
+    parser.add_argument(
+        "--run-id",
+        default="",
+        help="Run ID (when fetching from API)",
+    )
+    parser.add_argument(
+        "--timeout",
+        type=float,
+        default=30.0,
+        help="HTTP timeout seconds",
+    )
+    parser.add_argument(
+        "--project-dir",
+        default="",
+        help="Project directory for depth validation",
+    )
+    parser.add_argument(
+        "--min-depth",
+        type=int,
+        default=8,
+        help="Minimum concept tree depth",
+    )
+    parser.add_argument(
+        "--strict-status",
+        action="store_true",
+        help="Require each required step status == succeeded",
+    )
     parser.add_argument(
         "--require-pairwise-count",
         type=int,
@@ -239,16 +288,21 @@ def main() -> int:
     if pairwise_count < args.require_pairwise_count:
         failures.append(
             "Pairwise contrast count too low: "
-            f"found={pairwise_count}, required>={args.require_pairwise_count}"
+            f"found={pairwise_count}, required>={args.require_pairwise_count}",
         )
 
     max_depth = 0
     if args.project_dir.strip():
-        depth_failures, max_depth = _validate_depth(Path(args.project_dir), args.min_depth)
+        depth_failures, max_depth = _validate_depth(
+            Path(args.project_dir),
+            args.min_depth,
+        )
         failures.extend(depth_failures)
         print(f"[info] concept_tree_max_depth={max_depth}")
     else:
-        print("[warn] --project-dir not provided, skipped concept tree depth validation")
+        print(
+            "[warn] --project-dir not provided, skipped concept tree depth validation",
+        )
 
     if failures:
         print("[result] FAILED")

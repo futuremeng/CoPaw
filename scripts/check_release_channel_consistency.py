@@ -73,7 +73,8 @@ LOCAL_SUFFIX_RE = re.compile(r"(?:\.post\d+|\.dev\d+)+$")
 
 def _load_loader(repo_root: Path):
     spec = importlib.util.spec_from_file_location(
-        "_rc_consistency_loader", repo_root / LOADER_REL
+        "_rc_consistency_loader",
+        repo_root / LOADER_REL,
     )
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
@@ -89,14 +90,14 @@ def rule_authority(loader, data):
     if unknown:
         errors.append(
             f"R1: pending names unknown channels {unknown}; "
-            f"declared channels are {list(loader.CHANNELS)}"
+            f"declared channels are {list(loader.CHANNELS)}",
         )
     for key in ("distribution", "pypi_project"):
         value = data.get(key)
         if not isinstance(value, str) or not value:
             errors.append(
                 f"R1: {key} must name our own distribution even while its "
-                "channel is still pending"
+                "channel is still pending",
             )
     return errors
 
@@ -108,11 +109,11 @@ def rule_two_state(loader, data):
         value = data.get(field)
         if ready and not value:
             errors.append(
-                f"R2: {channel} is not pending but {field} is empty"
+                f"R2: {channel} is not pending but {field} is empty",
             )
         if not ready and value is not None:
             errors.append(
-                f"R2: {channel} is pending but {field} = {value!r}"
+                f"R2: {channel} is pending but {field} = {value!r}",
             )
     return errors
 
@@ -128,7 +129,7 @@ def rule_no_upstream(loader, data, repo_root):
     # Fork-owned release workflows join as soon as they exist (phase 2);
     # an empty glob is a legitimate phase-1 state, not a missing file.
     for path in sorted(
-        (repo_root / ".github/workflows").glob(FORK_WORKFLOW_GLOB)
+        (repo_root / ".github/workflows").glob(FORK_WORKFLOW_GLOB),
     ):
         paths.append((str(path.relative_to(repo_root)), None))
     for rel, anchor in paths:
@@ -140,7 +141,7 @@ def rule_no_upstream(loader, data, repo_root):
         for marker in UPSTREAM_MARKERS:
             if marker in text:
                 errors.append(
-                    f"R3: {rel} names the upstream identity {marker!r}"
+                    f"R3: {rel} names the upstream identity {marker!r}",
                 )
         if anchor:
             expected = anchors[anchor]
@@ -157,7 +158,7 @@ def rule_codegen(data, repo_root):
     if path.read_text(encoding="utf-8") != render_ts(data):
         return [
             f"R4: {rel} is stale; re-run "
-            "scripts/release_channel.py --write-ts"
+            "scripts/release_channel.py --write-ts",
         ]
     return []
 
@@ -181,7 +182,7 @@ def rule_version_line(data, repo_root):
         return [
             f"R5: {VERSION_REL} reports {number!r} (upstream part {base!r}) "
             f"but the fact source says upstream_version="
-            f"{data['upstream_version']!r}"
+            f"{data['upstream_version']!r}",
         ]
     return []
 
@@ -221,7 +222,7 @@ def main(argv=None):
 
     print(
         "Release channel consistency check passed "
-        f"(R1-R5 over {len(CHANNEL_FILES)} channel files)"
+        f"(R1-R5 over {len(CHANNEL_FILES)} channel files)",
     )
     return 0
 
