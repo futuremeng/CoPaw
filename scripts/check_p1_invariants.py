@@ -29,7 +29,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-DEFAULT_BASE_REF = "ddd8408eb"
+DEFAULT_BASE_REF = "2744a976b"
 DEFAULT_BASELINE = "scripts/p1_baseline.json"
 BRAND_RE = re.compile(r"(?:qwenpaw|copaw)", re.IGNORECASE)
 PLACEHOLDER = "\x00"

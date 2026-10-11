@@ -1,5 +1,5 @@
 {
-  "base_ref": "ddd8408eb",
+  "base_ref": "2744a976b",
   "files": {
     ".gitignore": {
       "added": 4,
@@ -188,14 +188,6 @@
     "console/src/api/types/skill.ts": {
       "added": 73,
       "behavior_added": 73,
-      "behavior_removed": 0,
-      "mechanical": false,
-      "naming": 0,
-      "removed": 0
-    },
-    "console/src/components/ChunkErrorBoundary.tsx": {
-      "added": 1,
-      "behavior_added": 1,
       "behavior_removed": 0,
       "mechanical": false,
       "naming": 0,
@@ -409,9 +401,17 @@
       "naming": 0,
       "removed": 4
     },
+    "console/src/utils/chunkRecovery.ts": {
+      "added": 1,
+      "behavior_added": 1,
+      "behavior_removed": 1,
+      "mechanical": false,
+      "naming": 0,
+      "removed": 1
+    },
     "console/src/utils/lazyWithRetry.ts": {
-      "added": 35,
-      "behavior_added": 35,
+      "added": 38,
+      "behavior_added": 38,
       "behavior_removed": 4,
       "mechanical": false,
       "naming": 0,
@@ -923,15 +923,15 @@
     }
   },
   "totals": {
-    "added": 10947,
-    "behavior_added": 10912,
+    "added": 10950,
+    "behavior_added": 10915,
     "behavior_files": 113,
-    "behavior_removed": 482,
+    "behavior_removed": 483,
     "files": 114,
     "mechanical_files": 1,
     "naming_files": 1,
     "naming_lines": 35,
     "naming_touched_files": 7,
-    "removed": 517
+    "removed": 518
   }
 }
