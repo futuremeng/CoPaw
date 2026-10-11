@@ -6,10 +6,15 @@
     python scripts/release_channel.py --sh
     GITHUB_ENV=... python scripts/release_channel.py --gh-env
     python scripts/release_channel.py --write-ts [--out PATH]
+    python scripts/release_channel.py --check-artifacts DIST_DIR
 
 ``--sh`` serves a *checkout* of this repository; the shipped installers are
 ``curl … | bash`` and have neither a checkout nor Python, so they carry the
 literals and the consistency gate keeps them equal to this file.
+
+``--check-artifacts`` is the publish gate of the fork-owned release workflow:
+it is what keeps a build made before the distribution rename from being pushed
+to PyPI under our project name.
 """
 
 from __future__ import annotations
@@ -18,6 +23,7 @@ import argparse
 import importlib.util
 import json
 import os
+import re
 import sys
 from pathlib import Path
 from typing import Any
@@ -116,6 +122,56 @@ def render_ts(data: dict[str, Any]) -> str:
     return "\n".join(lines) + TS_FOOTER
 
 
+ARTIFACT_SUFFIXES = (".whl", ".tar.gz")
+
+
+def artifact_prefixes(project: str) -> tuple[str, str]:
+    """The two file-name prefixes one project name produces.
+
+    A source distribution collapses runs of ``[-_.]`` to a dash, an installed
+    wheel collapses them to an underscore, so a name with a dash in it has to
+    be checked both ways or our own build reads as foreign.
+    """
+    return (
+        re.sub(r"[-_.]+", "-", project) + "-",
+        re.sub(r"[-_.]+", "_", project) + "-",
+    )
+
+
+def check_artifacts(dist_dir: Path, data: dict[str, Any]) -> int:
+    """Refuse to publish anything that is not built under our own project.
+
+    Two independent refusals: the channel itself may still be pending, and a
+    build made before the distribution rename carries upstream's name even
+    though it came out of our repository.  Either one alone is enough.
+    """
+    if "pypi" in data["pending"]:
+        print(
+            "ERROR: the pypi channel is still pending; refusing to publish",
+        )
+        return 1
+    names = sorted(
+        path.name
+        for path in dist_dir.iterdir()
+        if path.is_file() and path.name.endswith(ARTIFACT_SUFFIXES)
+    )
+    if not names:
+        print(f"ERROR: no artifacts in {dist_dir}")
+        return 1
+    prefixes = artifact_prefixes(data["pypi_project"])
+    foreign = [name for name in names if not name.startswith(prefixes)]
+    if foreign:
+        print(
+            f"ERROR: these artifacts are not built under "
+            f"{data['pypi_project']!r}:",
+        )
+        for name in foreign:
+            print(f"  {name}")
+        return 1
+    print(f"release gate: {len(names)} artifacts under {prefixes[0][:-1]}")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     form = parser.add_mutually_exclusive_group(required=True)
@@ -123,6 +179,12 @@ def main(argv: list[str] | None = None) -> int:
     form.add_argument("--sh", action="store_true")
     form.add_argument("--gh-env", action="store_true")
     form.add_argument("--write-ts", action="store_true")
+    form.add_argument(
+        "--check-artifacts",
+        type=Path,
+        metavar="DIST_DIR",
+        help="verify a build dir before publishing it",
+    )
     parser.add_argument(
         "--out",
         type=Path,
@@ -150,6 +212,8 @@ def main(argv: list[str] | None = None) -> int:
             for name, value in env_map(data).items():
                 handle.write(f"{name}={value}\n")
         return 0
+    if args.check_artifacts is not None:
+        return check_artifacts(args.check_artifacts, data)
     rendered = render_ts(data)
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text(rendered, encoding="utf-8")
