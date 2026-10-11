@@ -28,6 +28,28 @@ const factSource = JSON.parse(
   ),
 );
 
+/**
+ * The package names a shipped guide tells a reader to pip-install.
+ *
+ * Flags and the editable `pip install -e .` source rebuild are skipped: only a
+ * named package can point at the wrong project. `uv pip install x` is caught by
+ * the same match because it contains `pip install x`.
+ */
+function pipInstallTargets(text: string): string[] {
+  const targets: string[] = [];
+  for (const line of text.split("\n")) {
+    const match = /pip install\s+(.+)/.exec(line);
+    if (!match) continue;
+    targets.push(
+      ...match[1]
+        .trim()
+        .split(/\s+/)
+        .filter((argument) => !argument.startsWith("-") && argument !== "."),
+    );
+  }
+  return targets;
+}
+
 describe("CoPaw release channel wiring", () => {
   it("mirrors the fact source field for field", () => {
     expect(RELEASE_CHANNEL).toEqual(factSource);
@@ -50,10 +72,19 @@ describe("CoPaw release channel wiring", () => {
     }
   });
 
-  it("never promises a PyPI channel the fact source marks pending", () => {
-    for (const language of Object.keys(UPDATE_MD)) {
-      expect(UPDATE_MD[language]).not.toMatch(/pip install copaw/);
-      expect(UPDATE_MD[language]).not.toMatch(/uv pip install copaw/);
+  it("offers a named package install only when the fact source opens pypi", () => {
+    const targets = Object.keys(UPDATE_MD).flatMap((language) =>
+      pipInstallTargets(UPDATE_MD[language]),
+    );
+    if (factSource.pending.includes("pypi")) {
+      // A pending channel has nothing to install from, so a guide that names a
+      // package is promising an install that cannot work -- and, read the other
+      // way, `pip install qwenpaw` would hand the reader upstream's product.
+      expect(targets).toEqual([]);
+      return;
+    }
+    for (const target of targets) {
+      expect(target).toBe(factSource.pypi_project);
     }
   });
 
