@@ -17,6 +17,7 @@ never mutated.
 from __future__ import annotations
 
 import os
+from typing import Any
 
 import click
 
@@ -35,10 +36,10 @@ def invoked_as_copaw(ctx: click.Context) -> bool:
 
 
 @click.pass_context
-def overlay_update_callback(ctx: click.Context, *, yes: bool = False) -> None:
+def overlay_update_callback(ctx: click.Context, **options: Any) -> None:
     """Refuse for CoPaw, hand any other program back to upstream."""
     if not invoked_as_copaw(ctx):
-        ctx.invoke(_core_update_cmd, yes=yes)
+        ctx.invoke(_core_update_cmd, **options)
         return
 
     click.echo(f"CoPaw {__version__}")

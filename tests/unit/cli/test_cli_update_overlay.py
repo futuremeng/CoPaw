@@ -84,9 +84,14 @@ def no_installer(monkeypatch) -> list:
 
 @pytest.fixture
 def up_to_date(monkeypatch):
-    """Steer the upstream updater to its harmless 'already current' branch."""
+    """Steer the upstream updater to its harmless 'already current' branch.
+
+    The fixture records what the core command is handed, because the overlay
+    has to forward upstream's options rather than only the one it knows about.
+    """
     from qwenpaw.cli.update_cmd import InstallInfo
 
+    seen: dict = {}
     info = InstallInfo(
         package_dir="/tmp/site-packages/qwenpaw",
         python_executable="/tmp/venv/bin/python",
@@ -97,12 +102,13 @@ def up_to_date(monkeypatch):
         source_url=None,
     )
     monkeypatch.setattr(core_update, "_detect_installation", lambda: info)
-    monkeypatch.setattr(
-        core_update,
-        "_fetch_latest_version",
-        lambda: core_update.__version__,
-    )
-    return info
+
+    def _fetch_latest(*, include_prerelease: bool = False) -> str:
+        seen["include_prerelease"] = include_prerelease
+        return core_update.__version__
+
+    monkeypatch.setattr(core_update, "_fetch_latest_version", _fetch_latest)
+    return seen
 
 
 def test_copaw_program_refuses_and_points_to_releases(no_installer) -> None:
@@ -145,6 +151,46 @@ def test_copaw_program_still_refuses_with_yes(no_installer) -> None:
 
     assert result.exit_code != 0
     assert no_installer == []
+
+
+def test_copaw_refusal_accepts_every_option_it_advertises(
+    no_installer,
+) -> None:
+    """The overlay may not advertise an option its callback then rejects.
+
+    The command's option list is copied from upstream, so a new upstream
+    option is parsed unconditionally; the callback used to name only ``yes``
+    and every invocation died on an unexpected keyword argument.
+    """
+    overlay = make_overlay_update_command()
+    options = [p for p in overlay.params if isinstance(p, click.Option)]
+    assert len(options) == len(overlay.params)
+    assert all(p.is_flag for p in options)
+    flags = [max(p.opts, key=len) for p in options]
+
+    result = CliRunner().invoke(
+        copaw_cli,
+        ["update", *flags],
+        prog_name="copaw",
+    )
+
+    assert result.exit_code != 0
+    assert no_installer == []
+    assert "not published to PyPI" in result.output
+
+
+def test_qwenpaw_program_forwards_prerelease_to_the_upstream_updater(
+    up_to_date,
+) -> None:
+    result = CliRunner().invoke(
+        copaw_cli,
+        ["update", "--yes", "--prerelease"],
+        prog_name="qwenpaw",
+    )
+
+    assert result.exit_code == 0
+    assert "QwenPaw is already up to date." in result.output
+    assert up_to_date == {"include_prerelease": True}
 
 
 def test_other_program_names_keep_the_upstream_updater(up_to_date) -> None:
