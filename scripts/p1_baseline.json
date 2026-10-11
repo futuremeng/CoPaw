@@ -690,12 +690,12 @@
       "removed": 0
     },
     "src/qwenpaw/app/routers/agent_scoped.py": {
-      "added": 15,
-      "behavior_added": 15,
-      "behavior_removed": 1,
+      "added": 14,
+      "behavior_added": 14,
+      "behavior_removed": 0,
       "mechanical": false,
       "naming": 0,
-      "removed": 1
+      "removed": 0
     },
     "src/qwenpaw/app/routers/agents.py": {
       "added": 3790,
@@ -833,6 +833,14 @@
       "naming": 0,
       "removed": 1
     },
+    "src/qwenpaw/security/tool_guard/safety_checks.py": {
+      "added": 9,
+      "behavior_added": 9,
+      "behavior_removed": 1,
+      "mechanical": false,
+      "naming": 0,
+      "removed": 1
+    },
     "tests/unit/app/crons/test_heartbeat.py": {
       "added": 321,
       "behavior_added": 321,
@@ -939,11 +947,11 @@
     }
   },
   "totals": {
-    "added": 10960,
-    "behavior_added": 10924,
-    "behavior_files": 115,
+    "added": 10968,
+    "behavior_added": 10932,
+    "behavior_files": 116,
     "behavior_removed": 485,
-    "files": 116,
+    "files": 117,
     "mechanical_files": 1,
     "naming_files": 1,
     "naming_lines": 36,
