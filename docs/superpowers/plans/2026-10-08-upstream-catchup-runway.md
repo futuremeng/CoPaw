@@ -2318,7 +2318,104 @@ CI 选择集（终树一趟，`tests/unit --ignore=tests/unit/channels`）：**2
 里的读点数全部从 10 改为 **11**（模板仍 10 条），并把"集合相等 / 逐行比对"这类含混说法改成明确分工的写法
 （**门禁盯未登记的落点文件，守卫用例盯行级相等**）；§8.36 的三处旧串就地标注为"同日被第二次纠正，见本节"。
 
-**本笔登记的未办**：① 109-2 那把照旧在册（fork 自有 `copaw-release.yml` + `--check-artifacts` + `constants.test.ts` 自咬前置修）；
+**本笔登记的未办**：① 109-2 那把照旧在册（fork 自有 `copaw-release.yml` + `--check-artifacts` + `constants.test.ts` 自咬前置修）—— **同日已落，见 §8.38**；
 ② §8.36 未办 ①–④ 照旧在册（阶段 2 宿主二选一待报、2 枚 acp 工作区耦合、上游 `secret_store`、8.32 ①–⑤）。
 
-**已闭环计数推到 109（109-1 与其补刀 109-1b 同批闭环）；109-2 待做。**
+**已闭环计数推到 109（109-1 与其补刀 109-1b 同批闭环）；109-2 待做。**（109-2 同日落地，见 §8.38。）
+
+---
+
+### 8.38 刀 109-2（2026-10-11）：发布链路缺的是两道闸门，而那条写死的禁令两头都错
+
+**一句话结论**：三处落地 —— `scripts/release_channel.py --check-artifacts`（+64）、fork 自有
+`.github/workflows/copaw-release.yml`（155 行，配 6 枚断言 117 行）、`constants.test.ts` 那条
+未锚定的 `/pip install copaw/` 换成按事实源状态判定（+35 −4）。上游四条发布 workflow 仍逐字节等于分叉点，
+靠 GitHub 设置停用（**设置动作，未授权，仍在待裁**）。**这把不是零账册成本**：P1 行为 +31，见下面"账"。
+
+**为什么新建 workflow 不必进冲突账**：现测 `.github/workflows/` 共 38 枚文件，除 `unit-tests.yml`
+（fork-created）其余 37 枚在 `2744a976b` 上字节相同 ⇒ 新建一枚不碰任何上游文件；两个既有机制顺带把它盯住 ——
+门禁 R3 的 `FORK_WORKFLOW_GLOB = copaw-*.y*ml` 把"fork 自有 workflow 不得指向上游地址"覆盖到它，
+R6 的全扫 `READER_DIRS` 含 `.github/workflows` × 后缀 `.yml`，所以它若写成按分发名读 wheel 就以**未登记读点**变红。
+现树读数仍是 `10 registered templates, 11 read points swept in 5 files`（与 §8.37 逐字相同 ⇒ 本批未新造读点）。
+`check_ci_command_targets.py` 从上一笔的 `18 命令` 变成 **19 命令 / 4 包目录** —— 新增那 1 条正是本 workflow 的
+`run` 步骤，被门禁验过指向真实目标。
+
+**两道闸门各自被摘掉看过红（5 枚变异，每枚恰红 1 条）**：
+
+| 摘掉/改掉 | 变红的断言 |
+| --- | --- |
+| 加 `release: published` 触发 | `test_it_can_only_be_started_by_hand` |
+| 删 publish 的 `if: inputs.confirm_publish` | `test_publishing_requires_the_explicit_confirmation` |
+| publish 的 `needs` 去掉 `artifacts` | `test_the_publish_job_downstreams_the_artifact_check` |
+| `COPAW_PYPI_API_TOKEN` 换回上游的 `PYPI_API_TOKEN` | `test_it_never_borrows_upstream_pypi_secret_name` |
+| 删 `channel` 里的一致性闸门步 | `test_a_job_exports_the_channel_facts_and_runs_the_consistency_gate` |
+
+形状：`channel`（导出事实源到 `GITHUB_ENV` + 跑 R1–R6）→ `build`（前端产物 + `python -m build`）→
+`artifacts`（`--check-artifacts dist`）→ `publish`（需人工 `confirm_publish`）。
+上游那四条 YAML 一字不改（§7 裁决），所以**这个文件是我们到 PyPI 的唯一路径** —— 它必须自带闸门，
+而不能指望"没人会误点"。
+
+**`--check-artifacts` 为什么必须认两种规范化形式**：`python -m build` 按 `[project] name` 命名产物，
+而 PEP 427 让 wheel 把 `[-_.]` 连串折成下划线、sdist 折成连字符 ⇒ `copaw-community` 的产物是
+`copaw_community-…-py3-none-any.whl` 与 `copaw-community-….tar.gz` **同时存在**。只比一种会把自己的 sdist 判成外来的。
+变异实测：把连字符那支改成下划线 ⇒ 恰红 `test_check_artifacts_accepts_both_normalized_forms` 1 枚；
+把 `.tar.gz` 后缀摘掉 ⇒ 同一枚红。方向相反的两条红也在：pending 期一律拒（消息含 `pypi` / `pending`）、
+空目录拒（`no artifacts`）、**`copaw-1.0-py3-none-any.whl` 也拒** —— `copaw` 是上游改名前那枚被占的包名
+（§4，2026-10-08 裁），它看着像我们的，实际会把包发到别人的项目下。
+
+**判据 98 在本刀的实证（那条旧断言两头都错）**：`not.toMatch(/pip install copaw/)` 既放过 `pip install qwenpaw`，
+又会在渠道开通那天咬住本该教的 `pip install copaw-community`。三枚探针实测（改 `constants.ts` 文案 / 改事实源
+`pending`，跑完用 Edit 还原；`git status` 证两枚文件字节未变，`grep pip install` 只剩三行 `-e .`）：
+
+| 探针 | 新用例 | 旧用例 |
+| --- | --- | --- |
+| pending 期文案写 `pip install qwenpaw` | **红 1** | 绿 ⇒ 这就是漏 |
+| 渠道已开、文案写 `copaw`（错名） | 红 1 | 红 1 |
+| 渠道已开、文案写 `copaw-community`（合法） | 绿 | **红** ⇒ 自咬（旧正则对该串匹配为真，实测 `True`） |
+
+新写法：从每语正文提取所有 `pip install` 的**目标 token**（跳过 flag 与 `.`，`uv pip install x` 由同一匹配吃到），
+pending 期要求目标集为空，开通后每个目标必须逐字等于 `pypi_project`。
+第二条探针同时红 `RELEASE_CHANNEL` 镜像那条（改事实源必然改到生成文件）—— 属预期，非新洞。
+
+**TDD 读数**：`--check-artifacts` 先红 = `SystemExit: 2 / one of the arguments --print --sh --gh-env --write-ts is required`；
+workflow 断言先红 = 文件不存在（`test_the_workflow_exists_and_parses`）。终树
+`tests/unit/scripts` + `tests/unit/copaw` **180 passed in 9.22s**（上一笔 169 ⇒ 本批 +11 枚：CLI 5 + workflow 6），
+门禁 **rc=0** 同串。
+
+**账（现算，非沿用）**：P1 `--check --target-ref working` 在提交前就报
+`behavior_added 10932 → 10963`、`console/src/layouts/constants.test.ts 88 → 119` ——
+**本刀账册成本 +31 行**，全在那枚在册的上游用例文件里；其余四枚落点
+（`scripts/release_channel.py`、它的 CLI 用例、新 workflow、新 workflow 用例）全是 fork-created ⇒ 不记账。
+`behavior_removed` 与总 `removed` 不变（我删掉的 4 行本身就是 fork 加的行，不进上游行账）。
+基线随本笔重立：`--write-baseline` 后 **117 文件 / +10,999 −521**（behavior 116 / +10,963 / −485，机械 1 枚 lockfile），
+`--check` **rc=0**。
+
+**其余读数**：前端全量 **532 文件 / 5,237 passed / 334.33s**（用例数不变：一条换一条）；
+CI 选择集（`tests/unit --ignore=tests/unit/channels`）**2 failed / 15,813 passed / 23 skipped / 4 xfailed in 1169.27s**
+—— 与 §8.37 的 2 / 15,802 差 **11 枚**，正是本批新增，红的仍是 §8.35 那两枚 `test_acp_available_commands`（工作区耦合，未裁）
+⇒ **本批零新增红**。`src/` 未动 ⇒ L1 必过五目录不重跑。
+`npx tsc --noEmit -p tsconfig.json` **0 错**（旧记的 19 枚在此命令下不复现，取现测为准）；
+`prettier --check` 两枚前端文件干净；`black 23.3.0` 与 `add-trailing-comma` 迭代到**不动点**后同 Passed
+（首跑两枚文件被 reformatted —— 钩子版本与本机 `black 26.10.0` 都不是"随手跑一次"的依据，以 pre-commit 为准）；
+`flake8 --extend-ignore=E203` 三枚 Python 文件 **rc=0**。四枝离线门禁同树 rc=0：
+namespace `PASSED` · ci-command-targets `19 命令 / 4 包目录` · locale split `4,658 + 59 + 7 + 1,459 + 23` ·
+brand `7 files / 35 lines`。
+
+**取不到的一条，如实登记**：`actionlint` 钩子离线装不起来（Go 依赖要网络，`proxy.golang.org` i/o timeout）。
+对照实验：对**上游自己的** `.github/workflows/release.yml` 同样 rc=3 安装失败 ⇒ 这是环境缺口，不是本文件的裁决。
+新 workflow 的 actionlint 结论只能等推送后由 CI 给。
+
+**判据 197（禁令要写成"按可用性状态判定 + 提取目标集合"，不要写成被禁字符串的字面匹配）**：
+以字面量为禁令的守卫同时具备两种错 —— 拼写不同的违规放过（`qwenpaw`），未来合法的文本咬住
+（`copaw-community` 以 `copaw` 为前缀）。它的根因与判据 98 同族（用今天的非法串枚举明天的合法串），
+197 给的是替代写法：状态读事实源，覆盖面靠"提取全部目标"而不是"列举已知坏值"，
+于是渠道开关那天既不用改用例也不会漏掉别的名。
+
+**本笔登记的未办（不裁，只落点）**：① 阶段 2 真发包的四把仍未落 —— `pyproject.toml:2` 改名 +
+§3 那 11 处读点同把落 + `pending` 去掉 `pypi` + `copaw update` 从拒绝改真升级，**逐把需单独授权**；
+② GitHub 设置停用上游四条发布 workflow、创建仓库密钥 `COPAW_PYPI_API_TOKEN`（设置动作，需授权）；
+③ 那 6 枚 release-channel 前端用例整体搬进 fork 自有文件：可退掉本刀的 +31，并可能让
+`constants.test.ts` 退回分叉点字节 ⇒ **关 1 枚冲突宿主**（待裁，不在本刀做）；
+④ actionlint 的本地读数缺口（见上）；⑤ §8.36 未办 ①–④ 与 §8.35 两项照旧在册。
+
+**已闭环计数推到 110（109-2 落）；阶段 2 的"发"那一步待授权，本刀只把闸门备好。**

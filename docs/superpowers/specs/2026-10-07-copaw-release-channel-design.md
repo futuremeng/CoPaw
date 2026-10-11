@@ -139,7 +139,7 @@
 | `copaw update` | 打印版本 + "CoPaw is not published to PyPI yet" + Releases 链接，退出码 1，不执行任何 pip/uv | 从事实源读 `pypi_project`，比对基号后 `pip install copaw-community==<latest>` | `pending` 里去掉 `pypi` 那一把刀；命令体仍按**程序名分派**（判据 90：非 `copaw` 一律委托上游） |
 | `qwenpaw update` | 上游原行为（委托，未被我们改） | 同左 | 不变 |
 | 版本徽标 | 恒可点，打开本地三语指引，不发任何网络请求 | 恢复"有新版本"圆点，基准来自 `releaseChannel.ts`（由 JSON 生成） | 阶段 3 |
-| 上游四条发布 workflow（`publish-pypi` / `docker-release` / `desktop-release` / `plugins-release`） | 仍在仓库里；靠 GitHub 设置**停用**，不改 YAML | fork 自有 `copaw-release.yml` / `copaw-docker-release.yml` 承担发布 | 停均是仓库设置动作，需要授权，不在代码里 |
+| 上游四条发布 workflow（`publish-pypi` / `docker-release` / `desktop-release` / `plugins-release`） | 仍在仓库里；靠 GitHub 设置**停用**，不改 YAML | fork 自有 `copaw-release.yml` / `copaw-docker-release.yml` 承担发布 | 停均是仓库设置动作，需要授权，不在代码里。**`copaw-release.yml` 已于 2026-10-11 落**（刀 109-2，跑道 §8.38）：`workflow_dispatch` 唯一入口 + `confirm_publish` 人工确认 + `--check-artifacts` 产物闸门；`copaw-docker-release.yml` 仍属阶段 3 |
 | 安装脚本 | 仍克隆上游仓库（§2 第 6 行）| 克隆源、包名、索引全部从事实源取 | **阶段 1 就做**：这是当前唯一"照着官方步骤装错产品"的路径。**未就绪期的具体行为要定死**：源码分支（克隆）改指 `futuremeng/CoPaw`；PyPI 分支（`install.sh:264` / `install.ps1:315` 那种 `qwenpaw==<version>`）在 `pending` 含 `pypi` 时必须**显式失败并指向 Releases**，既不许装上游 `qwenpaw==`，也不许去装一个还不存在的 `copaw-community==` |
 
 ---
@@ -205,7 +205,7 @@
 **阶段 1（不等任何账号，可立即做）**：事实源 JSON + Python loader + `scripts/release_channel.py` + 前端生成文件与接线 + 门禁五条规则 + 安装脚本的克隆源/包名改指我们仓库 + 版本线写回 `__version__.py`（含 `.post1`）与品牌账册登记 + `copaw update` 文案改为从事实源读。
 验收：门禁绿且五条规则各自证过红；**册只 +1 宿主**（`__version__.py`），其余落点逐文件对照 §7；`pytest tests/unit` / `tsc -b --force` / `npm run test:run` 全绿；`copaw update` 仍是拒绝态，但拒绝文案里的地址来自 JSON。
 
-**阶段 2（PyPI 账号就绪）**：`pyproject.toml:2` 的 `[project] name` `qwenpaw` → `copaw-community`（= 事实源里的 `pypi_project`；console script `copaw` 已在 `pyproject.toml:102`，这一把不需要新增入口）；**§3 那张表里的 11 处读点与那 1 处声明必须同一把改**（门禁 R6 逐条盯登记表里的字面量，漏一处即红；行级相等由守卫用例盯，见 §8 第 6 条）；fork 自有发布 workflow；`copaw update` 从拒绝改为真升级（仍按程序名分派）；`pending` 去掉 `pypi`。
+**阶段 2（PyPI 账号就绪）**：`pyproject.toml:2` 的 `[project] name` `qwenpaw` → `copaw-community`（= 事实源里的 `pypi_project`；console script `copaw` 已在 `pyproject.toml:102`，这一把不需要新增入口）；**§3 那张表里的 11 处读点与那 1 处声明必须同一把改**（门禁 R6 逐条盯登记表里的字面量，漏一处即红；行级相等由守卫用例盯，见 §8 第 6 条）；fork 自有发布 workflow（**2026-10-11 已落**，刀 109-2：`.github/workflows/copaw-release.yml` 自带 `confirm_publish` 人工确认与 `--check-artifacts` 产物闸门，后者在 `pending` 含 `pypi` 时一律拒发）；`copaw update` 从拒绝改为真升级（仍按程序名分派）；`pending` 去掉 `pypi`。
 验收：`pip install copaw-community` 出来的包能起 `copaw` 且 `qwenpaw` console script 仍在；升级命令装的是 `copaw-community==`。
 
 **阶段 3（Docker / 对象存储就绪）**：Docker 命名空间与 fork 镜像 workflow；前端"有新版本"圆点恢复；`pending` 清空。

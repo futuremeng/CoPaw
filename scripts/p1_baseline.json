@@ -202,8 +202,8 @@
       "removed": 0
     },
     "console/src/layouts/constants.test.ts": {
-      "added": 69,
-      "behavior_added": 69,
+      "added": 100,
+      "behavior_added": 100,
       "behavior_removed": 19,
       "mechanical": false,
       "naming": 0,
@@ -947,8 +947,8 @@
     }
   },
   "totals": {
-    "added": 10968,
-    "behavior_added": 10932,
+    "added": 10999,
+    "behavior_added": 10963,
     "behavior_files": 116,
     "behavior_removed": 485,
     "files": 117,
