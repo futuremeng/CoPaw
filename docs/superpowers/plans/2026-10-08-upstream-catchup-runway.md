@@ -1540,9 +1540,9 @@ fork 自有文件也不会让这道 workflow 转绿（它还红在 mypy / flake8
 2. 本文判据 126 原句 `:619` 划掉 ~~全仓零 workflow 跑它~~，续行 `:621-623` 落上面那条结论（同一件事的两半：归属证据照旧有用，遮蔽理由作废）。
 3. 本文 §8.24 bullet `:1319-1320` —— "没有检查会因它红"，且该 bullet 用的**未固定版本** flake8 读数按判据 163 属"不可比"；
    只有"净 −6、新增 0"这个方向在锁定版本（6.1.0）下重取照旧成立。
-4. `2026-10-01-conflict-surface-backlog.md:466`（刀 76 ⑥）—— "`scripts/*.py` 不在任何格式化门禁里"分轴作废：对 flake8 成立
+4. `2026-10-01-conflict-surface-backlog.md:466`（刀 74 的格式化括号）—— "`scripts/*.py` 不在任何格式化门禁里"分轴作废：对 flake8 成立
    （`.flake8` `exclude = scripts/*`），对 black **不成立**（钩子只排 `scripts/pack/`，`scripts/` 下现数 **15 枚 offender**）。
-5. 同文 `:470`（刀 76 未办 (vi)）—— "全仓没有任何 workflow 跑 flake8/ruff/black" 整句作废（那道 workflow 每次 push 与 PR 都跑，
+5. 同文 `:470`（刀 76 ⑥ 与其未办 (vi)，同一行）—— "全仓没有任何 workflow 跑 flake8/ruff/black" 整句作废（那道 workflow 每次 push 与 PR 都跑，
    本分支连续 ≥8 次全红），连带 75 那条"新 Python 文件 flake8 rc=0"的读数解释一起更正。
 6. 同文 `:686`（判据 12 尾句）—— "仍然没有任何检查会因它红"划掉；结论不变，但改由"修册外文件不会让那道 workflow 转绿 +
    格式化册内上游宿主是往上游文件加删除行（判据 22）"支撑。
