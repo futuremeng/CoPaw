@@ -1,0 +1,155 @@
+# CoPaw's own release channel -- the fork-side publish path.
+#
+# Upstream's release workflows (``release.yml``, ``publish-pypi.yml``,
+# ``docker-release.yml``, ``plugins-release.yml``) stay in this repository
+# byte-identical to the fork point and are disabled in the GitHub settings,
+# not edited (design doc 2026-10-07-copaw-release-channel-design.md §7).  That
+# means this file is the only route by which a build of this repository can
+# reach PyPI, so it carries the two properties the upstream path does not:
+#
+#   1. Nothing publishes unless a human set ``confirm_publish`` when starting
+#      the run -- there is no trigger that fires on its own.
+#   2. The artifacts are checked against ``src/copaw/release_channel.json``
+#      before the publish job is allowed to run.  ``python -m build`` names
+#      what it produces after ``[project] name``, so a run from a checkout
+#      made before the distribution rename yields artifacts carrying
+#      upstream's name.  ``--check-artifacts`` refuses those, and refuses
+#      everything while the ``pypi`` channel is still listed as pending,
+#      which is the state of this repository today.
+#
+# The channel facts come from the fact source on every run; nothing here
+# hard-codes a project name, a version, or an address.
+
+name: CoPaw Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm_publish:
+        description: 'Upload the checked artifacts to PyPI'
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: copaw-release
+  cancel-in-progress: false
+
+jobs:
+  # ── Stage 0: what does the channel actually say right now? ──
+  channel:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Export the channel facts
+        run: python scripts/release_channel.py --gh-env
+
+      - name: Record the target this run publishes into
+        run: |
+          {
+            echo "pypi project: ${RELEASE_PYPI_PROJECT}"
+            echo "declared distribution: ${RELEASE_DISTRIBUTION}"
+            echo "still pending: ${RELEASE_PENDING}"
+            echo "releases: ${RELEASE_RELEASES_URL}"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Release-channel consistency gate
+        run: python scripts/check_release_channel_consistency.py
+
+  # ── Stage 1: build the wheel and sdist ──
+  build:
+    needs: [channel]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Set up Node (for console build)
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: console/package-lock.json
+
+      - name: Build console frontend
+        run: |
+          cd console && npm ci && npm run build
+
+      - name: Copy console build into package
+        run: |
+          rm -rf src/qwenpaw/console/*
+          mkdir -p src/qwenpaw/console
+          cp -R console/dist/* src/qwenpaw/console/
+
+      - name: Bundle docs into package
+        run: |
+          rm -rf src/qwenpaw/docs
+          mkdir -p src/qwenpaw/docs
+          cp website/public/docs/*.md src/qwenpaw/docs/
+
+      - name: Install build dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install setuptools wheel build
+
+      - name: Build package
+        run: python -m build --outdir dist .
+
+      - name: Upload dist artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: copaw-dist
+          path: dist/
+          retention-days: 7
+
+  # ── Stage 2: refuse foreign-named or empty builds ──
+  artifacts:
+    needs: [build]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Download dist artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: copaw-dist
+          path: dist
+
+      - name: Check every artifact against the channel fact source
+        run: python scripts/release_channel.py --check-artifacts dist
+
+  # ── Stage 3: publish, only on an explicit confirmation ──
+  publish:
+    needs: [channel, build, artifacts]
+    if: ${{ inputs.confirm_publish == 'true' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download dist artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: copaw-dist
+          path: dist
+
+      - name: Publish package to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          user: __token__
+          password: ${{ secrets.COPAW_PYPI_API_TOKEN }}
