@@ -1406,10 +1406,15 @@ lint 两枚工具取 pre-commit 缓存里的**锁定版本**环境，判据 163�
   17 枚按根因分四族，四族都不是合并造出来的：
   (a) 12 枚收集错误 = fork 自有 `console/vitest.config.ts` 的**前缀 alias** 把 `@agentscope-ai/design` 整族
   吃掉，深路径（`/lib/i18n` 等）被改写进 mock，`deps.inline` 的正则又排除 icons/chat/design ⇒ 判据 165；
+  **【→ 8.30 现量拆分：那 12 枚里 `design` 只占 1 枚，9 枚是同一形状的 `@agentscope-ai/chat` 前缀，另 2 枚
+  （`Sidebar.test.tsx`、`ProjectDetailPage.test.tsx`）与前缀 alias 无关。本句的"整族"当成 design 族是错的归属。】**
   (b) `register.test.ts` 7 条 + `i18n.test.ts` 3 条 = overlay 注册打在替身上；
   (c) `openExternalLink.test.ts` 10 条 = Tauri 命令 spy 一次没被调到
   （`AssertionError: expected "vi.fn()" to be called with arguments: [ 'open_external_link', …(1) ] /
   Number of calls: 0`，`:106`）；
+  **【→ 8.30 已修并结清：根因 = 影子配置缺了上游 `vite.config.ts` 里 `@tauri-apps/api/core` 与
+  `@tauri-apps/plugin-dialog` → `src/test/tauri-mock.ts` 那两枚 find，生产模块打到真包、用例手里的替身
+  因此一次也没被调用；补上两枚 find 后 23/23 全绿。】**
   (d) 两枚案例级分歧：`Chat/OptionsPanel/defaultConfig.test.ts` 3 条（用例期望 `/online.svg`，生产给
   `/copaw-icon.svg`——那枚生产文件正是册里 7 枚"碰过的命名"文件之一，`naming: 1`、+2/−2）、
   `ProviderConfigModal.test.tsx` 1 条（`TypeError: default.getAgentRunningConfig is not a function`，
@@ -1517,8 +1522,12 @@ pre-commit 那道 workflow 的 pylint/mypy 逐枚清单没取（只取了 CI 给
 
 **待裁（刀 102 之后新增，都不在刀序里）**：(a) 那 12 枚被前缀 alias 杀掉的收集错误要不要修
 `console/vitest.config.ts` 的 alias 形状（候选改法：按子路径逐条 alias，或把 `@agentscope-ai/design` 从 alias
-里摘掉改走真实包）—— 它买回的是 12 枚文件的覆盖，不是"多几条绿"；(b) 8.26 (b)(c)(d) 三族共 12 条断言红的
-逐枚归因；(c) 判据 164 那条"CI 日志 vs 本地选择集"的差异要不要结清【已在 8.29 结清，2026-10-11】；(d) 判据 162 之后 lint 轴**是**门禁了
+里摘掉改走真实包）—— 它买回的是 12 枚文件的覆盖，不是"多几条绿"；
+**【→ 8.30 已裁"修"并落地：真实形状 = 数组 + exact-match `find`，另补上游有而影子配置缺的两枚 `@tauri-apps/*`
+find。实测买回 10 枚文件 / +274 条用例，另有 2 枚收集错误与前缀 alias 无关、留给 (b)。】**
+(b) 8.26 (b)(c)(d) 三族共 12 条断言红的逐枚归因【**数错了，现账 = 24 条 = (b) 10 + (c) 10 + (d) 4**，判据 171；
+其中 (c) 那 10 条已由 8.30 修掉、8.30 又新暴露 `longTextPaste` 6 条 ⇒ 现存 20 条：10 − (b) + 4 (d) + 6 新 = 20】；
+(c) 判据 164 那条"CI 日志 vs 本地选择集"的差异要不要结清【已在 8.29 结清，2026-10-11】；(d) 判据 162 之后 lint 轴**是**门禁了
 （black 180 枚 / mypy 64 错 / flake8 8,965 处 / pylint 亦红），要不要排刀。本笔的处置是**不排**，理由与实测都记在
 这里：180 枚里 164 枚在册外、16 枚是上游宿主，格式化那 16 枚会给上游文件加删除行（判据 22），而只修几枚
 fork 自有文件也不会让这道 workflow 转绿（它还红在 mypy / flake8 / pylint 上）——已实测一次
@@ -1584,9 +1593,10 @@ flake8 锁定版本下 CI 选择集 8,965 处【→ 8.29：这一串没固定成
 刀 96 = 8.14 那笔，8.10 里其余 14 枚测试侧；刀 97 = 8.16 那笔，8.14 待办 ① 那枚生产侧签名；
 刀 98 = 8.18 那笔，8.14 待办 ① 剩下的 2 枚测试侧红；刀 99 = 8.20 那笔，8.18 末句登记的那 6 枚 migration 红；
 刀 100 = 8.22 那笔，8.20 验收读数里剩下的 14 枚散枚红；刀 101 = 8.24 那笔，8.22 待裁 ② 那 4 枚自 skip 的用例；
-刀 102 = 8.26 那笔，8.23 末句"下一个动作只能是合并本身"落地（16 枚提交 + 4 枚手解宿主）+ 新分叉点重立基线）；
+刀 102 = 8.26 那笔，8.23 末句"下一个动作只能是合并本身"落地（16 枚提交 + 4 枚手解宿主）+ 新分叉点重立基线；
+刀 103 = 8.30 那笔，8.26/8.27 待裁 (a) 那 12 枚收集错误的 alias 形状）；
 判据 113–128 原文在本节 8.7、129–136 在 8.12、137–141 在 8.15、142–143 在 8.17、144–147 在 8.19、148–151 在 8.21、
-152–156 在 8.23、157–161 在 8.25、162–168 在 8.27、169–174 在 8.28、175 在 8.29（§1–§6 引用的 84–86、101–112 仍是
+152–156 在 8.23、157–161 在 8.25、162–168 在 8.27、169–174 在 8.28、175 在 8.29、176 在 8.30（§1–§6 引用的 84–86、101–112 仍是
 `2026-10-07-trial-merge-conflict-table.md` 与本文前七节的口径）。
 **8.28 不是刀**：它没有闭环新的去债成果，只按判据 170/171 就地作废 7 处旧断言（另有 5 个仍成立的半句只加选择集标注、不改写）、
 并新开判据 169–174，所以"已闭环"计数照旧停在 **102**。
@@ -1629,3 +1639,72 @@ pycodestyle 的 `DEFAULT_IGNORE` 里，`.flake8` 的 `ignore` 是否会清掉它
 
 **本节不是刀**：没改任何生产或测试文件（对拍全在 `/tmp`，临时 worktree 已 `git worktree remove`），只把 8.26 待裁 (c) 判结清、
 并新立判据 175，所以"已闭环"计数照旧停在 **102**。
+
+### 8.30 刀 103（2026-10-11）：影子 `console/vitest.config.ts` 的 alias 形状漂出上游，静默杀掉 12 枚测试文件
+
+**落点**：`console/vitest.config.ts`（fork 自有、**册外**：`grep -c vitest scripts/p1_baseline.json` = 0 ⇒ 零冲突面代价）。
+只此一枚文件，+37/−21。
+
+**机制**：vitest 的配置查找顺序里 `vitest.config.*` **赢过** `vite.config.*`，所以 fork 这枚影子文件不是"补充"上游配置，
+而是**整份替掉**它（`plugins`、`css.modules`、`resolve`、`server`、`test.*` 全部换成影子文件里的字段，上游那套一次也不生效）。
+替掉之后，影子文件里的 `test.alias` 用的是**对象**形状，而对象条目在 vite 里是**前缀子串**匹配：
+`"@agentscope-ai/chat"` 会把 `@agentscope-ai/chat/lib/AgentScopeRuntimeWebUI/core/...` 逐条改写成
+`<abs>/chat/lib/index.js/lib/AgentScopeRuntimeWebUI/core/...`（不存在的宿主），`"@agentscope-ai/design"` 同理会把
+`@agentscope-ai/design/lib/i18n` 改写进 mock。上游 `vite.config.ts` 早就用**数组 + exact-match 正则**避开这件事
+（它的注释原话 = "Resolve the beta's real ESM entry for Vitest, without masking SDK subpaths"），
+影子文件既没跟上那个形状、又缺了上游的 `@tauri-apps/api/core` 与 `@tauri-apps/plugin-dialog` → `src/test/tauri-mock.ts`
+两枚 find ⇒ 生产模块打到真包，用例手里的 `vi.fn()` 替身一次也没被调到。
+
+**本笔改法**（把 `test.alias` 换成数组，finds 逐项对齐上游，再保留 fork 自己那枚 `.../AgentScopeRuntime/types.js` 替身）：
+`/^@agentscope-ai\/chat$/` → 装好的 SDK 入口、`/^@agentscope-ai\/design$/` → `src/test/design-mock.ts`、
+`@agentscope-ai/icons` → `icons-mock.ts`、两枚 `@tauri-apps/*` → `tauri-mock.ts`、types.js → `chat-runtime-types-mock.ts`。
+
+**验收读数**（同一棵树、同一份 `console/node_modules`，只换那枚配置；配方 =
+`cd console && npx vitest run --reporter=json --outputFile=<f>`，两态各一次，`HOME` 不参与）：
+
+| 读数 | 改前 | 改后 |
+|---|---|---|
+| 收集到的测试文件 | 532 | **532**（枚数不动，因为收集错误的文件也占一枚行） |
+| 跑到的用例 | 4,948 | **5,222**（**+274**） |
+| 红文件 | 17 | **7** |
+| 红用例 | 24 | **20** |
+| `numFailedTestSuites` | 24 | **14** |
+| JSON 时间跨度（`startTime` → 最晚 `endTime`，与 §8.26 那两枚 242.58/265.86 s 的墙钟数不同轴，判据 175） | 140.0 s | 186.5 s |
+
+12 枚收集错误的真实拆分（**这一行更正 8.26 里"design 整族"的归属**）：
+`design` 前缀只杀了 **1** 枚（`src/App.runtime.test.tsx`，改后 8/8 绿）、`chat` 前缀杀了 **9** 枚
+（8 枚改后全绿，逐枚用例数 = `ChatPage.coverage` 86、`sdkHostIntegration` 95、`messageDisplay` 20、
+`HostBubbles.test.ts` 13、`chatRunLifecycle` 13、`sdkSessionLifecycle.integration` 14、`turnEndedProvider` 12、
+`HostBubbles.render` 2；第 9 枚 `longTextPaste.integration` 现在能跑了，11 条里 **6 条红**）、另 **2** 枚与前缀 alias 无关、改后照旧收集失败
+（`layouts/Sidebar.test.tsx` = `instance.addResourceBundle is not a function`、
+`Agent/Projects/tests/ProjectDetailPage.test.tsx` = `document.queryCommandSupported is not a function`）。
+**对账**：那 10 枚改活的文件用例数逐枚相加 = 8 + 86 + 95 + 20 + 13 + 13 + 14 + 12 + 2 + 11 = **274**，
+与表里 `numTotalTests` 的 +274 **逐枚闭合**。
+断言红那边：`utils/openExternalLink.test.ts` 的 10 条**全清**（23/23 绿），这就是 8.26 待裁 (b) 里 (c) 那族的结清。
+红用例的对账：24 − 10（Tauri） + 6（`longTextPaste` 新暴露） = **20** ⇒ 与表里那个 20 一致，本笔**净造红 0**。
+
+**旁证**：`npx vitest run src/App.runtime.test.tsx src/utils/openExternalLink.test.ts
+src/pages/Chat/chatRunLifecycle.test.ts src/pages/Chat/messageDisplay.test.ts` = 4 files / 64 cases 全绿、5.30 s
+（改前这四枚里三枚是收集错误、一枚 10 条红）；`npx tsc -b --force` = **19 = 19**（错误清单没动）；
+`scripts/check_p1_invariants.py --check` = **114 文件 / +10,950 −518、rc=0**（落点册外，账册零变化）；
+`npx prettier --check vitest.config.ts` 改前红、改后绿（顺手把这枚文件本身格式化了一次，属同一文件）。
+
+**新暴露那 6 条的归属（本笔只登记、不裁）**：`longTextPaste.integration.test.tsx` 与它的宿主
+`src/pages/Chat/LongTextPaste.tsx` 对 `2744a976b` **逐字节相同** ⇒ 不是 fork 改坏的生产代码；用例找的是
+antd `Modal` 里的"Paste as text / Attach as file / Cancel"三枚按钮（文案在册内 `en.json` 的
+`chat.longTextPaste.*`），报错是 `Unable to find role="button"`，而同一文件里那 5 条"不该有弹窗"的用例全绿
+⇒ 弹窗路径整条没渲染。它是随 8.26 那笔上游合并进来的（`610efd539`，2026-10-08），在影子配置下从进场第一天就是收集错误。
+候选成因 = 影子配置替掉的**其余**字段（`plugins: [react(), startupMonitorPlugin(), cssStubPlugin]`、
+`css.modules.localsConvention/generateScopedName`、`define` 的 loadEnv、`test.exclude` 里的 `**/src/tauri/**`、
+`test.coverage`），不是 alias。**这笔没动它们**：动了就是把上游那枚在册文件（`console/vite.config.ts` 在 P1 册内）的
+行为整份搬进测试路径，属于 (b) 项的独立裁决。
+
+**判据 176（影子配置文件是持续性义务，它的漂移不写"红 N 条"而写"少跑 N 枚文件"）**：一次替掉宿主配置的 fork 影子文件
+必须在每次上游合并后与宿主**逐字段对拍**（本笔实测到的差异分五层：finds 形状、finds 清单、`plugins`、`css.modules`、
+`test.exclude/coverage`），且统计口径要先把红分成"收集错误 / 断言失败"两类才敢当分母用。
+边界：判据 165 说的是"前缀 alias 会静默杀一整族"，本笔补的是它缺的那一半——**被杀的家族按 find 逐条算，
+不能按包名整体算**（`design` 族实测只 1 枚，`chat` 族 9 枚，还有 2 枚根本不是 alias）。
+另一条：`numTotalTestSuites` 这类汇总数在"文件收集失败"时也会增长（17 枚红文件里 12 枚的 `assertionResults` 是空的），
+所以"跑到了多少条用例"只能读 `numTotalTests`，不能读 suites 数。
+
+**已闭环计数推到 103。**

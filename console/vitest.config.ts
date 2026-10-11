@@ -10,10 +10,8 @@ export default defineConfig({
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
-      "@agentscope-ai/chat/lib/AgentScopeRuntimeWebUI/core/AgentScopeRuntime/types.js": path.resolve(
-        __dirname,
-        "src/test/chat-runtime-types-mock.ts",
-      ),
+      "@agentscope-ai/chat/lib/AgentScopeRuntimeWebUI/core/AgentScopeRuntime/types.js":
+        path.resolve(__dirname, "src/test/chat-runtime-types-mock.ts"),
     },
   },
   test: {
@@ -31,27 +29,43 @@ export default defineConfig({
     deps: {
       inline: [/@agentscope-ai\/(?!icons|chat|design)/],
     },
-    alias: {
-      // Resolve the installed SDK, the way upstream's own vite.config does: the
-      // stand-in this line used to point at is retired upstream, so a merge
-      // deletes it while this file (fork-owned) survives.
-      "@agentscope-ai/chat": path.resolve(
-        __dirname,
-        "node_modules/@agentscope-ai/chat/lib/index.js",
-      ),
-      "@agentscope-ai/chat/lib/AgentScopeRuntimeWebUI/core/AgentScopeRuntime/types.js": path.resolve(
-        __dirname,
-        "src/test/chat-runtime-types-mock.ts",
-      ),
-      "@agentscope-ai/design": path.resolve(
-        __dirname,
-        "src/test/design-mock.ts",
-      ),
-      "@agentscope-ai/icons": path.resolve(
-        __dirname,
-        "src/test/icons-mock.ts",
-      ),
-    },
+    alias: [
+      // Same finds as upstream's vite.config.ts.  They must be exact matches:
+      // a plain string find is a prefix match, so `"@agentscope-ai/chat"` also
+      // rewrites every `@agentscope-ai/chat/lib/...` subpath into the entry
+      // file and kills those imports at resolution time.
+      {
+        find: /^@agentscope-ai\/chat$/,
+        replacement: path.resolve(
+          __dirname,
+          "node_modules/@agentscope-ai/chat/lib/index.js",
+        ),
+      },
+      {
+        find: /^@agentscope-ai\/design$/,
+        replacement: path.resolve(__dirname, "src/test/design-mock.ts"),
+      },
+      {
+        find: "@agentscope-ai/icons",
+        replacement: path.resolve(__dirname, "src/test/icons-mock.ts"),
+      },
+      {
+        find: "@tauri-apps/api/core",
+        replacement: path.resolve(__dirname, "src/test/tauri-mock.ts"),
+      },
+      {
+        find: "@tauri-apps/plugin-dialog",
+        replacement: path.resolve(__dirname, "src/test/tauri-mock.ts"),
+      },
+      // fork-only stand-in (upstream has no equivalent)
+      {
+        find: "@agentscope-ai/chat/lib/AgentScopeRuntimeWebUI/core/AgentScopeRuntime/types.js",
+        replacement: path.resolve(
+          __dirname,
+          "src/test/chat-runtime-types-mock.ts",
+        ),
+      },
+    ],
     exclude: [
       "**/node_modules/**",
       "**/dist/**",
