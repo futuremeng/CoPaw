@@ -12,7 +12,8 @@ export interface MarkdownOutlineJumpDetail {
   line: number;
 }
 
-export const PROJECT_MARKDOWN_OUTLINE_JUMP_EVENT = "copaw:project-markdown-outline-jump";
+export const PROJECT_MARKDOWN_OUTLINE_JUMP_EVENT =
+  "copaw:project-markdown-outline-jump";
 
 const MARKDOWN_FILE_RE = /\.(md|markdown|mdx)$/i;
 
@@ -41,8 +42,13 @@ function slugifyHeading(value: string): string {
   return normalized || "section";
 }
 
-export function parseMarkdownOutline(markdown: string, maxItems = 120): MarkdownOutlineItem[] {
-  const lines = String(markdown || "").replace(/\r\n?/g, "\n").split("\n");
+export function parseMarkdownOutline(
+  markdown: string,
+  maxItems = 120,
+): MarkdownOutlineItem[] {
+  const lines = String(markdown || "")
+    .replace(/\r\n?/g, "\n")
+    .split("\n");
   const items: MarkdownOutlineItem[] = [];
   const idCounter = new Map<string, number>();
   let activeFenceChar = "";

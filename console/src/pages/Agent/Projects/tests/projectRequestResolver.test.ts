@@ -5,7 +5,9 @@ import {
   resolveProjectRequestCandidate,
 } from "../utils/projectRequestResolver";
 
-function buildProject(overrides?: Partial<AgentProjectSummary>): AgentProjectSummary {
+function buildProject(
+  overrides?: Partial<AgentProjectSummary>,
+): AgentProjectSummary {
   return {
     id: "project-main",
     name: "Project Main",
@@ -39,17 +41,12 @@ describe("projectRequestResolver", () => {
       routeProjectId: "",
     });
 
-    expect(candidates).toEqual([
-      "preferred-id",
-      "project-main",
-      "project-alt",
-    ]);
+    expect(candidates).toEqual(["preferred-id", "project-main", "project-alt"]);
   });
 
   it("resolves to the first successful project request id", async () => {
-    const loader = vi.fn<
-      (projectRequestId: string) => Promise<string>
-    >()
+    const loader = vi
+      .fn<(projectRequestId: string) => Promise<string>>()
       .mockRejectedValueOnce(new Error("missing-a"))
       .mockResolvedValueOnce("ok-b");
 
@@ -66,9 +63,8 @@ describe("projectRequestResolver", () => {
   });
 
   it("retries when first round fails", async () => {
-    const loader = vi.fn<
-      (projectRequestId: string) => Promise<string>
-    >()
+    const loader = vi
+      .fn<(projectRequestId: string) => Promise<string>>()
       .mockRejectedValueOnce(new Error("transient"))
       .mockResolvedValueOnce("recovered");
 
@@ -85,17 +81,18 @@ describe("projectRequestResolver", () => {
   });
 
   it("throws the last error when all attempts fail", async () => {
-    const loader = vi.fn<
-      (projectRequestId: string) => Promise<string>
-    >()
+    const loader = vi
+      .fn<(projectRequestId: string) => Promise<string>>()
       .mockRejectedValue(new Error("final-failure"));
 
-    await expect(resolveProjectRequestCandidate({
-      projectRequestIds: ["a", "b"],
-      loader,
-      retryCount: 1,
-      retryDelayMs: 0,
-    })).rejects.toThrow("final-failure");
+    await expect(
+      resolveProjectRequestCandidate({
+        projectRequestIds: ["a", "b"],
+        loader,
+        retryCount: 1,
+        retryDelayMs: 0,
+      }),
+    ).rejects.toThrow("final-failure");
 
     expect(loader).toHaveBeenCalledTimes(4);
   });

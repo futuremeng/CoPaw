@@ -12,7 +12,10 @@ export function isPreviewablePath(path: string): boolean {
 export function pickPreviewablePathFromTreeNodes(
   nodes: AgentProjectFileTreeNode[],
 ): string {
-  return nodes.find((item) => !item.is_directory && isPreviewablePath(item.path))?.path || "";
+  return (
+    nodes.find((item) => !item.is_directory && isPreviewablePath(item.path))
+      ?.path || ""
+  );
 }
 
 export function resolveArtifactSelectionPath(

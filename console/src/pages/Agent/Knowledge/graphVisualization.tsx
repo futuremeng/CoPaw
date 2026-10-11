@@ -1,4 +1,11 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import {
   Button,
   Card,
@@ -81,7 +88,10 @@ interface GraphVisualizationProps {
   activeNodeId?: string | null;
   onActiveNodeChange?: (nodeId: string | null) => void;
   onUsePathContext?: (pathSummary: string, runNow?: boolean) => void;
-  onInsightFocusChange?: (payload: { keyword: string; active: boolean }) => void;
+  onInsightFocusChange?: (payload: {
+    keyword: string;
+    active: boolean;
+  }) => void;
   topK?: number;
   minTopK?: number;
   maxTopK?: number;
@@ -91,11 +101,13 @@ interface GraphVisualizationProps {
   hideEntityDetail?: boolean;
   frameless?: boolean;
   hideToolbar?: boolean;
-  onActionsReady?: (actions: {
-    openSettings: () => void;
-    refresh: () => void;
-    exportData: () => void;
-  } | null) => void;
+  onActionsReady?: (
+    actions: {
+      openSettings: () => void;
+      refresh: () => void;
+      exportData: () => void;
+    } | null,
+  ) => void;
 }
 
 interface G6Graph {
@@ -110,7 +122,11 @@ interface G6Graph {
   ) => Promise<void>;
   focusElement: (id: string, animation?: unknown) => Promise<void>;
   getNeighborNodesData: (id: string) => Array<{ id?: string | number }>;
-  zoomBy?: (ratio: number, animation?: unknown, origin?: [number, number]) => void;
+  zoomBy?: (
+    ratio: number,
+    animation?: unknown,
+    origin?: [number, number],
+  ) => void;
   fitView?: (options?: unknown, animation?: unknown) => void;
   setOptions?: (options: unknown) => void;
   layout?: () => Promise<void>;
@@ -218,7 +234,10 @@ function resolveEventElementId(evt: unknown): string | null {
   return candidate || null;
 }
 
-function resolveKnownNodeId(nodeId: string | null | undefined, nodeMap: Map<string, GraphNode>): string | null {
+function resolveKnownNodeId(
+  nodeId: string | null | undefined,
+  nodeMap: Map<string, GraphNode>,
+): string | null {
   if (!nodeId) {
     return null;
   }
@@ -262,7 +281,9 @@ function buildStateMap(
         stateMap[node.id] = ["insight"];
         return;
       }
-      stateMap[node.id] = filteredNodeIds.has(node.id) ? ["filtered"] : ["inactive"];
+      stateMap[node.id] = filteredNodeIds.has(node.id)
+        ? ["filtered"]
+        : ["inactive"];
       return;
     }
     if (pathNodeIds.has(node.id)) {
@@ -290,14 +311,17 @@ function buildStateMap(
         stateMap[edge.id] = ["insight"];
         return;
       }
-      stateMap[edge.id] = filteredEdgeIds.has(edge.id) ? ["filtered"] : ["inactive"];
+      stateMap[edge.id] = filteredEdgeIds.has(edge.id)
+        ? ["filtered"]
+        : ["inactive"];
       return;
     }
     if (pathEdgeIds.has(edge.id)) {
       stateMap[edge.id] = ["path"];
       return;
     }
-    const isConnected = edge.source === focusedNodeId || edge.target === focusedNodeId;
+    const isConnected =
+      edge.source === focusedNodeId || edge.target === focusedNodeId;
     stateMap[edge.id] = isConnected ? ["active"] : ["dim"];
   });
 
@@ -334,7 +358,9 @@ function buildHoverStateMap(
       stateMap[node.id] = ["insight"];
       return;
     }
-    stateMap[node.id] = filteredNodeIds.has(node.id) ? ["filtered"] : ["inactive"];
+    stateMap[node.id] = filteredNodeIds.has(node.id)
+      ? ["filtered"]
+      : ["inactive"];
   });
 
   data.edges.forEach((edge) => {
@@ -342,7 +368,8 @@ function buildHoverStateMap(
       stateMap[edge.id] = ["path"];
       return;
     }
-    const isConnected = edge.source === hoveredNodeId || edge.target === hoveredNodeId;
+    const isConnected =
+      edge.source === hoveredNodeId || edge.target === hoveredNodeId;
     if (isConnected) {
       stateMap[edge.id] = ["active"];
       return;
@@ -351,7 +378,9 @@ function buildHoverStateMap(
       stateMap[edge.id] = ["insight"];
       return;
     }
-    stateMap[edge.id] = filteredEdgeIds.has(edge.id) ? ["filtered"] : ["inactive"];
+    stateMap[edge.id] = filteredEdgeIds.has(edge.id)
+      ? ["filtered"]
+      : ["inactive"];
   });
 
   return stateMap;
@@ -505,10 +534,10 @@ function snapTopKBySegment(value: number): number {
 
 export function GraphQueryResults(props: GraphQueryResultsProps) {
   const { t } = useTranslation();
-    const scopeFilterState = useMemo(
-      () => parseScopeFilterProvenance(props.provenance),
-      [props.provenance],
-    );
+  const scopeFilterState = useMemo(
+    () => parseScopeFilterProvenance(props.provenance),
+    [props.provenance],
+  );
   const [filterText, setFilterText] = useState("");
   const [sortBy, setSortBy] = useState<GraphSortField>("score");
   const [sortOrder, setSortOrder] = useState<GraphSortOrder>("descend");
@@ -577,7 +606,9 @@ export function GraphQueryResults(props: GraphQueryResultsProps) {
       sorter: (a, b) => a.score - b.score,
       render: (score: number) => {
         const formatted = formatScore(score);
-        return <Tag color={getScoreColor(formatted.level)}>{formatted.value}</Tag>;
+        return (
+          <Tag color={getScoreColor(formatted.level)}>{formatted.value}</Tag>
+        );
       },
     },
     {
@@ -593,7 +624,9 @@ export function GraphQueryResults(props: GraphQueryResultsProps) {
           </Tooltip>
           <Space size={4} wrap>
             {record.scopeType ? (
-              <Tag color={record.scopeType === "project" ? "geekblue" : "green"}>
+              <Tag
+                color={record.scopeType === "project" ? "geekblue" : "green"}
+              >
                 {record.scopeType}
               </Tag>
             ) : null}
@@ -622,7 +655,13 @@ export function GraphQueryResults(props: GraphQueryResultsProps) {
         size={props.compact ? 8 : 12}
         style={{ width: "100%", marginBottom: props.compact ? 8 : 16 }}
       >
-        <Space wrap size={props.compact ? 6 : 8} className={props.compact ? styles.graphQueryToolbarCompact : undefined}>
+        <Space
+          wrap
+          size={props.compact ? 6 : 8}
+          className={
+            props.compact ? styles.graphQueryToolbarCompact : undefined
+          }
+        >
           <Input
             size={props.compact ? "small" : "middle"}
             value={filterText}
@@ -660,12 +699,13 @@ export function GraphQueryResults(props: GraphQueryResultsProps) {
             {scopeFilterState.scopeType === "agent"
               ? t("knowledge.graphQuery.scopeAgent")
               : scopeFilterState.scopeType === "project"
-                ? t("knowledge.graphQuery.scopeProject")
-                : t("knowledge.graphQuery.scopeCombined")}
+              ? t("knowledge.graphQuery.scopeProject")
+              : t("knowledge.graphQuery.scopeCombined")}
           </Tag>
-          {scopeFilterState.scopeId ? <Tag>{scopeFilterState.scopeId}</Tag> : null}
+          {scopeFilterState.scopeId ? (
+            <Tag>{scopeFilterState.scopeId}</Tag>
+          ) : null}
         </Space>
-
       </Space>
 
       {viewModels.records.length === 0 ? (
@@ -692,9 +732,10 @@ export function GraphQueryResults(props: GraphQueryResultsProps) {
               pageSize,
               onChange: (_, size) => setPageSize(size),
               showSizeChanger: true,
-              showTotal: (total) => t("knowledge.graphQuery.resultsSummary", {
-                count: total,
-              }),
+              showTotal: (total) =>
+                t("knowledge.graphQuery.resultsSummary", {
+                  count: total,
+                }),
               pageSizeOptions: ["10", "20", "50", "100"],
             }}
             sticky={props.compact}
@@ -710,11 +751,13 @@ export function GraphQueryResults(props: GraphQueryResultsProps) {
   );
 
   return (
-    <div className={`${styles.graphQueryResults} ${props.compact ? styles.graphQueryResultsCompact : ""} ${props.frameless ? styles.graphQueryResultsFrameless : ""}`.trim()}>
+    <div
+      className={`${styles.graphQueryResults} ${
+        props.compact ? styles.graphQueryResultsCompact : ""
+      } ${props.frameless ? styles.graphQueryResultsFrameless : ""}`.trim()}
+    >
       {props.frameless ? (
-        <div className={styles.graphQueryResultsBody}>
-          {resultsBody}
-        </div>
+        <div className={styles.graphQueryResultsBody}>{resultsBody}</div>
       ) : (
         <Card
           className={props.compact ? styles.graphCardCompact : undefined}
@@ -788,12 +831,15 @@ export function GraphVisualization(props: GraphVisualizationProps) {
   const [advancedSettingsOpen, setAdvancedSettingsOpen] = useState(false);
   const [colorMode, setColorMode] = useState<GraphColorMode>("type");
   const [edgeStrengthThreshold, setEdgeStrengthThreshold] = useState(0);
-  const [pendingColorMode, setPendingColorMode] = useState<GraphColorMode>("type");
-  const [pendingEdgeStrengthThreshold, setPendingEdgeStrengthThreshold] = useState(0);
+  const [pendingColorMode, setPendingColorMode] =
+    useState<GraphColorMode>("type");
+  const [pendingEdgeStrengthThreshold, setPendingEdgeStrengthThreshold] =
+    useState(0);
   const [pendingTopK, setPendingTopK] = useState<number | null>(
     typeof topK === "number" ? topK : null,
   );
-  const [layoutMode, setLayoutMode] = useState<GraphLayoutMode>("force-cluster");
+  const [layoutMode, setLayoutMode] =
+    useState<GraphLayoutMode>("force-cluster");
   const [activeInsightKey, setActiveInsightKey] = useState("");
   const colorModeRef = useRef<GraphColorMode>("type");
   const nodeTypeColorMapRef = useRef<Map<string, string>>(new Map());
@@ -804,63 +850,84 @@ export function GraphVisualization(props: GraphVisualizationProps) {
     [isDark],
   );
 
-  const buildLayoutConfig = useCallback((width: number, height: number) => {
-    const nodeCount = data.nodes.length;
-    const baseIterations = Math.min(240, Math.max(80, Math.round(60 + nodeCount * 1.2)));
+  const buildLayoutConfig = useCallback(
+    (width: number, height: number) => {
+      const nodeCount = data.nodes.length;
+      const baseIterations = Math.min(
+        240,
+        Math.max(80, Math.round(60 + nodeCount * 1.2)),
+      );
 
-    if (layoutMode === "force-prevent-overlap") {
+      if (layoutMode === "force-prevent-overlap") {
+        return {
+          type: "d3-force",
+          center: { x: width / 2, y: height / 2 },
+          link: {
+            distance: (edge: {
+              source?: { data?: { visualSize?: number } };
+              target?: { data?: { visualSize?: number } };
+            }) => {
+              const sourceSize = Number(edge?.source?.data?.visualSize || 22);
+              const targetSize = Number(edge?.target?.data?.visualSize || 22);
+              return sourceSize + targetSize + 36;
+            },
+          },
+          collide: {
+            radius: (node: { data?: { visualSize?: number } }) =>
+              Number(node?.data?.visualSize || 22) + 16,
+          },
+          manyBody: {
+            strength: (node: { data?: { visualSize?: number } }) =>
+              -7.5 * Number(node?.data?.visualSize || 22),
+          },
+          animation: false,
+          iterations: Math.min(320, baseIterations + 80),
+        };
+      }
+
+      if (layoutMode === "radial") {
+        return {
+          type: "radial",
+          center: [width / 2, height / 2],
+          unitRadius: Math.max(
+            26,
+            Math.min(width, height) /
+              Math.max(8, Math.sqrt(nodeCount || 1) * 1.8),
+          ),
+          linkDistance: 80,
+          preventOverlap: true,
+          nodeSize: (node: { data?: { visualSize?: number } }) =>
+            Number(node?.data?.visualSize || 22) + 6,
+        };
+      }
+
       return {
         type: "d3-force",
         center: { x: width / 2, y: height / 2 },
         link: {
-          distance: (edge: { source?: { data?: { visualSize?: number } }; target?: { data?: { visualSize?: number } } }) => {
+          distance: (edge: {
+            source?: { data?: { visualSize?: number } };
+            target?: { data?: { visualSize?: number } };
+          }) => {
             const sourceSize = Number(edge?.source?.data?.visualSize || 22);
             const targetSize = Number(edge?.target?.data?.visualSize || 22);
-            return sourceSize + targetSize + 36;
+            return sourceSize + targetSize + 26;
           },
         },
         collide: {
-          radius: (node: { data?: { visualSize?: number } }) => Number(node?.data?.visualSize || 22) + 16,
+          radius: (node: { data?: { visualSize?: number } }) =>
+            Number(node?.data?.visualSize || 22) + 8,
         },
         manyBody: {
-          strength: (node: { data?: { visualSize?: number } }) => -7.5 * Number(node?.data?.visualSize || 22),
+          strength: (node: { data?: { visualSize?: number } }) =>
+            -6 * Number(node?.data?.visualSize || 22),
         },
         animation: false,
-        iterations: Math.min(320, baseIterations + 80),
+        iterations: baseIterations,
       };
-    }
-
-    if (layoutMode === "radial") {
-      return {
-        type: "radial",
-        center: [width / 2, height / 2],
-        unitRadius: Math.max(26, Math.min(width, height) / Math.max(8, Math.sqrt(nodeCount || 1) * 1.8)),
-        linkDistance: 80,
-        preventOverlap: true,
-        nodeSize: (node: { data?: { visualSize?: number } }) => Number(node?.data?.visualSize || 22) + 6,
-      };
-    }
-
-    return {
-      type: "d3-force",
-      center: { x: width / 2, y: height / 2 },
-      link: {
-        distance: (edge: { source?: { data?: { visualSize?: number } }; target?: { data?: { visualSize?: number } } }) => {
-          const sourceSize = Number(edge?.source?.data?.visualSize || 22);
-          const targetSize = Number(edge?.target?.data?.visualSize || 22);
-          return sourceSize + targetSize + 26;
-        },
-      },
-      collide: {
-        radius: (node: { data?: { visualSize?: number } }) => Number(node?.data?.visualSize || 22) + 8,
-      },
-      manyBody: {
-        strength: (node: { data?: { visualSize?: number } }) => -6 * Number(node?.data?.visualSize || 22),
-      },
-      animation: false,
-      iterations: baseIterations,
-    };
-  }, [data.nodes.length, layoutMode]);
+    },
+    [data.nodes.length, layoutMode],
+  );
 
   const normalizeTopK = useCallback(
     (value: number) => {
@@ -881,33 +948,54 @@ export function GraphVisualization(props: GraphVisualizationProps) {
   }, [normalizeTopK, pendingTopK, topK]);
 
   const hasPendingGraphSettings = useMemo(() => {
-    const topKDirty = typeof topK === "number"
-      && typeof effectivePendingTopK === "number"
-      && effectivePendingTopK !== topK;
+    const topKDirty =
+      typeof topK === "number" &&
+      typeof effectivePendingTopK === "number" &&
+      effectivePendingTopK !== topK;
     return (
-      pendingColorMode !== colorMode
-      || pendingEdgeStrengthThreshold !== edgeStrengthThreshold
-      || topKDirty
+      pendingColorMode !== colorMode ||
+      pendingEdgeStrengthThreshold !== edgeStrengthThreshold ||
+      topKDirty
     );
-  }, [colorMode, edgeStrengthThreshold, effectivePendingTopK, pendingColorMode, pendingEdgeStrengthThreshold, topK]);
+  }, [
+    colorMode,
+    edgeStrengthThreshold,
+    effectivePendingTopK,
+    pendingColorMode,
+    pendingEdgeStrengthThreshold,
+    topK,
+  ]);
 
-  const applyPendingGraphSettings = useCallback((options?: { closeModal?: boolean; refreshQuery?: boolean }) => {
-    const closeModal = options?.closeModal ?? false;
-    const refreshQuery = options?.refreshQuery ?? true;
-    setColorMode(pendingColorMode);
-    setEdgeStrengthThreshold(pendingEdgeStrengthThreshold);
+  const applyPendingGraphSettings = useCallback(
+    (options?: { closeModal?: boolean; refreshQuery?: boolean }) => {
+      const closeModal = options?.closeModal ?? false;
+      const refreshQuery = options?.refreshQuery ?? true;
+      setColorMode(pendingColorMode);
+      setEdgeStrengthThreshold(pendingEdgeStrengthThreshold);
 
-    if (typeof topK === "number" && typeof effectivePendingTopK === "number") {
-      onTopKChange?.(effectivePendingTopK);
-      if (refreshQuery) {
-        onTopKCommit?.(effectivePendingTopK);
+      if (
+        typeof topK === "number" &&
+        typeof effectivePendingTopK === "number"
+      ) {
+        onTopKChange?.(effectivePendingTopK);
+        if (refreshQuery) {
+          onTopKCommit?.(effectivePendingTopK);
+        }
       }
-    }
 
-    if (closeModal) {
-      setAdvancedSettingsOpen(false);
-    }
-  }, [effectivePendingTopK, onTopKChange, onTopKCommit, pendingColorMode, pendingEdgeStrengthThreshold, topK]);
+      if (closeModal) {
+        setAdvancedSettingsOpen(false);
+      }
+    },
+    [
+      effectivePendingTopK,
+      onTopKChange,
+      onTopKCommit,
+      pendingColorMode,
+      pendingEdgeStrengthThreshold,
+      topK,
+    ],
+  );
 
   const resetPendingGraphSettings = useCallback(() => {
     setPendingColorMode(colorMode);
@@ -929,7 +1017,13 @@ export function GraphVisualization(props: GraphVisualizationProps) {
   }, [advancedSettingsOpen, colorMode, edgeStrengthThreshold, topK]);
 
   const nodeTypeColorMap = useMemo(() => {
-    const groups = Array.from(new Set(data.nodes.map((node) => getNodeGroupId(node.id, String(node.type || "")))));
+    const groups = Array.from(
+      new Set(
+        data.nodes.map((node) =>
+          getNodeGroupId(node.id, String(node.type || "")),
+        ),
+      ),
+    );
     const map = new Map<string, string>();
     groups.forEach((group, index) => {
       map.set(group, colorByIndex(index, isDark));
@@ -937,10 +1031,7 @@ export function GraphVisualization(props: GraphVisualizationProps) {
     return map;
   }, [data.nodes, isDark]);
 
-  const graphData = useMemo(
-    () => buildGraphDisplayData(data, 0),
-    [data],
-  );
+  const graphData = useMemo(() => buildGraphDisplayData(data, 0), [data]);
 
   const filteredGraphData = useMemo(
     () => buildGraphDisplayData(data, edgeStrengthThreshold),
@@ -952,30 +1043,33 @@ export function GraphVisualization(props: GraphVisualizationProps) {
     [filteredGraphData],
   );
 
-  const topKControl = typeof topK === "number" ? (
-    <Space size={6} align="center">
-      <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-        TopK
-      </Typography.Text>
-      <Slider
-        min={Math.max(20, minTopK ?? 20)}
-        max={Math.max(Math.max(20, minTopK ?? 20), maxTopK ?? topK)}
-        step={1}
-        value={effectivePendingTopK ?? topK}
-        onChange={(value) => {
-          const next = normalizeTopK(Number(value));
-          if (Number.isFinite(next)) {
-            setPendingTopK(next);
-          }
-        }}
-        style={{ width: compact ? 120 : 180, margin: 0 }}
-        tooltip={{ open: false }}
-      />
-      <Typography.Text style={{ fontSize: 12, minWidth: 36, textAlign: "right" }}>
-        {effectivePendingTopK ?? topK}
-      </Typography.Text>
-    </Space>
-  ) : null;
+  const topKControl =
+    typeof topK === "number" ? (
+      <Space size={6} align="center">
+        <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+          TopK
+        </Typography.Text>
+        <Slider
+          min={Math.max(20, minTopK ?? 20)}
+          max={Math.max(Math.max(20, minTopK ?? 20), maxTopK ?? topK)}
+          step={1}
+          value={effectivePendingTopK ?? topK}
+          onChange={(value) => {
+            const next = normalizeTopK(Number(value));
+            if (Number.isFinite(next)) {
+              setPendingTopK(next);
+            }
+          }}
+          style={{ width: compact ? 120 : 180, margin: 0 }}
+          tooltip={{ open: false }}
+        />
+        <Typography.Text
+          style={{ fontSize: 12, minWidth: 36, textAlign: "right" }}
+        >
+          {effectivePendingTopK ?? topK}
+        </Typography.Text>
+      </Space>
+    ) : null;
 
   const filteredEdgeIds = useMemo(
     () => new Set(filteredGraphData.edges.map((edge) => edge.id)),
@@ -987,7 +1081,11 @@ export function GraphVisualization(props: GraphVisualizationProps) {
       return new Set(graphData.nodes.map((node) => node.id));
     }
     return new Set(filteredGraphData.connectedNodeIds);
-  }, [edgeStrengthThreshold, filteredGraphData.connectedNodeIds, graphData.nodes]);
+  }, [
+    edgeStrengthThreshold,
+    filteredGraphData.connectedNodeIds,
+    graphData.nodes,
+  ]);
 
   const nodeOptions = useMemo(
     () =>
@@ -1054,8 +1152,20 @@ export function GraphVisualization(props: GraphVisualizationProps) {
   const focusedNodeRelations = useMemo(() => {
     if (!focusedNodeId) {
       return {
-        outgoing: [] as Array<{ edgeId: string; label: string; nodeId: string; nodeLabel: string; strength: number }> ,
-        incoming: [] as Array<{ edgeId: string; label: string; nodeId: string; nodeLabel: string; strength: number }> ,
+        outgoing: [] as Array<{
+          edgeId: string;
+          label: string;
+          nodeId: string;
+          nodeLabel: string;
+          strength: number;
+        }>,
+        incoming: [] as Array<{
+          edgeId: string;
+          label: string;
+          nodeId: string;
+          nodeLabel: string;
+          strength: number;
+        }>,
       };
     }
 
@@ -1110,14 +1220,18 @@ export function GraphVisualization(props: GraphVisualizationProps) {
       .slice(0, 20);
     const weakEdgeIds = weakEdges.map((item) => item.edge.id);
     const weakNodeIds = Array.from(
-      new Set(weakEdges.flatMap((item) => [item.edge.source, item.edge.target])),
+      new Set(
+        weakEdges.flatMap((item) => [item.edge.source, item.edge.target]),
+      ),
     ).slice(0, 12);
 
     const bridgeNodeIds = graphData.nodes
       .map((node) => {
         const n = Array.from(neighbors.get(node.id) || []);
         const groups = new Set(
-          n.map((nid) => getNodeGroupId(nid, String(nodeMap.get(nid)?.type || ""))),
+          n.map((nid) =>
+            getNodeGroupId(nid, String(nodeMap.get(nid)?.type || "")),
+          ),
         );
         return {
           id: node.id,
@@ -1126,12 +1240,19 @@ export function GraphVisualization(props: GraphVisualizationProps) {
         };
       })
       .filter((item) => item.groupCount >= 2 && item.degree >= 3)
-      .sort((left, right) => right.groupCount - left.groupCount || right.degree - left.degree)
+      .sort(
+        (left, right) =>
+          right.groupCount - left.groupCount || right.degree - left.degree,
+      )
       .slice(0, 8)
       .map((item) => item.id);
 
     const bridgeEdges = graphData.edges
-      .filter((edge) => bridgeNodeIds.includes(edge.source) || bridgeNodeIds.includes(edge.target))
+      .filter(
+        (edge) =>
+          bridgeNodeIds.includes(edge.source) ||
+          bridgeNodeIds.includes(edge.target),
+      )
       .slice(0, 20)
       .map((edge) => edge.id);
 
@@ -1208,7 +1329,9 @@ export function GraphVisualization(props: GraphVisualizationProps) {
     const validEdgeIds = new Set(graphData.edges.map((edge) => edge.id));
 
     setFocusedNodeId((prev) => (prev && validNodeIds.has(prev) ? prev : null));
-    setPathStartNodeId((prev) => (prev && validNodeIds.has(prev) ? prev : null));
+    setPathStartNodeId((prev) =>
+      prev && validNodeIds.has(prev) ? prev : null,
+    );
     setPathEndNodeId((prev) => (prev && validNodeIds.has(prev) ? prev : null));
     setPathNodeIds((prev) => prev.filter((id) => validNodeIds.has(id)));
     setPathEdgeIds((prev) => prev.filter((id) => validEdgeIds.has(id)));
@@ -1255,14 +1378,14 @@ export function GraphVisualization(props: GraphVisualizationProps) {
           insightNodeSet,
           insightEdgeSet,
         );
-          const renderedResetState = filterRenderedElementState(
-            resetState,
-            renderedNodeIdsRef.current,
-            renderedEdgeIdsRef.current,
-          );
-          if (Object.keys(renderedResetState).length > 0) {
-            await graphRef.current.setElementState(renderedResetState, false);
-          }
+        const renderedResetState = filterRenderedElementState(
+          resetState,
+          renderedNodeIdsRef.current,
+          renderedEdgeIdsRef.current,
+        );
+        if (Object.keys(renderedResetState).length > 0) {
+          await graphRef.current.setElementState(renderedResetState, false);
+        }
         lastFocusStateKeyRef.current = focusKey;
         return;
       }
@@ -1294,11 +1417,23 @@ export function GraphVisualization(props: GraphVisualizationProps) {
       }
       lastFocusStateKeyRef.current = focusKey;
 
-      if (shouldFocusElement && renderedNodeIdsRef.current.has(resolvedNodeId)) {
+      if (
+        shouldFocusElement &&
+        renderedNodeIdsRef.current.has(resolvedNodeId)
+      ) {
         await graphRef.current.focusElement(resolvedNodeId, { duration: 300 });
       }
     },
-    [activeInsight?.edgeIds, activeInsight?.nodeIds, filteredEdgeIds, filteredNodeIds, graphData, nodeMap, pathEdgeIds, pathNodeIds],
+    [
+      activeInsight?.edgeIds,
+      activeInsight?.nodeIds,
+      filteredEdgeIds,
+      filteredNodeIds,
+      graphData,
+      nodeMap,
+      pathEdgeIds,
+      pathNodeIds,
+    ],
   );
 
   const updateFocusStateRef = useRef(updateFocusState);
@@ -1307,46 +1442,58 @@ export function GraphVisualization(props: GraphVisualizationProps) {
     updateFocusStateRef.current = updateFocusState;
   }, [updateFocusState]);
 
-  const updateHoverState = useCallback(async (nodeId: string | null) => {
-    if (!graphRef.current) {
-      return;
-    }
-    const resolvedNodeId = resolveKnownNodeId(nodeId, nodeMap);
-    if (!resolvedNodeId) {
-      await updateFocusStateRef.current(focusedNodeIdRef.current, false);
-      return;
-    }
+  const updateHoverState = useCallback(
+    async (nodeId: string | null) => {
+      if (!graphRef.current) {
+        return;
+      }
+      const resolvedNodeId = resolveKnownNodeId(nodeId, nodeMap);
+      if (!resolvedNodeId) {
+        await updateFocusStateRef.current(focusedNodeIdRef.current, false);
+        return;
+      }
 
-    const pathNodeSet = new Set(pathNodeIds);
-    const pathEdgeSet = new Set(pathEdgeIds);
-    const insightNodeSet = new Set(activeInsight?.nodeIds || []);
-    const insightEdgeSet = new Set(activeInsight?.edgeIds || []);
-    const neighbors = new Set(
-      graphRef.current
-        .getNeighborNodesData(resolvedNodeId)
-        .map((item) => String(item.id || ""))
-        .filter(Boolean),
-    );
-    const stateMap = buildHoverStateMap(
-      graphData,
-      resolvedNodeId,
-      neighbors,
-      filteredNodeIds,
+      const pathNodeSet = new Set(pathNodeIds);
+      const pathEdgeSet = new Set(pathEdgeIds);
+      const insightNodeSet = new Set(activeInsight?.nodeIds || []);
+      const insightEdgeSet = new Set(activeInsight?.edgeIds || []);
+      const neighbors = new Set(
+        graphRef.current
+          .getNeighborNodesData(resolvedNodeId)
+          .map((item) => String(item.id || ""))
+          .filter(Boolean),
+      );
+      const stateMap = buildHoverStateMap(
+        graphData,
+        resolvedNodeId,
+        neighbors,
+        filteredNodeIds,
+        filteredEdgeIds,
+        pathNodeSet,
+        pathEdgeSet,
+        insightNodeSet,
+        insightEdgeSet,
+      );
+      const renderedStateMap = filterRenderedElementState(
+        stateMap,
+        renderedNodeIdsRef.current,
+        renderedEdgeIdsRef.current,
+      );
+      if (Object.keys(renderedStateMap).length > 0) {
+        await graphRef.current.setElementState(renderedStateMap, false);
+      }
+    },
+    [
+      activeInsight?.edgeIds,
+      activeInsight?.nodeIds,
       filteredEdgeIds,
-      pathNodeSet,
-      pathEdgeSet,
-      insightNodeSet,
-      insightEdgeSet,
-    );
-    const renderedStateMap = filterRenderedElementState(
-      stateMap,
-      renderedNodeIdsRef.current,
-      renderedEdgeIdsRef.current,
-    );
-    if (Object.keys(renderedStateMap).length > 0) {
-      await graphRef.current.setElementState(renderedStateMap, false);
-    }
-  }, [activeInsight?.edgeIds, activeInsight?.nodeIds, filteredEdgeIds, filteredNodeIds, graphData, nodeMap, pathEdgeIds, pathNodeIds]);
+      filteredNodeIds,
+      graphData,
+      nodeMap,
+      pathEdgeIds,
+      pathNodeIds,
+    ],
+  );
 
   const updateHoverStateRef = useRef(updateHoverState);
 
@@ -1427,7 +1574,7 @@ export function GraphVisualization(props: GraphVisualizationProps) {
     }
 
     const adjacency = new Map<string, string[]>();
-      graphData.edges.forEach((edge) => {
+    graphData.edges.forEach((edge) => {
       if (!adjacency.has(edge.source)) {
         adjacency.set(edge.source, []);
       }
@@ -1518,25 +1665,28 @@ export function GraphVisualization(props: GraphVisualizationProps) {
     setPathEndNodeId(pathStartNodeId || null);
   }, [pathEndNodeId, pathStartNodeId]);
 
-  const handleAutoFillPathFromClick = useCallback((nodeId: string) => {
-    if (!autoFillPathEndpoints) {
-      return;
-    }
-    if (!pathStartNodeId) {
-      setPathStartNodeId(nodeId);
-      return;
-    }
-    if (!pathEndNodeId) {
-      if (nodeId !== pathStartNodeId) {
+  const handleAutoFillPathFromClick = useCallback(
+    (nodeId: string) => {
+      if (!autoFillPathEndpoints) {
+        return;
+      }
+      if (!pathStartNodeId) {
+        setPathStartNodeId(nodeId);
+        return;
+      }
+      if (!pathEndNodeId) {
+        if (nodeId !== pathStartNodeId) {
+          setPathEndNodeId(nodeId);
+        }
+        return;
+      }
+      if (nodeId !== pathEndNodeId) {
+        setPathStartNodeId(pathEndNodeId);
         setPathEndNodeId(nodeId);
       }
-      return;
-    }
-    if (nodeId !== pathEndNodeId) {
-      setPathStartNodeId(pathEndNodeId);
-      setPathEndNodeId(nodeId);
-    }
-  }, [autoFillPathEndpoints, pathEndNodeId, pathStartNodeId]);
+    },
+    [autoFillPathEndpoints, pathEndNodeId, pathStartNodeId],
+  );
 
   const handleAutoFillPathFromClickRef = useRef(handleAutoFillPathFromClick);
 
@@ -1561,18 +1711,21 @@ export function GraphVisualization(props: GraphVisualizationProps) {
     }
   }, [pathSummary, t]);
 
-  const handleUsePathContext = useCallback((runNow?: boolean) => {
-    if (!pathSummary) {
-      message.info(t("knowledge.graphQuery.pathSummaryEmpty"));
-      return;
-    }
-    onUsePathContext?.(pathSummary, runNow);
-    message.success(
-      runNow
-        ? t("knowledge.graphQuery.pathContextRunApplied")
-        : t("knowledge.graphQuery.pathContextApplied"),
-    );
-  }, [onUsePathContext, pathSummary, t]);
+  const handleUsePathContext = useCallback(
+    (runNow?: boolean) => {
+      if (!pathSummary) {
+        message.info(t("knowledge.graphQuery.pathSummaryEmpty"));
+        return;
+      }
+      onUsePathContext?.(pathSummary, runNow);
+      message.success(
+        runNow
+          ? t("knowledge.graphQuery.pathContextRunApplied")
+          : t("knowledge.graphQuery.pathContextApplied"),
+      );
+    },
+    [onUsePathContext, pathSummary, t],
+  );
 
   useEffect(() => {
     let unmounted = false;
@@ -1592,7 +1745,7 @@ export function GraphVisualization(props: GraphVisualizationProps) {
         height,
       );
       const g6Data = {
-          nodes: graphData.nodes.map((node, index) => ({
+        nodes: graphData.nodes.map((node, index) => ({
           id: node.id,
           x: initialPositions[index]?.x,
           y: initialPositions[index]?.y,
@@ -1603,7 +1756,7 @@ export function GraphVisualization(props: GraphVisualizationProps) {
             type: node.type,
             source_id: node.source_id,
             document_path: node.document_path,
-              isIsolated: graphData.isolatedNodeIds.includes(node.id),
+            isIsolated: graphData.isolatedNodeIds.includes(node.id),
           },
         })),
         edges: graphData.edges.map((edge) => ({
@@ -1627,7 +1780,13 @@ export function GraphVisualization(props: GraphVisualizationProps) {
         node: {
           type: "circle",
           style: (datum: {
-            data?: { label?: string; score?: number; visualSize?: number; type?: string; isIsolated?: boolean };
+            data?: {
+              label?: string;
+              score?: number;
+              visualSize?: number;
+              type?: string;
+              isIsolated?: boolean;
+            };
           }) => {
             const score = Number(datum?.data?.score || 0);
             const group = getNodeGroupId("", String(datum?.data?.type || ""));
@@ -1637,14 +1796,18 @@ export function GraphVisualization(props: GraphVisualizationProps) {
               currentColorMode === "type"
                 ? nodeTypeColorMapRef.current.get(group) || "#1677ff"
                 : buildWeightColor(score, isDark);
-            const size = Number(datum?.data?.visualSize || nodeVisualSizeFromScore(score));
+            const size = Number(
+              datum?.data?.visualSize || nodeVisualSizeFromScore(score),
+            );
             const rawLabel = String(datum?.data?.label || "");
             const showLabel = true;
             const displayLabel = showLabel ? shortenLabel(rawLabel, 24) : "";
             return {
               size,
               lineWidth: isDark ? 0.58 : 1,
-              fill: `${baseFill}${isIsolated ? (isDark ? "08" : "14") : isDark ? "10" : "22"}`,
+              fill: `${baseFill}${
+                isIsolated ? (isDark ? "08" : "14") : isDark ? "10" : "22"
+              }`,
               stroke: isDark ? `${baseFill}66` : baseFill,
               labelText: displayLabel || undefined,
               labelPlacement: "center" as const,
@@ -1834,7 +1997,10 @@ export function GraphVisualization(props: GraphVisualizationProps) {
           const box = entries[0].contentRect;
           graphRef.current.setSize(
             Math.max(320, box.width),
-            Math.max(320, box.height || containerRef.current?.clientHeight || 440),
+            Math.max(
+              320,
+              box.height || containerRef.current?.clientHeight || 440,
+            ),
           );
         });
         resizeObserverRef.current.observe(containerRef.current);
@@ -1873,7 +2039,13 @@ export function GraphVisualization(props: GraphVisualizationProps) {
       return (
         <>
           <div className={styles.graphFramelessRoot}>
-            <Empty description={edgeStrengthThreshold > 0 ? t("knowledge.graphQuery.noVisualizationAfterFilter") : t("knowledge.graphQuery.noVisualization")} />
+            <Empty
+              description={
+                edgeStrengthThreshold > 0
+                  ? t("knowledge.graphQuery.noVisualizationAfterFilter")
+                  : t("knowledge.graphQuery.noVisualization")
+              }
+            />
           </div>
           <Modal
             title={t("knowledge.graphQuery.advancedSettings")}
@@ -1882,7 +2054,7 @@ export function GraphVisualization(props: GraphVisualizationProps) {
               resetPendingGraphSettings();
               setAdvancedSettingsOpen(false);
             }}
-            footer={(
+            footer={
               <Space>
                 <Button
                   onClick={() => {
@@ -1895,35 +2067,52 @@ export function GraphVisualization(props: GraphVisualizationProps) {
                   type="primary"
                   icon={<ReloadOutlined />}
                   onClick={() => {
-                    applyPendingGraphSettings({ closeModal: true, refreshQuery: true });
+                    applyPendingGraphSettings({
+                      closeModal: true,
+                      refreshQuery: true,
+                    });
                   }}
                 >
                   {t("knowledge.graphQuery.applyAndRefresh")}
                 </Button>
               </Space>
-            )}
+            }
             width={960}
           >
             <Space direction="vertical" size={10} style={{ width: "100%" }}>
               <Space wrap className={styles.graphAdvancedRow}>
-                <Typography.Text type="secondary">{t("knowledge.graphQuery.colorMode")}</Typography.Text>
+                <Typography.Text type="secondary">
+                  {t("knowledge.graphQuery.colorMode")}
+                </Typography.Text>
                 <Select
                   size="small"
                   value={pendingColorMode}
                   style={{ width: 180 }}
-                  onChange={(value) => setPendingColorMode(value as GraphColorMode)}
+                  onChange={(value) =>
+                    setPendingColorMode(value as GraphColorMode)
+                  }
                   options={[
-                    { label: t("knowledge.graphQuery.colorModeType"), value: "type" },
-                    { label: t("knowledge.graphQuery.colorModeWeight"), value: "weight" },
+                    {
+                      label: t("knowledge.graphQuery.colorModeType"),
+                      value: "type",
+                    },
+                    {
+                      label: t("knowledge.graphQuery.colorModeWeight"),
+                      value: "weight",
+                    },
                   ]}
                 />
-                <Typography.Text type="secondary">{t("knowledge.graphQuery.edgeThreshold")}</Typography.Text>
+                <Typography.Text type="secondary">
+                  {t("knowledge.graphQuery.edgeThreshold")}
+                </Typography.Text>
                 <Slider
                   min={0}
                   max={1}
                   step={0.05}
                   value={pendingEdgeStrengthThreshold}
-                  onChange={(value) => setPendingEdgeStrengthThreshold(Number(value) || 0)}
+                  onChange={(value) =>
+                    setPendingEdgeStrengthThreshold(Number(value) || 0)
+                  }
                   style={{ width: 220 }}
                 />
                 <Typography.Text className={styles.graphThresholdValue}>
@@ -1937,11 +2126,21 @@ export function GraphVisualization(props: GraphVisualizationProps) {
     }
     return (
       <Card
-        title={hideToolbar ? undefined : t("knowledge.graphQuery.visualization")}
+        title={
+          hideToolbar ? undefined : t("knowledge.graphQuery.visualization")
+        }
         loading={loading}
-        className={`${compact ? styles.graphCardCompact : ""} ${frameless ? styles.graphCardFrameless : ""}`.trim()}
+        className={`${compact ? styles.graphCardCompact : ""} ${
+          frameless ? styles.graphCardFrameless : ""
+        }`.trim()}
       >
-        <Empty description={edgeStrengthThreshold > 0 ? t("knowledge.graphQuery.noVisualizationAfterFilter") : t("knowledge.graphQuery.noVisualization")} />
+        <Empty
+          description={
+            edgeStrengthThreshold > 0
+              ? t("knowledge.graphQuery.noVisualizationAfterFilter")
+              : t("knowledge.graphQuery.noVisualization")
+          }
+        />
       </Card>
     );
   }
@@ -1952,32 +2151,43 @@ export function GraphVisualization(props: GraphVisualizationProps) {
     <div className={styles.graphStatusPanel}>
       <div className={styles.graphLegendRow}>
         <Typography.Text type="secondary">
-          {t("knowledge.graphQuery.colorMode")}: {colorMode === "type" ? t("knowledge.graphQuery.colorModeType") : t("knowledge.graphQuery.colorModeWeight")}
+          {t("knowledge.graphQuery.colorMode")}:{" "}
+          {colorMode === "type"
+            ? t("knowledge.graphQuery.colorModeType")
+            : t("knowledge.graphQuery.colorModeWeight")}
         </Typography.Text>
         <div className={styles.graphLegendList}>
           {colorMode === "type"
             ? Array.from(nodeTypeColorMap.entries()).map(([type, color]) => (
-              <span key={type} className={styles.graphLegendItem}>
-                <span className={styles.graphLegendSwatch} style={{ backgroundColor: color }} />
-                {type}
-              </span>
-            ))
+                <span key={type} className={styles.graphLegendItem}>
+                  <span
+                    className={styles.graphLegendSwatch}
+                    style={{ backgroundColor: color }}
+                  />
+                  {type}
+                </span>
+              ))
             : [
-              { label: weightLabels.low, color: buildWeightColor(0.2) },
-              { label: weightLabels.mid, color: buildWeightColor(0.55) },
-              { label: weightLabels.high, color: buildWeightColor(0.9) },
-            ].map((item) => (
-              <span key={item.label} className={styles.graphLegendItem}>
-                <span className={styles.graphLegendSwatch} style={{ backgroundColor: item.color }} />
-                {item.label}
-              </span>
-            ))}
+                { label: weightLabels.low, color: buildWeightColor(0.2) },
+                { label: weightLabels.mid, color: buildWeightColor(0.55) },
+                { label: weightLabels.high, color: buildWeightColor(0.9) },
+              ].map((item) => (
+                <span key={item.label} className={styles.graphLegendItem}>
+                  <span
+                    className={styles.graphLegendSwatch}
+                    style={{ backgroundColor: item.color }}
+                  />
+                  {item.label}
+                </span>
+              ))}
         </div>
       </div>
       <Typography.Text type="secondary" className={styles.graphSummaryText}>
-        {t("knowledge.graphQuery.nodes")}: {graphEntitySummary.totalNodes} | {t("knowledge.graphQuery.edges")}: {filteredGraphData.edges.length}/{graphData.edges.length}
+        {t("knowledge.graphQuery.nodes")}: {graphEntitySummary.totalNodes} |{" "}
+        {t("knowledge.graphQuery.edges")}: {filteredGraphData.edges.length}/
+        {graphData.edges.length}
       </Typography.Text>
-      {(provenanceEngine || provenanceLayer) ? (
+      {provenanceEngine || provenanceLayer ? (
         <Typography.Text type="secondary" className={styles.graphSummaryText}>
           Engine: {provenanceEngine || "-"}
           {provenanceLayer ? ` | Layer: ${provenanceLayer}` : ""}
@@ -1985,17 +2195,21 @@ export function GraphVisualization(props: GraphVisualizationProps) {
       ) : null}
       <div className={styles.graphEntityStatsRow}>
         <span className={styles.graphEntityStatPill}>
-          {t("knowledge.graphQuery.totalEntities")}: {graphEntitySummary.totalNodes}
+          {t("knowledge.graphQuery.totalEntities")}:{" "}
+          {graphEntitySummary.totalNodes}
         </span>
         <span className={styles.graphEntityStatPill}>
-          {t("knowledge.graphQuery.connectedEntities")}: {graphEntitySummary.connectedNodes}
+          {t("knowledge.graphQuery.connectedEntities")}:{" "}
+          {graphEntitySummary.connectedNodes}
         </span>
         <span className={styles.graphEntityStatPill}>
-          {t("knowledge.graphQuery.isolatedEntities")}: {graphEntitySummary.isolatedNodes}
+          {t("knowledge.graphQuery.isolatedEntities")}:{" "}
+          {graphEntitySummary.isolatedNodes}
         </span>
         {edgeStrengthThreshold > 0 ? (
           <span className={styles.graphEntityStatPill}>
-            {t("knowledge.graphQuery.thresholdApplied")}: {Math.round(edgeStrengthThreshold * 100)}%
+            {t("knowledge.graphQuery.thresholdApplied")}:{" "}
+            {Math.round(edgeStrengthThreshold * 100)}%
           </span>
         ) : null}
       </div>
@@ -2023,12 +2237,16 @@ export function GraphVisualization(props: GraphVisualizationProps) {
             <button
               key={card.key}
               type="button"
-              className={`${styles.graphInsightCard} ${active ? styles.graphInsightCardActive : ""}`}
+              className={`${styles.graphInsightCard} ${
+                active ? styles.graphInsightCardActive : ""
+              }`}
               onClick={() => {
                 setActiveInsightKey((prev) => {
                   const nextActive = prev !== card.key;
                   const firstNodeId = card.nodeIds[0] || "";
-                  const keyword = firstNodeId ? nodeMap.get(firstNodeId)?.label || "" : "";
+                  const keyword = firstNodeId
+                    ? nodeMap.get(firstNodeId)?.label || ""
+                    : "";
                   onInsightFocusChange?.({ keyword, active: nextActive });
                   return nextActive ? card.key : "";
                 });
@@ -2053,17 +2271,29 @@ export function GraphVisualization(props: GraphVisualizationProps) {
         </Tooltip>
       ) : null}
       <Tooltip title={t("knowledge.graphQuery.zoomIn")}>
-        <Button size={compact ? "small" : "middle"} icon={<PlusOutlined />} onClick={handleZoomIn}>
+        <Button
+          size={compact ? "small" : "middle"}
+          icon={<PlusOutlined />}
+          onClick={handleZoomIn}
+        >
           {compact ? null : t("knowledge.graphQuery.zoomIn")}
         </Button>
       </Tooltip>
       <Tooltip title={t("knowledge.graphQuery.zoomOut")}>
-        <Button size={compact ? "small" : "middle"} icon={<MinusOutlined />} onClick={handleZoomOut}>
+        <Button
+          size={compact ? "small" : "middle"}
+          icon={<MinusOutlined />}
+          onClick={handleZoomOut}
+        >
           {compact ? null : t("knowledge.graphQuery.zoomOut")}
         </Button>
       </Tooltip>
       <Tooltip title={t("knowledge.graphQuery.fitView")}>
-        <Button size={compact ? "small" : "middle"} icon={<AimOutlined />} onClick={handleFitView}>
+        <Button
+          size={compact ? "small" : "middle"}
+          icon={<AimOutlined />}
+          onClick={handleFitView}
+        >
           {compact ? null : t("knowledge.graphQuery.fitView")}
         </Button>
       </Tooltip>
@@ -2079,8 +2309,13 @@ export function GraphVisualization(props: GraphVisualizationProps) {
         </Button>
       </Popover>
       <Tooltip title={t("knowledge.graphQuery.advancedSettings")}>
-        <Button size={compact ? "small" : "middle"} onClick={handleOpenSettings}>
-          {compact ? t("knowledge.graphQuery.advancedSettingsShort") : t("knowledge.graphQuery.advancedSettings")}
+        <Button
+          size={compact ? "small" : "middle"}
+          onClick={handleOpenSettings}
+        >
+          {compact
+            ? t("knowledge.graphQuery.advancedSettingsShort")
+            : t("knowledge.graphQuery.advancedSettings")}
         </Button>
       </Tooltip>
       <Tooltip title={t("knowledge.graphQuery.refresh")}>
@@ -2094,7 +2329,11 @@ export function GraphVisualization(props: GraphVisualizationProps) {
         </Button>
       </Tooltip>
       <Tooltip title={t("knowledge.graphQuery.export")}>
-        <Button size={compact ? "small" : "middle"} icon={<ExportOutlined />} onClick={handleExport}>
+        <Button
+          size={compact ? "small" : "middle"}
+          icon={<ExportOutlined />}
+          onClick={handleExport}
+        >
           {compact ? null : t("knowledge.graphQuery.export")}
         </Button>
       </Tooltip>
@@ -2105,8 +2344,14 @@ export function GraphVisualization(props: GraphVisualizationProps) {
         style={{ width: compact ? 150 : 180 }}
         onChange={(value) => setLayoutMode(value as GraphLayoutMode)}
         options={[
-          { label: t("knowledge.graphQuery.layoutForceCluster"), value: "force-cluster" },
-          { label: t("knowledge.graphQuery.layoutForcePreventOverlap"), value: "force-prevent-overlap" },
+          {
+            label: t("knowledge.graphQuery.layoutForceCluster"),
+            value: "force-cluster",
+          },
+          {
+            label: t("knowledge.graphQuery.layoutForcePreventOverlap"),
+            value: "force-prevent-overlap",
+          },
           { label: t("knowledge.graphQuery.layoutRadial"), value: "radial" },
         ]}
         aria-label={t("knowledge.graphQuery.layoutMode")}
@@ -2121,9 +2366,7 @@ export function GraphVisualization(props: GraphVisualizationProps) {
           <div ref={containerRef} className={styles.graphCanvas} />
         </div>
         {hideToolbar ? null : (
-          <div className={styles.graphFloatingToolbar}>
-            {toolbar}
-          </div>
+          <div className={styles.graphFloatingToolbar}>{toolbar}</div>
         )}
       </div>
       {focusedNodeId && !hideEntityDetail ? (
@@ -2132,12 +2375,15 @@ export function GraphVisualization(props: GraphVisualizationProps) {
             <Typography.Text strong>
               {t("knowledge.graphQuery.entityDetail")}
             </Typography.Text>
-            <Typography.Text type="secondary">{focusedNodeLabel}</Typography.Text>
+            <Typography.Text type="secondary">
+              {focusedNodeLabel}
+            </Typography.Text>
           </div>
           <div className={styles.graphEntityPanelBody}>
             <div className={styles.graphEntitySection}>
               <Typography.Text type="secondary">
-                {t("knowledge.graphQuery.outgoing")} ({focusedNodeRelations.outgoing.length})
+                {t("knowledge.graphQuery.outgoing")} (
+                {focusedNodeRelations.outgoing.length})
               </Typography.Text>
               <div className={styles.graphEntityRelationList}>
                 {focusedNodeRelations.outgoing.slice(0, 8).map((item) => (
@@ -2147,13 +2393,22 @@ export function GraphVisualization(props: GraphVisualizationProps) {
                     className={styles.graphEntityRelationItem}
                     onClick={() => handleSelectNode(item.nodeId)}
                   >
-                    <span className={styles.graphEntityRelationLabel}>{item.label}</span>
-                    <span className={styles.graphEntityRelationTarget}>{item.nodeLabel}</span>
-                    <span className={styles.graphEntityRelationStrength}>{Math.round(item.strength * 100)}%</span>
+                    <span className={styles.graphEntityRelationLabel}>
+                      {item.label}
+                    </span>
+                    <span className={styles.graphEntityRelationTarget}>
+                      {item.nodeLabel}
+                    </span>
+                    <span className={styles.graphEntityRelationStrength}>
+                      {Math.round(item.strength * 100)}%
+                    </span>
                   </button>
                 ))}
                 {!focusedNodeRelations.outgoing.length ? (
-                  <Typography.Text type="secondary" className={styles.graphEntityEmpty}>
+                  <Typography.Text
+                    type="secondary"
+                    className={styles.graphEntityEmpty}
+                  >
                     {t("knowledge.graphQuery.none")}
                   </Typography.Text>
                 ) : null}
@@ -2161,7 +2416,8 @@ export function GraphVisualization(props: GraphVisualizationProps) {
             </div>
             <div className={styles.graphEntitySection}>
               <Typography.Text type="secondary">
-                {t("knowledge.graphQuery.incoming")} ({focusedNodeRelations.incoming.length})
+                {t("knowledge.graphQuery.incoming")} (
+                {focusedNodeRelations.incoming.length})
               </Typography.Text>
               <div className={styles.graphEntityRelationList}>
                 {focusedNodeRelations.incoming.slice(0, 8).map((item) => (
@@ -2171,13 +2427,22 @@ export function GraphVisualization(props: GraphVisualizationProps) {
                     className={styles.graphEntityRelationItem}
                     onClick={() => handleSelectNode(item.nodeId)}
                   >
-                    <span className={styles.graphEntityRelationTarget}>{item.nodeLabel}</span>
-                    <span className={styles.graphEntityRelationLabel}>{item.label}</span>
-                    <span className={styles.graphEntityRelationStrength}>{Math.round(item.strength * 100)}%</span>
+                    <span className={styles.graphEntityRelationTarget}>
+                      {item.nodeLabel}
+                    </span>
+                    <span className={styles.graphEntityRelationLabel}>
+                      {item.label}
+                    </span>
+                    <span className={styles.graphEntityRelationStrength}>
+                      {Math.round(item.strength * 100)}%
+                    </span>
                   </button>
                 ))}
                 {!focusedNodeRelations.incoming.length ? (
-                  <Typography.Text type="secondary" className={styles.graphEntityEmpty}>
+                  <Typography.Text
+                    type="secondary"
+                    className={styles.graphEntityEmpty}
+                  >
                     {t("knowledge.graphQuery.none")}
                   </Typography.Text>
                 ) : null}
@@ -2192,13 +2457,13 @@ export function GraphVisualization(props: GraphVisualizationProps) {
   return (
     <>
       {frameless ? (
-        <div className={styles.graphFramelessRoot}>
-          {graphBody}
-        </div>
+        <div className={styles.graphFramelessRoot}>{graphBody}</div>
       ) : (
         <Card
           className={compact ? styles.graphCardCompact : undefined}
-          title={compact ? topKControl : t("knowledge.graphQuery.visualization")}
+          title={
+            compact ? topKControl : t("knowledge.graphQuery.visualization")
+          }
           loading={loading}
         >
           {graphBody}
@@ -2211,7 +2476,7 @@ export function GraphVisualization(props: GraphVisualizationProps) {
           resetPendingGraphSettings();
           setAdvancedSettingsOpen(false);
         }}
-        footer={(
+        footer={
           <Space>
             <Button
               onClick={() => {
@@ -2224,35 +2489,50 @@ export function GraphVisualization(props: GraphVisualizationProps) {
               type="primary"
               icon={<ReloadOutlined />}
               onClick={() => {
-                applyPendingGraphSettings({ closeModal: true, refreshQuery: true });
+                applyPendingGraphSettings({
+                  closeModal: true,
+                  refreshQuery: true,
+                });
               }}
             >
               {t("knowledge.graphQuery.applyAndRefresh")}
             </Button>
           </Space>
-        )}
+        }
         width={960}
       >
         <Space direction="vertical" size={10} style={{ width: "100%" }}>
           <Space wrap className={styles.graphAdvancedRow}>
-            <Typography.Text type="secondary">{t("knowledge.graphQuery.colorMode")}</Typography.Text>
+            <Typography.Text type="secondary">
+              {t("knowledge.graphQuery.colorMode")}
+            </Typography.Text>
             <Select
               size="small"
               value={pendingColorMode}
               style={{ width: 180 }}
               onChange={(value) => setPendingColorMode(value as GraphColorMode)}
               options={[
-                { label: t("knowledge.graphQuery.colorModeType"), value: "type" },
-                { label: t("knowledge.graphQuery.colorModeWeight"), value: "weight" },
+                {
+                  label: t("knowledge.graphQuery.colorModeType"),
+                  value: "type",
+                },
+                {
+                  label: t("knowledge.graphQuery.colorModeWeight"),
+                  value: "weight",
+                },
               ]}
             />
-            <Typography.Text type="secondary">{t("knowledge.graphQuery.edgeThreshold")}</Typography.Text>
+            <Typography.Text type="secondary">
+              {t("knowledge.graphQuery.edgeThreshold")}
+            </Typography.Text>
             <Slider
               min={0}
               max={1}
               step={0.05}
               value={pendingEdgeStrengthThreshold}
-              onChange={(value) => setPendingEdgeStrengthThreshold(Number(value) || 0)}
+              onChange={(value) =>
+                setPendingEdgeStrengthThreshold(Number(value) || 0)
+              }
               style={{ width: 220 }}
             />
             <Typography.Text className={styles.graphThresholdValue}>
@@ -2260,7 +2540,9 @@ export function GraphVisualization(props: GraphVisualizationProps) {
             </Typography.Text>
           </Space>
           <Space wrap className={styles.graphFocusBar}>
-            <Typography.Text type="secondary">{t("knowledge.graphQuery.focusNode")}</Typography.Text>
+            <Typography.Text type="secondary">
+              {t("knowledge.graphQuery.focusNode")}
+            </Typography.Text>
             <Select
               showSearch
               allowClear
@@ -2290,7 +2572,9 @@ export function GraphVisualization(props: GraphVisualizationProps) {
             </Space>
           </Space>
           <Space wrap className={styles.graphPathBar}>
-            <Typography.Text type="secondary">{t("knowledge.graphQuery.path")}</Typography.Text>
+            <Typography.Text type="secondary">
+              {t("knowledge.graphQuery.path")}
+            </Typography.Text>
             {autoFillPathEndpoints ? (
               <Space size={6} className={styles.graphPathHintRow} wrap>
                 {focusedNodeLabel ? (
@@ -2317,7 +2601,9 @@ export function GraphVisualization(props: GraphVisualizationProps) {
                 label: item.label,
                 value: item.value,
               }))}
-              onChange={(value) => setPathStartNodeId((value as string) || null)}
+              onChange={(value) =>
+                setPathStartNodeId((value as string) || null)
+              }
               style={{ minWidth: 180 }}
               optionFilterProp="label"
             />
@@ -2424,7 +2710,9 @@ export function GraphVisualization(props: GraphVisualizationProps) {
           ) : null}
           {topEntities.length > 0 ? (
             <Space wrap className={styles.graphHotNodesRow}>
-              <Typography.Text type="secondary">{t("knowledge.graphQuery.topEntities")}</Typography.Text>
+              <Typography.Text type="secondary">
+                {t("knowledge.graphQuery.topEntities")}
+              </Typography.Text>
               {topEntities.map((item) => (
                 <Tag
                   key={item.id}

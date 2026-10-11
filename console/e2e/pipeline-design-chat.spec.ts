@@ -120,7 +120,15 @@ async function setupApiMocks(page: Page, options: ApiMockOptions = {}) {
             name: "Ollama",
             api_key_prefix: "",
             chat_model: "qwen3.5:27b",
-            models: [{ id: "qwen3.5:27b", name: "qwen3.5:27b", supports_multimodal: false, supports_image: false, supports_video: false }],
+            models: [
+              {
+                id: "qwen3.5:27b",
+                name: "qwen3.5:27b",
+                supports_multimodal: false,
+                supports_image: false,
+                supports_video: false,
+              },
+            ],
             extra_models: [],
             is_custom: false,
             is_local: true,
@@ -248,7 +256,9 @@ async function setupApiMocks(page: Page, options: ApiMockOptions = {}) {
     if (deleteStepMatch && route.request().method() === "DELETE") {
       const templateId = decodeURIComponent(deleteStepMatch[1]);
       const stepId = decodeURIComponent(deleteStepMatch[2]);
-      editableTemplateSteps = editableTemplateSteps.filter((step) => step.id !== stepId);
+      editableTemplateSteps = editableTemplateSteps.filter(
+        (step) => step.id !== stepId,
+      );
       await route.fulfill({
         status: 200,
         contentType: "application/json",
@@ -388,7 +398,7 @@ async function setupApiMocks(page: Page, options: ApiMockOptions = {}) {
           Connection: "keep-alive",
           "Cache-Control": "no-cache",
         },
-        body: "data: {\"status\":\"ok\"}\n\n",
+        body: 'data: {"status":"ok"}\n\n',
       });
       return;
     }
@@ -411,7 +421,9 @@ test("health: pipelines page renders design entry", async ({ page }) => {
   await expect(openDesignBtn).toBeVisible({ timeout: 30_000 });
 });
 
-test("behavior: pipeline design entry opens inline edit and keeps dedicated chat id", async ({ page }) => {
+test("behavior: pipeline design entry opens inline edit and keeps dedicated chat id", async ({
+  page,
+}) => {
   test.setTimeout(90_000);
 
   await setupApiMocks(page);
@@ -502,7 +514,9 @@ test("behavior: each pipeline create opens a new chat id", async ({ page }) => {
   expect(secondChatId).not.toBe(firstChatId);
 });
 
-test("behavior: new pipeline edit starts clean and does not restore legacy prefilled steps", async ({ page }) => {
+test("behavior: new pipeline edit starts clean and does not restore legacy prefilled steps", async ({
+  page,
+}) => {
   test.setTimeout(90_000);
 
   await setupApiMocks(page);
@@ -517,23 +531,35 @@ test("behavior: new pipeline edit starts clean and does not restore legacy prefi
     page.getByText(/Describe your goal first|先描述你的目标/),
   ).toBeVisible({ timeout: 20_000 });
   await expect(
-    page.getByText(/Start by describing the goal and key steps|先描述流程目标和关键步骤/),
+    page.getByText(
+      /Start by describing the goal and key steps|先描述流程目标和关键步骤/,
+    ),
   ).toBeVisible({ timeout: 20_000 });
   await expect(
     page.getByText(/Only one node is generated at a time|每次只生成一个节点/),
   ).toBeVisible({ timeout: 20_000 });
 
   await expect(
-    page.getByText(/This column updates automatically from the backend draft|这里会根据后端 draft 自动更新/),
+    page.getByText(
+      /This column updates automatically from the backend draft|这里会根据后端 draft 自动更新/,
+    ),
   ).toBeVisible({ timeout: 20_000 });
 
-  await expect(page.getByText(/已根据最新对话更新节点草稿|Updated from the latest chat/i)).toHaveCount(0);
+  await expect(
+    page.getByText(/已根据最新对话更新节点草稿|Updated from the latest chat/i),
+  ).toHaveCount(0);
   await expect(page.getByText("明确流程用途", { exact: true })).toHaveCount(0);
-  await expect(page.getByText("step-1-purpose", { exact: true })).toHaveCount(0);
-  await expect(page.getByText(/逐步生成中：第|Generating step/i)).toHaveCount(0);
+  await expect(page.getByText("step-1-purpose", { exact: true })).toHaveCount(
+    0,
+  );
+  await expect(page.getByText(/逐步生成中：第|Generating step/i)).toHaveCount(
+    0,
+  );
 });
 
-test("behavior: pipeline design entry lands on plain chat url without query params", async ({ page }) => {
+test("behavior: pipeline design entry lands on plain chat url without query params", async ({
+  page,
+}) => {
   test.setTimeout(90_000);
 
   await setupApiMocks(page);
@@ -560,7 +586,9 @@ test("behavior: pipeline design entry lands on plain chat url without query para
   expect(currentUrl.search).toBe("");
 });
 
-test("behavior: edit pipeline restores bound chat after reload", async ({ page }) => {
+test("behavior: edit pipeline restores bound chat after reload", async ({
+  page,
+}) => {
   test.setTimeout(90_000);
 
   await setupApiMocks(page);
@@ -608,7 +636,9 @@ test("behavior: edit pipeline restores bound chat after reload", async ({ page }
   expect(createCount).toBe(0);
 });
 
-test("behavior: conflict panel offers remote recovery when local draft is empty", async ({ page }) => {
+test("behavior: conflict panel offers remote recovery when local draft is empty", async ({
+  page,
+}) => {
   test.setTimeout(90_000);
 
   await setupApiMocks(page, { conflictScenario: true });
@@ -623,14 +653,20 @@ test("behavior: conflict panel offers remote recovery when local draft is empty"
   await expect(saveBtn).toBeVisible({ timeout: 30_000 });
   await saveBtn.click();
 
-  await expect(page.getByText(/检测到并发冲突|concurrent conflict/i)).toBeVisible({ timeout: 30_000 });
+  await expect(
+    page.getByText(/检测到并发冲突|concurrent conflict/i),
+  ).toBeVisible({ timeout: 30_000 });
 
   const refreshBtn = page.getByRole("button", { name: /刷新后重试|refresh/i });
   await refreshBtn.click();
 
   const mergeBtn = page.getByRole("button", { name: /按 step_id 合并|merge/i });
-  const useRemoteBtn = page.getByRole("button", { name: /采用远端草稿|remote draft/i });
-  const restoreLocalBtn = page.getByRole("button", { name: /恢复本地草稿|restore local/i });
+  const useRemoteBtn = page.getByRole("button", {
+    name: /采用远端草稿|remote draft/i,
+  });
+  const restoreLocalBtn = page.getByRole("button", {
+    name: /恢复本地草稿|restore local/i,
+  });
 
   await expect(useRemoteBtn).toBeVisible({ timeout: 20_000 });
   await expect(mergeBtn).toHaveCount(0);
@@ -644,11 +680,15 @@ test("behavior: conflict panel offers remote recovery when local draft is empty"
   await expect(page.getByText("远端新增步骤")).toBeVisible({ timeout: 20_000 });
 });
 
-test("behavior: edit pipeline applies delete step operation through page workflow", async ({ page }) => {
+test("behavior: edit pipeline applies delete step operation through page workflow", async ({
+  page,
+}) => {
   test.setTimeout(90_000);
 
   await page.addInitScript(() => {
-    (window as typeof window & { __COPAW_ENABLE_TEST_HOOKS__?: boolean }).__COPAW_ENABLE_TEST_HOOKS__ = true;
+    (
+      window as typeof window & { __COPAW_ENABLE_TEST_HOOKS__?: boolean }
+    ).__COPAW_ENABLE_TEST_HOOKS__ = true;
   });
 
   await setupApiMocks(page, {
@@ -670,15 +710,26 @@ test("behavior: edit pipeline applies delete step operation through page workflo
   await expect(editBtn).toBeVisible({ timeout: 30_000 });
   await editBtn.click();
 
-  await expect(page.getByRole("button", { name: /Exit Edit|退出编辑/i })).toBeVisible({ timeout: 20_000 });
+  await expect(
+    page.getByRole("button", { name: /Exit Edit|退出编辑/i }),
+  ).toBeVisible({ timeout: 20_000 });
   await expect(page.getByText("旧用途步骤")).toBeVisible({ timeout: 20_000 });
 
-  await page.waitForFunction(() => Boolean((window as typeof window & { __COPAW_PIPELINES_TEST__?: unknown }).__COPAW_PIPELINES_TEST__));
+  await page.waitForFunction(() =>
+    Boolean(
+      (window as typeof window & { __COPAW_PIPELINES_TEST__?: unknown })
+        .__COPAW_PIPELINES_TEST__,
+    ),
+  );
 
   await page.evaluate(() => {
-    (window as typeof window & {
-      __COPAW_PIPELINES_TEST__?: { activateIncrementalModify: (input: Record<string, unknown>) => void };
-    }).__COPAW_PIPELINES_TEST__?.activateIncrementalModify({
+    (
+      window as typeof window & {
+        __COPAW_PIPELINES_TEST__?: {
+          activateIncrementalModify: (input: Record<string, unknown>) => void;
+        };
+      }
+    ).__COPAW_PIPELINES_TEST__?.activateIncrementalModify({
       totalStepsExpected: 1,
       currentStep: 1,
       userRequirements: "删除旧用途步骤",
@@ -686,17 +737,28 @@ test("behavior: edit pipeline applies delete step operation through page workflo
     });
   });
 
-  const deleteRequest = page.waitForRequest((request) => {
-    return (
-      request.method() === "DELETE" &&
-      request.url().includes("/api/agents/default/pipelines/templates/books-alignment-v1/steps/step-1-purpose")
-    );
-  }, { timeout: 10_000 });
+  const deleteRequest = page.waitForRequest(
+    (request) => {
+      return (
+        request.method() === "DELETE" &&
+        request
+          .url()
+          .includes(
+            "/api/agents/default/pipelines/templates/books-alignment-v1/steps/step-1-purpose",
+          )
+      );
+    },
+    { timeout: 10_000 },
+  );
 
   await page.evaluate(async () => {
-    await (window as typeof window & {
-      __COPAW_PIPELINES_TEST__?: { completeAssistantTurn: (text: string) => Promise<void> };
-    }).__COPAW_PIPELINES_TEST__?.completeAssistantTurn(
+    await (
+      window as typeof window & {
+        __COPAW_PIPELINES_TEST__?: {
+          completeAssistantTurn: (text: string) => Promise<void>;
+        };
+      }
+    ).__COPAW_PIPELINES_TEST__?.completeAssistantTurn(
       JSON.stringify({
         operation: "delete",
         step_id: "step-1-purpose",
@@ -708,9 +770,13 @@ test("behavior: edit pipeline applies delete step operation through page workflo
   await expect
     .poll(async () => {
       return page.evaluate(() => {
-        return (window as typeof window & {
-          __COPAW_PIPELINES_TEST__?: { getDraftStepIds: () => string[] };
-        }).__COPAW_PIPELINES_TEST__?.getDraftStepIds() || [];
+        return (
+          (
+            window as typeof window & {
+              __COPAW_PIPELINES_TEST__?: { getDraftStepIds: () => string[] };
+            }
+          ).__COPAW_PIPELINES_TEST__?.getDraftStepIds() || []
+        );
       });
     })
     .toEqual([]);

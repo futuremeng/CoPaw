@@ -9,25 +9,39 @@ type TranslateFn = (
   maybeOptions?: Record<string, unknown>,
 ) => string;
 
-type ProjectKnowledgeStatsLike = ProjectKnowledgeStepStatsRecord | Record<string, never> | null | undefined;
+type ProjectKnowledgeStatsLike =
+  | ProjectKnowledgeStepStatsRecord
+  | Record<string, never>
+  | null
+  | undefined;
 
-function asMetricsRecord(stats: ProjectKnowledgeStatsLike): Record<string, unknown> {
+function asMetricsRecord(
+  stats: ProjectKnowledgeStatsLike,
+): Record<string, unknown> {
   if (!stats || typeof stats !== "object" || !("metrics" in stats)) {
     return {};
   }
   const metrics = stats.metrics;
-  return metrics && typeof metrics === "object" ? (metrics as Record<string, unknown>) : {};
+  return metrics && typeof metrics === "object"
+    ? (metrics as Record<string, unknown>)
+    : {};
 }
 
 function hasObjectFields(value: ProjectKnowledgeStatsLike): boolean {
-  return Boolean(value && typeof value === "object" && Object.keys(value).length > 0);
+  return Boolean(
+    value && typeof value === "object" && Object.keys(value).length > 0,
+  );
 }
 
-export function hasProjectKnowledgeStats(stats: ProjectKnowledgeStatsLike): boolean {
+export function hasProjectKnowledgeStats(
+  stats: ProjectKnowledgeStatsLike,
+): boolean {
   return hasObjectFields(stats);
 }
 
-export function formatProjectKnowledgeStatsTimestamp(value?: string | null): string {
+export function formatProjectKnowledgeStatsTimestamp(
+  value?: string | null,
+): string {
   const normalized = String(value || "").trim();
   if (!normalized) {
     return "-";
@@ -44,13 +58,17 @@ export function formatProjectKnowledgeStatsTimestamp(value?: string | null): str
   }).format(new Date(timestamp));
 }
 
-export function formatProjectKnowledgeStatsRecordTimestamp(stats: ProjectKnowledgeStatsLike): string {
+export function formatProjectKnowledgeStatsRecordTimestamp(
+  stats: ProjectKnowledgeStatsLike,
+): string {
   if (!stats || typeof stats !== "object") {
     return "-";
   }
   const updatedAt = "updated_at" in stats ? stats.updated_at : undefined;
   const indexedAt = "indexed_at" in stats ? stats.indexed_at : undefined;
-  return formatProjectKnowledgeStatsTimestamp(String(updatedAt || indexedAt || ""));
+  return formatProjectKnowledgeStatsTimestamp(
+    String(updatedAt || indexedAt || ""),
+  );
 }
 
 export function summarizeProjectKnowledgeSourceScanStats(
@@ -119,30 +137,28 @@ export function buildProjectKnowledgeLatestL1SummaryParts(
 ): string[] {
   const parts: string[] = [];
   if (hasProjectKnowledgeStats(params.snapshotRaw)) {
-    parts.push(t(
-      "copaw.projects.knowledge.latestSnapshotRawSummary",
-      {
+    parts.push(
+      t("copaw.projects.knowledge.latestSnapshotRawSummary", {
         time: formatProjectKnowledgeStatsRecordTimestamp(params.snapshotRaw),
         summary: summarizeProjectKnowledgeSourceScanStats(
           t,
           params.snapshotRaw,
           "copaw.projects.knowledge.latestSnapshotRawMetrics",
         ),
-      },
-    ));
+      }),
+    );
   }
   if (hasProjectKnowledgeStats(params.buildChunks)) {
-    parts.push(t(
-      "copaw.projects.knowledge.latestBuildChunksSummary",
-      {
+    parts.push(
+      t("copaw.projects.knowledge.latestBuildChunksSummary", {
         time: formatProjectKnowledgeStatsRecordTimestamp(params.buildChunks),
         summary: summarizeProjectKnowledgeFileAnalysisStats(
           t,
           params.buildChunks,
           "copaw.projects.knowledge.latestBuildChunksMetrics",
         ),
-      },
-    ));
+      }),
+    );
   }
   return parts;
 }
@@ -159,69 +175,68 @@ export function buildProjectKnowledgeLatestL23SummaryParts(
 ): string[] {
   const parts: string[] = [];
   if (hasProjectKnowledgeStats(params.buildInterlinear)) {
-    parts.push(t(
-      "copaw.projects.knowledge.latestBuildInterlinearSummary",
-      {
-        time: formatProjectKnowledgeStatsRecordTimestamp(params.buildInterlinear),
+    parts.push(
+      t("copaw.projects.knowledge.latestBuildInterlinearSummary", {
+        time: formatProjectKnowledgeStatsRecordTimestamp(
+          params.buildInterlinear,
+        ),
         summary: summarizeProjectKnowledgeFileAnalysisStats(
           t,
           params.buildInterlinear,
           "copaw.projects.knowledge.latestBuildInterlinearMetrics",
         ),
-      },
-    ));
+      }),
+    );
   }
   if (hasProjectKnowledgeStats(params.tokenize)) {
-    parts.push(t(
-      "copaw.projects.knowledge.latestTokenizeSummary",
-      {
+    parts.push(
+      t("copaw.projects.knowledge.latestTokenizeSummary", {
         time: formatProjectKnowledgeStatsRecordTimestamp(params.tokenize),
         summary: summarizeProjectKnowledgeFileAnalysisStats(
           t,
           params.tokenize,
           "copaw.projects.knowledge.latestTokenizeMetrics",
         ),
-      },
-    ));
+      }),
+    );
   }
   if (hasProjectKnowledgeStats(params.posTagging)) {
-    parts.push(t(
-      "copaw.projects.knowledge.latestPosTaggingSummary",
-      {
+    parts.push(
+      t("copaw.projects.knowledge.latestPosTaggingSummary", {
         time: formatProjectKnowledgeStatsRecordTimestamp(params.posTagging),
         summary: summarizeProjectKnowledgeFileAnalysisStats(
           t,
           params.posTagging,
           "copaw.projects.knowledge.latestPosTaggingMetrics",
         ),
-      },
-    ));
+      }),
+    );
   }
   if (hasProjectKnowledgeStats(params.syntaxParse)) {
-    parts.push(t(
-      "copaw.projects.knowledge.latestSyntaxParseSummary",
-      {
+    parts.push(
+      t("copaw.projects.knowledge.latestSyntaxParseSummary", {
         time: formatProjectKnowledgeStatsRecordTimestamp(params.syntaxParse),
         summary: summarizeProjectKnowledgeDomainGraphBuildStats(
           t,
           params.syntaxParse,
           "copaw.projects.knowledge.latestSyntaxParseMetrics",
         ),
-      },
-    ));
+      }),
+    );
   }
   if (hasProjectKnowledgeStats(params.semanticRoleLabeling)) {
-    parts.push(t(
-      "copaw.projects.knowledge.latestSemanticRoleLabelingSummary",
-      {
-        time: formatProjectKnowledgeStatsRecordTimestamp(params.semanticRoleLabeling),
+    parts.push(
+      t("copaw.projects.knowledge.latestSemanticRoleLabelingSummary", {
+        time: formatProjectKnowledgeStatsRecordTimestamp(
+          params.semanticRoleLabeling,
+        ),
         summary: summarizeProjectKnowledgeQualityReviewStats(
           t,
           params.semanticRoleLabeling,
           "copaw.projects.knowledge.latestSemanticRoleLabelingMetrics",
         ),
-      },
-    ));
+      }),
+    );
   }
   return parts;
 }
@@ -235,31 +250,37 @@ export function buildProjectKnowledgeLatestOutputSummaryParts(
   },
 ): string[] {
   const parts: string[] = [];
-  if ((params.selectedMode === "nlp" || params.selectedMode === "agentic") && hasProjectKnowledgeStats(params.syntaxParse)) {
-    parts.push(t(
-      "copaw.projects.knowledge.outputs.latestSyntaxProvenance",
-      {
+  if (
+    (params.selectedMode === "nlp" || params.selectedMode === "agentic") &&
+    hasProjectKnowledgeStats(params.syntaxParse)
+  ) {
+    parts.push(
+      t("copaw.projects.knowledge.outputs.latestSyntaxProvenance", {
         time: formatProjectKnowledgeStatsRecordTimestamp(params.syntaxParse),
         summary: summarizeProjectKnowledgeDomainGraphBuildStats(
           t,
           params.syntaxParse,
           "copaw.projects.knowledge.outputs.latestSyntaxProvenanceMetrics",
         ),
-      },
-    ));
+      }),
+    );
   }
-  if (params.selectedMode === "agentic" && hasProjectKnowledgeStats(params.semanticRoleLabeling)) {
-    parts.push(t(
-      "copaw.projects.knowledge.outputs.latestSemanticRoleLabelingOutcome",
-      {
-        time: formatProjectKnowledgeStatsRecordTimestamp(params.semanticRoleLabeling),
+  if (
+    params.selectedMode === "agentic" &&
+    hasProjectKnowledgeStats(params.semanticRoleLabeling)
+  ) {
+    parts.push(
+      t("copaw.projects.knowledge.outputs.latestSemanticRoleLabelingOutcome", {
+        time: formatProjectKnowledgeStatsRecordTimestamp(
+          params.semanticRoleLabeling,
+        ),
         summary: summarizeProjectKnowledgeQualityReviewStats(
           t,
           params.semanticRoleLabeling,
           "copaw.projects.knowledge.outputs.latestSemanticRoleLabelingOutcomeMetrics",
         ),
-      },
-    ));
+      }),
+    );
   }
   return parts;
 }

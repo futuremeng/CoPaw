@@ -4,9 +4,16 @@
   gap: 16px;
   min-height: 100%;
   padding: 24px;
-  background:
-    radial-gradient(circle at top left, rgba(18, 125, 105, 0.08), transparent 28%),
-    radial-gradient(circle at top right, rgba(227, 122, 39, 0.08), transparent 30%),
+  background: radial-gradient(
+      circle at top left,
+      rgba(18, 125, 105, 0.08),
+      transparent 28%
+    ),
+    radial-gradient(
+      circle at top right,
+      rgba(227, 122, 39, 0.08),
+      transparent 30%
+    ),
     #f5f7f2;
 }
 
@@ -34,7 +41,10 @@
 
 .grid {
   display: grid;
-  grid-template-columns: minmax(280px, 360px) minmax(360px, 1fr) minmax(380px, 1.1fr);
+  grid-template-columns: minmax(280px, 360px) minmax(360px, 1fr) minmax(
+      380px,
+      1.1fr
+    );
   gap: 16px;
   align-items: start;
 }
@@ -52,7 +62,10 @@
   border-radius: 14px;
   border: 1px solid rgba(0, 0, 0, 0.06);
   cursor: pointer;
-  transition: border-color 0.2s ease, transform 0.2s ease, background 0.2s ease;
+  transition:
+    border-color 0.2s ease,
+    transform 0.2s ease,
+    background 0.2s ease;
 }
 
 .listItem:hover,

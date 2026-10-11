@@ -15,7 +15,9 @@ import type { ProjectStageKey } from "../utils/projectLayoutPrefs";
 // The app renders the English bundle (i18n default language is "en"), so the
 // double resolves copy from that bundle instead of an inline default.
 vi.mock("react-i18next", async () => {
-  const { t } = await vi.importActual<typeof import("./enLocaleTranslate")>("./enLocaleTranslate");
+  const { t } = await vi.importActual<typeof import("./enLocaleTranslate")>(
+    "./enLocaleTranslate",
+  );
   return { useTranslation: () => ({ t, i18n: { language: "en" } }) };
 });
 
@@ -106,16 +108,18 @@ function renderTree(
     selectedFilePath?: string;
     expandedKeys?: string[];
     projectTreeNodes?: AgentProjectFileTreeNode[];
-    onLoadProjectTreeChildren?: (path: string) => Promise<AgentProjectFileTreeNode[]>;
+    onLoadProjectTreeChildren?: (
+      path: string,
+    ) => Promise<AgentProjectFileTreeNode[]>;
   },
 ) {
   function TestHarness() {
-    const [selectedMetricFilter, setSelectedMetricFilter] = useState<ProjectFileFilterKey | "">(
-      options?.initialFilter ?? "",
-    );
-    const [treeDisplayMode, setTreeDisplayMode] = useState<"filter" | "highlight">(
-      options?.initialTreeDisplayMode ?? "filter",
-    );
+    const [selectedMetricFilter, setSelectedMetricFilter] = useState<
+      ProjectFileFilterKey | ""
+    >(options?.initialFilter ?? "");
+    const [treeDisplayMode, setTreeDisplayMode] = useState<
+      "filter" | "highlight"
+    >(options?.initialTreeDisplayMode ?? "filter");
 
     return (
       <ProjectFileTree
@@ -149,9 +153,14 @@ describe("ProjectFileTree interactions", () => {
     const user = userEvent.setup();
     renderTree([buildFile("data/README.md"), buildFile("original/guide.md")]);
 
-    await user.type(screen.getByPlaceholderText("Filter files"), "missing-keyword");
+    await user.type(
+      screen.getByPlaceholderText("Filter files"),
+      "missing-keyword",
+    );
 
-    expect(screen.getByText("No files match the current keyword")).toBeDefined();
+    expect(
+      screen.getByText("No files match the current keyword"),
+    ).toBeDefined();
 
     await user.clear(screen.getByPlaceholderText("Filter files"));
     await user.type(screen.getByPlaceholderText("Filter files"), "readme");
@@ -189,7 +198,9 @@ describe("ProjectFileTree interactions", () => {
 
     render(<ControlledTreeFilterHarness />);
 
-    const input = screen.getByPlaceholderText("Filter files") as HTMLInputElement;
+    const input = screen.getByPlaceholderText(
+      "Filter files",
+    ) as HTMLInputElement;
     await user.type(input, "readme");
 
     expect(input.value).toBe("readme");
@@ -206,7 +217,9 @@ describe("ProjectFileTree interactions", () => {
   });
 
   it("loads expanded lazy directories automatically", async () => {
-    const onLoadProjectTreeChildren = vi.fn(async () => [buildLeafNode("original/guide.md")]);
+    const onLoadProjectTreeChildren = vi.fn(async () => [
+      buildLeafNode("original/guide.md"),
+    ]);
 
     renderTree([], {
       expandedKeys: ["original"],
@@ -222,7 +235,9 @@ describe("ProjectFileTree interactions", () => {
   });
 
   it("shows only built-in root directories when the builtin filter is active", async () => {
-    const onLoadProjectTreeChildren = vi.fn(async () => [buildLeafNode(".agent/AGENTS.md")]);
+    const onLoadProjectTreeChildren = vi.fn(async () => [
+      buildLeafNode(".agent/AGENTS.md"),
+    ]);
 
     renderTree(
       [
@@ -281,12 +296,14 @@ describe("ProjectFileTree interactions", () => {
   });
 
   it("keeps loaded lazy children when root tree nodes refresh", async () => {
-    const onLoadProjectTreeChildren = vi.fn(async () => [buildLeafNode("original/guide.md")]);
+    const onLoadProjectTreeChildren = vi.fn(async () => [
+      buildLeafNode("original/guide.md"),
+    ]);
 
     function RefreshHarness() {
-      const [projectTreeNodes, setProjectTreeNodes] = useState<AgentProjectFileTreeNode[]>([
-        buildTreeNode("original"),
-      ]);
+      const [projectTreeNodes, setProjectTreeNodes] = useState<
+        AgentProjectFileTreeNode[]
+      >([buildTreeNode("original")]);
 
       return (
         <>
@@ -294,7 +311,9 @@ describe("ProjectFileTree interactions", () => {
             type="button"
             onClick={() => {
               setProjectTreeNodes([
-                buildTreeNode("original", { modified_time: "2026-04-09T00:01:00Z" }),
+                buildTreeNode("original", {
+                  modified_time: "2026-04-09T00:01:00Z",
+                }),
               ]);
             }}
           >
@@ -346,7 +365,10 @@ describe("ProjectFileTree interactions", () => {
       {
         expandedKeys: ["original"],
         projectTreeNodes: [buildTreeNode("original", { child_count: 2 })],
-        projectFileSummary: buildFileSummary({ markdown_files: 1, other_type_files: 1 }),
+        projectFileSummary: buildFileSummary({
+          markdown_files: 1,
+          other_type_files: 1,
+        }),
         onLoadProjectTreeChildren,
       },
     );

@@ -1,9 +1,6 @@
 import { agentsApi } from "../../../../api/modules/agents";
 import type { AgentProjectFileQueryRequest } from "../../../../api/types/agents";
-import {
-  PROJECT_SCOPED_CAPABILITIES,
-  isPathReadonly,
-} from "./capabilities";
+import { PROJECT_SCOPED_CAPABILITIES, isPathReadonly } from "./capabilities";
 import type {
   ProjectWorkspaceAdapter,
   ProjectWorkspaceQueryInput,
@@ -15,7 +12,9 @@ interface ProjectScopedAdapterOptions {
   projectId: string;
 }
 
-function toProjectQueryBody(input: ProjectWorkspaceQueryInput): AgentProjectFileQueryRequest {
+function toProjectQueryBody(
+  input: ProjectWorkspaceQueryInput,
+): AgentProjectFileQueryRequest {
   const body: AgentProjectFileQueryRequest = {
     include_ignored: input.includeIgnored ?? false,
     sort_by: input.sortBy ?? "path",
@@ -34,7 +33,8 @@ function toProjectQueryBody(input: ProjectWorkspaceQueryInput): AgentProjectFile
     body.stages = input.stages as AgentProjectFileQueryRequest["stages"];
   }
   if (Array.isArray(input.contentTypes) && input.contentTypes.length > 0) {
-    body.content_types = input.contentTypes as AgentProjectFileQueryRequest["content_types"];
+    body.content_types =
+      input.contentTypes as AgentProjectFileQueryRequest["content_types"];
   }
   if (input.includeBuiltin !== undefined) {
     body.include_builtin = input.includeBuiltin;
@@ -43,18 +43,26 @@ function toProjectQueryBody(input: ProjectWorkspaceQueryInput): AgentProjectFile
   return body;
 }
 
-function toProjectQueryOutput(input: ProjectWorkspaceQueryOutput): ProjectWorkspaceQueryOutput {
+function toProjectQueryOutput(
+  input: ProjectWorkspaceQueryOutput,
+): ProjectWorkspaceQueryOutput {
   return input;
 }
 
-export function createProjectScopedAdapter(options: ProjectScopedAdapterOptions): ProjectWorkspaceAdapter {
+export function createProjectScopedAdapter(
+  options: ProjectScopedAdapterOptions,
+): ProjectWorkspaceAdapter {
   const { agentId, projectId } = options;
 
   return {
     getScope: () => "project",
     getCapabilities: () => PROJECT_SCOPED_CAPABILITIES,
     queryFiles: async (input) => {
-      const payload = await agentsApi.queryProjectFiles(agentId, projectId, toProjectQueryBody(input));
+      const payload = await agentsApi.queryProjectFiles(
+        agentId,
+        projectId,
+        toProjectQueryBody(input),
+      );
       return toProjectQueryOutput({
         items: payload.items.map((item) => ({
           filename: item.filename,
@@ -65,7 +73,10 @@ export function createProjectScopedAdapter(options: ProjectScopedAdapterOptions)
           contentType: item.content_type,
           builtin: item.builtin,
           ignored: item.ignored,
-          readonly: isPathReadonly(item.path, PROJECT_SCOPED_CAPABILITIES.readonlyPathRules),
+          readonly: isPathReadonly(
+            item.path,
+            PROJECT_SCOPED_CAPABILITIES.readonlyPathRules,
+          ),
         })),
         summary: {
           totalMatched: payload.summary.total_matched,
@@ -89,25 +100,38 @@ export function createProjectScopedAdapter(options: ProjectScopedAdapterOptions)
         },
       });
     },
-    getFileSummary: async () => agentsApi.getProjectFileSummary(agentId, projectId),
-    listTree: async (dirPath = "") => agentsApi.listProjectFileTree(agentId, projectId, dirPath),
+    getFileSummary: async () =>
+      agentsApi.getProjectFileSummary(agentId, projectId),
+    listTree: async (dirPath = "") =>
+      agentsApi.listProjectFileTree(agentId, projectId, dirPath),
     readText: async (path) => {
       const payload = await agentsApi.readProjectFile(agentId, projectId, path);
       return { content: payload.content || "" };
     },
     writeText: async () => {
-      throw new Error("Project scoped adapter does not support direct file writes yet.");
+      throw new Error(
+        "Project scoped adapter does not support direct file writes yet.",
+      );
     },
-    getBinaryUrl: (path) => agentsApi.getProjectBinaryFileUrl(agentId, projectId, path),
+    getBinaryUrl: (path) =>
+      agentsApi.getProjectBinaryFileUrl(agentId, projectId, path),
     mkdir: async (path) => {
-      const payload = await agentsApi.createProjectDirectory(agentId, projectId, { path });
+      const payload = await agentsApi.createProjectDirectory(
+        agentId,
+        projectId,
+        { path },
+      );
       return {
         success: payload.success,
         path: payload.path,
         existed: payload.existed,
       };
     },
-    move: async (sourcePath, targetPath, conflictStrategy = "fail_if_exists") => {
+    move: async (
+      sourcePath,
+      targetPath,
+      conflictStrategy = "fail_if_exists",
+    ) => {
       const payload = await agentsApi.moveProjectPath(agentId, projectId, {
         source_path: sourcePath,
         target_path: targetPath,
@@ -121,7 +145,11 @@ export function createProjectScopedAdapter(options: ProjectScopedAdapterOptions)
       };
     },
     remove: async (path, isDirectory = false) => {
-      const payload = await agentsApi.deleteProjectPath(agentId, projectId, path);
+      const payload = await agentsApi.deleteProjectPath(
+        agentId,
+        projectId,
+        path,
+      );
       return {
         success: payload.success,
         path: payload.path,
@@ -129,7 +157,13 @@ export function createProjectScopedAdapter(options: ProjectScopedAdapterOptions)
       };
     },
     upload: async (file, targetDir = "", relativePath = "") => {
-      await agentsApi.uploadProjectFile(agentId, projectId, file, targetDir, relativePath);
+      await agentsApi.uploadProjectFile(
+        agentId,
+        projectId,
+        file,
+        targetDir,
+        relativePath,
+      );
     },
     watch: () => {
       // Project-level realtime watch is currently disabled in the page layer.

@@ -19,19 +19,26 @@ interface UseProjectChatEnsureControllerParams {
   startFailedText: string;
 }
 
-function getMetaString(meta: Record<string, unknown> | undefined, key: string): string {
+function getMetaString(
+  meta: Record<string, unknown> | undefined,
+  key: string,
+): string {
   const value = meta?.[key];
   return typeof value === "string" ? value : "";
 }
 
-function isProjectWorkspaceRelatedChat(chat: ChatSpec, projectId: string): boolean {
+function isProjectWorkspaceRelatedChat(
+  chat: ChatSpec,
+  projectId: string,
+): boolean {
   const meta =
     chat.meta && typeof chat.meta === "object"
       ? (chat.meta as Record<string, unknown>)
       : undefined;
   const focusType = getMetaString(meta, "focus_type");
   const projectMetaId =
-    getMetaString(meta, "project_id") || getMetaString(meta, "project_request_id");
+    getMetaString(meta, "project_id") ||
+    getMetaString(meta, "project_request_id");
   const focusPath = getMetaString(meta, "focus_path");
   const sessionPrefix = `project-workspace-${projectId}-`;
 
@@ -54,7 +61,10 @@ function isProjectWorkspaceRelatedChat(chat: ChatSpec, projectId: string): boole
   return false;
 }
 
-function collectWorkspaceChatCandidates(chats: ChatSpec[], projectId: string): ChatSpec[] {
+function collectWorkspaceChatCandidates(
+  chats: ChatSpec[],
+  projectId: string,
+): ChatSpec[] {
   const parentChats = chats.filter((chat) =>
     isProjectWorkspaceRelatedChat(chat, projectId),
   );
@@ -101,7 +111,9 @@ function sortChatsForRestore<T extends ChatSpec>(chats: T[]): T[] {
 }
 
 function pickLeafChatCandidates(chats: ChatSpec[]): ChatSpec[] {
-  const parentIds = new Set(chats.map((chat) => chat.session_id).filter(Boolean) as string[]);
+  const parentIds = new Set(
+    chats.map((chat) => chat.session_id).filter(Boolean) as string[],
+  );
   const leaves = chats.filter((chat) => !parentIds.has(chat.id));
   return leaves.length > 0 ? leaves : chats;
 }
@@ -126,7 +138,10 @@ function pickWorkspaceChatFromCandidates(params: {
     }
   }
 
-  const related = collectWorkspaceChatCandidates(params.chats, params.projectId);
+  const related = collectWorkspaceChatCandidates(
+    params.chats,
+    params.projectId,
+  );
   if (related.length === 0) {
     return "";
   }
@@ -150,138 +165,145 @@ export default function useProjectChatEnsureController({
   setError,
   startFailedText,
 }: UseProjectChatEnsureControllerParams) {
-  const handleEnsureRunChat = useCallback(async (forceNew = false): Promise<string> => {
-    if (!selectedProject || !selectedRunId) {
-      return "";
-    }
-
-    if (!forceNew && activeRunChatId) {
-      return activeRunChatId;
-    }
-
-    setChatStarting(true);
-    try {
-      const previousChatId = runFocusChatIdRef.current;
-      if (forceNew && previousChatId) {
-        void chatApi
-          .clearChatMeta(previousChatId, {
-            user_id: "default",
-            channel: "console",
-          })
-          .catch(() => {});
+  const handleEnsureRunChat = useCallback(
+    async (forceNew = false): Promise<string> => {
+      if (!selectedProject || !selectedRunId) {
+        return "";
       }
 
-      const created = await chatApi.createChat({
-        name: `[focus] ${selectedProject.name}`,
-        session_id: `project-run-${selectedRunId}-${Date.now()}`,
-        user_id: "default",
-        channel: "console",
-        meta: {
-          focus_type: "project_run",
-          focus_id: selectedProject.id,
-          project_id: selectedProject.id,
-          project_request_id: resolvedProjectRequestId || selectedProject.id,
-          run_id: selectedRunId,
-          focus_path: `projects/${selectedProject.id}`,
-        },
-      });
+      if (!forceNew && activeRunChatId) {
+        return activeRunChatId;
+      }
 
-      setRunFocusChatId(created.id);
-      setError("");
-      return created.id;
-    } catch (err) {
-      console.error("failed to create project run chat", err);
-      setError(startFailedText);
-      return "";
-    } finally {
-      setChatStarting(false);
-    }
-  }, [
-    activeRunChatId,
-    resolvedProjectRequestId,
-    runFocusChatIdRef,
-    selectedProject,
-    selectedRunId,
-    setChatStarting,
-    setError,
-    setRunFocusChatId,
-    startFailedText,
-  ]);
+      setChatStarting(true);
+      try {
+        const previousChatId = runFocusChatIdRef.current;
+        if (forceNew && previousChatId) {
+          void chatApi
+            .clearChatMeta(previousChatId, {
+              user_id: "default",
+              channel: "console",
+            })
+            .catch(() => {});
+        }
 
-  const handleEnsureWorkspaceChat = useCallback(async (forceNew = false): Promise<string> => {
-    if (!selectedProject) {
-      return "";
-    }
-
-    if (!forceNew && workspaceFocusChatId) {
-      return workspaceFocusChatId;
-    }
-
-    setChatStarting(true);
-    try {
-      if (!forceNew) {
-        const chats = await chatApi.listChats({
+        const created = await chatApi.createChat({
+          name: `[focus] ${selectedProject.name}`,
+          session_id: `project-run-${selectedRunId}-${Date.now()}`,
           user_id: "default",
           channel: "console",
+          meta: {
+            focus_type: "project_run",
+            focus_id: selectedProject.id,
+            project_id: selectedProject.id,
+            project_request_id: resolvedProjectRequestId || selectedProject.id,
+            run_id: selectedRunId,
+            focus_path: `projects/${selectedProject.id}`,
+          },
         });
-        const restoredChatId = pickWorkspaceChatFromCandidates({
-          chats,
-          projectId: selectedProject.id,
-          routeWorkspaceChatId,
-          preferredWorkspaceChatId: selectedProject.preferred_workspace_chat_id || "",
-        });
-        if (restoredChatId) {
-          setWorkspaceFocusChatId(restoredChatId);
-          setError("");
-          return restoredChatId;
-        }
+
+        setRunFocusChatId(created.id);
+        setError("");
+        return created.id;
+      } catch (err) {
+        console.error("failed to create project run chat", err);
+        setError(startFailedText);
+        return "";
+      } finally {
+        setChatStarting(false);
+      }
+    },
+    [
+      activeRunChatId,
+      resolvedProjectRequestId,
+      runFocusChatIdRef,
+      selectedProject,
+      selectedRunId,
+      setChatStarting,
+      setError,
+      setRunFocusChatId,
+      startFailedText,
+    ],
+  );
+
+  const handleEnsureWorkspaceChat = useCallback(
+    async (forceNew = false): Promise<string> => {
+      if (!selectedProject) {
+        return "";
       }
 
-      const previousChatId = workspaceFocusChatIdRef.current;
-      if (forceNew && previousChatId) {
-        void chatApi
-          .clearChatMeta(previousChatId, {
+      if (!forceNew && workspaceFocusChatId) {
+        return workspaceFocusChatId;
+      }
+
+      setChatStarting(true);
+      try {
+        if (!forceNew) {
+          const chats = await chatApi.listChats({
             user_id: "default",
             channel: "console",
-          })
-          .catch(() => {});
+          });
+          const restoredChatId = pickWorkspaceChatFromCandidates({
+            chats,
+            projectId: selectedProject.id,
+            routeWorkspaceChatId,
+            preferredWorkspaceChatId:
+              selectedProject.preferred_workspace_chat_id || "",
+          });
+          if (restoredChatId) {
+            setWorkspaceFocusChatId(restoredChatId);
+            setError("");
+            return restoredChatId;
+          }
+        }
+
+        const previousChatId = workspaceFocusChatIdRef.current;
+        if (forceNew && previousChatId) {
+          void chatApi
+            .clearChatMeta(previousChatId, {
+              user_id: "default",
+              channel: "console",
+            })
+            .catch(() => {});
+        }
+
+        const created = await chatApi.createChat({
+          name: `[project] ${selectedProject.name}`,
+          session_id: `project-workspace-${selectedProject.id}-${Date.now()}`,
+          user_id: "default",
+          channel: "console",
+          meta: {
+            focus_type: "project_workspace",
+            focus_id: selectedProject.id,
+            project_id: selectedProject.id,
+            project_request_id: resolvedProjectRequestId || selectedProject.id,
+            focus_path: `projects/${selectedProject.id}`,
+          },
+        });
+
+        setWorkspaceFocusChatId(created.id);
+        setError("");
+        return created.id;
+      } catch (err) {
+        console.error("failed to create project workspace chat", err);
+        setError(startFailedText);
+        return "";
+      } finally {
+        setChatStarting(false);
       }
-
-      const created = await chatApi.createChat({
-        name: `[project] ${selectedProject.name}`,
-        session_id: `project-workspace-${selectedProject.id}-${Date.now()}`,
-        user_id: "default",
-        channel: "console",
-        meta: {
-          focus_type: "project_workspace",
-          focus_id: selectedProject.id,
-          project_id: selectedProject.id,
-          project_request_id: resolvedProjectRequestId || selectedProject.id,
-          focus_path: `projects/${selectedProject.id}`,
-        },
-      });
-
-      setWorkspaceFocusChatId(created.id);
-      setError("");
-      return created.id;
-    } catch (err) {
-      console.error("failed to create project workspace chat", err);
-      setError(startFailedText);
-      return "";
-    } finally {
-      setChatStarting(false);
-    }
-  }, [
-    routeWorkspaceChatId,
-    resolvedProjectRequestId,
-    selectedProject,
-    setChatStarting,
-    setError,
-    setWorkspaceFocusChatId,
-    startFailedText,
-    workspaceFocusChatId,
-    workspaceFocusChatIdRef,
-  ]);
+    },
+    [
+      routeWorkspaceChatId,
+      resolvedProjectRequestId,
+      selectedProject,
+      setChatStarting,
+      setError,
+      setWorkspaceFocusChatId,
+      startFailedText,
+      workspaceFocusChatId,
+      workspaceFocusChatIdRef,
+    ],
+  );
 
   return {
     handleEnsureRunChat,

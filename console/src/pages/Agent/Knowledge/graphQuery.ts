@@ -13,7 +13,9 @@ export function filterGraphQuerySourceRecords(
     entityTypes?: string[];
   },
 ): GraphQueryRecord[] {
-  const query = String(filterText || "").trim().toLowerCase();
+  const query = String(filterText || "")
+    .trim()
+    .toLowerCase();
   const relationTypes = new Set(
     (options?.relationTypes || [])
       .map((item) => String(item || "").trim())
@@ -25,30 +27,28 @@ export function filterGraphQuerySourceRecords(
       .filter(Boolean),
   );
 
-  return records.filter((record) => (
-    (relationTypes.size <= 0 || relationTypes.has(String(record.predicate || "").trim()))
-    && (
-      entityTypes.size <= 0
-      || entityTypes.has(String(record.subject_type || "").trim())
-      || entityTypes.has(String(record.object_type || "").trim())
-    )
-    && (
-      !query
-      || [
-        record.subject,
-        record.subject_type,
-        record.predicate,
-        record.object,
-        record.object_type,
-        record.document_title,
-        record.document_path,
-        record.source_id,
-        record.source_type,
-      ]
-        .map((part) => String(part || "").toLowerCase())
-        .some((part) => part.includes(query))
-    )
-  ));
+  return records.filter(
+    (record) =>
+      (relationTypes.size <= 0 ||
+        relationTypes.has(String(record.predicate || "").trim())) &&
+      (entityTypes.size <= 0 ||
+        entityTypes.has(String(record.subject_type || "").trim()) ||
+        entityTypes.has(String(record.object_type || "").trim())) &&
+      (!query ||
+        [
+          record.subject,
+          record.subject_type,
+          record.predicate,
+          record.object,
+          record.object_type,
+          record.document_title,
+          record.document_path,
+          record.source_id,
+          record.source_type,
+        ]
+          .map((part) => String(part || "").toLowerCase())
+          .some((part) => part.includes(query))),
+  );
 }
 
 export function limitGraphVisualizationRecords(
@@ -231,9 +231,7 @@ export function sortGraphQueryRecords(
 
     const aStr = String(aVal).toLowerCase();
     const bStr = String(bVal).toLowerCase();
-    return descending
-      ? bStr.localeCompare(aStr)
-      : aStr.localeCompare(bStr);
+    return descending ? bStr.localeCompare(aStr) : aStr.localeCompare(bStr);
   });
 
   return sorted;
@@ -251,8 +249,8 @@ export function getWarningsBadge(warnings: string[]): {
     return { count: 0, status: "success", label: "No warnings" };
   }
 
-  const hasErrors = warnings.some((w) =>
-    w.includes("ERROR") || w.includes("FAILED"),
+  const hasErrors = warnings.some(
+    (w) => w.includes("ERROR") || w.includes("FAILED"),
   );
 
   return {
@@ -292,7 +290,10 @@ function isMeaningfulEntityLabel(raw: string): boolean {
   return !/^[^a-z0-9\u4e00-\u9fff]+$/i.test(normalized);
 }
 
-export function graphEntityNodeId(label: string, fallback: string = "unknown"): string {
+export function graphEntityNodeId(
+  label: string,
+  fallback: string = "unknown",
+): string {
   const normalized = normalizeEntityLabel(label) || fallback;
   const safe = safeNodeId(normalized) || safeNodeId(fallback) || "unknown";
   return `entity-${safe}`;
@@ -320,7 +321,11 @@ function parseObjectTriples(
     .split(";")
     .map((item) => item.trim())
     .filter(Boolean);
-  const triples: Array<{ relation: string; target: string; confidence: string }> = [];
+  const triples: Array<{
+    relation: string;
+    target: string;
+    confidence: string;
+  }> = [];
 
   parts.forEach((part) => {
     const arrowIndex = part.lastIndexOf("-->");
@@ -350,7 +355,8 @@ export function recordsToVisualizationData(
   let edgeCounter = 0;
 
   records.forEach((record, index) => {
-    const subjectLabel = normalizeEntityLabel(record.subject) || `Entity ${index + 1}`;
+    const subjectLabel =
+      normalizeEntityLabel(record.subject) || `Entity ${index + 1}`;
     const subjectId = graphEntityNodeId(subjectLabel, `n-${index}`);
     if (!nodes.has(subjectId)) {
       nodes.set(subjectId, {
@@ -368,10 +374,12 @@ export function recordsToVisualizationData(
     const normalizedTriples = triples.length
       ? triples
       : parseFallbackTargets(record.object).map((target) => ({
-        relation: normalizeEntityLabel(record.predicate) || "related",
-        target,
-        confidence: Number.isFinite(record.score) ? `${Math.round(record.score * 100)}%` : "",
-      }));
+          relation: normalizeEntityLabel(record.predicate) || "related",
+          target,
+          confidence: Number.isFinite(record.score)
+            ? `${Math.round(record.score * 100)}%`
+            : "",
+        }));
     if (!normalizedTriples.length) {
       return;
     }
@@ -382,7 +390,10 @@ export function recordsToVisualizationData(
         return;
       }
 
-      const targetId = graphEntityNodeId(targetLabel, `${subjectId}-${edgeCounter}`);
+      const targetId = graphEntityNodeId(
+        targetLabel,
+        `${subjectId}-${edgeCounter}`,
+      );
       if (!nodes.has(targetId)) {
         nodes.set(targetId, {
           id: targetId,

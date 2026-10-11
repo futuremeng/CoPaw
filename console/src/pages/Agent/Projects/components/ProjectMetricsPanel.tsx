@@ -25,7 +25,9 @@ interface ProjectMetricsPanelProps {
   onSelectArtifactPath?: (path: string) => void;
 }
 
-function resolveArtifactCompareKey(item: ProjectPipelineRunDetail["artifact_records"][number]): string {
+function resolveArtifactCompareKey(
+  item: ProjectPipelineRunDetail["artifact_records"][number],
+): string {
   return item.published_path || item.logical_key || item.path;
 }
 
@@ -79,7 +81,8 @@ export default function ProjectMetricsPanel({
 }: ProjectMetricsPanelProps) {
   const { t } = useTranslation();
   const [compareRunId, setCompareRunId] = useState("");
-  const [compareRunDetail, setCompareRunDetail] = useState<ProjectPipelineRunDetail | null>(null);
+  const [compareRunDetail, setCompareRunDetail] =
+    useState<ProjectPipelineRunDetail | null>(null);
   const [compareLoading, setCompareLoading] = useState(false);
   const [compareError, setCompareError] = useState("");
 
@@ -119,7 +122,11 @@ export default function ProjectMetricsPanel({
     setCompareLoading(true);
     setCompareError("");
     void agentsApi
-      .getProjectPipelineRun(currentAgentId, selectedProjectRequestId, compareRunId)
+      .getProjectPipelineRun(
+        currentAgentId,
+        selectedProjectRequestId,
+        compareRunId,
+      )
       .then((detail) => {
         if (!cancelled) {
           setCompareRunDetail(detail);
@@ -186,8 +193,10 @@ export default function ProjectMetricsPanel({
       }
     }
 
-    const compareEntries = (left: ArtifactCompareEntry, right: ArtifactCompareEntry) =>
-      left.compareKey.localeCompare(right.compareKey);
+    const compareEntries = (
+      left: ArtifactCompareEntry,
+      right: ArtifactCompareEntry,
+    ) => left.compareKey.localeCompare(right.compareKey);
 
     shared.sort(compareEntries);
     currentOnly.sort(compareEntries);
@@ -201,30 +210,44 @@ export default function ProjectMetricsPanel({
   }, [compareRunDetail?.artifact_records, runDetail?.artifact_records]);
 
   const renderPathLinks = useCallback(
-    (entries: ArtifactCompareEntry[], mode: "current" | "baseline" | "shared") => {
+    (
+      entries: ArtifactCompareEntry[],
+      mode: "current" | "baseline" | "shared",
+    ) => {
       if (entries.length === 0) {
         return null;
       }
       return (
-        <div style={{ marginTop: 4, display: "flex", flexDirection: "column", alignItems: "flex-start" }}>
+        <div
+          style={{
+            marginTop: 4,
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "flex-start",
+          }}
+        >
           {entries.slice(0, 6).map((entry) => {
-            const targetPath = mode === "baseline"
-              ? entry.baselinePath
-              : entry.currentPath || entry.baselinePath;
-            const label = mode === "shared"
-              ? `${entry.compareKey} -> ${entry.currentPath || entry.baselinePath}`
-              : entry.compareKey;
+            const targetPath =
+              mode === "baseline"
+                ? entry.baselinePath
+                : entry.currentPath || entry.baselinePath;
+            const label =
+              mode === "shared"
+                ? `${entry.compareKey} -> ${
+                    entry.currentPath || entry.baselinePath
+                  }`
+                : entry.compareKey;
 
             return (
-            <Button
-              key={`${mode}:${entry.compareKey}`}
-              type="link"
-              size="small"
-              style={{ paddingInline: 0, height: "auto" }}
-              onClick={() => onSelectArtifactPath?.(targetPath)}
-            >
-              {label}
-            </Button>
+              <Button
+                key={`${mode}:${entry.compareKey}`}
+                type="link"
+                size="small"
+                style={{ paddingInline: 0, height: "auto" }}
+                onClick={() => onSelectArtifactPath?.(targetPath)}
+              >
+                {label}
+              </Button>
             );
           })}
           {entries.length > 6 ? (
@@ -247,7 +270,9 @@ export default function ProjectMetricsPanel({
         <div className={styles.metricPanel}>
           <div className={styles.metricBlock}>
             <div className={styles.itemTitleRow}>
-              <span className={styles.itemTitle}>{t("projects.pipeline.compare")}</span>
+              <span className={styles.itemTitle}>
+                {t("projects.pipeline.compare")}
+              </span>
             </div>
             {compareCandidates.length === 0 ? (
               <div className={styles.itemMeta}>
@@ -262,7 +287,9 @@ export default function ProjectMetricsPanel({
                   style={{ width: "100%", maxWidth: 420 }}
                   options={compareCandidates.map((item) => ({
                     value: item.id,
-                    label: `${item.id} · ${item.status || "unknown"} · ${formatRunTimeLabel(
+                    label: `${item.id} · ${
+                      item.status || "unknown"
+                    } · ${formatRunTimeLabel(
                       item.updated_at || item.created_at || "",
                     )}`,
                   }))}
@@ -270,7 +297,8 @@ export default function ProjectMetricsPanel({
                 />
                 {compareLoading ? (
                   <div className={styles.itemMeta} style={{ marginTop: 8 }}>
-                    <Spin size="small" /> {t("projects.pipeline.compareLoading")}
+                    <Spin size="small" />{" "}
+                    {t("projects.pipeline.compareLoading")}
                   </div>
                 ) : null}
                 {compareError ? (
@@ -285,30 +313,48 @@ export default function ProjectMetricsPanel({
                 {compareRunDetail && !compareLoading && !compareError ? (
                   <div style={{ marginTop: 8 }}>
                     <div className={styles.itemMeta}>
-                      {t("projects.pipeline.compareArtifactsShared")}: {artifactCompareSummary.shared.length}
+                      {t("projects.pipeline.compareArtifactsShared")}:{" "}
+                      {artifactCompareSummary.shared.length}
                     </div>
                     <div className={styles.itemMeta}>
-                      {t("projects.pipeline.compareArtifactsCurrentOnly")}: {artifactCompareSummary.currentOnly.length}
+                      {t("projects.pipeline.compareArtifactsCurrentOnly")}:{" "}
+                      {artifactCompareSummary.currentOnly.length}
                     </div>
                     <div className={styles.itemMeta}>
-                      {t("projects.pipeline.compareArtifactsBaselineOnly")}: {artifactCompareSummary.baselineOnly.length}
+                      {t("projects.pipeline.compareArtifactsBaselineOnly")}:{" "}
+                      {artifactCompareSummary.baselineOnly.length}
                     </div>
                     {artifactCompareSummary.currentOnly.length > 0 ? (
                       <div className={styles.itemMeta}>
-                        {t("projects.pipeline.compareArtifactsCurrentOnlyPreview")}:
-                        {renderPathLinks(artifactCompareSummary.currentOnly, "current")}
+                        {t(
+                          "projects.pipeline.compareArtifactsCurrentOnlyPreview",
+                        )}
+                        :
+                        {renderPathLinks(
+                          artifactCompareSummary.currentOnly,
+                          "current",
+                        )}
                       </div>
                     ) : null}
                     {artifactCompareSummary.shared.length > 0 ? (
                       <div className={styles.itemMeta}>
                         {t("projects.pipeline.compareArtifactsSharedPreview")}:
-                        {renderPathLinks(artifactCompareSummary.shared, "shared")}
+                        {renderPathLinks(
+                          artifactCompareSummary.shared,
+                          "shared",
+                        )}
                       </div>
                     ) : null}
                     {artifactCompareSummary.baselineOnly.length > 0 ? (
                       <div className={styles.itemMeta}>
-                        {t("projects.pipeline.compareArtifactsBaselineOnlyPreview")}:
-                        {renderPathLinks(artifactCompareSummary.baselineOnly, "baseline")}
+                        {t(
+                          "projects.pipeline.compareArtifactsBaselineOnlyPreview",
+                        )}
+                        :
+                        {renderPathLinks(
+                          artifactCompareSummary.baselineOnly,
+                          "baseline",
+                        )}
                       </div>
                     ) : null}
                   </div>
@@ -319,20 +365,36 @@ export default function ProjectMetricsPanel({
 
           <div className={styles.metricSummaryGrid}>
             <div className={styles.metricSummaryCard}>
-              <div className={styles.itemMeta}>{t("projects.pipeline.totalSteps")}</div>
-              <div className={styles.metricSummaryValue}>{runProgress.total}</div>
+              <div className={styles.itemMeta}>
+                {t("projects.pipeline.totalSteps")}
+              </div>
+              <div className={styles.metricSummaryValue}>
+                {runProgress.total}
+              </div>
             </div>
             <div className={styles.metricSummaryCard}>
-              <div className={styles.itemMeta}>{t("projects.pipeline.status.completed")}</div>
-              <div className={styles.metricSummaryValue}>{runProgress.completed}</div>
+              <div className={styles.itemMeta}>
+                {t("projects.pipeline.status.completed")}
+              </div>
+              <div className={styles.metricSummaryValue}>
+                {runProgress.completed}
+              </div>
             </div>
             <div className={styles.metricSummaryCard}>
-              <div className={styles.itemMeta}>{t("projects.pipeline.status.running")}</div>
-              <div className={styles.metricSummaryValue}>{runProgress.running}</div>
+              <div className={styles.itemMeta}>
+                {t("projects.pipeline.status.running")}
+              </div>
+              <div className={styles.metricSummaryValue}>
+                {runProgress.running}
+              </div>
             </div>
             <div className={styles.metricSummaryCard}>
-              <div className={styles.itemMeta}>{t("projects.pipeline.status.pending")}</div>
-              <div className={styles.metricSummaryValue}>{runProgress.pending}</div>
+              <div className={styles.itemMeta}>
+                {t("projects.pipeline.status.pending")}
+              </div>
+              <div className={styles.metricSummaryValue}>
+                {runProgress.pending}
+              </div>
             </div>
           </div>
           {runDetail.steps.map((step) => {
@@ -345,18 +407,25 @@ export default function ProjectMetricsPanel({
                   <Tag color={statusTagColor(step.status)}>{step.status}</Tag>
                 </div>
                 {entries.length === 0 ? (
-                  <div className={styles.itemMeta}>{t("projects.pipeline.noMetrics")}</div>
+                  <div className={styles.itemMeta}>
+                    {t("projects.pipeline.noMetrics")}
+                  </div>
                 ) : (
                   entries.map(([key, value]) => {
                     const currentNumeric = toNumericMetric(value);
                     const compareNumeric = toNumericMetric(compareMetrics[key]);
-                    const hasCompare = currentNumeric !== null && compareNumeric !== null;
-                    const delta = hasCompare ? currentNumeric - compareNumeric : null;
+                    const hasCompare =
+                      currentNumeric !== null && compareNumeric !== null;
+                    const delta = hasCompare
+                      ? currentNumeric - compareNumeric
+                      : null;
 
                     return (
                       <div key={key} className={styles.itemMeta}>
                         {key}: {String(value)}
-                        {hasCompare ? ` (${formatDelta(delta as number)} vs baseline)` : ""}
+                        {hasCompare
+                          ? ` (${formatDelta(delta as number)} vs baseline)`
+                          : ""}
                       </div>
                     );
                   })

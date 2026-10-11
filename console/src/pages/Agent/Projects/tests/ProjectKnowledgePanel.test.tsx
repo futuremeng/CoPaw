@@ -6,7 +6,10 @@ import { buildModeState } from "../utils/projectKnowledgeTestUtils";
 import type { KnowledgeSourceItem } from "../../../../api/types";
 import type { ProjectKnowledgeState } from "../hooks/useProjectKnowledgeState";
 
-const mockRecordsToVisualizationData = vi.fn((_: unknown, __?: unknown) => ({ nodes: [], edges: [] }));
+const mockRecordsToVisualizationData = vi.fn((_: unknown, __?: unknown) => ({
+  nodes: [],
+  edges: [],
+}));
 
 vi.mock("react-i18next", () => ({
   useTranslation: () => ({
@@ -16,9 +19,11 @@ vi.mock("react-i18next", () => ({
       maybeOptions?: Record<string, unknown>,
     ) => {
       if (typeof maybeFallbackOrOptions === "string") {
-        return maybeFallbackOrOptions.replace(/\{\{(\w+)\}\}/g, (_match, name: string) => (
-          String(maybeOptions?.[name] ?? `{{${name}}}`)
-        ));
+        return maybeFallbackOrOptions.replace(
+          /\{\{(\w+)\}\}/g,
+          (_match, name: string) =>
+            String(maybeOptions?.[name] ?? `{{${name}}}`),
+        );
       }
       return key;
     },
@@ -26,7 +31,9 @@ vi.mock("react-i18next", () => ({
 }));
 
 vi.mock("../../Knowledge/graphQuery", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("../../Knowledge/graphQuery")>();
+  const actual = await importOriginal<
+    typeof import("../../Knowledge/graphQuery")
+  >();
   return {
     ...actual,
     limitGraphVisualizationRecords: (records: unknown[], topK?: number) => {
@@ -38,9 +45,8 @@ vi.mock("../../Knowledge/graphQuery", async (importOriginal) => {
       }
       return records.slice(0, Math.max(1, Math.floor(Number(topK))));
     },
-    recordsToVisualizationData: (records: unknown[], options?: unknown) => (
-      mockRecordsToVisualizationData(records, options)
-    ),
+    recordsToVisualizationData: (records: unknown[], options?: unknown) =>
+      mockRecordsToVisualizationData(records, options),
   };
 });
 
@@ -107,9 +113,24 @@ function buildKnowledgeState(projectId: string): ProjectKnowledgeState {
       reason: "",
     },
     modeOutputs: {
-      fast: { mode: "fast", source: "indexed-preview", summaryLines: ["Documents: 1"], artifacts: [] },
-      nlp: { mode: "nlp", source: "graph-artifacts", summaryLines: ["Entities: 0"], artifacts: [] },
-      agentic: { mode: "agentic", source: "pipeline-artifacts", summaryLines: ["Run:"], artifacts: [] },
+      fast: {
+        mode: "fast",
+        source: "indexed-preview",
+        summaryLines: ["Documents: 1"],
+        artifacts: [],
+      },
+      nlp: {
+        mode: "nlp",
+        source: "graph-artifacts",
+        summaryLines: ["Entities: 0"],
+        artifacts: [],
+      },
+      agentic: {
+        mode: "agentic",
+        source: "pipeline-artifacts",
+        summaryLines: ["Run:"],
+        artifacts: [],
+      },
     },
     quantMetrics: {
       totalSources: 1,
@@ -235,7 +256,12 @@ function buildCanonicalStats(projectId: string) {
       source_id: `project-${projectId.toLowerCase()}-workspace`,
       step_id: "semantic_role_labeling",
       updated_at: "2026-05-12T10:56:00Z",
-      metrics: { quality_score_before: 0.91, quality_score_after: 0.95, quality_delta: 0.04, quality_rounds: 1 },
+      metrics: {
+        quality_score_before: 0.91,
+        quality_score_after: 0.95,
+        quality_delta: 0.04,
+        quality_rounds: 1,
+      },
     },
   };
 }
@@ -245,14 +271,49 @@ describe("ProjectKnowledgePanel", () => {
     const projectId = "project-abc";
     const knowledgeState = buildKnowledgeState(projectId);
     const stats = buildCanonicalStats(projectId);
-    knowledgeState.sourceScanStats = { project_id: projectId, step_id: "snapshot_raw", latest: stats.snapshotRaw, history: [] };
-    knowledgeState.fileAnalysisStats = { project_id: projectId, step_id: "build_chunks", latest: stats.buildChunks, history: [] };
+    knowledgeState.sourceScanStats = {
+      project_id: projectId,
+      step_id: "snapshot_raw",
+      latest: stats.snapshotRaw,
+      history: [],
+    };
+    knowledgeState.fileAnalysisStats = {
+      project_id: projectId,
+      step_id: "build_chunks",
+      latest: stats.buildChunks,
+      history: [],
+    };
     knowledgeState.projectStepStats = {
-      build_interlinear: { project_id: projectId, step_id: "build_interlinear", latest: stats.buildInterlinear, history: [] },
-      tokenize: { project_id: projectId, step_id: "tokenize", latest: stats.tokenize, history: [] },
-      pos_tagging: { project_id: projectId, step_id: "pos_tagging", latest: stats.posTagging, history: [] },
-      syntax_parse: { project_id: projectId, step_id: "syntax_parse", latest: stats.syntaxParse, history: [] },
-      semantic_role_labeling: { project_id: projectId, step_id: "semantic_role_labeling", latest: stats.semanticRoleLabeling, history: [] },
+      build_interlinear: {
+        project_id: projectId,
+        step_id: "build_interlinear",
+        latest: stats.buildInterlinear,
+        history: [],
+      },
+      tokenize: {
+        project_id: projectId,
+        step_id: "tokenize",
+        latest: stats.tokenize,
+        history: [],
+      },
+      pos_tagging: {
+        project_id: projectId,
+        step_id: "pos_tagging",
+        latest: stats.posTagging,
+        history: [],
+      },
+      syntax_parse: {
+        project_id: projectId,
+        step_id: "syntax_parse",
+        latest: stats.syntaxParse,
+        history: [],
+      },
+      semantic_role_labeling: {
+        project_id: projectId,
+        step_id: "semantic_role_labeling",
+        latest: stats.semanticRoleLabeling,
+        history: [],
+      },
     } as ProjectKnowledgeState["projectStepStats"];
 
     render(
@@ -267,10 +328,20 @@ describe("ProjectKnowledgePanel", () => {
       />,
     );
 
-    expect(screen.getByText("copaw.projects.knowledge.latestWorkflowSummary")).not.toBeNull();
-    expect(screen.getByText(/copaw\.projects\.knowledge\.latestSnapshotRawSummary/)).not.toBeNull();
-    expect(screen.getByText(/copaw\.projects\.knowledge\.latestBuildChunksSummary/)).not.toBeNull();
-    expect(screen.getByText(/copaw\.projects\.knowledge\.latestSemanticRoleLabelingSummary/)).not.toBeNull();
+    expect(
+      screen.getByText("copaw.projects.knowledge.latestWorkflowSummary"),
+    ).not.toBeNull();
+    expect(
+      screen.getByText(/copaw\.projects\.knowledge\.latestSnapshotRawSummary/),
+    ).not.toBeNull();
+    expect(
+      screen.getByText(/copaw\.projects\.knowledge\.latestBuildChunksSummary/),
+    ).not.toBeNull();
+    expect(
+      screen.getByText(
+        /copaw\.projects\.knowledge\.latestSemanticRoleLabelingSummary/,
+      ),
+    ).not.toBeNull();
   });
 
   it("switches sources", async () => {
@@ -288,7 +359,13 @@ describe("ProjectKnowledgePanel", () => {
       tags: ["project"],
       summary: "",
       project_id: projectId,
-      status: { indexed: true, indexed_at: "2026-04-29T08:00:00+00:00", document_count: 10, chunk_count: 40, error: null },
+      status: {
+        indexed: true,
+        indexed_at: "2026-04-29T08:00:00+00:00",
+        document_count: 10,
+        chunk_count: 40,
+        error: null,
+      },
     };
     const sourceB: KnowledgeSourceItem = {
       id: "project-project-abc-docs",
@@ -301,7 +378,13 @@ describe("ProjectKnowledgePanel", () => {
       tags: ["project"],
       summary: "",
       project_id: projectId,
-      status: { indexed: false, indexed_at: "", document_count: 0, chunk_count: 0, error: null },
+      status: {
+        indexed: false,
+        indexed_at: "",
+        document_count: 0,
+        chunk_count: 0,
+        error: null,
+      },
     };
     knowledgeState.projectSources = [sourceA, sourceB];
     knowledgeState.selectedSourceId = sourceA.id;
@@ -318,12 +401,16 @@ describe("ProjectKnowledgePanel", () => {
       />,
     );
 
-    expect(screen.getByText("copaw.projects.knowledge.dataSource")).not.toBeNull();
+    expect(
+      screen.getByText("copaw.projects.knowledge.dataSource"),
+    ).not.toBeNull();
     expect(screen.getByText("Workspace Source")).not.toBeNull();
 
     await user.click(screen.getByText("Workspace Source"));
     await user.click(await screen.findByText("Docs Source"));
 
-    expect(knowledgeState.setSelectedSourceId).toHaveBeenCalledWith("project-project-abc-docs");
+    expect(knowledgeState.setSelectedSourceId).toHaveBeenCalledWith(
+      "project-project-abc-docs",
+    );
   });
 });

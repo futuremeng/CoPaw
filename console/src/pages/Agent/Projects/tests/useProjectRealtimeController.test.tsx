@@ -73,7 +73,9 @@ describe("useProjectRealtimeController", () => {
     vi.clearAllMocks();
     MockWebSocket.instances = [];
     mockedGetApiToken.mockReturnValue("token-1");
-    mockedGetApiUrl.mockImplementation((path: string) => `http://localhost:8000${path}`);
+    mockedGetApiUrl.mockImplementation(
+      (path: string) => `http://localhost:8000${path}`,
+    );
     vi.stubGlobal("WebSocket", MockWebSocket as unknown as typeof WebSocket);
   });
 

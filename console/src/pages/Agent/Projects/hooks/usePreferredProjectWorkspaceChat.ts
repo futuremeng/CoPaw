@@ -16,13 +16,18 @@ function readPreferredWorkspaceChatId(projectId: string): string {
     return "";
   }
   try {
-    return window.localStorage.getItem(workspaceChatPreferenceKey(projectId)) || "";
+    return (
+      window.localStorage.getItem(workspaceChatPreferenceKey(projectId)) || ""
+    );
   } catch {
     return "";
   }
 }
 
-function writePreferredWorkspaceChatId(projectId: string, chatId: string): void {
+function writePreferredWorkspaceChatId(
+  projectId: string,
+  chatId: string,
+): void {
   if (!projectId || !chatId) {
     return;
   }
@@ -48,7 +53,10 @@ async function persistPreferredWorkspaceChatId(params: {
   );
 }
 
-function getMetaString(meta: Record<string, unknown> | undefined, key: string): string {
+function getMetaString(
+  meta: Record<string, unknown> | undefined,
+  key: string,
+): string {
   const value = meta?.[key];
   return typeof value === "string" ? value : "";
 }
@@ -61,14 +69,18 @@ function toTimestamp(raw?: string | null): number {
   return Number.isFinite(ts) ? ts : 0;
 }
 
-function isProjectWorkspaceRelatedChat(chat: ChatSpec, projectId: string): boolean {
+function isProjectWorkspaceRelatedChat(
+  chat: ChatSpec,
+  projectId: string,
+): boolean {
   const meta =
     chat.meta && typeof chat.meta === "object"
       ? (chat.meta as Record<string, unknown>)
       : undefined;
   const focusType = getMetaString(meta, "focus_type");
   const projectMetaId =
-    getMetaString(meta, "project_id") || getMetaString(meta, "project_request_id");
+    getMetaString(meta, "project_id") ||
+    getMetaString(meta, "project_request_id");
   const focusPath = getMetaString(meta, "focus_path");
   const sessionPrefix = `project-workspace-${projectId}-`;
 
@@ -91,7 +103,10 @@ function isProjectWorkspaceRelatedChat(chat: ChatSpec, projectId: string): boole
   return false;
 }
 
-function collectDescendantChats(chats: ChatSpec[], rootIds: string[]): ChatSpec[] {
+function collectDescendantChats(
+  chats: ChatSpec[],
+  rootIds: string[],
+): ChatSpec[] {
   if (rootIds.length === 0) {
     return [];
   }
@@ -124,7 +139,9 @@ function collectDescendantChats(chats: ChatSpec[], rootIds: string[]): ChatSpec[
 }
 
 function pickLeafChatCandidates(chats: ChatSpec[]): ChatSpec[] {
-  const parentIds = new Set(chats.map((chat) => chat.session_id).filter(Boolean) as string[]);
+  const parentIds = new Set(
+    chats.map((chat) => chat.session_id).filter(Boolean) as string[],
+  );
   const leaves = chats.filter((chat) => !parentIds.has(chat.id));
   return leaves.length > 0 ? leaves : chats;
 }
@@ -151,13 +168,20 @@ async function resolvePreferredOrLatestWorkspaceChat(params: {
     return { chatId: "", preferredValid: false };
   }
 
-  const chats = params.chats || await chatApi.listChats({ user_id: "default", channel: "console" });
-  const related = chats.filter((chat) => isProjectWorkspaceRelatedChat(chat, params.projectId));
+  const chats =
+    params.chats ||
+    (await chatApi.listChats({ user_id: "default", channel: "console" }));
+  const related = chats.filter((chat) =>
+    isProjectWorkspaceRelatedChat(chat, params.projectId),
+  );
 
   const preferredChatId = params.preferredChatId.trim();
   if (preferredChatId) {
     const preferredChat = chats.find((chat) => chat.id === preferredChatId);
-    if (preferredChat && isProjectWorkspaceRelatedChat(preferredChat, params.projectId)) {
+    if (
+      preferredChat &&
+      isProjectWorkspaceRelatedChat(preferredChat, params.projectId)
+    ) {
       const descendantPool = collectDescendantChats(chats, [preferredChat.id]);
       const preferredCandidates = pickLeafChatCandidates(
         descendantPool.length > 0 ? descendantPool : [preferredChat],
@@ -177,7 +201,9 @@ async function resolvePreferredOrLatestWorkspaceChat(params: {
   }
 
   const relatedLeaves = pickLeafChatCandidates(related);
-  const resolvedChatId = await pickChatWithHistory(sortChatsForRestore(relatedLeaves));
+  const resolvedChatId = await pickChatWithHistory(
+    sortChatsForRestore(relatedLeaves),
+  );
 
   return { chatId: resolvedChatId, preferredValid: false };
 }
@@ -192,7 +218,9 @@ async function resolveRouteWorkspaceChat(params: {
     return { chatId: "", routeValid: false };
   }
 
-  const chats = params.chats || await chatApi.listChats({ user_id: "default", channel: "console" });
+  const chats =
+    params.chats ||
+    (await chatApi.listChats({ user_id: "default", channel: "console" }));
   const target = chats.find((chat) => chat.id === routeChatId);
   if (!target || !isProjectWorkspaceRelatedChat(target, params.projectId)) {
     return { chatId: "", routeValid: false };
@@ -244,41 +272,47 @@ export default function usePreferredProjectWorkspaceChat({
     );
   }, [selectedProject?.id, selectedProject?.preferred_workspace_chat_id]);
 
-  const applyWorkspaceChatFocus = useCallback((chatId: string) => {
-    if (!selectedProject?.id || !chatId) {
-      return;
-    }
+  const applyWorkspaceChatFocus = useCallback(
+    (chatId: string) => {
+      if (!selectedProject?.id || !chatId) {
+        return;
+      }
 
-    setSelectedRunId("");
-    setSelectedStepId("");
-    setRunDetail(null);
-    setRunFocusChatId("");
-    setDesignFocusChatId("");
-    setWorkspaceFocusChatId(chatId);
-  }, [
-    selectedProject?.id,
-    setDesignFocusChatId,
-    setRunDetail,
-    setRunFocusChatId,
-    setSelectedRunId,
-    setSelectedStepId,
-    setWorkspaceFocusChatId,
-  ]);
+      setSelectedRunId("");
+      setSelectedStepId("");
+      setRunDetail(null);
+      setRunFocusChatId("");
+      setDesignFocusChatId("");
+      setWorkspaceFocusChatId(chatId);
+    },
+    [
+      selectedProject?.id,
+      setDesignFocusChatId,
+      setRunDetail,
+      setRunFocusChatId,
+      setSelectedRunId,
+      setSelectedStepId,
+      setWorkspaceFocusChatId,
+    ],
+  );
 
-  const syncPreferredWorkspaceChatBinding = useCallback(async (chatId: string) => {
-    if (!selectedProject?.id || !chatId) {
-      return;
-    }
-    writePreferredWorkspaceChatId(selectedProject.id, chatId);
-    if (!currentAgentId) {
-      return;
-    }
-    await persistPreferredWorkspaceChatId({
-      currentAgentId,
-      projectId: selectedProject.id,
-      chatId,
-    });
-  }, [currentAgentId, selectedProject?.id]);
+  const syncPreferredWorkspaceChatBinding = useCallback(
+    async (chatId: string) => {
+      if (!selectedProject?.id || !chatId) {
+        return;
+      }
+      writePreferredWorkspaceChatId(selectedProject.id, chatId);
+      if (!currentAgentId) {
+        return;
+      }
+      await persistPreferredWorkspaceChatId({
+        currentAgentId,
+        projectId: selectedProject.id,
+        chatId,
+      });
+    },
+    [currentAgentId, selectedProject?.id],
+  );
 
   const resetPreferredWorkspaceChatBinding = useCallback(() => {
     persistedWorkspaceChatIdRef.current = "";
@@ -313,9 +347,11 @@ export default function usePreferredProjectWorkspaceChat({
     }
 
     persistedWorkspaceChatIdRef.current = workspaceFocusChatId;
-    void syncPreferredWorkspaceChatBinding(workspaceFocusChatId).catch((err) => {
-      console.warn("failed to persist preferred workspace chat binding", err);
-    });
+    void syncPreferredWorkspaceChatBinding(workspaceFocusChatId).catch(
+      (err) => {
+        console.warn("failed to persist preferred workspace chat binding", err);
+      },
+    );
   }, [
     selectedProject?.id,
     syncPreferredWorkspaceChatBinding,
@@ -352,7 +388,9 @@ export default function usePreferredProjectWorkspaceChat({
             persistedWorkspaceChatIdRef.current = routeResolved.chatId;
             applyWorkspaceChatFocus(routeResolved.chatId);
             if (routeResolved.chatId !== preferredCandidate) {
-              void syncPreferredWorkspaceChatBinding(routeResolved.chatId).catch(() => {
+              void syncPreferredWorkspaceChatBinding(
+                routeResolved.chatId,
+              ).catch(() => {
                 // Ignore passive binding sync failures.
               });
             }
@@ -372,10 +410,15 @@ export default function usePreferredProjectWorkspaceChat({
         if (resolved.chatId) {
           persistedWorkspaceChatIdRef.current = resolved.chatId;
           applyWorkspaceChatFocus(resolved.chatId);
-          if (!resolved.preferredValid || resolved.chatId !== preferredCandidate) {
-            void syncPreferredWorkspaceChatBinding(resolved.chatId).catch(() => {
-              // Ignore passive binding sync failures.
-            });
+          if (
+            !resolved.preferredValid ||
+            resolved.chatId !== preferredCandidate
+          ) {
+            void syncPreferredWorkspaceChatBinding(resolved.chatId).catch(
+              () => {
+                // Ignore passive binding sync failures.
+              },
+            );
           }
           return;
         }
@@ -396,9 +439,11 @@ export default function usePreferredProjectWorkspaceChat({
             if (createdChatId) {
               persistedWorkspaceChatIdRef.current = createdChatId;
               applyWorkspaceChatFocus(createdChatId);
-              void syncPreferredWorkspaceChatBinding(createdChatId).catch(() => {
-                // Ignore passive binding sync failures.
-              });
+              void syncPreferredWorkspaceChatBinding(createdChatId).catch(
+                () => {
+                  // Ignore passive binding sync failures.
+                },
+              );
             }
           } catch {
             // Keep passive; next state change will retry recovery.

@@ -1,7 +1,10 @@
 import { useCallback, useState } from "react";
 import { message } from "antd";
 import { useTranslation } from "react-i18next";
-import type { AgentProjectSummary, AgentSummary } from "../../../../api/types/agents";
+import type {
+  AgentProjectSummary,
+  AgentSummary,
+} from "../../../../api/types/agents";
 import type { ProjectWorkspaceAdapter } from "../adapters";
 import {
   buildProjectRequestCandidates,
@@ -13,7 +16,9 @@ interface UseProjectUploadControllerParams {
   selectedProject?: AgentProjectSummary;
   resolvedProjectRequestId: string;
   setResolvedProjectRequestId: (value: string) => void;
-  getProjectAdapter: (projectIdOverride?: string) => ProjectWorkspaceAdapter | null;
+  getProjectAdapter: (
+    projectIdOverride?: string,
+  ) => ProjectWorkspaceAdapter | null;
   onUploadCompleted: (
     agentId: string,
     project: AgentProjectSummary,
@@ -38,7 +43,9 @@ export default function useProjectUploadController({
   const { t } = useTranslation();
   const [uploadModalOpen, setUploadModalOpen] = useState(false);
   const [uploadingFiles, setUploadingFiles] = useState(false);
-  const [pendingUploads, setPendingUploads] = useState<ProjectPendingUpload[]>([]);
+  const [pendingUploads, setPendingUploads] = useState<ProjectPendingUpload[]>(
+    [],
+  );
   const [uploadTargetDir, setUploadTargetDir] = useState("");
   const [uploadMode, setUploadMode] = useState<ProjectUploadMode>("files");
 
@@ -69,7 +76,11 @@ export default function useProjectUploadController({
             if (!projectAdapter) {
               throw new Error("Project adapter unavailable");
             }
-            await projectAdapter.upload(item.file, uploadTargetDir, item.relativePath);
+            await projectAdapter.upload(
+              item.file,
+              uploadTargetDir,
+              item.relativePath,
+            );
             return undefined;
           },
         });

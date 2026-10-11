@@ -1,5 +1,14 @@
 import { Button } from "@agentscope-ai/design";
-import { Alert, Card, Collapse, Input, Space, Switch, Tag, Typography } from "antd";
+import {
+  Alert,
+  Card,
+  Collapse,
+  Input,
+  Space,
+  Switch,
+  Tag,
+  Typography,
+} from "antd";
 import { useEffect, useRef, useState } from "react";
 import type { KeyboardEventHandler } from "react";
 import { useTranslation } from "react-i18next";
@@ -49,15 +58,22 @@ type NlpDemoMeta = {
   sidecar_trace_stage_ms?: Record<string, number>;
 };
 
-const UNIFIED_DEMO_SAMPLE = "北京九录科技有限公司推出产品 Copaw。Copaw 是公司面向知识生产和加工场景打造的产品，致力于以智能化技术推动知识服务领域的全流程数字化转型，并持续支持多个开源项目。";
-const CLASSICAL_DEMO_SAMPLE = "赫赫九录，肇基京华。\n孟氏创立，岁在孟秋。\n专攻数术，出版维纲。\n开源布道，众志共襄。\n轻量之台，知识是扬。\n依彼神基，巧制 Copaw。\n智能为辅，编修有方。\n赋能全域，流泽孔长。";
-const SIAMESE_NER_SAMPLE = "北京九录科技有限公司推出产品 Copaw。Copaw 是公司面向知识生产和加工场景打造的产品，致力于以智能化技术推动知识服务领域的全流程数字化转型，并持续支持多个开源项目。";
-const SIAMESE_RELATION_SAMPLE = "孟繁永担任北京九录科技有限公司创始人兼首席执行官，公司总部位于北京。";
-const SIAMESE_EVENT_SAMPLE = "2026年5月，九录科技在北京发布 Copaw 2.0，吸引多家机构参与试点。";
+const UNIFIED_DEMO_SAMPLE =
+  "北京九录科技有限公司推出产品 Copaw。Copaw 是公司面向知识生产和加工场景打造的产品，致力于以智能化技术推动知识服务领域的全流程数字化转型，并持续支持多个开源项目。";
+const CLASSICAL_DEMO_SAMPLE =
+  "赫赫九录，肇基京华。\n孟氏创立，岁在孟秋。\n专攻数术，出版维纲。\n开源布道，众志共襄。\n轻量之台，知识是扬。\n依彼神基，巧制 Copaw。\n智能为辅，编修有方。\n赋能全域，流泽孔长。";
+const SIAMESE_NER_SAMPLE =
+  "北京九录科技有限公司推出产品 Copaw。Copaw 是公司面向知识生产和加工场景打造的产品，致力于以智能化技术推动知识服务领域的全流程数字化转型，并持续支持多个开源项目。";
+const SIAMESE_RELATION_SAMPLE =
+  "孟繁永担任北京九录科技有限公司创始人兼首席执行官，公司总部位于北京。";
+const SIAMESE_EVENT_SAMPLE =
+  "2026年5月，九录科技在北京发布 Copaw 2.0，吸引多家机构参与试点。";
 const SIAMESE_ABSA_SAMPLE = "这款耳机音质很好，但续航一般，价格偏高。";
-const SIAMESE_COREF_SAMPLE = "是的,不是|孟繁永创立了北京九录科技有限公司。他希望它能够持续服务知识生产。";
+const SIAMESE_COREF_SAMPLE =
+  "是的,不是|孟繁永创立了北京九录科技有限公司。他希望它能够持续服务知识生产。";
 const SIAMESE_SENTIMENT_SAMPLE = "整体体验不错，功能完善，但学习成本略高。";
-const SIAMESE_CLASSIFICATION_SAMPLE = "该平台发布了新的模型评测基准，并开放了开发者文档。";
+const SIAMESE_CLASSIFICATION_SAMPLE =
+  "该平台发布了新的模型评测基准，并开放了开发者文档。";
 const SIAMESE_TEXT_MATCHING_SAMPLE = JSON.stringify(
   {
     text_a: "Copaw 是知识生产智能体。",
@@ -238,7 +254,11 @@ const SIAMESE_DEMO_METHODS: DemoMethod[] = [
     title: "命名实体识别",
     placeholder: "输入包含人物、公司名或产品名的中文文本。",
     examples: [SIAMESE_NER_SAMPLE],
-    schema: JSON.stringify({ 人物: null, 地理位置: null, 组织机构: null, 公司: null, 产品: null }, null, 2),
+    schema: JSON.stringify(
+      { 人物: null, 地理位置: null, 组织机构: null, 公司: null, 产品: null },
+      null,
+      2,
+    ),
   },
   {
     key: "relation_extraction",
@@ -300,7 +320,11 @@ const SIAMESE_DEMO_METHODS: DemoMethod[] = [
     title: "指代消解",
     placeholder: "输入“标签|文本”格式（如：是的,不是|...）并包含代词指代。",
     examples: [SIAMESE_COREF_SAMPLE],
-    schema: JSON.stringify({ "在下面的描述中，代词“它”指代的是“北京九录科技有限公司”吗？": null }, null, 2),
+    schema: JSON.stringify(
+      { "在下面的描述中，代词“它”指代的是“北京九录科技有限公司”吗？": null },
+      null,
+      2,
+    ),
   },
   {
     key: "sentiment_classification",
@@ -368,7 +392,8 @@ function localizeStatusReason(reason: string): string {
     return text;
   }
   const exactMap: Record<string, string> = {
-    "HanLP task is configured. Run task demo to verify model availability.": "任务已配置，可点击“开始分析”验证效果。",
+    "HanLP task is configured. Run task demo to verify model availability.":
+      "任务已配置，可点击“开始分析”验证效果。",
     "HanLP task is ready.": "任务已就绪，可直接开始分析。",
     "HanLP task is disabled in the task matrix.": "该任务当前未启用。",
   };
@@ -419,10 +444,10 @@ function normalizeNerLabel(value: unknown): { raw: string; display: string } {
     key === "NS"
       ? "LOCATION"
       : key === "NT"
-        ? "ORGANIZATION"
-        : key === "NR"
-          ? "PERSON"
-          : raw;
+      ? "ORGANIZATION"
+      : key === "NR"
+      ? "PERSON"
+      : raw;
   if (mapped && raw && mapped !== raw) {
     return { raw, display: `${mapped} (${raw})` };
   }
@@ -430,10 +455,16 @@ function normalizeNerLabel(value: unknown): { raw: string; display: string } {
 }
 
 function normalizeOverlayLabel(label: string): string {
-  return String(label || "").trim().toUpperCase();
+  return String(label || "")
+    .trim()
+    .toUpperCase();
 }
 
-function resolvePosTokenOffset(sourceText: string, token: string, from: number): { start: number; end: number } | null {
+function resolvePosTokenOffset(
+  sourceText: string,
+  token: string,
+  from: number,
+): { start: number; end: number } | null {
   const text = String(sourceText || "");
   const tok = String(token || "");
   if (!text || !tok) {
@@ -531,10 +562,7 @@ function buildPosAnnotations(
   return items;
 }
 
-function renderTokenRail(
-  tokens: string[],
-  activeTokenIndex?: number | null,
-) {
+function renderTokenRail(tokens: string[], activeTokenIndex?: number | null) {
   if (tokens.length === 0) {
     return null;
   }
@@ -543,7 +571,9 @@ function renderTokenRail(
       {tokens.map((token, index) => (
         <span
           key={`${token}-${index}`}
-          className={`${styles.demoTokenNode} ${activeTokenIndex === index ? styles.demoTokenNodeActive : ""}`}
+          className={`${styles.demoTokenNode} ${
+            activeTokenIndex === index ? styles.demoTokenNodeActive : ""
+          }`}
         >
           <span className={styles.demoTokenIndex}>{index + 1}</span>
           <span>{token}</span>
@@ -575,10 +605,17 @@ function resolveTokenResultList(taskKey: string, result: unknown): string[] {
 }
 
 function getTokenListFromResult(taskKey: string, result: unknown): string[] {
-  if (taskKey === "tokenize" || taskKey === "lzh_tok_fine" || taskKey === "lzh_tok_coarse") {
+  if (
+    taskKey === "tokenize" ||
+    taskKey === "lzh_tok_fine" ||
+    taskKey === "lzh_tok_coarse"
+  ) {
     return resolveTokenResultList(taskKey, result);
   }
-  if ((taskKey === "dep" || taskKey === "sdp" || taskKey === "lzh_dep") && Array.isArray(result)) {
+  if (
+    (taskKey === "dep" || taskKey === "sdp" || taskKey === "lzh_dep") &&
+    Array.isArray(result)
+  ) {
     return result
       .map((item) => asRecord(item))
       .filter((item): item is Record<string, unknown> => Boolean(item))
@@ -611,13 +648,23 @@ function getTokenListFromResult(taskKey: string, result: unknown): string[] {
 }
 
 function getSelectableCount(taskKey: string, result: unknown): number {
-  if (taskKey === "tokenize" || taskKey === "lzh_tok_fine" || taskKey === "lzh_tok_coarse") {
+  if (
+    taskKey === "tokenize" ||
+    taskKey === "lzh_tok_fine" ||
+    taskKey === "lzh_tok_coarse"
+  ) {
     return resolveTokenResultList(taskKey, result).length;
   }
   if (!Array.isArray(result)) {
     return 0;
   }
-  if (taskKey === "ner" || taskKey === "dep" || taskKey === "sdp" || taskKey === "srl" || taskKey === "lzh_dep") {
+  if (
+    taskKey === "ner" ||
+    taskKey === "dep" ||
+    taskKey === "sdp" ||
+    taskKey === "srl" ||
+    taskKey === "lzh_dep"
+  ) {
     return result.length;
   }
   if (
@@ -650,7 +697,12 @@ function renderNerHighlightedText(
     return null;
   }
 
-  const blocks: Array<{ text: string; label?: string; isEntity: boolean; entityIndex?: number }> = [];
+  const blocks: Array<{
+    text: string;
+    label?: string;
+    isEntity: boolean;
+    entityIndex?: number;
+  }> = [];
   let cursor = 0;
   for (const [entityIndex, entity] of entities.entries()) {
     if (entity.start < cursor) {
@@ -659,7 +711,12 @@ function renderNerHighlightedText(
     if (!entityOnlyView && entity.start > cursor) {
       blocks.push({ text: text.slice(cursor, entity.start), isEntity: false });
     }
-    blocks.push({ text: text.slice(entity.start, entity.end), label: entity.label, isEntity: true, entityIndex });
+    blocks.push({
+      text: text.slice(entity.start, entity.end),
+      label: entity.label,
+      isEntity: true,
+      entityIndex,
+    });
     cursor = entity.end;
   }
   if (!entityOnlyView && cursor < text.length) {
@@ -672,7 +729,11 @@ function renderNerHighlightedText(
         block.isEntity ? (
           <span
             key={`entity-${index}`}
-            className={`${styles.demoHighlightEntity} ${block.entityIndex === activeEntityIndex ? styles.demoHighlightEntityActive : ""}`}
+            className={`${styles.demoHighlightEntity} ${
+              block.entityIndex === activeEntityIndex
+                ? styles.demoHighlightEntityActive
+                : ""
+            }`}
           >
             {block.text}
             <span className={styles.demoHighlightLabel}>{block.label}</span>
@@ -714,7 +775,9 @@ function renderBratLikeOverlay(
     }
     const segmentText = text.slice(start, end);
     const covers = annotations
-      .filter((annotation) => annotation.start <= start && annotation.end >= end)
+      .filter(
+        (annotation) => annotation.start <= start && annotation.end >= end,
+      )
       .sort((a, b) => {
         if (a.kind !== b.kind) {
           return a.kind === "ner" ? -1 : 1;
@@ -731,13 +794,17 @@ function renderBratLikeOverlay(
         if (segment.covers.length === 0) {
           return <span key={`plain-${index}`}>{segment.text}</span>;
         }
-        const active = segment.covers.some((cover) => cover.rowIndex === activeRowIndex);
+        const active = segment.covers.some(
+          (cover) => cover.rowIndex === activeRowIndex,
+        );
         const primary = segment.covers[0];
         return (
           <span
             key={`seg-${index}`}
             className={`${styles.bratSegment} ${
-              primary.kind === "ner" ? styles.bratSegmentNer : styles.bratSegmentPos
+              primary.kind === "ner"
+                ? styles.bratSegmentNer
+                : styles.bratSegmentPos
             } ${active ? styles.bratSegmentActive : ""}`}
           >
             <span className={styles.bratLabels}>
@@ -745,7 +812,9 @@ function renderBratLikeOverlay(
                 <span
                   key={`label-${index}-${coverIndex}-${cover.rawLabel}`}
                   className={`${styles.bratLabelChip} ${
-                    cover.kind === "ner" ? styles.bratLabelChipNer : styles.bratLabelChipPos
+                    cover.kind === "ner"
+                      ? styles.bratLabelChipNer
+                      : styles.bratLabelChipPos
                   } ${active ? styles.bratLabelChipActive : ""}`}
                   data-label={cover.rawLabel}
                 >
@@ -777,7 +846,9 @@ function renderRecordRows(
   }
 
   const firstRowKeys = Object.keys(rows[0] || {});
-  const remainingKeys = firstRowKeys.filter((key) => !preferredColumns.includes(key));
+  const remainingKeys = firstRowKeys.filter(
+    (key) => !preferredColumns.includes(key),
+  );
   const columns = [...preferredColumns, ...remainingKeys].filter((key) =>
     rows.some((row) => row[key] !== undefined),
   );
@@ -792,26 +863,42 @@ function renderRecordRows(
 
   return (
     <div className={styles.demoTable}>
-      <div className={styles.demoTableHeader} style={{ gridTemplateColumns: `repeat(${columns.length}, minmax(0, 1fr))` }}>
+      <div
+        className={styles.demoTableHeader}
+        style={{
+          gridTemplateColumns: `repeat(${columns.length}, minmax(0, 1fr))`,
+        }}
+      >
         {columns.map((column) => (
           <span key={`header-${column}`}>{column}</span>
         ))}
       </div>
       {rows.map((row, index) => {
-        const highlighted = (options?.hoveredRowIndex ?? options?.selectedRowIndex) === index;
+        const highlighted =
+          (options?.hoveredRowIndex ?? options?.selectedRowIndex) === index;
         if (options?.interactive && options.onSelectRow) {
           return (
             <button
               type="button"
               key={`row-${index}`}
-              className={`${styles.demoTableRow} ${highlighted ? styles.demoTableRowActive : ""}`}
-              style={{ gridTemplateColumns: `repeat(${columns.length}, minmax(0, 1fr))` }}
-              onClick={() => options.onSelectRow?.(options.selectedRowIndex === index ? null : index)}
+              className={`${styles.demoTableRow} ${
+                highlighted ? styles.demoTableRowActive : ""
+              }`}
+              style={{
+                gridTemplateColumns: `repeat(${columns.length}, minmax(0, 1fr))`,
+              }}
+              onClick={() =>
+                options.onSelectRow?.(
+                  options.selectedRowIndex === index ? null : index,
+                )
+              }
               onMouseEnter={() => options.onHoverRow?.(index)}
               onMouseLeave={() => options.onHoverRow?.(null)}
             >
               {columns.map((column) => (
-                <span key={`row-${index}-${column}`}>{String(row[column] ?? "")}</span>
+                <span key={`row-${index}-${column}`}>
+                  {String(row[column] ?? "")}
+                </span>
               ))}
             </button>
           );
@@ -820,10 +907,14 @@ function renderRecordRows(
           <div
             key={`row-${index}`}
             className={styles.demoTableRow}
-            style={{ gridTemplateColumns: `repeat(${columns.length}, minmax(0, 1fr))` }}
+            style={{
+              gridTemplateColumns: `repeat(${columns.length}, minmax(0, 1fr))`,
+            }}
           >
             {columns.map((column) => (
-              <span key={`row-${index}-${column}`}>{String(row[column] ?? "")}</span>
+              <span key={`row-${index}-${column}`}>
+                {String(row[column] ?? "")}
+              </span>
             ))}
           </div>
         );
@@ -843,12 +934,21 @@ function renderResultByTask(
   onHoverRow: (index: number | null) => void,
 ) {
   const highlightedRowIndex = hoveredRowIndex ?? activeRowIndex;
-  if (taskKey === "tokenize" || taskKey === "lzh_tok_fine" || taskKey === "lzh_tok_coarse") {
+  if (
+    taskKey === "tokenize" ||
+    taskKey === "lzh_tok_fine" ||
+    taskKey === "lzh_tok_coarse"
+  ) {
     const tokens = resolveTokenResultList(taskKey, result);
     if (tokens.length === 0) {
-      return <Typography.Text type="secondary">未返回分词结果。</Typography.Text>;
+      return (
+        <Typography.Text type="secondary">未返回分词结果。</Typography.Text>
+      );
     }
-    return renderTokenRail(tokens.map((token) => String(token)), highlightedRowIndex);
+    return renderTokenRail(
+      tokens.map((token) => String(token)),
+      highlightedRowIndex,
+    );
   }
 
   if (taskKey === "ner" && Array.isArray(result)) {
@@ -864,26 +964,40 @@ function renderResultByTask(
             <span>Span</span>
           </div>
           {rows.map((row, index) => (
-
             <button
               type="button"
               key={`ner-row-${index}`}
-              className={`${styles.demoTableRow} ${highlightedRowIndex === index ? styles.demoTableRowActive : ""}`}
-              onClick={() => onSelectRow(activeRowIndex === index ? null : index)}
+              className={`${styles.demoTableRow} ${
+                highlightedRowIndex === index ? styles.demoTableRowActive : ""
+              }`}
+              onClick={() =>
+                onSelectRow(activeRowIndex === index ? null : index)
+              }
               onMouseEnter={() => onHoverRow(index)}
               onMouseLeave={() => onHoverRow(null)}
             >
               <span>{String(row.text || "")}</span>
               <span>{normalizeNerLabel(row.label).display}</span>
-              <span>{`${String(row.start ?? "")}-${String(row.end ?? "")}`}</span>
+              <span>{`${String(row.start ?? "")}-${String(
+                row.end ?? "",
+              )}`}</span>
             </button>
           ))}
         </div>
         <Typography.Text type="secondary">
           高亮区域中的非标签文本是上下文，不代表新增实体。
         </Typography.Text>
-        {renderBratLikeOverlay(sourceText, buildNerAnnotations(sourceText, rows), highlightedRowIndex)}
-        {renderNerHighlightedText(sourceText, rows, nerEntityOnlyView, highlightedRowIndex)}
+        {renderBratLikeOverlay(
+          sourceText,
+          buildNerAnnotations(sourceText, rows),
+          highlightedRowIndex,
+        )}
+        {renderNerHighlightedText(
+          sourceText,
+          rows,
+          nerEntityOnlyView,
+          highlightedRowIndex,
+        )}
       </>
     );
   }
@@ -892,7 +1006,9 @@ function renderResultByTask(
     const rows = result
       .map((item) => asRecord(item))
       .filter((item): item is Record<string, unknown> => Boolean(item));
-    const tokens = rows.map((row) => String(row.token || row.text || row.word || "")).filter(Boolean);
+    const tokens = rows
+      .map((row) => String(row.token || row.text || row.word || ""))
+      .filter(Boolean);
     return (
       <>
         <div className={styles.demoTable}>
@@ -905,8 +1021,12 @@ function renderResultByTask(
             <button
               type="button"
               key={`dep-row-${index}`}
-              className={`${styles.demoTableRow} ${highlightedRowIndex === index ? styles.demoTableRowActive : ""}`}
-              onClick={() => onSelectRow(activeRowIndex === index ? null : index)}
+              className={`${styles.demoTableRow} ${
+                highlightedRowIndex === index ? styles.demoTableRowActive : ""
+              }`}
+              onClick={() =>
+                onSelectRow(activeRowIndex === index ? null : index)
+              }
               onMouseEnter={() => onHoverRow(index)}
               onMouseLeave={() => onHoverRow(null)}
             >
@@ -921,47 +1041,55 @@ function renderResultByTask(
     );
   }
 
-    if (
-      (
-        taskKey === "pos_ctb" ||
-        taskKey === "pos_pku" ||
-        taskKey === "pos_863" ||
-        taskKey === "lzh_pos_upos" ||
-        taskKey === "lzh_pos_xpos" ||
-        taskKey === "lzh_pos_pku"
-      ) &&
-      Array.isArray(result)
-    ) {
-      const rows = result
-        .map((item) => asRecord(item))
-        .filter((item): item is Record<string, unknown> => Boolean(item));
-      const tokens = rows.map((row) => String(row.token || row.index || "")).filter(Boolean);
-      return (
-        <>
-          <div className={styles.demoTable}>
-            <div className={styles.demoTableHeader}>
-              <span>{taskKey.startsWith("lzh_") ? "Index" : "Token"}</span>
-              <span>POS</span>
-            </div>
-            {rows.map((row, index) => (
-              <button
-                type="button"
-                key={`pos-row-${index}`}
-                className={`${styles.demoTableRow} ${highlightedRowIndex === index ? styles.demoTableRowActive : ""}`}
-                onClick={() => onSelectRow(activeRowIndex === index ? null : index)}
-                onMouseEnter={() => onHoverRow(index)}
-                onMouseLeave={() => onHoverRow(null)}
-              >
-                <span>{String(row.token || row.index || "")}</span>
-                <span>{String(row.pos || "")}</span>
-              </button>
-            ))}
+  if (
+    (taskKey === "pos_ctb" ||
+      taskKey === "pos_pku" ||
+      taskKey === "pos_863" ||
+      taskKey === "lzh_pos_upos" ||
+      taskKey === "lzh_pos_xpos" ||
+      taskKey === "lzh_pos_pku") &&
+    Array.isArray(result)
+  ) {
+    const rows = result
+      .map((item) => asRecord(item))
+      .filter((item): item is Record<string, unknown> => Boolean(item));
+    const tokens = rows
+      .map((row) => String(row.token || row.index || ""))
+      .filter(Boolean);
+    return (
+      <>
+        <div className={styles.demoTable}>
+          <div className={styles.demoTableHeader}>
+            <span>{taskKey.startsWith("lzh_") ? "Index" : "Token"}</span>
+            <span>POS</span>
           </div>
-          {renderTokenRail(tokens, highlightedRowIndex)}
-          {renderBratLikeOverlay(sourceText, buildPosAnnotations(sourceText, rows), highlightedRowIndex)}
-        </>
-      );
-    }
+          {rows.map((row, index) => (
+            <button
+              type="button"
+              key={`pos-row-${index}`}
+              className={`${styles.demoTableRow} ${
+                highlightedRowIndex === index ? styles.demoTableRowActive : ""
+              }`}
+              onClick={() =>
+                onSelectRow(activeRowIndex === index ? null : index)
+              }
+              onMouseEnter={() => onHoverRow(index)}
+              onMouseLeave={() => onHoverRow(null)}
+            >
+              <span>{String(row.token || row.index || "")}</span>
+              <span>{String(row.pos || "")}</span>
+            </button>
+          ))}
+        </div>
+        {renderTokenRail(tokens, highlightedRowIndex)}
+        {renderBratLikeOverlay(
+          sourceText,
+          buildPosAnnotations(sourceText, rows),
+          highlightedRowIndex,
+        )}
+      </>
+    );
+  }
   if (taskKey === "lzh_lem" && Array.isArray(result)) {
     const rows = result
       .map((item) => asRecord(item))
@@ -979,16 +1107,22 @@ function renderResultByTask(
       const rows = result
         .map((item) => asRecord(item))
         .filter((item): item is Record<string, unknown> => Boolean(item));
-      const tokens = rows.map((row) => String(row.token || row.text || row.word || "")).filter(Boolean);
+      const tokens = rows
+        .map((row) => String(row.token || row.text || row.word || ""))
+        .filter(Boolean);
       return (
         <>
-          {renderRecordRows(rows, ["token", "head", "deprel", "relation", "score"], {
-            interactive: true,
-            selectedRowIndex: activeRowIndex,
-            hoveredRowIndex,
-            onSelectRow,
-            onHoverRow,
-          })}
+          {renderRecordRows(
+            rows,
+            ["token", "head", "deprel", "relation", "score"],
+            {
+              interactive: true,
+              selectedRowIndex: activeRowIndex,
+              hoveredRowIndex,
+              onSelectRow,
+              onHoverRow,
+            },
+          )}
           {renderTokenRail(tokens, highlightedRowIndex)}
         </>
       );
@@ -1006,13 +1140,17 @@ function renderResultByTask(
     const tokens = rows.map((row) => String(row.text || "")).filter(Boolean);
     return (
       <>
-        {renderRecordRows(rows, ["predicate_group", "role", "text", "start", "end"], {
-          interactive: true,
-          selectedRowIndex: activeRowIndex,
-          hoveredRowIndex,
-          onSelectRow,
-          onHoverRow,
-        })}
+        {renderRecordRows(
+          rows,
+          ["predicate_group", "role", "text", "start", "end"],
+          {
+            interactive: true,
+            selectedRowIndex: activeRowIndex,
+            hoveredRowIndex,
+            onSelectRow,
+            onHoverRow,
+          },
+        )}
         {renderTokenRail(tokens, highlightedRowIndex)}
       </>
     );
@@ -1053,11 +1191,17 @@ function renderResultByTask(
         return (
           <div className={styles.demoClusterWrap}>
             {result.map((cluster, clusterIndex) => (
-              <div key={`cluster-${clusterIndex}`} className={styles.demoClusterCard}>
+              <div
+                key={`cluster-${clusterIndex}`}
+                className={styles.demoClusterCard}
+              >
                 <Typography.Text strong>簇 {clusterIndex + 1}</Typography.Text>
                 <div className={styles.demoTokenRail}>
                   {(cluster as unknown[]).map((mention, mentionIndex) => (
-                    <Tag key={`cluster-${clusterIndex}-${mentionIndex}`} className={styles.demoChip}>
+                    <Tag
+                      key={`cluster-${clusterIndex}-${mentionIndex}`}
+                      className={styles.demoChip}
+                    >
                       {String(mention)}
                     </Tag>
                   ))}
@@ -1116,14 +1260,27 @@ function NlpPage() {
   const [nerEntityOnlyView, setNerEntityOnlyView] = useState(false);
   const [demoInputs, setDemoInputs] = useState<Record<string, string>>({});
   const [activeDemoTaskKey, setActiveDemoTaskKey] = useState("tokenize");
-  const [activeDemoRowIndex, setActiveDemoRowIndex] = useState<number | null>(null);
-  const [hoveredDemoRowIndex, setHoveredDemoRowIndex] = useState<number | null>(null);
-  const [classicalDemoInputs, setClassicalDemoInputs] = useState<Record<string, string>>({});
-  const [activeClassicalDemoMethodKey, setActiveClassicalDemoMethodKey] = useState(CLASSICAL_DEMO_METHODS[0]?.key || "");
-  const [activeClassicalDemoRowIndex, setActiveClassicalDemoRowIndex] = useState<number | null>(null);
-  const [hoveredClassicalDemoRowIndex, setHoveredClassicalDemoRowIndex] = useState<number | null>(null);
-  const [siameseDemoInputs, setSiameseDemoInputs] = useState<Record<string, string>>({});
-  const [siameseDemoSchemas, setSiameseDemoSchemas] = useState<Record<string, string>>({});
+  const [activeDemoRowIndex, setActiveDemoRowIndex] = useState<number | null>(
+    null,
+  );
+  const [hoveredDemoRowIndex, setHoveredDemoRowIndex] = useState<number | null>(
+    null,
+  );
+  const [classicalDemoInputs, setClassicalDemoInputs] = useState<
+    Record<string, string>
+  >({});
+  const [activeClassicalDemoMethodKey, setActiveClassicalDemoMethodKey] =
+    useState(CLASSICAL_DEMO_METHODS[0]?.key || "");
+  const [activeClassicalDemoRowIndex, setActiveClassicalDemoRowIndex] =
+    useState<number | null>(null);
+  const [hoveredClassicalDemoRowIndex, setHoveredClassicalDemoRowIndex] =
+    useState<number | null>(null);
+  const [siameseDemoInputs, setSiameseDemoInputs] = useState<
+    Record<string, string>
+  >({});
+  const [siameseDemoSchemas, setSiameseDemoSchemas] = useState<
+    Record<string, string>
+  >({});
   const [activeSiameseDemoMethodKey, setActiveSiameseDemoMethodKey] = useState(
     SIAMESE_DEMO_METHODS[0]?.key || "named_entity_recognition",
   );
@@ -1158,7 +1315,10 @@ function NlpPage() {
       return;
     }
     const initial = Object.fromEntries(
-      SIAMESE_DEMO_METHODS.map((item) => [item.backendTaskKey, item.examples[0] || ""]),
+      SIAMESE_DEMO_METHODS.map((item) => [
+        item.backendTaskKey,
+        item.examples[0] || "",
+      ]),
     ) as Record<string, string>;
     setSiameseDemoInputs(initial);
   }, [siameseDemoInputs]);
@@ -1168,7 +1328,10 @@ function NlpPage() {
       return;
     }
     const initial = Object.fromEntries(
-      SIAMESE_DEMO_METHODS.map((item) => [item.backendTaskKey, item.schema || ""]),
+      SIAMESE_DEMO_METHODS.map((item) => [
+        item.backendTaskKey,
+        item.schema || "",
+      ]),
     ) as Record<string, string>;
     setSiameseDemoSchemas(initial);
   }, [siameseDemoSchemas]);
@@ -1186,9 +1349,18 @@ function NlpPage() {
       enabled: true,
       scope: "all_enabled_tasks",
     });
-  }, [hanlpProviderActive, sidecarReady, status?.preload?.enabled, status?.preload?.scope]);
+  }, [
+    hanlpProviderActive,
+    sidecarReady,
+    status?.preload?.enabled,
+    status?.preload?.scope,
+  ]);
 
-  const methods: Array<{ key: string; taskKey?: string; status: MethodStatus }> = [
+  const methods: Array<{
+    key: string;
+    taskKey?: string;
+    status: MethodStatus;
+  }> = [
     {
       key: "tokenize",
       status: sidecarReady
@@ -1200,13 +1372,19 @@ function NlpPage() {
             }
           : {
               status: "unavailable",
-              reasonCode: status?.model.reason_code || "HANLP_MODEL_LOAD_FAILED",
-              reason: status?.model.reason || t("nlpConfig.methods.tokenize.unavailableReason"),
+              reasonCode:
+                status?.model.reason_code || "HANLP_MODEL_LOAD_FAILED",
+              reason:
+                status?.model.reason ||
+                t("nlpConfig.methods.tokenize.unavailableReason"),
             }
         : {
             status: "unavailable",
-            reasonCode: status?.sidecar.reason_code || "HANLP_SIDECAR_UNCONFIGURED",
-            reason: status?.sidecar.reason || t("nlpConfig.methods.tokenize.unavailableReason"),
+            reasonCode:
+              status?.sidecar.reason_code || "HANLP_SIDECAR_UNCONFIGURED",
+            reason:
+              status?.sidecar.reason ||
+              t("nlpConfig.methods.tokenize.unavailableReason"),
           },
     },
     {
@@ -1214,47 +1392,68 @@ function NlpPage() {
       taskKey: "ner_msra",
       status: {
         status: taskStates.ner_msra?.status || "unavailable",
-        reasonCode: taskStates.ner_msra?.reason_code || "HANLP_TASK_NOT_CONFIGURED",
-        reason: taskStates.ner_msra?.reason || t("nlpConfig.methods.defaultUnavailableReason"),
+        reasonCode:
+          taskStates.ner_msra?.reason_code || "HANLP_TASK_NOT_CONFIGURED",
+        reason:
+          taskStates.ner_msra?.reason ||
+          t("nlpConfig.methods.defaultUnavailableReason"),
       },
     },
     {
       key: "pos_ctb",
       taskKey: "pos_ctb",
       status: {
-        status: taskStates.pos_ctb?.status || (sidecarReady ? "ready" : "unavailable"),
+        status:
+          taskStates.pos_ctb?.status ||
+          (sidecarReady ? "ready" : "unavailable"),
         reasonCode:
           taskStates.pos_ctb?.reason_code ||
-          (sidecarReady ? "HANLP_TASK_API_READY" : "HANLP_SIDECAR_UNCONFIGURED"),
+          (sidecarReady
+            ? "HANLP_TASK_API_READY"
+            : "HANLP_SIDECAR_UNCONFIGURED"),
         reason:
           taskStates.pos_ctb?.reason ||
-          (sidecarReady ? "CTB9_POS_ELECTRA_SMALL" : t("nlpConfig.methods.defaultUnavailableReason")),
+          (sidecarReady
+            ? "CTB9_POS_ELECTRA_SMALL"
+            : t("nlpConfig.methods.defaultUnavailableReason")),
       },
     },
     {
       key: "pos_pku",
       taskKey: "pos_pku",
       status: {
-        status: taskStates.pos_pku?.status || (sidecarReady ? "ready" : "unavailable"),
+        status:
+          taskStates.pos_pku?.status ||
+          (sidecarReady ? "ready" : "unavailable"),
         reasonCode:
           taskStates.pos_pku?.reason_code ||
-          (sidecarReady ? "HANLP_TASK_API_READY" : "HANLP_SIDECAR_UNCONFIGURED"),
+          (sidecarReady
+            ? "HANLP_TASK_API_READY"
+            : "HANLP_SIDECAR_UNCONFIGURED"),
         reason:
           taskStates.pos_pku?.reason ||
-          (sidecarReady ? "PKU_POS_ELECTRA_SMALL" : t("nlpConfig.methods.defaultUnavailableReason")),
+          (sidecarReady
+            ? "PKU_POS_ELECTRA_SMALL"
+            : t("nlpConfig.methods.defaultUnavailableReason")),
       },
     },
     {
       key: "pos_863",
       taskKey: "pos_863",
       status: {
-        status: taskStates.pos_863?.status || (sidecarReady ? "ready" : "unavailable"),
+        status:
+          taskStates.pos_863?.status ||
+          (sidecarReady ? "ready" : "unavailable"),
         reasonCode:
           taskStates.pos_863?.reason_code ||
-          (sidecarReady ? "HANLP_TASK_API_READY" : "HANLP_SIDECAR_UNCONFIGURED"),
+          (sidecarReady
+            ? "HANLP_TASK_API_READY"
+            : "HANLP_SIDECAR_UNCONFIGURED"),
         reason:
           taskStates.pos_863?.reason ||
-          (sidecarReady ? "C863_POS_ELECTRA_SMALL" : t("nlpConfig.methods.defaultUnavailableReason")),
+          (sidecarReady
+            ? "C863_POS_ELECTRA_SMALL"
+            : t("nlpConfig.methods.defaultUnavailableReason")),
       },
     },
     {
@@ -1263,7 +1462,9 @@ function NlpPage() {
       status: {
         status: taskStates.dep?.status || "unavailable",
         reasonCode: taskStates.dep?.reason_code || "HANLP_TASK_NOT_CONFIGURED",
-        reason: taskStates.dep?.reason || t("nlpConfig.methods.defaultUnavailableReason"),
+        reason:
+          taskStates.dep?.reason ||
+          t("nlpConfig.methods.defaultUnavailableReason"),
       },
     },
     {
@@ -1272,7 +1473,9 @@ function NlpPage() {
       status: {
         status: taskStates.sdp?.status || "unavailable",
         reasonCode: taskStates.sdp?.reason_code || "HANLP_TASK_NOT_CONFIGURED",
-        reason: taskStates.sdp?.reason || t("nlpConfig.methods.defaultUnavailableReason"),
+        reason:
+          taskStates.sdp?.reason ||
+          t("nlpConfig.methods.defaultUnavailableReason"),
       },
     },
     {
@@ -1281,7 +1484,9 @@ function NlpPage() {
       status: {
         status: taskStates.srl?.status || "unavailable",
         reasonCode: taskStates.srl?.reason_code || "HANLP_TASK_NOT_CONFIGURED",
-        reason: taskStates.srl?.reason || t("nlpConfig.methods.defaultUnavailableReason"),
+        reason:
+          taskStates.srl?.reason ||
+          t("nlpConfig.methods.defaultUnavailableReason"),
       },
     },
     {
@@ -1290,7 +1495,9 @@ function NlpPage() {
       status: {
         status: taskStates.con?.status || "unavailable",
         reasonCode: taskStates.con?.reason_code || "HANLP_TASK_NOT_CONFIGURED",
-        reason: taskStates.con?.reason || t("nlpConfig.methods.defaultUnavailableReason"),
+        reason:
+          taskStates.con?.reason ||
+          t("nlpConfig.methods.defaultUnavailableReason"),
       },
     },
     {
@@ -1298,8 +1505,11 @@ function NlpPage() {
       taskKey: "cor",
       status: {
         status: taskStates.cor?.status || "unavailable",
-        reasonCode: taskStates.cor?.reason_code || "HANLP_COREF_NOT_OPEN_SOURCE",
-        reason: taskStates.cor?.reason || t("nlpConfig.methods.cor.unavailableReason"),
+        reasonCode:
+          taskStates.cor?.reason_code || "HANLP_COREF_NOT_OPEN_SOURCE",
+        reason:
+          taskStates.cor?.reason ||
+          t("nlpConfig.methods.cor.unavailableReason"),
       },
     },
   ];
@@ -1392,21 +1602,33 @@ function NlpPage() {
     },
   };
 
-  const activeDemoMethod = DEMO_METHODS.find((item) => item.backendTaskKey === activeDemoTaskKey) || DEMO_METHODS[0];
+  const activeDemoMethod =
+    DEMO_METHODS.find((item) => item.backendTaskKey === activeDemoTaskKey) ||
+    DEMO_METHODS[0];
   const activeDemoInput = demoInputs[activeDemoMethod.backendTaskKey] || "";
-  const activeDemoStatus = methodStatusByTask[activeDemoMethod.backendTaskKey] || {
+  const activeDemoStatus = methodStatusByTask[
+    activeDemoMethod.backendTaskKey
+  ] || {
     status: "unavailable",
     reasonCode: "UNKNOWN",
     reason: "暂无状态信息",
   };
-  const activeDemoResult = (demoResults[activeDemoMethod.backendTaskKey] || null) as NlpDemoMeta | null;
-  const resolveDisplayResult = (taskKey: string, result: NlpDemoMeta | null): unknown => {
+  const activeDemoResult = (demoResults[activeDemoMethod.backendTaskKey] ||
+    null) as NlpDemoMeta | null;
+  const resolveDisplayResult = (
+    taskKey: string,
+    result: NlpDemoMeta | null,
+  ): unknown => {
     if (!result) {
       return undefined;
     }
     const primary = result.result;
     const fallback = result.raw_result;
-    if (taskKey === "tokenize" || taskKey === "lzh_tok_fine" || taskKey === "lzh_tok_coarse") {
+    if (
+      taskKey === "tokenize" ||
+      taskKey === "lzh_tok_fine" ||
+      taskKey === "lzh_tok_coarse"
+    ) {
       const primaryTokens = getTokenListFromResult(taskKey, primary);
       if (primaryTokens.length > 0) {
         return primary;
@@ -1421,7 +1643,10 @@ function NlpPage() {
     }
     return primary;
   };
-  const activeDemoDisplayResult = resolveDisplayResult(activeDemoMethod.backendTaskKey, activeDemoResult);
+  const activeDemoDisplayResult = resolveDisplayResult(
+    activeDemoMethod.backendTaskKey,
+    activeDemoResult,
+  );
   const activeSelectableCount = getSelectableCount(
     activeDemoMethod.backendTaskKey,
     activeDemoDisplayResult,
@@ -1432,15 +1657,21 @@ function NlpPage() {
   );
 
   const activeClassicalDemoMethod =
-    CLASSICAL_DEMO_METHODS.find((item) => item.key === activeClassicalDemoMethodKey) || CLASSICAL_DEMO_METHODS[0];
-  const activeClassicalDemoInput = classicalDemoInputs[activeClassicalDemoMethod?.key || ""] || "";
-  const activeClassicalDemoStatus = methodStatusByTask[activeClassicalDemoMethod?.backendTaskKey || ""] || {
+    CLASSICAL_DEMO_METHODS.find(
+      (item) => item.key === activeClassicalDemoMethodKey,
+    ) || CLASSICAL_DEMO_METHODS[0];
+  const activeClassicalDemoInput =
+    classicalDemoInputs[activeClassicalDemoMethod?.key || ""] || "";
+  const activeClassicalDemoStatus = methodStatusByTask[
+    activeClassicalDemoMethod?.backendTaskKey || ""
+  ] || {
     status: "unavailable",
     reasonCode: "UNKNOWN",
     reason: "暂无状态信息",
   };
-  const activeClassicalDemoResult =
-    (demoResults[activeClassicalDemoMethod?.backendTaskKey || ""] || null) as NlpDemoMeta | null;
+  const activeClassicalDemoResult = (demoResults[
+    activeClassicalDemoMethod?.backendTaskKey || ""
+  ] || null) as NlpDemoMeta | null;
   const activeClassicalDisplayResult = resolveDisplayResult(
     activeClassicalDemoMethod?.backendTaskKey || "",
     activeClassicalDemoResult,
@@ -1454,7 +1685,10 @@ function NlpPage() {
     activeClassicalDisplayResult,
   );
 
-  const methodDetailByTaskKey: Record<string, { key: string; taskKey?: string; status: MethodStatus } | undefined> = {
+  const methodDetailByTaskKey: Record<
+    string,
+    { key: string; taskKey?: string; status: MethodStatus } | undefined
+  > = {
     tokenize: methods.find((item) => item.key === "tokenize"),
     ner: methods.find((item) => item.key === "nerMsra"),
     pos_ctb: methods.find((item) => item.key === "pos_ctb"),
@@ -1466,7 +1700,8 @@ function NlpPage() {
     con: methods.find((item) => item.key === "con"),
     cor: methods.find((item) => item.key === "cor"),
   };
-  const activeDemoMethodDetail = methodDetailByTaskKey[activeDemoMethod.backendTaskKey];
+  const activeDemoMethodDetail =
+    methodDetailByTaskKey[activeDemoMethod.backendTaskKey];
   const activeDemoMethodName = activeDemoMethodDetail
     ? t(`nlpConfig.methods.${activeDemoMethodDetail.key}.name`)
     : activeDemoMethod.title;
@@ -1493,70 +1728,113 @@ function NlpPage() {
     return mapping[taskKey] || [taskKey];
   };
 
-  const resolveMethodModelInfo = (taskKey: string, methodStatus: MethodStatus) => {
+  const resolveMethodModelInfo = (
+    taskKey: string,
+    methodStatus: MethodStatus,
+  ) => {
     const taskResults = status?.preload?.task_results || {};
     const taskResult = resolveMethodTaskCandidates(taskKey)
       .map((candidate) => taskResults[candidate])
       .find((item) => Boolean(item));
-    const modelId = String(taskResult?.model_id || status?.model.model_id || "").trim();
+    const modelId = String(
+      taskResult?.model_id || status?.model.model_id || "",
+    ).trim();
     const cachePath = String(
       status?.preload?.model_cache_path ||
-      status?.sidecar.model_cache_path ||
-      status?.sidecar.model_home ||
-      status?.sidecar.hanlp_home ||
-      "",
+        status?.sidecar.model_cache_path ||
+        status?.sidecar.model_home ||
+        status?.sidecar.hanlp_home ||
+        "",
     ).trim();
-    const reasonHint = `${methodStatus.reasonCode} ${methodStatus.reason}`.toUpperCase();
-    const taskStatus = String(taskResult?.status || methodStatus.status || "").toLowerCase();
+    const reasonHint =
+      `${methodStatus.reasonCode} ${methodStatus.reason}`.toUpperCase();
+    const taskStatus = String(
+      taskResult?.status || methodStatus.status || "",
+    ).toLowerCase();
     const localItems = localModelsStatus?.items || [];
-    const taskCandidates = resolveMethodTaskCandidates(taskKey).map((item) => String(item || "").toLowerCase());
+    const taskCandidates = resolveMethodTaskCandidates(taskKey).map((item) =>
+      String(item || "").toLowerCase(),
+    );
     const localItem =
       localItems.find((item) => {
         const itemTaskKey = String(item.task_key || "").toLowerCase();
         const itemTaskName = String(item.task_name || "").toLowerCase();
-        return taskCandidates.includes(itemTaskKey) || taskCandidates.includes(itemTaskName);
+        return (
+          taskCandidates.includes(itemTaskKey) ||
+          taskCandidates.includes(itemTaskName)
+        );
       }) ||
-      (taskKey.startsWith("lzh_") || taskKey === "tokenize" ? localItems.find((item) => item.scope === "default") : undefined);
+      (taskKey.startsWith("lzh_") || taskKey === "tokenize"
+        ? localItems.find((item) => item.scope === "default")
+        : undefined);
     const localModelAvailable = localItem?.local_available === true;
     const missingFromStatusHint =
-      taskStatus !== "ready" && /(MODEL|DOWNLOAD|MISSING|INSTALL_REQUIRED|NOT_CONFIGURED|NOT_FOUND)/.test(reasonHint);
+      taskStatus !== "ready" &&
+      /(MODEL|DOWNLOAD|MISSING|INSTALL_REQUIRED|NOT_CONFIGURED|NOT_FOUND)/.test(
+        reasonHint,
+      );
     const missingFromLocalState = localItem?.local_available === false;
     // Prefer explicit local model state when available to avoid false "download" prompts.
-    const missing = missingFromLocalState || (missingFromStatusHint && !localModelAvailable);
+    const missing =
+      missingFromLocalState || (missingFromStatusHint && !localModelAvailable);
     return {
-      modelText: String(localItem?.model_id || modelId || t("nlpConfig.notConfigured")).trim() || t("nlpConfig.notConfigured"),
+      modelText:
+        String(
+          localItem?.model_id || modelId || t("nlpConfig.notConfigured"),
+        ).trim() || t("nlpConfig.notConfigured"),
       fileText: cachePath || t("nlpConfig.notConfigured"),
       missing,
     };
   };
 
   const pythonVersion = String(status?.sidecar?.python_version || "").trim();
-  const missingLocalModelItems = (localModelsStatus?.items || []).filter((item) => !item.local_available);
+  const missingLocalModelItems = (localModelsStatus?.items || []).filter(
+    (item) => !item.local_available,
+  );
   const hasMissingLocalModels =
     hanlpProviderActive &&
     Boolean(localModelsStatus?.require_local_models) &&
     missingLocalModelItems.length > 0;
-  const activeDemoReady = String(activeDemoStatus.status || "").toLowerCase() === "ready";
-  const activeClassicalDemoReady = String(activeClassicalDemoStatus.status || "").toLowerCase() === "ready";
+  const activeDemoReady =
+    String(activeDemoStatus.status || "").toLowerCase() === "ready";
+  const activeClassicalDemoReady =
+    String(activeClassicalDemoStatus.status || "").toLowerCase() === "ready";
   const hasRunningDemo = Boolean(runningDemoTask);
   const runDemoDisabled =
-    hasMissingLocalModels || !hanlpProviderActive || !sidecarReady || !activeDemoReady || hasRunningDemo;
+    hasMissingLocalModels ||
+    !hanlpProviderActive ||
+    !sidecarReady ||
+    !activeDemoReady ||
+    hasRunningDemo;
   const runClassicalDemoDisabled =
-    hasMissingLocalModels || !hanlpProviderActive || !sidecarReady || !activeClassicalDemoReady || hasRunningDemo;
+    hasMissingLocalModels ||
+    !hanlpProviderActive ||
+    !sidecarReady ||
+    !activeClassicalDemoReady ||
+    hasRunningDemo;
   const siameseProviderStatus = status?.providers?.siamese_uninlu;
-  const siameseSidecarReady = String(siameseProviderStatus?.sidecar?.status || "") === "ready";
+  const siameseSidecarReady =
+    String(siameseProviderStatus?.sidecar?.status || "") === "ready";
   const siameseTaskStates = siameseProviderStatus?.tasks || {};
   const activeSiameseDemoMethod =
-    SIAMESE_DEMO_METHODS.find((item) => item.key === activeSiameseDemoMethodKey) || SIAMESE_DEMO_METHODS[0];
-  const activeSiameseInput = siameseDemoInputs[activeSiameseDemoMethod?.backendTaskKey || ""] || "";
-  const activeSiameseSchema = siameseDemoSchemas[activeSiameseDemoMethod?.backendTaskKey || ""] || "";
-  const activeSiameseStatus = siameseTaskStates[activeSiameseDemoMethod?.backendTaskKey || ""] || {
+    SIAMESE_DEMO_METHODS.find(
+      (item) => item.key === activeSiameseDemoMethodKey,
+    ) || SIAMESE_DEMO_METHODS[0];
+  const activeSiameseInput =
+    siameseDemoInputs[activeSiameseDemoMethod?.backendTaskKey || ""] || "";
+  const activeSiameseSchema =
+    siameseDemoSchemas[activeSiameseDemoMethod?.backendTaskKey || ""] || "";
+  const activeSiameseStatus = siameseTaskStates[
+    activeSiameseDemoMethod?.backendTaskKey || ""
+  ] || {
     status: siameseSidecarReady ? "ready" : "unavailable",
     reason: siameseProviderStatus?.sidecar?.reason || "Siamese 运行环境不可用",
-    reason_code: siameseProviderStatus?.sidecar?.reason_code || "SIAMESE_UNAVAILABLE",
+    reason_code:
+      siameseProviderStatus?.sidecar?.reason_code || "SIAMESE_UNAVAILABLE",
   };
-  const activeSiameseResult =
-    (demoResults[activeSiameseDemoMethod?.backendTaskKey || ""] || null) as NlpDemoMeta | null;
+  const activeSiameseResult = (demoResults[
+    activeSiameseDemoMethod?.backendTaskKey || ""
+  ] || null) as NlpDemoMeta | null;
   const runSiameseDemoDisabled = !siameseSidecarReady || hasRunningDemo;
 
   useEffect(() => {
@@ -1569,13 +1847,18 @@ function NlpPage() {
     setHoveredClassicalDemoRowIndex(null);
   }, [activeClassicalDemoMethod?.key, activeClassicalDemoResult?.request_id]);
 
-  const handleDemoResultKeyDown: KeyboardEventHandler<HTMLDivElement> = (event) => {
+  const handleDemoResultKeyDown: KeyboardEventHandler<HTMLDivElement> = (
+    event,
+  ) => {
     if (!activeDemoResult || activeSelectableCount <= 0) {
       return;
     }
     if (event.key === "ArrowDown") {
       event.preventDefault();
-      const next = activeDemoRowIndex === null ? 0 : (activeDemoRowIndex + 1) % activeSelectableCount;
+      const next =
+        activeDemoRowIndex === null
+          ? 0
+          : (activeDemoRowIndex + 1) % activeSelectableCount;
       setActiveDemoRowIndex(next);
       setHoveredDemoRowIndex(null);
       return;
@@ -1585,7 +1868,8 @@ function NlpPage() {
       const next =
         activeDemoRowIndex === null
           ? activeSelectableCount - 1
-          : (activeDemoRowIndex - 1 + activeSelectableCount) % activeSelectableCount;
+          : (activeDemoRowIndex - 1 + activeSelectableCount) %
+            activeSelectableCount;
       setActiveDemoRowIndex(next);
       setHoveredDemoRowIndex(null);
       return;
@@ -1597,14 +1881,18 @@ function NlpPage() {
     }
   };
 
-  const handleClassicalDemoResultKeyDown: KeyboardEventHandler<HTMLDivElement> = (event) => {
+  const handleClassicalDemoResultKeyDown: KeyboardEventHandler<
+    HTMLDivElement
+  > = (event) => {
     if (!activeClassicalDemoResult || activeClassicalSelectableCount <= 0) {
       return;
     }
     if (event.key === "ArrowDown") {
       event.preventDefault();
       const next =
-        activeClassicalDemoRowIndex === null ? 0 : (activeClassicalDemoRowIndex + 1) % activeClassicalSelectableCount;
+        activeClassicalDemoRowIndex === null
+          ? 0
+          : (activeClassicalDemoRowIndex + 1) % activeClassicalSelectableCount;
       setActiveClassicalDemoRowIndex(next);
       setHoveredClassicalDemoRowIndex(null);
       return;
@@ -1614,7 +1902,8 @@ function NlpPage() {
       const next =
         activeClassicalDemoRowIndex === null
           ? activeClassicalSelectableCount - 1
-          : (activeClassicalDemoRowIndex - 1 + activeClassicalSelectableCount) % activeClassicalSelectableCount;
+          : (activeClassicalDemoRowIndex - 1 + activeClassicalSelectableCount) %
+            activeClassicalSelectableCount;
       setActiveClassicalDemoRowIndex(next);
       setHoveredClassicalDemoRowIndex(null);
       return;
@@ -1629,45 +1918,53 @@ function NlpPage() {
   const sidecarActionLabel = installing
     ? "部署中"
     : sidecarReady
-      ? "已就绪"
-      : loading
-        ? "加载中"
-        : "部署";
+    ? "已就绪"
+    : loading
+    ? "加载中"
+    : "部署";
 
   const sidecarActionBusy = installing || (!sidecarReady && loading);
   const siameseActionBusy = initializingSiamese;
   const siameseActionLabel = initializingSiamese
     ? "初始化中"
     : siameseSidecarReady
-      ? "已就绪"
-      : "初始化";
+    ? "已就绪"
+    : "初始化";
   const runtimeAlertType: "success" | "warning" =
     hanlpProviderActive && sidecarReady && modelReady ? "success" : "warning";
   const compactRuntimeMeta = [
-    `提供方 ${provider || "hanlp"}${hanlpProviderActive ? "(启用)" : "(未启用)"}`,
+    `提供方 ${provider || "hanlp"}${
+      hanlpProviderActive ? "(启用)" : "(未启用)"
+    }`,
     `路径 ${status?.sidecar.python_executable || t("nlpConfig.notConfigured")}`,
     `Python ${pythonVersion || t("nlpConfig.notConfigured")}`,
     `模型 ${status?.model?.model_id || t("nlpConfig.notConfigured")}`,
   ].join(" · ");
   const compactSiameseRuntimeMeta = [
-    `路径 ${siameseProviderStatus?.sidecar?.python_executable || t("nlpConfig.notConfigured")}`,
-    `Python ${siameseProviderStatus?.sidecar?.python_version || t("nlpConfig.notConfigured")}`,
-    `模型 ${siameseProviderStatus?.model?.model_id || t("nlpConfig.notConfigured")}`,
+    `路径 ${
+      siameseProviderStatus?.sidecar?.python_executable ||
+      t("nlpConfig.notConfigured")
+    }`,
+    `Python ${
+      siameseProviderStatus?.sidecar?.python_version ||
+      t("nlpConfig.notConfigured")
+    }`,
+    `模型 ${
+      siameseProviderStatus?.model?.model_id || t("nlpConfig.notConfigured")
+    }`,
   ].join(" · ");
-
-
 
   return (
     <div className={styles.nlpPage}>
       <PageHeader
-        items={[
-          { title: t("nav.settings") },
-          { title: t("nlpConfig.title") },
-        ]}
+        items={[{ title: t("nav.settings") }, { title: t("nlpConfig.title") }]}
       />
 
       <div className={styles.content}>
-        <div id="nlp-section-maintenance" className={`${styles.alertRow} ${styles.sectionAnchorOffset}`}>
+        <div
+          id="nlp-section-maintenance"
+          className={`${styles.alertRow} ${styles.sectionAnchorOffset}`}
+        >
           <div className={styles.alertStack}>
             <Alert
               type={runtimeAlertType}
@@ -1677,7 +1974,9 @@ function NlpPage() {
                   <Typography.Text strong>HanLP运行状态</Typography.Text>
                   <Button
                     size="small"
-                    className={`${styles.maintenanceInstallButton} ${sidecarReady ? styles.maintenanceInstallButtonReady : ""}`}
+                    className={`${styles.maintenanceInstallButton} ${
+                      sidecarReady ? styles.maintenanceInstallButtonReady : ""
+                    }`}
                     type="primary"
                     onClick={handleInstall}
                     loading={sidecarActionBusy}
@@ -1689,7 +1988,9 @@ function NlpPage() {
               }
               description={
                 <div className={styles.maintenanceInfoBlock}>
-                  <Typography.Text className={styles.maintenanceSecondaryTextSingleLine}>
+                  <Typography.Text
+                    className={styles.maintenanceSecondaryTextSingleLine}
+                  >
                     {compactRuntimeMeta}
                   </Typography.Text>
                 </div>
@@ -1712,7 +2013,9 @@ function NlpPage() {
                 message={t("nlpConfig.maintenance.localModelPrecheckFailed")}
                 description={
                   <div className={styles.maintenanceInfoBlock}>
-                    <Typography.Text className={styles.maintenanceSecondaryText}>
+                    <Typography.Text
+                      className={styles.maintenanceSecondaryText}
+                    >
                       {t("nlpConfig.maintenance.localModelPrecheckDesc")}
                     </Typography.Text>
                     <Typography.Text className={styles.maintenanceMutedText}>
@@ -1723,7 +2026,9 @@ function NlpPage() {
                     </Typography.Text>
                     {missingLocalModelItems.length > 8 ? (
                       <Typography.Text className={styles.maintenanceMutedText}>
-                        {t("nlpConfig.maintenance.moreModels", { count: missingLocalModelItems.length - 8 })}
+                        {t("nlpConfig.maintenance.moreModels", {
+                          count: missingLocalModelItems.length - 8,
+                        })}
                       </Typography.Text>
                     ) : null}
                     <Space size={8}>
@@ -1731,7 +2036,11 @@ function NlpPage() {
                         size="small"
                         type="primary"
                         loading={downloadingMissingLocalModels}
-                        disabled={!sidecarReady || installing || downloadingMissingLocalModels}
+                        disabled={
+                          !sidecarReady ||
+                          installing ||
+                          downloadingMissingLocalModels
+                        }
                         onClick={() => {
                           void handleDownloadMissingLocalModels();
                         }}
@@ -1753,14 +2062,32 @@ function NlpPage() {
                 description={
                   <div className={styles.maintenanceInfoBlock}>
                     {lastDownloadAttempts.map((attempt) => (
-                      <div key={attempt.model_id} style={{ display: "flex", gap: 8, alignItems: "flex-start", marginBottom: 4 }}>
-                        <Tag color={attempt.status === "ready" ? "success" : "error"} style={{ flexShrink: 0 }}>
+                      <div
+                        key={attempt.model_id}
+                        style={{
+                          display: "flex",
+                          gap: 8,
+                          alignItems: "flex-start",
+                          marginBottom: 4,
+                        }}
+                      >
+                        <Tag
+                          color={
+                            attempt.status === "ready" ? "success" : "error"
+                          }
+                          style={{ flexShrink: 0 }}
+                        >
                           {attempt.status === "ready" ? "✓" : "✗"}
                         </Tag>
                         <span>
-                          <Typography.Text code style={{ fontSize: 12 }}>{attempt.model_id}</Typography.Text>
+                          <Typography.Text code style={{ fontSize: 12 }}>
+                            {attempt.model_id}
+                          </Typography.Text>
                           {attempt.status !== "ready" ? (
-                            <Typography.Text type="secondary" style={{ fontSize: 12, marginLeft: 6 }}>
+                            <Typography.Text
+                              type="secondary"
+                              style={{ fontSize: 12, marginLeft: 6 }}
+                            >
                               {attempt.reason_code}: {attempt.reason}
                             </Typography.Text>
                           ) : null}
@@ -1776,12 +2103,20 @@ function NlpPage() {
 
         <div className={styles.workspaceLayout}>
           <div className={styles.primaryColumn}>
-            <div id="nlp-section-api-cli" className={styles.sectionAnchorOffset}>
-              <Card className={`${styles.card} ${styles.primaryCard} ${styles.docsCard}`}>
+            <div
+              id="nlp-section-api-cli"
+              className={styles.sectionAnchorOffset}
+            >
+              <Card
+                className={`${styles.card} ${styles.primaryCard} ${styles.docsCard}`}
+              >
                 <Typography.Title level={5} className={styles.docsTitle}>
                   API 与 CLI 调用说明
                 </Typography.Title>
-                <Typography.Paragraph type="secondary" className={styles.cardDescription}>
+                <Typography.Paragraph
+                  type="secondary"
+                  className={styles.cardDescription}
+                >
                   可通过 HTTP API 或命令行快速接入 NLP 能力，并用于连通性验证。
                 </Typography.Paragraph>
                 <div className={styles.docsGrid}>
@@ -1792,17 +2127,29 @@ function NlpPage() {
                     <Typography.Paragraph className={styles.operationOutput}>
                       端点模板：{getApiRunEndpointTemplate()}
                     </Typography.Paragraph>
-                    <Typography.Text type="secondary">最小请求体（JSON）</Typography.Text>
-                    <pre className={styles.codeBlock}>{API_MINIMAL_PAYLOAD_EXAMPLE}</pre>
+                    <Typography.Text type="secondary">
+                      最小请求体（JSON）
+                    </Typography.Text>
+                    <pre className={styles.codeBlock}>
+                      {API_MINIMAL_PAYLOAD_EXAMPLE}
+                    </pre>
                   </div>
                   <div className={styles.docsPane}>
                     <Typography.Text strong className={styles.docsSubTitle}>
                       CLI 调用（curl）
                     </Typography.Text>
-                    <Typography.Text type="secondary">1. tokenize</Typography.Text>
-                    <pre className={styles.codeBlock}>{CLI_TOKENIZE_EXAMPLE}</pre>
-                    <Typography.Text type="secondary">2. lzh_tok_fine</Typography.Text>
-                    <pre className={styles.codeBlock}>{CLI_CLASSICAL_FINE_EXAMPLE}</pre>
+                    <Typography.Text type="secondary">
+                      1. tokenize
+                    </Typography.Text>
+                    <pre className={styles.codeBlock}>
+                      {CLI_TOKENIZE_EXAMPLE}
+                    </pre>
+                    <Typography.Text type="secondary">
+                      2. lzh_tok_fine
+                    </Typography.Text>
+                    <pre className={styles.codeBlock}>
+                      {CLI_CLASSICAL_FINE_EXAMPLE}
+                    </pre>
                   </div>
                 </div>
               </Card>
@@ -1813,52 +2160,80 @@ function NlpPage() {
                 <Typography.Title level={5} className={styles.cardTitle}>
                   现代文本分析
                 </Typography.Title>
-                <Typography.Paragraph type="secondary" className={styles.cardDescription}>
+                <Typography.Paragraph
+                  type="secondary"
+                  className={styles.cardDescription}
+                >
                   选择一个能力，输入一句话，点击运行后即可查看分析结果。
                 </Typography.Paragraph>
                 <div className={styles.demoWorkbench}>
                   <div className={styles.demoMethodList}>
                     {DEMO_METHODS.map((method) => {
-                      const methodStatus = methodStatusByTask[method.backendTaskKey];
-                      const methodDetail = methodDetailByTaskKey[method.backendTaskKey];
-                      const modelInfo = resolveMethodModelInfo(method.backendTaskKey, methodStatus);
-                      const active = method.backendTaskKey === activeDemoMethod.backendTaskKey;
+                      const methodStatus =
+                        methodStatusByTask[method.backendTaskKey];
+                      const methodDetail =
+                        methodDetailByTaskKey[method.backendTaskKey];
+                      const modelInfo = resolveMethodModelInfo(
+                        method.backendTaskKey,
+                        methodStatus,
+                      );
+                      const active =
+                        method.backendTaskKey ===
+                        activeDemoMethod.backendTaskKey;
                       const methodName = methodDetail
                         ? t(`nlpConfig.methods.${methodDetail.key}.name`)
                         : method.title;
                       const methodDescription = methodDetail
                         ? t(`nlpConfig.methods.${methodDetail.key}.description`)
                         : method.placeholder;
-                      const methodReason = methodDetail?.status.reason || methodStatus?.reason || "";
+                      const methodReason =
+                        methodDetail?.status.reason ||
+                        methodStatus?.reason ||
+                        "";
                       return (
                         <button
                           key={method.backendTaskKey}
                           type="button"
-                          className={`${styles.demoMethodButton} ${active ? styles.demoMethodButtonActive : ""}`}
-                          onClick={() => setActiveDemoTaskKey(method.backendTaskKey)}
+                          className={`${styles.demoMethodButton} ${
+                            active ? styles.demoMethodButtonActive : ""
+                          }`}
+                          onClick={() =>
+                            setActiveDemoTaskKey(method.backendTaskKey)
+                          }
                         >
                           <div className={styles.demoMethodMain}>
                             <div className={styles.demoMethodHeader}>
-                              <Typography.Text strong className={styles.demoMethodTitle}>
+                              <Typography.Text
+                                strong
+                                className={styles.demoMethodTitle}
+                              >
                                 {methodName}
                               </Typography.Text>
                               <Tag
                                 className={styles.demoStatusTag}
-                                color={resolveTagColor(methodStatus?.status || "unavailable")}
+                                color={resolveTagColor(
+                                  methodStatus?.status || "unavailable",
+                                )}
                                 title={modelInfo.modelText}
                               >
                                 {modelInfo.missing
                                   ? "待下载"
                                   : methodStatus?.status === "ready"
-                                    ? "可用"
-                                    : "暂不可用"}
+                                  ? "可用"
+                                  : "暂不可用"}
                               </Tag>
                             </div>
-                            <Typography.Text type="secondary" className={styles.demoMethodDescription}>
+                            <Typography.Text
+                              type="secondary"
+                              className={styles.demoMethodDescription}
+                            >
                               {methodDescription}
                             </Typography.Text>
                             {methodReason ? (
-                              <Typography.Text type="secondary" className={styles.demoMethodReason}>
+                              <Typography.Text
+                                type="secondary"
+                                className={styles.demoMethodReason}
+                              >
                                 {localizeStatusReason(methodReason)}
                               </Typography.Text>
                             ) : null}
@@ -1868,7 +2243,12 @@ function NlpPage() {
                                 type="link"
                                 className={styles.demoDownloadButton}
                                 loading={downloadingModel}
-                                disabled={installing || downloadingModel || !sidecarReady || !hanlpProviderActive}
+                                disabled={
+                                  installing ||
+                                  downloadingModel ||
+                                  !sidecarReady ||
+                                  !hanlpProviderActive
+                                }
                                 onClick={(event) => {
                                   event.preventDefault();
                                   event.stopPropagation();
@@ -1888,7 +2268,10 @@ function NlpPage() {
                       <Typography.Title level={5} className={styles.cardTitle}>
                         {activeDemoMethodName}
                       </Typography.Title>
-                      <Typography.Paragraph type="secondary" className={styles.cardDescription}>
+                      <Typography.Paragraph
+                        type="secondary"
+                        className={styles.cardDescription}
+                      >
                         {localizeStatusReason(activeDemoStatus.reason)}
                       </Typography.Paragraph>
                       <Space wrap size={8} className={styles.demoExamples}>
@@ -1914,15 +2297,23 @@ function NlpPage() {
                         onChange={(event) =>
                           setDemoInputs((prev) => ({
                             ...prev,
-                            [activeDemoMethod.backendTaskKey]: event.target.value,
+                            [activeDemoMethod.backendTaskKey]:
+                              event.target.value,
                           }))
                         }
                       />
                       <Button
                         type="primary"
-                        loading={runningDemoTask === activeDemoMethod.backendTaskKey}
+                        loading={
+                          runningDemoTask === activeDemoMethod.backendTaskKey
+                        }
                         disabled={runDemoDisabled}
-                        onClick={() => runMethodDemo(activeDemoMethod.backendTaskKey, activeDemoInput)}
+                        onClick={() =>
+                          runMethodDemo(
+                            activeDemoMethod.backendTaskKey,
+                            activeDemoInput,
+                          )
+                        }
                       >
                         {t("nlpConfig.demo.runTest")}
                       </Button>
@@ -1932,7 +2323,10 @@ function NlpPage() {
                         {t("nlpConfig.demo.resultPanel")}
                       </Typography.Title>
                       {!activeDemoResult ? (
-                        <Typography.Paragraph type="secondary" className={styles.cardDescription}>
+                        <Typography.Paragraph
+                          type="secondary"
+                          className={styles.cardDescription}
+                        >
                           {t("nlpConfig.demo.clickRunTestHint")}
                         </Typography.Paragraph>
                       ) : (
@@ -1955,16 +2349,22 @@ function NlpPage() {
                           </div>
                           {activeDemoMethod.backendTaskKey === "ner" ? (
                             <Space size={8} wrap>
-                              <Typography.Text type="secondary">{t("nlpConfig.demo.entityOnlyView")}</Typography.Text>
+                              <Typography.Text type="secondary">
+                                {t("nlpConfig.demo.entityOnlyView")}
+                              </Typography.Text>
                               <Switch
                                 checked={nerEntityOnlyView}
-                                onChange={(checked) => setNerEntityOnlyView(checked)}
+                                onChange={(checked) =>
+                                  setNerEntityOnlyView(checked)
+                                }
                               />
                             </Space>
                           ) : null}
                           {activeResultTokens.length > 0 ? (
                             <Typography.Text type="secondary">
-                              {t("nlpConfig.demo.currentTokenCount", { count: activeResultTokens.length })}
+                              {t("nlpConfig.demo.currentTokenCount", {
+                                count: activeResultTokens.length,
+                              })}
                             </Typography.Text>
                           ) : null}
                           <Collapse
@@ -1976,55 +2376,173 @@ function NlpPage() {
                                 children: (
                                   <>
                                     <div className={styles.demoMetaGrid}>
-                                      <div className={styles.demoMetaItem}><span>任务状态</span><Tag color={resolveTagColor(activeDemoResult.status)}>{activeDemoResult.reason_code}</Tag></div>
-                                      <div className={styles.demoMetaItem}><span>当前任务</span><span>{activeDemoResult.task_key}</span></div>
-                                      <div className={styles.demoMetaItem}><span>使用模型</span><span>{activeDemoResult.resolved_model || t("nlpConfig.demo.empty")}</span></div>
-                                      <div className={styles.demoMetaItem}><span>文本风格</span><span>{activeDemoResult.detected_style}</span></div>
-                                      <div className={styles.demoMetaItem}><span>识别分值</span><span>{activeDemoResult.detection_score}</span></div>
-                                      <div className={styles.demoMetaItem}><span>总耗时</span><span>{activeDemoResult.duration_ms} ms</span></div>
-                                      <div className={styles.demoMetaItem}><span>预热状态</span><span>{activeDemoResult.preload_status || "未预热"}</span></div>
+                                      <div className={styles.demoMetaItem}>
+                                        <span>任务状态</span>
+                                        <Tag
+                                          color={resolveTagColor(
+                                            activeDemoResult.status,
+                                          )}
+                                        >
+                                          {activeDemoResult.reason_code}
+                                        </Tag>
+                                      </div>
+                                      <div className={styles.demoMetaItem}>
+                                        <span>当前任务</span>
+                                        <span>{activeDemoResult.task_key}</span>
+                                      </div>
+                                      <div className={styles.demoMetaItem}>
+                                        <span>使用模型</span>
+                                        <span>
+                                          {activeDemoResult.resolved_model ||
+                                            t("nlpConfig.demo.empty")}
+                                        </span>
+                                      </div>
+                                      <div className={styles.demoMetaItem}>
+                                        <span>文本风格</span>
+                                        <span>
+                                          {activeDemoResult.detected_style}
+                                        </span>
+                                      </div>
+                                      <div className={styles.demoMetaItem}>
+                                        <span>识别分值</span>
+                                        <span>
+                                          {activeDemoResult.detection_score}
+                                        </span>
+                                      </div>
+                                      <div className={styles.demoMetaItem}>
+                                        <span>总耗时</span>
+                                        <span>
+                                          {activeDemoResult.duration_ms} ms
+                                        </span>
+                                      </div>
+                                      <div className={styles.demoMetaItem}>
+                                        <span>预热状态</span>
+                                        <span>
+                                          {activeDemoResult.preload_status ||
+                                            "未预热"}
+                                        </span>
+                                      </div>
                                     </div>
-                                    <Typography.Paragraph className={styles.operationOutput}>
-                                      {t("nlpConfig.demo.rules")}: {(activeDemoResult.matched_rules || []).join(", ") || t("nlpConfig.demo.none")}
+                                    <Typography.Paragraph
+                                      className={styles.operationOutput}
+                                    >
+                                      {t("nlpConfig.demo.rules")}:{" "}
+                                      {(
+                                        activeDemoResult.matched_rules || []
+                                      ).join(", ") || t("nlpConfig.demo.none")}
                                     </Typography.Paragraph>
                                     <div className={styles.demoMetaGrid}>
-                                      <div className={styles.demoMetaItem}><span>{t("nlpConfig.demo.taskModel")}</span><span>{activeDemoResult.effective_task_model_id || t("nlpConfig.demo.inherit")}</span></div>
-                                      <div className={styles.demoMetaItem}><span>{t("nlpConfig.telemetry.sidecarTotal")}</span><span>{activeDemoResult.sidecar_elapsed_ms ?? 0} ms</span></div>
-                                      <div className={styles.demoMetaItem}><span>{t("nlpConfig.telemetry.traceTotal")}</span><span>{activeDemoResult.sidecar_trace_elapsed_ms ?? 0} ms</span></div>
-                                      <div className={styles.demoMetaItem}><span>{t("nlpConfig.telemetry.executionPath")}</span><span>{activeDemoResult.sidecar_execution_path || t("nlpConfig.telemetry.unknown")}</span></div>
+                                      <div className={styles.demoMetaItem}>
+                                        <span>
+                                          {t("nlpConfig.demo.taskModel")}
+                                        </span>
+                                        <span>
+                                          {activeDemoResult.effective_task_model_id ||
+                                            t("nlpConfig.demo.inherit")}
+                                        </span>
+                                      </div>
+                                      <div className={styles.demoMetaItem}>
+                                        <span>
+                                          {t(
+                                            "nlpConfig.telemetry.sidecarTotal",
+                                          )}
+                                        </span>
+                                        <span>
+                                          {activeDemoResult.sidecar_elapsed_ms ??
+                                            0}{" "}
+                                          ms
+                                        </span>
+                                      </div>
+                                      <div className={styles.demoMetaItem}>
+                                        <span>
+                                          {t("nlpConfig.telemetry.traceTotal")}
+                                        </span>
+                                        <span>
+                                          {activeDemoResult.sidecar_trace_elapsed_ms ??
+                                            0}{" "}
+                                          ms
+                                        </span>
+                                      </div>
+                                      <div className={styles.demoMetaItem}>
+                                        <span>
+                                          {t(
+                                            "nlpConfig.telemetry.executionPath",
+                                          )}
+                                        </span>
+                                        <span>
+                                          {activeDemoResult.sidecar_execution_path ||
+                                            t("nlpConfig.telemetry.unknown")}
+                                        </span>
+                                      </div>
                                     </div>
                                     {activeDemoResult.sidecar_execution_detail ? (
-                                      <Typography.Paragraph className={styles.operationOutput}>
-                                        {t("nlpConfig.telemetry.executionDetail")}: {activeDemoResult.sidecar_execution_detail}
+                                      <Typography.Paragraph
+                                        className={styles.operationOutput}
+                                      >
+                                        {t(
+                                          "nlpConfig.telemetry.executionDetail",
+                                        )}
+                                        :{" "}
+                                        {
+                                          activeDemoResult.sidecar_execution_detail
+                                        }
                                       </Typography.Paragraph>
                                     ) : null}
-                                    {activeDemoResult.sidecar_trace_stage_ms && Object.keys(activeDemoResult.sidecar_trace_stage_ms).length > 0 ? (
-                                      <Typography.Paragraph className={styles.operationOutput}>
-                                        {t("nlpConfig.telemetry.stageMs")}: {prettyJson(activeDemoResult.sidecar_trace_stage_ms)}
+                                    {activeDemoResult.sidecar_trace_stage_ms &&
+                                    Object.keys(
+                                      activeDemoResult.sidecar_trace_stage_ms,
+                                    ).length > 0 ? (
+                                      <Typography.Paragraph
+                                        className={styles.operationOutput}
+                                      >
+                                        {t("nlpConfig.telemetry.stageMs")}:{" "}
+                                        {prettyJson(
+                                          activeDemoResult.sidecar_trace_stage_ms,
+                                        )}
                                       </Typography.Paragraph>
                                     ) : null}
-                                    <Typography.Paragraph className={styles.operationOutput}>
-                                      {t("nlpConfig.demo.cachePath")}: {activeDemoResult.model_cache_path || status?.sidecar.model_cache_path || status?.sidecar.model_home || status?.sidecar.hanlp_home || t("nlpConfig.notConfigured")}
+                                    <Typography.Paragraph
+                                      className={styles.operationOutput}
+                                    >
+                                      {t("nlpConfig.demo.cachePath")}:{" "}
+                                      {activeDemoResult.model_cache_path ||
+                                        status?.sidecar.model_cache_path ||
+                                        status?.sidecar.model_home ||
+                                        status?.sidecar.hanlp_home ||
+                                        t("nlpConfig.notConfigured")}
                                     </Typography.Paragraph>
-                                    <Typography.Paragraph className={styles.operationOutput}>
+                                    <Typography.Paragraph
+                                      className={styles.operationOutput}
+                                    >
                                       {activeDemoResult.reason}
                                     </Typography.Paragraph>
                                     {activeDemoResult.pretty_print ? (
                                       <>
-                                        <Typography.Title level={5} className={styles.cardTitle}>
+                                        <Typography.Title
+                                          level={5}
+                                          className={styles.cardTitle}
+                                        >
                                           {t("nlpConfig.demo.prettyPrint")}
                                         </Typography.Title>
-                                        <Typography.Paragraph className={styles.operationOutput}>
+                                        <Typography.Paragraph
+                                          className={styles.operationOutput}
+                                        >
                                           {activeDemoResult.pretty_print}
                                         </Typography.Paragraph>
                                       </>
                                     ) : null}
-                                    <Typography.Title level={5} className={styles.cardTitle}>
+                                    <Typography.Title
+                                      level={5}
+                                      className={styles.cardTitle}
+                                    >
                                       {t("nlpConfig.demo.rawOutput")}
                                     </Typography.Title>
-                                    <Typography.Paragraph className={styles.operationOutput}>
+                                    <Typography.Paragraph
+                                      className={styles.operationOutput}
+                                    >
                                       {prettyJson(
-                                        activeDemoResult.raw_result !== undefined
+                                        activeDemoResult.raw_result !==
+                                          undefined
                                           ? activeDemoResult.raw_result
                                           : activeDemoResult.result,
                                       )}
@@ -2042,54 +2560,87 @@ function NlpPage() {
               </Card>
             </div>
 
-            <div id="nlp-section-classical-demo" className={styles.sectionAnchorOffset}>
+            <div
+              id="nlp-section-classical-demo"
+              className={styles.sectionAnchorOffset}
+            >
               <Card className={`${styles.card} ${styles.primaryCard}`}>
                 <Typography.Title level={5} className={styles.cardTitle}>
                   古文分析
                 </Typography.Title>
-                <Typography.Paragraph type="secondary" className={styles.cardDescription}>
+                <Typography.Paragraph
+                  type="secondary"
+                  className={styles.cardDescription}
+                >
                   适用于文言文场景，支持分词、词性与依存分析。
                 </Typography.Paragraph>
-                <Typography.Paragraph type="secondary" className={styles.cardDescription}>
+                <Typography.Paragraph
+                  type="secondary"
+                  className={styles.cardDescription}
+                >
                   这里使用统一模型，体验更稳定、更易上手。
                 </Typography.Paragraph>
                 <div className={styles.demoWorkbench}>
                   <div className={styles.demoMethodList}>
                     {CLASSICAL_DEMO_METHODS.map((method) => {
-                      const methodStatus = methodStatusByTask[method.backendTaskKey];
-                      const methodDetail = methodDetailByTaskKey[method.backendTaskKey];
-                      const modelInfo = resolveMethodModelInfo(method.backendTaskKey, methodStatus);
-                      const active = method.key === activeClassicalDemoMethod?.key;
-                      const methodReason = methodDetail?.status.reason || methodStatus?.reason || "";
+                      const methodStatus =
+                        methodStatusByTask[method.backendTaskKey];
+                      const methodDetail =
+                        methodDetailByTaskKey[method.backendTaskKey];
+                      const modelInfo = resolveMethodModelInfo(
+                        method.backendTaskKey,
+                        methodStatus,
+                      );
+                      const active =
+                        method.key === activeClassicalDemoMethod?.key;
+                      const methodReason =
+                        methodDetail?.status.reason ||
+                        methodStatus?.reason ||
+                        "";
                       return (
                         <button
                           key={method.key}
                           type="button"
-                          className={`${styles.demoMethodButton} ${active ? styles.demoMethodButtonActive : ""}`}
-                          onClick={() => setActiveClassicalDemoMethodKey(method.key)}
+                          className={`${styles.demoMethodButton} ${
+                            active ? styles.demoMethodButtonActive : ""
+                          }`}
+                          onClick={() =>
+                            setActiveClassicalDemoMethodKey(method.key)
+                          }
                         >
                           <div className={styles.demoMethodMain}>
                             <div className={styles.demoMethodHeader}>
-                              <Typography.Text strong className={styles.demoMethodTitle}>
+                              <Typography.Text
+                                strong
+                                className={styles.demoMethodTitle}
+                              >
                                 {method.title}
                               </Typography.Text>
                               <Tag
                                 className={styles.demoStatusTag}
-                                color={resolveTagColor(methodStatus?.status || "unavailable")}
+                                color={resolveTagColor(
+                                  methodStatus?.status || "unavailable",
+                                )}
                                 title={modelInfo.modelText}
                               >
                                 {modelInfo.missing
                                   ? "待下载"
                                   : methodStatus?.status === "ready"
-                                    ? "可用"
-                                    : "暂不可用"}
+                                  ? "可用"
+                                  : "暂不可用"}
                               </Tag>
                             </div>
-                            <Typography.Text type="secondary" className={styles.demoMethodDescription}>
+                            <Typography.Text
+                              type="secondary"
+                              className={styles.demoMethodDescription}
+                            >
                               {method.placeholder}
                             </Typography.Text>
                             {methodReason ? (
-                              <Typography.Text type="secondary" className={styles.demoMethodReason}>
+                              <Typography.Text
+                                type="secondary"
+                                className={styles.demoMethodReason}
+                              >
                                 {localizeStatusReason(methodReason)}
                               </Typography.Text>
                             ) : null}
@@ -2099,7 +2650,12 @@ function NlpPage() {
                                 type="link"
                                 className={styles.demoDownloadButton}
                                 loading={downloadingModel}
-                                disabled={installing || downloadingModel || !sidecarReady || !hanlpProviderActive}
+                                disabled={
+                                  installing ||
+                                  downloadingModel ||
+                                  !sidecarReady ||
+                                  !hanlpProviderActive
+                                }
                                 onClick={(event) => {
                                   event.preventDefault();
                                   event.stopPropagation();
@@ -2117,44 +2673,66 @@ function NlpPage() {
                   <div className={styles.demoPanel}>
                     <div className={styles.demoInputPanel}>
                       <Typography.Title level={5} className={styles.cardTitle}>
-                        {activeClassicalDemoMethod?.title || t("nlpConfig.demo.classicalTask")}
+                        {activeClassicalDemoMethod?.title ||
+                          t("nlpConfig.demo.classicalTask")}
                       </Typography.Title>
-                      <Typography.Paragraph type="secondary" className={styles.cardDescription}>
+                      <Typography.Paragraph
+                        type="secondary"
+                        className={styles.cardDescription}
+                      >
                         {localizeStatusReason(activeClassicalDemoStatus.reason)}
                       </Typography.Paragraph>
                       <Space wrap size={8} className={styles.demoExamples}>
-                        {(activeClassicalDemoMethod?.examples || []).map((sample, index) => (
-                          <Button
-                            key={`${activeClassicalDemoMethod?.key || "classical"}-${index}`}
-                            size="small"
-                            onClick={() =>
-                              setClassicalDemoInputs((prev) => ({
-                                ...prev,
-                                [activeClassicalDemoMethod?.key || ""]: sample,
-                              }))
-                            }
-                          >
-                            {t("nlpConfig.demo.example", { index: index + 1 })}
-                          </Button>
-                        ))}
+                        {(activeClassicalDemoMethod?.examples || []).map(
+                          (sample, index) => (
+                            <Button
+                              key={`${
+                                activeClassicalDemoMethod?.key || "classical"
+                              }-${index}`}
+                              size="small"
+                              onClick={() =>
+                                setClassicalDemoInputs((prev) => ({
+                                  ...prev,
+                                  [activeClassicalDemoMethod?.key || ""]:
+                                    sample,
+                                }))
+                              }
+                            >
+                              {t("nlpConfig.demo.example", {
+                                index: index + 1,
+                              })}
+                            </Button>
+                          ),
+                        )}
                       </Space>
                       <Input.TextArea
                         rows={6}
                         value={activeClassicalDemoInput}
-                        placeholder={activeClassicalDemoMethod?.placeholder || t("nlpConfig.demo.classicalInputPlaceholder")}
+                        placeholder={
+                          activeClassicalDemoMethod?.placeholder ||
+                          t("nlpConfig.demo.classicalInputPlaceholder")
+                        }
                         onChange={(event) =>
                           setClassicalDemoInputs((prev) => ({
                             ...prev,
-                            [activeClassicalDemoMethod?.key || ""]: event.target.value,
+                            [activeClassicalDemoMethod?.key || ""]:
+                              event.target.value,
                           }))
                         }
                       />
                       <Button
                         type="primary"
-                        loading={runningDemoTask === activeClassicalDemoMethod?.backendTaskKey}
+                        loading={
+                          runningDemoTask ===
+                          activeClassicalDemoMethod?.backendTaskKey
+                        }
                         disabled={runClassicalDemoDisabled}
                         onClick={() =>
-                          runMethodDemo(activeClassicalDemoMethod?.backendTaskKey || "tokenize", activeClassicalDemoInput)
+                          runMethodDemo(
+                            activeClassicalDemoMethod?.backendTaskKey ||
+                              "tokenize",
+                            activeClassicalDemoInput,
+                          )
                         }
                       >
                         {t("nlpConfig.demo.runClassicalTest")}
@@ -2165,7 +2743,10 @@ function NlpPage() {
                         {t("nlpConfig.demo.resultPanel")}
                       </Typography.Title>
                       {!activeClassicalDemoResult ? (
-                        <Typography.Paragraph type="secondary" className={styles.cardDescription}>
+                        <Typography.Paragraph
+                          type="secondary"
+                          className={styles.cardDescription}
+                        >
                           {t("nlpConfig.demo.clickRunClassicalHint")}
                         </Typography.Paragraph>
                       ) : (
@@ -2176,7 +2757,8 @@ function NlpPage() {
                             onKeyDown={handleClassicalDemoResultKeyDown}
                           >
                             {renderResultByTask(
-                              activeClassicalDemoMethod?.backendTaskKey || "tokenize",
+                              activeClassicalDemoMethod?.backendTaskKey ||
+                                "tokenize",
                               activeClassicalDisplayResult,
                               activeClassicalDemoInput,
                               false,
@@ -2188,7 +2770,9 @@ function NlpPage() {
                           </div>
                           {activeClassicalResultTokens.length > 0 ? (
                             <Typography.Text type="secondary">
-                              {t("nlpConfig.demo.currentTokenCount", { count: activeClassicalResultTokens.length })}
+                              {t("nlpConfig.demo.currentTokenCount", {
+                                count: activeClassicalResultTokens.length,
+                              })}
                             </Typography.Text>
                           ) : null}
                           <Collapse
@@ -2200,56 +2784,197 @@ function NlpPage() {
                                 children: (
                                   <>
                                     <div className={styles.demoMetaGrid}>
-                                      <div className={styles.demoMetaItem}><span>任务状态</span><Tag color={resolveTagColor(activeClassicalDemoResult.status)}>{activeClassicalDemoResult.reason_code}</Tag></div>
-                                      <div className={styles.demoMetaItem}><span>当前任务</span><span>{activeClassicalDemoResult.task_key}</span></div>
-                                      <div className={styles.demoMetaItem}><span>使用模型</span><span>{activeClassicalDemoResult.resolved_model || t("nlpConfig.demo.empty")}</span></div>
-                                      <div className={styles.demoMetaItem}><span>{t("nlpConfig.telemetry.mode")}</span><span>{t("nlpConfig.telemetry.classicalSingleModel")}</span></div>
-                                      <div className={styles.demoMetaItem}><span>文本风格</span><span>{activeClassicalDemoResult.detected_style}</span></div>
-                                      <div className={styles.demoMetaItem}><span>识别分值</span><span>{activeClassicalDemoResult.detection_score}</span></div>
-                                      <div className={styles.demoMetaItem}><span>总耗时</span><span>{activeClassicalDemoResult.duration_ms} ms</span></div>
-                                      <div className={styles.demoMetaItem}><span>预热状态</span><span>{activeClassicalDemoResult.preload_status || "未预热"}</span></div>
+                                      <div className={styles.demoMetaItem}>
+                                        <span>任务状态</span>
+                                        <Tag
+                                          color={resolveTagColor(
+                                            activeClassicalDemoResult.status,
+                                          )}
+                                        >
+                                          {
+                                            activeClassicalDemoResult.reason_code
+                                          }
+                                        </Tag>
+                                      </div>
+                                      <div className={styles.demoMetaItem}>
+                                        <span>当前任务</span>
+                                        <span>
+                                          {activeClassicalDemoResult.task_key}
+                                        </span>
+                                      </div>
+                                      <div className={styles.demoMetaItem}>
+                                        <span>使用模型</span>
+                                        <span>
+                                          {activeClassicalDemoResult.resolved_model ||
+                                            t("nlpConfig.demo.empty")}
+                                        </span>
+                                      </div>
+                                      <div className={styles.demoMetaItem}>
+                                        <span>
+                                          {t("nlpConfig.telemetry.mode")}
+                                        </span>
+                                        <span>
+                                          {t(
+                                            "nlpConfig.telemetry.classicalSingleModel",
+                                          )}
+                                        </span>
+                                      </div>
+                                      <div className={styles.demoMetaItem}>
+                                        <span>文本风格</span>
+                                        <span>
+                                          {
+                                            activeClassicalDemoResult.detected_style
+                                          }
+                                        </span>
+                                      </div>
+                                      <div className={styles.demoMetaItem}>
+                                        <span>识别分值</span>
+                                        <span>
+                                          {
+                                            activeClassicalDemoResult.detection_score
+                                          }
+                                        </span>
+                                      </div>
+                                      <div className={styles.demoMetaItem}>
+                                        <span>总耗时</span>
+                                        <span>
+                                          {
+                                            activeClassicalDemoResult.duration_ms
+                                          }{" "}
+                                          ms
+                                        </span>
+                                      </div>
+                                      <div className={styles.demoMetaItem}>
+                                        <span>预热状态</span>
+                                        <span>
+                                          {activeClassicalDemoResult.preload_status ||
+                                            "未预热"}
+                                        </span>
+                                      </div>
                                     </div>
-                                    <Typography.Paragraph className={styles.operationOutput}>
-                                      {t("nlpConfig.demo.rules")}: {(activeClassicalDemoResult.matched_rules || []).join(", ") || t("nlpConfig.demo.none")}
+                                    <Typography.Paragraph
+                                      className={styles.operationOutput}
+                                    >
+                                      {t("nlpConfig.demo.rules")}:{" "}
+                                      {(
+                                        activeClassicalDemoResult.matched_rules ||
+                                        []
+                                      ).join(", ") || t("nlpConfig.demo.none")}
                                     </Typography.Paragraph>
                                     <div className={styles.demoMetaGrid}>
-                                      <div className={styles.demoMetaItem}><span>{t("nlpConfig.telemetry.sidecarTotal")}</span><span>{activeClassicalDemoResult.sidecar_elapsed_ms ?? 0} ms</span></div>
-                                      <div className={styles.demoMetaItem}><span>{t("nlpConfig.telemetry.traceTotal")}</span><span>{activeClassicalDemoResult.sidecar_trace_elapsed_ms ?? 0} ms</span></div>
-                                      <div className={styles.demoMetaItem}><span>{t("nlpConfig.telemetry.executionPath")}</span><span>{activeClassicalDemoResult.sidecar_execution_path || t("nlpConfig.telemetry.unknown")}</span></div>
-                                      <div className={styles.demoMetaItem}><span>{t("nlpConfig.demo.taskModel")}</span><span>{activeClassicalDemoResult.effective_task_model_id || t("nlpConfig.demo.inherit")}</span></div>
+                                      <div className={styles.demoMetaItem}>
+                                        <span>
+                                          {t(
+                                            "nlpConfig.telemetry.sidecarTotal",
+                                          )}
+                                        </span>
+                                        <span>
+                                          {activeClassicalDemoResult.sidecar_elapsed_ms ??
+                                            0}{" "}
+                                          ms
+                                        </span>
+                                      </div>
+                                      <div className={styles.demoMetaItem}>
+                                        <span>
+                                          {t("nlpConfig.telemetry.traceTotal")}
+                                        </span>
+                                        <span>
+                                          {activeClassicalDemoResult.sidecar_trace_elapsed_ms ??
+                                            0}{" "}
+                                          ms
+                                        </span>
+                                      </div>
+                                      <div className={styles.demoMetaItem}>
+                                        <span>
+                                          {t(
+                                            "nlpConfig.telemetry.executionPath",
+                                          )}
+                                        </span>
+                                        <span>
+                                          {activeClassicalDemoResult.sidecar_execution_path ||
+                                            t("nlpConfig.telemetry.unknown")}
+                                        </span>
+                                      </div>
+                                      <div className={styles.demoMetaItem}>
+                                        <span>
+                                          {t("nlpConfig.demo.taskModel")}
+                                        </span>
+                                        <span>
+                                          {activeClassicalDemoResult.effective_task_model_id ||
+                                            t("nlpConfig.demo.inherit")}
+                                        </span>
+                                      </div>
                                     </div>
                                     {activeClassicalDemoResult.sidecar_execution_detail ? (
-                                      <Typography.Paragraph className={styles.operationOutput}>
-                                        {t("nlpConfig.telemetry.executionDetail")}: {activeClassicalDemoResult.sidecar_execution_detail}
+                                      <Typography.Paragraph
+                                        className={styles.operationOutput}
+                                      >
+                                        {t(
+                                          "nlpConfig.telemetry.executionDetail",
+                                        )}
+                                        :{" "}
+                                        {
+                                          activeClassicalDemoResult.sidecar_execution_detail
+                                        }
                                       </Typography.Paragraph>
                                     ) : null}
-                                    {activeClassicalDemoResult.sidecar_trace_stage_ms && Object.keys(activeClassicalDemoResult.sidecar_trace_stage_ms).length > 0 ? (
-                                      <Typography.Paragraph className={styles.operationOutput}>
-                                        {t("nlpConfig.telemetry.stageMs")}: {prettyJson(activeClassicalDemoResult.sidecar_trace_stage_ms)}
+                                    {activeClassicalDemoResult.sidecar_trace_stage_ms &&
+                                    Object.keys(
+                                      activeClassicalDemoResult.sidecar_trace_stage_ms,
+                                    ).length > 0 ? (
+                                      <Typography.Paragraph
+                                        className={styles.operationOutput}
+                                      >
+                                        {t("nlpConfig.telemetry.stageMs")}:{" "}
+                                        {prettyJson(
+                                          activeClassicalDemoResult.sidecar_trace_stage_ms,
+                                        )}
                                       </Typography.Paragraph>
                                     ) : null}
-                                    <Typography.Paragraph className={styles.operationOutput}>
-                                      {t("nlpConfig.demo.cachePath")}: {activeClassicalDemoResult.model_cache_path || status?.sidecar.model_cache_path || status?.sidecar.model_home || status?.sidecar.hanlp_home || t("nlpConfig.notConfigured")}
+                                    <Typography.Paragraph
+                                      className={styles.operationOutput}
+                                    >
+                                      {t("nlpConfig.demo.cachePath")}:{" "}
+                                      {activeClassicalDemoResult.model_cache_path ||
+                                        status?.sidecar.model_cache_path ||
+                                        status?.sidecar.model_home ||
+                                        status?.sidecar.hanlp_home ||
+                                        t("nlpConfig.notConfigured")}
                                     </Typography.Paragraph>
-                                    <Typography.Paragraph className={styles.operationOutput}>
+                                    <Typography.Paragraph
+                                      className={styles.operationOutput}
+                                    >
                                       {activeClassicalDemoResult.reason}
                                     </Typography.Paragraph>
                                     {activeClassicalDemoResult.pretty_print ? (
                                       <>
-                                        <Typography.Title level={5} className={styles.cardTitle}>
+                                        <Typography.Title
+                                          level={5}
+                                          className={styles.cardTitle}
+                                        >
                                           {t("nlpConfig.demo.prettyPrint")}
                                         </Typography.Title>
-                                        <Typography.Paragraph className={styles.operationOutput}>
-                                          {activeClassicalDemoResult.pretty_print}
+                                        <Typography.Paragraph
+                                          className={styles.operationOutput}
+                                        >
+                                          {
+                                            activeClassicalDemoResult.pretty_print
+                                          }
                                         </Typography.Paragraph>
                                       </>
                                     ) : null}
-                                    <Typography.Title level={5} className={styles.cardTitle}>
+                                    <Typography.Title
+                                      level={5}
+                                      className={styles.cardTitle}
+                                    >
                                       {t("nlpConfig.demo.rawOutput")}
                                     </Typography.Title>
-                                    <Typography.Paragraph className={styles.operationOutput}>
+                                    <Typography.Paragraph
+                                      className={styles.operationOutput}
+                                    >
                                       {prettyJson(
-                                        activeClassicalDemoResult.raw_result !== undefined
+                                        activeClassicalDemoResult.raw_result !==
+                                          undefined
                                           ? activeClassicalDemoResult.raw_result
                                           : activeClassicalDemoResult.result,
                                       )}
@@ -2267,17 +2992,26 @@ function NlpPage() {
               </Card>
             </div>
 
-            <div id="nlp-section-siamese-demo" className={styles.sectionAnchorOffset}>
+            <div
+              id="nlp-section-siamese-demo"
+              className={styles.sectionAnchorOffset}
+            >
               <div className={styles.alertStack} style={{ marginBottom: 16 }}>
                 <Alert
                   type={siameseSidecarReady ? "success" : "warning"}
                   showIcon
                   message={
                     <div className={styles.maintenanceAlertHeader}>
-                      <Typography.Text strong>Siamese UniNLU 运行状态</Typography.Text>
+                      <Typography.Text strong>
+                        Siamese UniNLU 运行状态
+                      </Typography.Text>
                       <Button
                         size="small"
-                        className={`${styles.maintenanceInstallButton} ${siameseSidecarReady ? styles.maintenanceInstallButtonReady : ""}`}
+                        className={`${styles.maintenanceInstallButton} ${
+                          siameseSidecarReady
+                            ? styles.maintenanceInstallButtonReady
+                            : ""
+                        }`}
                         type="primary"
                         onClick={() => {
                           void handleInstallSiamese();
@@ -2291,7 +3025,9 @@ function NlpPage() {
                   }
                   description={
                     <div className={styles.maintenanceInfoBlock}>
-                      <Typography.Text className={styles.maintenanceSecondaryTextSingleLine}>
+                      <Typography.Text
+                        className={styles.maintenanceSecondaryTextSingleLine}
+                      >
                         {compactSiameseRuntimeMeta}
                       </Typography.Text>
                     </div>
@@ -2303,7 +3039,10 @@ function NlpPage() {
                 <Typography.Title level={5} className={styles.cardTitle}>
                   Siamese UniNLU 全方法演示
                 </Typography.Title>
-                <Typography.Paragraph type="secondary" className={styles.cardDescription}>
+                <Typography.Paragraph
+                  type="secondary"
+                  className={styles.cardDescription}
+                >
                   与 HanLP 并列运行，覆盖官方 11 类方法。当前运行状态：
                   {siameseProviderStatus?.sidecar?.status || "unavailable"}
                   {methodsCatalog?.providers?.siamese_uninlu?.length
@@ -2313,26 +3052,48 @@ function NlpPage() {
                 <div className={styles.demoWorkbench}>
                   <div className={styles.demoMethodList}>
                     {SIAMESE_DEMO_METHODS.map((method) => {
-                      const methodState = siameseTaskStates[method.backendTaskKey];
-                      const active = method.key === activeSiameseDemoMethod?.key;
-                      const stateStatus = String(methodState?.status || (siameseSidecarReady ? "ready" : "unavailable"));
+                      const methodState =
+                        siameseTaskStates[method.backendTaskKey];
+                      const active =
+                        method.key === activeSiameseDemoMethod?.key;
+                      const stateStatus = String(
+                        methodState?.status ||
+                          (siameseSidecarReady ? "ready" : "unavailable"),
+                      );
                       return (
                         <button
                           key={method.key}
                           type="button"
-                          className={`${styles.demoMethodButton} ${active ? styles.demoMethodButtonActive : ""}`}
-                          onClick={() => setActiveSiameseDemoMethodKey(method.key)}
+                          className={`${styles.demoMethodButton} ${
+                            active ? styles.demoMethodButtonActive : ""
+                          }`}
+                          onClick={() =>
+                            setActiveSiameseDemoMethodKey(method.key)
+                          }
                         >
                           <div className={styles.demoMethodMain}>
                             <div className={styles.demoMethodHeader}>
-                              <Typography.Text strong className={styles.demoMethodTitle}>
+                              <Typography.Text
+                                strong
+                                className={styles.demoMethodTitle}
+                              >
                                 {method.title}
                               </Typography.Text>
-                              <Tag className={styles.demoStatusTag} color={resolveTagColor(stateStatus)}>
-                                {stateStatus === "ready" ? "可用" : stateStatus === "disabled" ? "已禁用" : "暂不可用"}
+                              <Tag
+                                className={styles.demoStatusTag}
+                                color={resolveTagColor(stateStatus)}
+                              >
+                                {stateStatus === "ready"
+                                  ? "可用"
+                                  : stateStatus === "disabled"
+                                  ? "已禁用"
+                                  : "暂不可用"}
                               </Tag>
                             </div>
-                            <Typography.Text type="secondary" className={styles.demoMethodDescription}>
+                            <Typography.Text
+                              type="secondary"
+                              className={styles.demoMethodDescription}
+                            >
                               {method.placeholder}
                             </Typography.Text>
                           </div>
@@ -2345,24 +3106,36 @@ function NlpPage() {
                       <Typography.Title level={5} className={styles.cardTitle}>
                         {activeSiameseDemoMethod?.title}
                       </Typography.Title>
-                      <Typography.Paragraph type="secondary" className={styles.cardDescription}>
-                        {String(activeSiameseStatus.reason || "Siamese task ready")}
+                      <Typography.Paragraph
+                        type="secondary"
+                        className={styles.cardDescription}
+                      >
+                        {String(
+                          activeSiameseStatus.reason || "Siamese task ready",
+                        )}
                       </Typography.Paragraph>
                       <Space wrap size={8} className={styles.demoExamples}>
-                        {(activeSiameseDemoMethod?.examples || []).map((sample, index) => (
-                          <Button
-                            key={`${activeSiameseDemoMethod?.key || "siamese"}-${index}`}
-                            size="small"
-                            onClick={() =>
-                              setSiameseDemoInputs((prev) => ({
-                                ...prev,
-                                [activeSiameseDemoMethod?.backendTaskKey || ""]: sample,
-                              }))
-                            }
-                          >
-                            {t("nlpConfig.demo.example", { index: index + 1 })}
-                          </Button>
-                        ))}
+                        {(activeSiameseDemoMethod?.examples || []).map(
+                          (sample, index) => (
+                            <Button
+                              key={`${
+                                activeSiameseDemoMethod?.key || "siamese"
+                              }-${index}`}
+                              size="small"
+                              onClick={() =>
+                                setSiameseDemoInputs((prev) => ({
+                                  ...prev,
+                                  [activeSiameseDemoMethod?.backendTaskKey ||
+                                  ""]: sample,
+                                }))
+                              }
+                            >
+                              {t("nlpConfig.demo.example", {
+                                index: index + 1,
+                              })}
+                            </Button>
+                          ),
+                        )}
                       </Space>
                       <Input.TextArea
                         rows={6}
@@ -2371,13 +3144,16 @@ function NlpPage() {
                         onChange={(event) =>
                           setSiameseDemoInputs((prev) => ({
                             ...prev,
-                            [activeSiameseDemoMethod?.backendTaskKey || ""]: event.target.value,
+                            [activeSiameseDemoMethod?.backendTaskKey || ""]:
+                              event.target.value,
                           }))
                         }
                       />
                       {activeSiameseDemoMethod?.schema ? (
                         <>
-                          <Typography.Text type="secondary">{t("nlpConfig.demo.schemaJson")}</Typography.Text>
+                          <Typography.Text type="secondary">
+                            {t("nlpConfig.demo.schemaJson")}
+                          </Typography.Text>
                           <Input.TextArea
                             rows={5}
                             value={activeSiameseSchema}
@@ -2385,7 +3161,8 @@ function NlpPage() {
                             onChange={(event) =>
                               setSiameseDemoSchemas((prev) => ({
                                 ...prev,
-                                [activeSiameseDemoMethod?.backendTaskKey || ""]: event.target.value,
+                                [activeSiameseDemoMethod?.backendTaskKey || ""]:
+                                  event.target.value,
                               }))
                             }
                           />
@@ -2393,11 +3170,15 @@ function NlpPage() {
                       ) : null}
                       <Button
                         type="primary"
-                        loading={runningDemoTask === activeSiameseDemoMethod?.backendTaskKey}
+                        loading={
+                          runningDemoTask ===
+                          activeSiameseDemoMethod?.backendTaskKey
+                        }
                         disabled={runSiameseDemoDisabled}
                         onClick={() =>
                           runMethodDemo(
-                            activeSiameseDemoMethod?.backendTaskKey || "named_entity_recognition",
+                            activeSiameseDemoMethod?.backendTaskKey ||
+                              "named_entity_recognition",
                             activeSiameseInput,
                             "siamese_uninlu",
                             activeSiameseSchema || undefined,
@@ -2412,14 +3193,18 @@ function NlpPage() {
                         {t("nlpConfig.demo.resultPanel")}
                       </Typography.Title>
                       {!activeSiameseResult ? (
-                        <Typography.Paragraph type="secondary" className={styles.cardDescription}>
+                        <Typography.Paragraph
+                          type="secondary"
+                          className={styles.cardDescription}
+                        >
                           点击运行后显示 Siamese 输出。
                         </Typography.Paragraph>
                       ) : (
                         <>
                           <div className={styles.demoInteractiveArea}>
                             {renderResultByTask(
-                              activeSiameseDemoMethod?.backendTaskKey || "named_entity_recognition",
+                              activeSiameseDemoMethod?.backendTaskKey ||
+                                "named_entity_recognition",
                               activeSiameseResult.result,
                               activeSiameseInput,
                               false,
@@ -2429,10 +3214,14 @@ function NlpPage() {
                               () => {},
                             )}
                           </div>
-                          <Typography.Paragraph className={styles.operationOutput}>
+                          <Typography.Paragraph
+                            className={styles.operationOutput}
+                          >
                             {activeSiameseResult.reason}
                           </Typography.Paragraph>
-                          <Typography.Paragraph className={styles.operationOutput}>
+                          <Typography.Paragraph
+                            className={styles.operationOutput}
+                          >
                             {prettyJson(
                               activeSiameseResult.raw_result !== undefined
                                 ? activeSiameseResult.raw_result
@@ -2446,13 +3235,9 @@ function NlpPage() {
                 </div>
               </Card>
             </div>
-
           </div>
-
         </div>
-
       </div>
-
     </div>
   );
 }

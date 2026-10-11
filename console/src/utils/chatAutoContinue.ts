@@ -43,7 +43,10 @@ export function endsWithOnlyThinking(text: string): boolean {
     return true;
   }
   // Unclosed <think> that consumed everything (model stopped mid-think, no visible output)
-  if (/^<think>/i.test(withoutThinking) && !/<\/think>/i.test(withoutThinking)) {
+  if (
+    /^<think>/i.test(withoutThinking) &&
+    !/<\/think>/i.test(withoutThinking)
+  ) {
     return true;
   }
   return false;
@@ -91,12 +94,11 @@ export function endsWithLikelyInterruptedIntent(text: string): boolean {
 
   const actionLeadPattern =
     /(?:让我|我来|我现在|现在让我|接下来(?:我)?|下面(?:我)?|下一步(?:我)?|随后(?:我)?|然后(?:我)?|我将|我会).{0,80}(?:创建|生成|继续|制作|编写|整理|构建|补充|输出|绘制|分析|实现|添加|提供|完成)/;
-  const planLeadPattern =
-    /(?:推荐下一步|下一步|后续步骤|接下来|下面|现在)/;
+  const planLeadPattern = /(?:推荐下一步|下一步|后续步骤|接下来|下面|现在)/;
 
   return (
-    actionLeadPattern.test(lastLine)
-    || (planLeadPattern.test(lastLine) && /[:：]$/.test(lastLine))
+    actionLeadPattern.test(lastLine) ||
+    (planLeadPattern.test(lastLine) && /[:：]$/.test(lastLine))
   );
 }
 
@@ -138,7 +140,7 @@ export function shouldAutoContinueResponse(params: {
   }
 
   return (
-    endsWithLikelyInterruptedToken(trimmedText)
-    || endsWithLikelyInterruptedIntent(trimmedText)
+    endsWithLikelyInterruptedToken(trimmedText) ||
+    endsWithLikelyInterruptedIntent(trimmedText)
   );
 }

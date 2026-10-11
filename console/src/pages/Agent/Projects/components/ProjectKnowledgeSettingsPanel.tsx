@@ -1,15 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import {
-  Alert,
-  Badge,
-  Button,
-  Space,
-  Switch,
-  Typography,
-  message,
-} from "antd";
+import { Alert, Badge, Button, Space, Switch, Typography, message } from "antd";
 import api from "../../../../api";
-import type { KnowledgeSourceItem, ProjectKnowledgePipelineState } from "../../../../api/types";
+import type {
+  KnowledgeSourceItem,
+  ProjectKnowledgePipelineState,
+} from "../../../../api/types";
 import { agentsApi } from "../../../../api/modules/agents";
 import styles from "../index.module.less";
 import { useTranslation } from "react-i18next";
@@ -40,14 +35,17 @@ export default function ProjectKnowledgeSettingsPanel(
   } = props;
 
   const [updatingAutoSink, setUpdatingAutoSink] = useState(false);
-  const [runningFlowCommand, setRunningFlowCommand] = useState<"pause" | "resume" | "cancel" | "">("");
+  const [runningFlowCommand, setRunningFlowCommand] = useState<
+    "pause" | "resume" | "cancel" | ""
+  >("");
   const [autoSinkEnabled, setAutoSinkEnabled] = useState(
     projectAutoKnowledgeSink !== false,
   );
   const [updatingRegistration, setUpdatingRegistration] = useState(false);
   const [sourceLoaded, setSourceLoaded] = useState(false);
   const [sourceRegistered, setSourceRegistered] = useState(false);
-  const [projectSource, setProjectSource] = useState<KnowledgeSourceItem | null>(null);
+  const [projectSource, setProjectSource] =
+    useState<KnowledgeSourceItem | null>(null);
 
   const projectSourceId = useMemo(() => {
     const safeId = projectId
@@ -61,7 +59,9 @@ export default function ProjectKnowledgeSettingsPanel(
   const loadProjectSourceStatus = useCallback(async () => {
     try {
       const response = await api.listKnowledgeSources({ projectId });
-      const matched = response.sources.find((source) => source.id === projectSourceId) || null;
+      const matched =
+        response.sources.find((source) => source.id === projectSourceId) ||
+        null;
       setProjectSource(matched);
       setSourceRegistered(Boolean(matched));
     } catch {
@@ -87,96 +87,109 @@ export default function ProjectKnowledgeSettingsPanel(
     if (syncState.latest_source_id !== projectSourceId) {
       return;
     }
-    if (!["pending", "indexing", "graphifying", "succeeded", "failed"].includes(syncState.status)) {
+    if (
+      !["pending", "indexing", "graphifying", "succeeded", "failed"].includes(
+        syncState.status,
+      )
+    ) {
       return;
     }
     void loadProjectSourceStatus();
   }, [loadProjectSourceStatus, projectSourceId, syncState]);
 
-  const handleToggleAutoSink = useCallback(async (enabled: boolean) => {
-    if (!agentId) {
-      message.error(t("copaw.projects.knowledge.autoSinkAgentMissing"));
-      return;
-    }
-    try {
-      setUpdatingAutoSink(true);
-      await agentsApi.updateProjectKnowledgeSink(agentId, projectId, {
-        project_auto_knowledge_sink: enabled,
-      });
-      setAutoSinkEnabled(enabled);
-      onProjectAutoKnowledgeSinkChange?.(enabled);
-      message.success(
-        enabled
-          ? t("copaw.projects.knowledge.autoSinkEnabled")
-          : t("copaw.projects.knowledge.autoSinkDisabled"),
-      );
-    } catch (err) {
-      const messageText = err instanceof Error
-        ? err.message
-        : t("copaw.projects.knowledge.autoSinkUpdateFailed");
-      message.error(messageText);
-    } finally {
-      setUpdatingAutoSink(false);
-    }
-  }, [agentId, onProjectAutoKnowledgeSinkChange, projectId, t]);
+  const handleToggleAutoSink = useCallback(
+    async (enabled: boolean) => {
+      if (!agentId) {
+        message.error(t("copaw.projects.knowledge.autoSinkAgentMissing"));
+        return;
+      }
+      try {
+        setUpdatingAutoSink(true);
+        await agentsApi.updateProjectKnowledgeSink(agentId, projectId, {
+          project_auto_knowledge_sink: enabled,
+        });
+        setAutoSinkEnabled(enabled);
+        onProjectAutoKnowledgeSinkChange?.(enabled);
+        message.success(
+          enabled
+            ? t("copaw.projects.knowledge.autoSinkEnabled")
+            : t("copaw.projects.knowledge.autoSinkDisabled"),
+        );
+      } catch (err) {
+        const messageText =
+          err instanceof Error
+            ? err.message
+            : t("copaw.projects.knowledge.autoSinkUpdateFailed");
+        message.error(messageText);
+      } finally {
+        setUpdatingAutoSink(false);
+      }
+    },
+    [agentId, onProjectAutoKnowledgeSinkChange, projectId, t],
+  );
 
-  const handleToggleKnowledgeRegistration = useCallback(async (enabled: boolean) => {
-    if (!agentId) {
-      message.error(t("copaw.projects.knowledge.autoSinkAgentMissing"));
-      return;
-    }
-
-    const previousRegistered = sourceRegistered;
-    const previousSource = projectSource;
-    setSourceRegistered(enabled);
-    if (!enabled) {
-      setProjectSource(null);
-    }
-
-    try {
-      setUpdatingRegistration(true);
-      await agentsApi.updateProjectKnowledgeRegistration(agentId, projectId, {
-        project_agent_knowledge_registered: enabled,
-      });
-      message.success(
-        enabled
-          ? t("copaw.projects.knowledge.sourceRegisterSuccess")
-          : t("copaw.projects.knowledge.sourceUnregisterSuccess"),
-      );
-      await loadProjectSourceStatus();
-    } catch (err) {
-      const messageText = err instanceof Error
-        ? err.message
-        : t("copaw.projects.knowledge.sourceRegistrationUpdateFailed");
-      const endpointUnavailable = /404|405|not\s*found|knowledge-registration/i.test(messageText);
-      if (!enabled && endpointUnavailable) {
-        try {
-          await api.deleteKnowledgeSource(projectSourceId, { projectId });
-          message.success(
-            t("copaw.projects.knowledge.sourceUnregisterSuccess"),
-          );
-          await loadProjectSourceStatus();
-          return;
-        } catch {
-          // fall through to unified error handling
-        }
+  const handleToggleKnowledgeRegistration = useCallback(
+    async (enabled: boolean) => {
+      if (!agentId) {
+        message.error(t("copaw.projects.knowledge.autoSinkAgentMissing"));
+        return;
       }
 
-      setSourceRegistered(previousRegistered);
-      setProjectSource(previousSource);
-      message.error(messageText);
-    } finally {
-      setUpdatingRegistration(false);
-    }
-  }, [
-    agentId,
-    loadProjectSourceStatus,
-    projectSource,
-    projectSourceId,
-    projectId,
-    sourceRegistered,
-    t,
-  ]);
+      const previousRegistered = sourceRegistered;
+      const previousSource = projectSource;
+      setSourceRegistered(enabled);
+      if (!enabled) {
+        setProjectSource(null);
+      }
+
+      try {
+        setUpdatingRegistration(true);
+        await agentsApi.updateProjectKnowledgeRegistration(agentId, projectId, {
+          project_agent_knowledge_registered: enabled,
+        });
+        message.success(
+          enabled
+            ? t("copaw.projects.knowledge.sourceRegisterSuccess")
+            : t("copaw.projects.knowledge.sourceUnregisterSuccess"),
+        );
+        await loadProjectSourceStatus();
+      } catch (err) {
+        const messageText =
+          err instanceof Error
+            ? err.message
+            : t("copaw.projects.knowledge.sourceRegistrationUpdateFailed");
+        const endpointUnavailable =
+          /404|405|not\s*found|knowledge-registration/i.test(messageText);
+        if (!enabled && endpointUnavailable) {
+          try {
+            await api.deleteKnowledgeSource(projectSourceId, { projectId });
+            message.success(
+              t("copaw.projects.knowledge.sourceUnregisterSuccess"),
+            );
+            await loadProjectSourceStatus();
+            return;
+          } catch {
+            // fall through to unified error handling
+          }
+        }
+
+        setSourceRegistered(previousRegistered);
+        setProjectSource(previousSource);
+        message.error(messageText);
+      } finally {
+        setUpdatingRegistration(false);
+      }
+    },
+    [
+      agentId,
+      loadProjectSourceStatus,
+      projectSource,
+      projectSourceId,
+      projectId,
+      sourceRegistered,
+      t,
+    ],
+  );
 
   const syncAlertType = useMemo(
     () => getProjectKnowledgePipelineAlertType(syncState),
@@ -191,45 +204,59 @@ export default function ProjectKnowledgeSettingsPanel(
   }, [syncState, t]);
 
   const flowRunId = String(syncState?.flow_run_id || "").trim();
-  const recentControlCommand = String(syncState?.recent_control_command || "").trim().toLowerCase();
+  const recentControlCommand = String(syncState?.recent_control_command || "")
+    .trim()
+    .toLowerCase();
 
-  const handleFlowCommand = useCallback(async (commandType: "pause" | "resume" | "cancel") => {
-    setRunningFlowCommand(commandType);
-    try {
-      await api.commandProjectKnowledgePipeline({
-        projectId,
-        commandType,
-        payload: { reason: "project-settings-panel" },
-      });
-      message.success(
-        commandType === "pause"
-          ? t("copaw.projects.knowledge.control.pauseSuccess")
-          : commandType === "resume"
+  const handleFlowCommand = useCallback(
+    async (commandType: "pause" | "resume" | "cancel") => {
+      setRunningFlowCommand(commandType);
+      try {
+        await api.commandProjectKnowledgePipeline({
+          projectId,
+          commandType,
+          payload: { reason: "project-settings-panel" },
+        });
+        message.success(
+          commandType === "pause"
+            ? t("copaw.projects.knowledge.control.pauseSuccess")
+            : commandType === "resume"
             ? t("copaw.projects.knowledge.control.resumeSuccess")
             : t("copaw.projects.knowledge.control.cancelSuccess"),
-      );
-    } catch (err) {
-      const detail = parseErrorDetail(err) as { message?: unknown; recovery_hint?: unknown; error_code?: unknown } | null;
-      const messageText = String(detail?.message || (err instanceof Error ? err.message : "")).trim()
-        || t("copaw.projects.knowledge.control.commandFailed");
-      const recoveryHint = String(detail?.recovery_hint || "").trim();
-      const errorCode = String(detail?.error_code || "").trim();
-      message.error(
-        recoveryHint
-          ? `${messageText} (${recoveryHint})`
-          : errorCode
+        );
+      } catch (err) {
+        const detail = parseErrorDetail(err) as {
+          message?: unknown;
+          recovery_hint?: unknown;
+          error_code?: unknown;
+        } | null;
+        const messageText =
+          String(
+            detail?.message || (err instanceof Error ? err.message : ""),
+          ).trim() || t("copaw.projects.knowledge.control.commandFailed");
+        const recoveryHint = String(detail?.recovery_hint || "").trim();
+        const errorCode = String(detail?.error_code || "").trim();
+        message.error(
+          recoveryHint
+            ? `${messageText} (${recoveryHint})`
+            : errorCode
             ? `${messageText} (${errorCode})`
             : messageText,
-      );
-    } finally {
-      setRunningFlowCommand("");
-    }
-  }, [projectId, t]);
+        );
+      } finally {
+        setRunningFlowCommand("");
+      }
+    },
+    [projectId, t],
+  );
 
   return (
     <div className={styles.projectKnowledgeWorkbench}>
       <div>
-        <Typography.Title level={5} className={styles.projectKnowledgeSectionTitle}>
+        <Typography.Title
+          level={5}
+          className={styles.projectKnowledgeSectionTitle}
+        >
           {t("projects.knowledgeDock.tabSettings")}
         </Typography.Title>
         <Typography.Text type="secondary">
@@ -239,7 +266,10 @@ export default function ProjectKnowledgeSettingsPanel(
 
       <section className={styles.projectKnowledgeLayerSection}>
         <Space direction="vertical" size={12} style={{ width: "100%" }}>
-          <Space align="start" style={{ justifyContent: "space-between", width: "100%" }}>
+          <Space
+            align="start"
+            style={{ justifyContent: "space-between", width: "100%" }}
+          >
             <div>
               <Typography.Text strong>
                 {t("copaw.projects.knowledge.autoWorkflowTitle")}
@@ -258,7 +288,10 @@ export default function ProjectKnowledgeSettingsPanel(
             />
           </Space>
 
-          <Space align="start" style={{ justifyContent: "space-between", width: "100%" }}>
+          <Space
+            align="start"
+            style={{ justifyContent: "space-between", width: "100%" }}
+          >
             <div>
               <Typography.Text strong>
                 {t("copaw.projects.knowledge.registerAsAgentKnowledgeTitle")}
@@ -292,7 +325,8 @@ export default function ProjectKnowledgeSettingsPanel(
           />
 
           <Typography.Text type="secondary">
-            {t("copaw.projects.knowledge.sourceId")} {projectSource?.id || projectSourceId}
+            {t("copaw.projects.knowledge.sourceId")}{" "}
+            {projectSource?.id || projectSourceId}
           </Typography.Text>
 
           <Space direction="vertical" size={8} style={{ width: "100%" }}>
@@ -301,7 +335,9 @@ export default function ProjectKnowledgeSettingsPanel(
             </Typography.Text>
             <Typography.Text type="secondary">
               {flowRunId
-                ? t("copaw.projects.knowledge.control.flowRunLabel", { id: flowRunId })
+                ? t("copaw.projects.knowledge.control.flowRunLabel", {
+                    id: flowRunId,
+                  })
                 : t("copaw.projects.knowledge.control.flowRunMissing")}
             </Typography.Text>
             <Space wrap>
@@ -310,7 +346,9 @@ export default function ProjectKnowledgeSettingsPanel(
                   void handleFlowCommand("pause");
                 }}
                 loading={runningFlowCommand === "pause"}
-                disabled={runningFlowCommand !== "" || recentControlCommand === "pause"}
+                disabled={
+                  runningFlowCommand !== "" || recentControlCommand === "pause"
+                }
               >
                 {t("copaw.projects.knowledge.control.pause")}
               </Button>
@@ -319,7 +357,9 @@ export default function ProjectKnowledgeSettingsPanel(
                   void handleFlowCommand("resume");
                 }}
                 loading={runningFlowCommand === "resume"}
-                disabled={runningFlowCommand !== "" || recentControlCommand === "resume"}
+                disabled={
+                  runningFlowCommand !== "" || recentControlCommand === "resume"
+                }
               >
                 {t("copaw.projects.knowledge.control.resume")}
               </Button>
@@ -329,7 +369,9 @@ export default function ProjectKnowledgeSettingsPanel(
                   void handleFlowCommand("cancel");
                 }}
                 loading={runningFlowCommand === "cancel"}
-                disabled={runningFlowCommand !== "" || recentControlCommand === "cancel"}
+                disabled={
+                  runningFlowCommand !== "" || recentControlCommand === "cancel"
+                }
               >
                 {t("copaw.projects.knowledge.control.cancel")}
               </Button>

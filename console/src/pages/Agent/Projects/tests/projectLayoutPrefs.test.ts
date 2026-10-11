@@ -21,7 +21,7 @@ describe("project layout prefs", () => {
 
   it("returns defaults for null or invalid payload", () => {
     expect(parseProjectLayoutPrefs(null)).toEqual(defaultProjectLayoutPrefs());
-    expect(parseProjectLayoutPrefs("{" )).toEqual(defaultProjectLayoutPrefs());
+    expect(parseProjectLayoutPrefs("{")).toEqual(defaultProjectLayoutPrefs());
   });
 
   it("restores persisted knowledge module collapse and other fields", () => {

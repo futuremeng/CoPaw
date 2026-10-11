@@ -16,7 +16,11 @@ describe("deriveBuiltinProjectKnowledgeStages", () => {
       "syntax_parse",
       "semantic_role_labeling",
     ]);
-    expect(stages.every((item) => item.status === "idle" || item.status === "pending")).toBe(true);
+    expect(
+      stages.every(
+        (item) => item.status === "idle" || item.status === "pending",
+      ),
+    ).toBe(true);
   });
 
   it("maps legacy nlp runtime into canonical tokenize/pos/syntax stages", () => {
@@ -75,7 +79,9 @@ describe("deriveBuiltinProjectKnowledgeStages", () => {
 
     const snapshotRaw = stages.find((item) => item.key === "snapshot_raw");
     const buildChunks = stages.find((item) => item.key === "build_chunks");
-    const buildInterlinear = stages.find((item) => item.key === "build_interlinear");
+    const buildInterlinear = stages.find(
+      (item) => item.key === "build_interlinear",
+    );
     const tokenize = stages.find((item) => item.key === "tokenize");
     const posTagging = stages.find((item) => item.key === "pos_tagging");
     const syntaxParse = stages.find((item) => item.key === "syntax_parse");

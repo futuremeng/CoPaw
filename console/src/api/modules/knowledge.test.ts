@@ -16,7 +16,9 @@ describe("knowledgeApi.getProjectStepStats", () => {
       history: [],
     });
 
-    await knowledgeApi.getProjectStepStats("build_chunks", "project-a", { limit: 3 });
+    await knowledgeApi.getProjectStepStats("build_chunks", "project-a", {
+      limit: 3,
+    });
 
     expect(request).toHaveBeenCalledWith(
       "/knowledge/project-stats/build_chunks?limit=3&project_id=project-a",

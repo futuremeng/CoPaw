@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import type { KnowledgeTaskProgress } from "../../../../api/types";
-import type { KnowledgeSourceItem, ProjectKnowledgePipelineState } from "../../../../api/types";
+import type {
+  KnowledgeSourceItem,
+  ProjectKnowledgePipelineState,
+} from "../../../../api/types";
 import {
   applySourceFilterToGraphQueryResponse,
   deriveSourceQuantBaseMetrics,
@@ -26,9 +29,21 @@ function buildTask(
 describe("useProjectKnowledgeState task priority", () => {
   it("prefers quality loop and memify over project pipeline for the primary active task", () => {
     const tasks = [
-      buildTask({ task_id: "sync-1", task_type: "project_pipeline", updated_at: "2026-04-25T10:03:00Z" }),
-      buildTask({ task_id: "memify-1", task_type: "memify", updated_at: "2026-04-25T10:02:00Z" }),
-      buildTask({ task_id: "quality-1", task_type: "quality_loop", updated_at: "2026-04-25T10:01:00Z" }),
+      buildTask({
+        task_id: "sync-1",
+        task_type: "project_pipeline",
+        updated_at: "2026-04-25T10:03:00Z",
+      }),
+      buildTask({
+        task_id: "memify-1",
+        task_type: "memify",
+        updated_at: "2026-04-25T10:02:00Z",
+      }),
+      buildTask({
+        task_id: "quality-1",
+        task_type: "quality_loop",
+        updated_at: "2026-04-25T10:01:00Z",
+      }),
     ];
 
     expect(pickActiveKnowledgeTask(tasks)?.task_id).toBe("quality-1");
@@ -36,8 +51,16 @@ describe("useProjectKnowledgeState task priority", () => {
 
   it("keeps project pipeline ahead of history backfill when no higher-order task is active", () => {
     const tasks = [
-      buildTask({ task_id: "backfill-1", task_type: "history_backfill", updated_at: "2026-04-25T10:02:00Z" }),
-      buildTask({ task_id: "sync-1", task_type: "project_pipeline", updated_at: "2026-04-25T10:01:00Z" }),
+      buildTask({
+        task_id: "backfill-1",
+        task_type: "history_backfill",
+        updated_at: "2026-04-25T10:02:00Z",
+      }),
+      buildTask({
+        task_id: "sync-1",
+        task_type: "project_pipeline",
+        updated_at: "2026-04-25T10:01:00Z",
+      }),
     ];
 
     expect(getActiveKnowledgeTasks(tasks).map((task) => task.task_id)).toEqual([
@@ -48,11 +71,21 @@ describe("useProjectKnowledgeState task priority", () => {
 
   it("filters out inactive tasks before ranking", () => {
     const tasks = [
-      buildTask({ task_id: "done-memify", task_type: "memify", status: "succeeded" }),
-      buildTask({ task_id: "queued-sync", task_type: "project_pipeline", status: "queued" }),
+      buildTask({
+        task_id: "done-memify",
+        task_type: "memify",
+        status: "succeeded",
+      }),
+      buildTask({
+        task_id: "queued-sync",
+        task_type: "project_pipeline",
+        status: "queued",
+      }),
     ];
 
-    expect(getActiveKnowledgeTasks(tasks).map((task) => task.task_id)).toEqual(["queued-sync"]);
+    expect(getActiveKnowledgeTasks(tasks).map((task) => task.task_id)).toEqual([
+      "queued-sync",
+    ]);
   });
 });
 
@@ -148,8 +181,18 @@ describe("deriveSourceQuantBaseMetrics", () => {
 
   it("falls back to source/index aggregation when backend global metrics are absent", () => {
     const sources = [
-      buildSource({ indexed: false, document_count: 1, snapshot_count: 1, chunk_count: 2 }),
-      buildSource({ indexed: false, document_count: 2, snapshot_count: 2, chunk_count: 4 }),
+      buildSource({
+        indexed: false,
+        document_count: 1,
+        snapshot_count: 1,
+        chunk_count: 2,
+      }),
+      buildSource({
+        indexed: false,
+        document_count: 2,
+        snapshot_count: 2,
+        chunk_count: 4,
+      }),
     ];
     const syncState = buildSyncState({
       last_result: {
@@ -226,7 +269,10 @@ describe("graph source filtering helpers", () => {
       provenance: {},
     };
 
-    const filtered = applySourceFilterToGraphQueryResponse(response, "source-a");
+    const filtered = applySourceFilterToGraphQueryResponse(
+      response,
+      "source-a",
+    );
     expect(filtered.records).toHaveLength(1);
     expect(filtered.provenance.source_filter_mode).toBe("selected_source");
     expect(filtered.provenance.source_filter_id).toBe("source-a");
@@ -356,6 +402,8 @@ describe("resolveProjectKnowledgeStepStats", () => {
     expect(resolved.tokenize?.step_id).toBe("tokenize");
     expect(resolved.pos_tagging?.step_id).toBe("pos_tagging");
     expect(resolved.syntax_parse?.step_id).toBe("syntax_parse");
-    expect(resolved.semantic_role_labeling?.step_id).toBe("semantic_role_labeling");
+    expect(resolved.semantic_role_labeling?.step_id).toBe(
+      "semantic_role_labeling",
+    );
   });
 });

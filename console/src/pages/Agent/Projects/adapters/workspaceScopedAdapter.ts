@@ -2,10 +2,7 @@ import { buildAuthHeaders } from "../../../../api/authHeaders";
 import { workspaceApi } from "../../../../api/modules/workspace";
 import type { MdFileInfo } from "../../../../api/types/workspace";
 import type { AgentProjectFileSummary } from "../../../../api/types/agents";
-import {
-  WORKSPACE_SCOPED_CAPABILITIES,
-  isPathReadonly,
-} from "./capabilities";
+import { WORKSPACE_SCOPED_CAPABILITIES, isPathReadonly } from "./capabilities";
 import type {
   ProjectWorkspaceAdapter,
   ProjectWorkspaceQueryInput,
@@ -13,34 +10,51 @@ import type {
   ProjectWorkspaceWatchEvent,
 } from "./types";
 
-function inferContentType(path: string): "markdown" | "text" | "script" | "other" {
+function inferContentType(
+  path: string,
+): "markdown" | "text" | "script" | "other" {
   const normalized = String(path || "").toLowerCase();
-  if (normalized.endsWith(".md") || normalized.endsWith(".mdx") || normalized.endsWith(".markdown")) {
+  if (
+    normalized.endsWith(".md") ||
+    normalized.endsWith(".mdx") ||
+    normalized.endsWith(".markdown")
+  ) {
     return "markdown";
   }
-  if (normalized.endsWith(".txt") || normalized.endsWith(".log") || normalized.endsWith(".csv")) {
+  if (
+    normalized.endsWith(".txt") ||
+    normalized.endsWith(".log") ||
+    normalized.endsWith(".csv")
+  ) {
     return "text";
   }
   if (
-    normalized.endsWith(".py")
-    || normalized.endsWith(".ts")
-    || normalized.endsWith(".tsx")
-    || normalized.endsWith(".js")
-    || normalized.endsWith(".jsx")
-    || normalized.endsWith(".json")
-    || normalized.endsWith(".yaml")
-    || normalized.endsWith(".yml")
-    || normalized.endsWith(".sh")
-    || normalized.endsWith(".sql")
+    normalized.endsWith(".py") ||
+    normalized.endsWith(".ts") ||
+    normalized.endsWith(".tsx") ||
+    normalized.endsWith(".js") ||
+    normalized.endsWith(".jsx") ||
+    normalized.endsWith(".json") ||
+    normalized.endsWith(".yaml") ||
+    normalized.endsWith(".yml") ||
+    normalized.endsWith(".sh") ||
+    normalized.endsWith(".sql")
   ) {
     return "script";
   }
   return "other";
 }
 
-function filterAndSort(files: MdFileInfo[], input: ProjectWorkspaceQueryInput): MdFileInfo[] {
-  const search = String(input.search || "").trim().toLowerCase();
-  const pathPrefix = String(input.pathPrefix || "").trim().replace(/\\/g, "/");
+function filterAndSort(
+  files: MdFileInfo[],
+  input: ProjectWorkspaceQueryInput,
+): MdFileInfo[] {
+  const search = String(input.search || "")
+    .trim()
+    .toLowerCase();
+  const pathPrefix = String(input.pathPrefix || "")
+    .trim()
+    .replace(/\\/g, "/");
 
   let items = files.filter((item) => {
     if (pathPrefix && !item.path.startsWith(pathPrefix)) {
@@ -71,7 +85,10 @@ function filterAndSort(files: MdFileInfo[], input: ProjectWorkspaceQueryInput): 
   return items;
 }
 
-function mapWorkspaceQueryOutput(files: MdFileInfo[], input: ProjectWorkspaceQueryInput): ProjectWorkspaceQueryOutput {
+function mapWorkspaceQueryOutput(
+  files: MdFileInfo[],
+  input: ProjectWorkspaceQueryInput,
+): ProjectWorkspaceQueryOutput {
   const totalMatched = files.length;
   const offset = Math.max(0, input.offset ?? 0);
   const limit = Math.max(0, input.limit ?? 5000);
@@ -84,7 +101,10 @@ function mapWorkspaceQueryOutput(files: MdFileInfo[], input: ProjectWorkspaceQue
       size: item.size,
       modifiedTime: item.modified_time,
       contentType: inferContentType(item.path),
-      readonly: isPathReadonly(item.path, WORKSPACE_SCOPED_CAPABILITIES.readonlyPathRules),
+      readonly: isPathReadonly(
+        item.path,
+        WORKSPACE_SCOPED_CAPABILITIES.readonlyPathRules,
+      ),
     })),
     summary: {
       totalMatched,
@@ -102,16 +122,22 @@ function mapWorkspaceQueryOutput(files: MdFileInfo[], input: ProjectWorkspaceQue
   };
 }
 
-function buildWorkspaceFileSummary(files: MdFileInfo[]): AgentProjectFileSummary {
+function buildWorkspaceFileSummary(
+  files: MdFileInfo[],
+): AgentProjectFileSummary {
   const total = files.length;
-  const markdown = files.filter((item) => inferContentType(item.path) === "markdown").length;
+  const markdown = files.filter(
+    (item) => inferContentType(item.path) === "markdown",
+  ).length;
   const textLike = files.filter((item) => {
     const type = inferContentType(item.path);
     return type === "markdown" || type === "text";
   }).length;
 
   const recentUpdates = [...files]
-    .sort((left, right) => right.modified_time.localeCompare(left.modified_time))
+    .sort((left, right) =>
+      right.modified_time.localeCompare(left.modified_time),
+    )
     .slice(0, 10)
     .map((item) => ({
       filename: item.filename,
@@ -139,8 +165,14 @@ function splitPath(path: string): string[] {
 }
 
 function buildTreeNodes(files: MdFileInfo[], dirPath = "") {
-  const normalizedDir = String(dirPath || "").replace(/\\/g, "/").replace(/^\//, "").replace(/\/$/, "");
-  const bucket = new Map<string, { isDir: boolean; size: number; modifiedTime: string }>();
+  const normalizedDir = String(dirPath || "")
+    .replace(/\\/g, "/")
+    .replace(/^\//, "")
+    .replace(/\/$/, "");
+  const bucket = new Map<
+    string,
+    { isDir: boolean; size: number; modifiedTime: string }
+  >();
 
   for (const file of files) {
     const parts = splitPath(file.path);
@@ -195,7 +227,9 @@ function buildTreeNodes(files: MdFileInfo[], dirPath = "") {
     }));
 }
 
-function watchWorkspaceFiles(subscriber: (events: ProjectWorkspaceWatchEvent[]) => void): () => void {
+function watchWorkspaceFiles(
+  subscriber: (events: ProjectWorkspaceWatchEvent[]) => void,
+): () => void {
   const controller = new AbortController();
   const url = workspaceApi.getWatchUrl();
 
@@ -241,9 +275,15 @@ function watchWorkspaceFiles(subscriber: (events: ProjectWorkspaceWatchEvent[]) 
             try {
               const payload = JSON.parse(raw) as {
                 type: string;
-                events?: Array<{ change: "added" | "modified" | "deleted"; path: string }>;
+                events?: Array<{
+                  change: "added" | "modified" | "deleted";
+                  path: string;
+                }>;
               };
-              if (payload.type !== "file_change" || !Array.isArray(payload.events)) {
+              if (
+                payload.type !== "file_change" ||
+                !Array.isArray(payload.events)
+              ) {
                 continue;
               }
               subscriber(
@@ -302,13 +342,19 @@ export function createWorkspaceScopedAdapter(): ProjectWorkspaceAdapter {
     },
     getBinaryUrl: (path) => workspaceApi.getBinaryFileUrl(path),
     mkdir: async () => {
-      throw new Error("Workspace scoped adapter does not support directory operations yet.");
+      throw new Error(
+        "Workspace scoped adapter does not support directory operations yet.",
+      );
     },
     move: async () => {
-      throw new Error("Workspace scoped adapter does not support path move operations yet.");
+      throw new Error(
+        "Workspace scoped adapter does not support path move operations yet.",
+      );
     },
     remove: async () => {
-      throw new Error("Workspace scoped adapter does not support delete operations yet.");
+      throw new Error(
+        "Workspace scoped adapter does not support delete operations yet.",
+      );
     },
     upload: async (file) => {
       await workspaceApi.uploadFile(file);

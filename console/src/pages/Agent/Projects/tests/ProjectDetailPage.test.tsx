@@ -116,19 +116,19 @@ const {
     reconnectAttempt: 0,
     onFileTreeInvalidated: undefined as
       | ((payload?: {
-        changedPaths: string[];
-        changedDirs: string[];
-        changedPathsTruncated: boolean;
-        reason: string;
-      }) => Promise<void>)
+          changedPaths: string[];
+          changedDirs: string[];
+          changedPathsTruncated: boolean;
+          reason: string;
+        }) => Promise<void>)
       | undefined,
     onPipelineInvalidated: undefined as
       | ((payload?: {
-        changedPaths: string[];
-        changedDirs: string[];
-        changedPathsTruncated: boolean;
-        reason: string;
-      }) => Promise<void>)
+          changedPaths: string[];
+          changedDirs: string[];
+          changedPathsTruncated: boolean;
+          reason: string;
+        }) => Promise<void>)
       | undefined,
   },
 }));
@@ -140,24 +140,63 @@ vi.mock("antd", async (importOriginal) => {
   const Splitter = ({ children }: PropsWithChildren) => <div>{children}</div>;
   Splitter.Panel = ({ children }: PropsWithChildren) => <div>{children}</div>;
 
-  const Tabs = ({ items, children }: { items?: Array<{ key: string; children?: ReactNode }>; children?: ReactNode }) => (
+  const Tabs = ({
+    items,
+    children,
+  }: {
+    items?: Array<{ key: string; children?: ReactNode }>;
+    children?: ReactNode;
+  }) => (
     <div>
-      {items?.map((item) => <div key={item.key}>{item.children}</div>) ?? children}
+      {items?.map((item) => <div key={item.key}>{item.children}</div>) ??
+        children}
     </div>
   );
 
-  const Collapse = ({ items, children }: { items?: Array<{ key: string; children?: ReactNode }>; children?: ReactNode }) => (
+  const Collapse = ({
+    items,
+    children,
+  }: {
+    items?: Array<{ key: string; children?: ReactNode }>;
+    children?: ReactNode;
+  }) => (
     <div>
-      {items?.map((item) => <div key={item.key}>{item.children}</div>) ?? children}
+      {items?.map((item) => <div key={item.key}>{item.children}</div>) ??
+        children}
     </div>
   );
 
   return {
     ...actual,
-    Alert: ({ children, message }: PropsWithChildren<{ message?: ReactNode }>) => <div>{message}{children}</div>,
+    Alert: ({
+      children,
+      message,
+    }: PropsWithChildren<{ message?: ReactNode }>) => (
+      <div>
+        {message}
+        {children}
+      </div>
+    ),
     Badge: ({ children }: PropsWithChildren) => <div>{children}</div>,
-    Button: ({ children, onClick }: PropsWithChildren<{ onClick?: () => void }>) => <button type="button" onClick={onClick}>{children}</button>,
-    Card: ({ children, title, extra }: PropsWithChildren<{ title?: ReactNode; extra?: ReactNode }>) => <div>{title}{extra}{children}</div>,
+    Button: ({
+      children,
+      onClick,
+    }: PropsWithChildren<{ onClick?: () => void }>) => (
+      <button type="button" onClick={onClick}>
+        {children}
+      </button>
+    ),
+    Card: ({
+      children,
+      title,
+      extra,
+    }: PropsWithChildren<{ title?: ReactNode; extra?: ReactNode }>) => (
+      <div>
+        {title}
+        {extra}
+        {children}
+      </div>
+    ),
     Collapse,
     Drawer: ({ children }: PropsWithChildren) => <div>{children}</div>,
     Empty: () => <div>empty</div>,
@@ -180,7 +219,9 @@ vi.mock("antd", async (importOriginal) => {
 // The app renders the English bundle (i18n default language is "en"), so the
 // double resolves copy from that bundle instead of an inline default.
 vi.mock("react-i18next", async () => {
-  const { t } = await vi.importActual<typeof import("./enLocaleTranslate")>("./enLocaleTranslate");
+  const { t } = await vi.importActual<typeof import("./enLocaleTranslate")>(
+    "./enLocaleTranslate",
+  );
   return {
     useTranslation: () => ({
       t,
@@ -240,14 +281,22 @@ vi.mock("../hooks/useProjectRealtimeController", () => ({
   },
 }));
 
-vi.mock("../components/ProjectAutomationPanel", () => ({ default: () => <div /> }));
+vi.mock("../components/ProjectAutomationPanel", () => ({
+  default: () => <div />,
+}));
 // The editor panel pulls in monaco, which needs `document.queryCommandSupported`
 // at import time — jsdom does not implement it, so the whole file fails to
 // collect.  No case in this file asserts on the editor.
 vi.mock("../components/ProjectEditorPanel", () => ({ default: () => <div /> }));
-vi.mock("../components/ProjectKnowledgePanel", () => ({ default: () => <div /> }));
-vi.mock("../components/ProjectKnowledgeOutputsPanel", () => ({ default: () => <div /> }));
-vi.mock("../components/ProjectKnowledgeProcessingPanel", () => ({ default: () => <div /> }));
+vi.mock("../components/ProjectKnowledgePanel", () => ({
+  default: () => <div />,
+}));
+vi.mock("../components/ProjectKnowledgeOutputsPanel", () => ({
+  default: () => <div />,
+}));
+vi.mock("../components/ProjectKnowledgeProcessingPanel", () => ({
+  default: () => <div />,
+}));
 vi.mock("../components/ProjectKnowledgeSignalsPanel", () => ({
   default: (props: {
     runtimeSignalValue?: string;
@@ -258,21 +307,33 @@ vi.mock("../components/ProjectKnowledgeSignalsPanel", () => ({
   }) => (
     <div>
       <div data-testid="runtime-signal-value">{props.runtimeSignalValue}</div>
-      <div data-testid="runtime-signal-tooltip">{props.runtimeSignalTooltipContent}</div>
+      <div data-testid="runtime-signal-tooltip">
+        {props.runtimeSignalTooltipContent}
+      </div>
       {props.showRealtimeConnectionNotice ? (
         <div data-testid="realtime-health-notice">
           {props.realtimeConnectionText}
-          {props.realtimeReconnectAttempt ? ` Attempt ${props.realtimeReconnectAttempt}` : ""}
+          {props.realtimeReconnectAttempt
+            ? ` Attempt ${props.realtimeReconnectAttempt}`
+            : ""}
         </div>
       ) : null}
     </div>
   ),
 }));
-vi.mock("../components/ProjectKnowledgeSourcesPanel", () => ({ default: () => <div /> }));
-vi.mock("../components/ProjectKnowledgeSettingsPanel", () => ({ default: () => <div /> }));
+vi.mock("../components/ProjectKnowledgeSourcesPanel", () => ({
+  default: () => <div />,
+}));
+vi.mock("../components/ProjectKnowledgeSettingsPanel", () => ({
+  default: () => <div />,
+}));
 vi.mock("../components/ProjectUploadModal", () => ({ default: () => <div /> }));
-vi.mock("../components/ProjectMetricsPanel", () => ({ default: () => <div /> }));
-vi.mock("../components/ProjectEvidencePanel", () => ({ default: () => <div /> }));
+vi.mock("../components/ProjectMetricsPanel", () => ({
+  default: () => <div />,
+}));
+vi.mock("../components/ProjectEvidencePanel", () => ({
+  default: () => <div />,
+}));
 vi.mock("../components/ProjectChatPanel", () => ({
   default: (props: { onAssistantTurnCompleted?: () => void }) => (
     <button type="button" onClick={props.onAssistantTurnCompleted}>
@@ -281,11 +342,15 @@ vi.mock("../components/ProjectChatPanel", () => ({
   ),
 }));
 
-vi.mock("../hooks/useArtifactSelectionGuards", () => ({ default: () => undefined }));
+vi.mock("../hooks/useArtifactSelectionGuards", () => ({
+  default: () => undefined,
+}));
 vi.mock("../hooks/useProjectChatEnsureController", () => ({
   default: () => mockProjectChatEnsureControllerState,
 }));
-vi.mock("../hooks/useProjectChatFocusEffects", () => ({ default: () => undefined }));
+vi.mock("../hooks/useProjectChatFocusEffects", () => ({
+  default: () => undefined,
+}));
 vi.mock("../hooks/usePreferredProjectWorkspaceChat", () => ({
   default: () => mockPreferredWorkspaceChatState,
 }));
@@ -328,8 +393,12 @@ describe("ProjectDetailPage refresh scheduling", { timeout: 30000 }, () => {
   });
 
   beforeEach(() => {
-    consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
-    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    consoleErrorSpy = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => undefined);
+    (
+      globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
+    ).IS_REACT_ACT_ENVIRONMENT = true;
     vi.clearAllMocks();
     mockedAcquireProjectKnowledgeWatchLease.mockResolvedValue({
       lease_id: "lease-project-detail",
@@ -340,7 +409,9 @@ describe("ProjectDetailPage refresh scheduling", { timeout: 30000 }, () => {
     mockedListAgents.mockResolvedValue({
       agents: mockAgentStoreState.agents,
     });
-    mockedListAgentProjects.mockResolvedValue(mockAgentStoreState.agents[0]?.projects || []);
+    mockedListAgentProjects.mockResolvedValue(
+      mockAgentStoreState.agents[0]?.projects || [],
+    );
     const mutableKnowledgeState = mockKnowledgeState as {
       activeKnowledgeTask: Record<string, unknown> | null;
       activeKnowledgeTasks: Array<Record<string, unknown>>;
@@ -386,7 +457,13 @@ describe("ProjectDetailPage refresh scheduling", { timeout: 30000 }, () => {
         returned: 1,
         builtin_count: 0,
         ignored_count: 0,
-        stage_counts: { original: 1, intermediate: 0, artifact: 0, builtin: 0, other: 0 },
+        stage_counts: {
+          original: 1,
+          intermediate: 0,
+          artifact: 0,
+          builtin: 0,
+          other: 0,
+        },
         content_type_counts: { markdown: 1, text: 0, script: 0, other: 0 },
       },
       query_meta: {
@@ -425,7 +502,10 @@ describe("ProjectDetailPage refresh scheduling", { timeout: 30000 }, () => {
     const view = renderPage();
 
     await waitFor(() => {
-      expect(mockedAcquireProjectKnowledgeWatchLease).toHaveBeenCalledWith("agent-1", "proj-1");
+      expect(mockedAcquireProjectKnowledgeWatchLease).toHaveBeenCalledWith(
+        "agent-1",
+        "proj-1",
+      );
     });
     await waitFor(() => {
       expect(mockedQueryProjectFiles).toHaveBeenCalledWith(
@@ -446,7 +526,11 @@ describe("ProjectDetailPage refresh scheduling", { timeout: 30000 }, () => {
     view.unmount();
 
     await waitFor(() => {
-      expect(mockedReleaseProjectKnowledgeWatchLease).toHaveBeenCalledWith("agent-1", "proj-1", "lease-project-detail");
+      expect(mockedReleaseProjectKnowledgeWatchLease).toHaveBeenCalledWith(
+        "agent-1",
+        "proj-1",
+        "lease-project-detail",
+      );
     });
   });
 
@@ -478,13 +562,23 @@ describe("ProjectDetailPage refresh scheduling", { timeout: 30000 }, () => {
     try {
       await waitFor(() => {
         expect(mockedGetProjectFileSummary).toHaveBeenCalled();
-        expect(screen.getByRole("button", { name: "Recent Update" })).toBeDefined();
+        expect(
+          screen.getByRole("button", { name: "Recent Update" }),
+        ).toBeDefined();
       });
       await waitFor(() => {
-        expect(mockedListProjectFileTree).toHaveBeenCalledWith("agent-1", "proj-1", "");
+        expect(mockedListProjectFileTree).toHaveBeenCalledWith(
+          "agent-1",
+          "proj-1",
+          "",
+        );
       });
 
-      expect(mockedReadProjectFile).not.toHaveBeenCalledWith("agent-1", "proj-1", "original/latest.md");
+      expect(mockedReadProjectFile).not.toHaveBeenCalledWith(
+        "agent-1",
+        "proj-1",
+        "original/latest.md",
+      );
     } finally {
       view.unmount();
     }
@@ -499,7 +593,9 @@ describe("ProjectDetailPage refresh scheduling", { timeout: 30000 }, () => {
         expect(mockedGetProjectFileSummary).toHaveBeenCalledTimes(1);
       });
 
-      expect(realtimeControllerState.onFileTreeInvalidated).toBeTypeOf("function");
+      expect(realtimeControllerState.onFileTreeInvalidated).toBeTypeOf(
+        "function",
+      );
 
       act(() => {
         realtimeControllerState.onFileTreeInvalidated?.({
@@ -525,7 +621,9 @@ describe("ProjectDetailPage refresh scheduling", { timeout: 30000 }, () => {
         expect(mockedQueryProjectFiles).toHaveBeenCalledTimes(1);
       });
 
-      const markdownChip = await screen.findByRole("button", { name: /Markdown/ });
+      const markdownChip = await screen.findByRole("button", {
+        name: /Markdown/,
+      });
       expect(markdownChip.getAttribute("aria-pressed")).toBe("false");
 
       act(() => {
@@ -600,7 +698,13 @@ describe("ProjectDetailPage refresh scheduling", { timeout: 30000 }, () => {
         returned: 2,
         builtin_count: 0,
         ignored_count: 0,
-        stage_counts: { original: 2, intermediate: 0, artifact: 0, builtin: 0, other: 0 },
+        stage_counts: {
+          original: 2,
+          intermediate: 0,
+          artifact: 0,
+          builtin: 0,
+          other: 0,
+        },
         content_type_counts: { markdown: 2, text: 0, script: 0, other: 0 },
       },
       query_meta: {
@@ -638,7 +742,9 @@ describe("ProjectDetailPage refresh scheduling", { timeout: 30000 }, () => {
     const view = renderPage();
     try {
       await waitFor(() => {
-        expect(screen.getByRole("button", { name: "Recent Update" })).toBeDefined();
+        expect(
+          screen.getByRole("button", { name: "Recent Update" }),
+        ).toBeDefined();
       });
 
       act(() => {
@@ -646,9 +752,17 @@ describe("ProjectDetailPage refresh scheduling", { timeout: 30000 }, () => {
       });
 
       await waitFor(() => {
-        expect(mockedReadProjectFile).toHaveBeenCalledWith("agent-1", "proj-1", "notes.md");
+        expect(mockedReadProjectFile).toHaveBeenCalledWith(
+          "agent-1",
+          "proj-1",
+          "notes.md",
+        );
       });
-      expect(mockedListProjectFileTree).not.toHaveBeenCalledWith("agent-1", "proj-1", "notes.md");
+      expect(mockedListProjectFileTree).not.toHaveBeenCalledWith(
+        "agent-1",
+        "proj-1",
+        "notes.md",
+      );
     } finally {
       view.unmount();
     }
@@ -677,7 +791,13 @@ describe("ProjectDetailPage refresh scheduling", { timeout: 30000 }, () => {
           returned: 1,
           builtin_count: 0,
           ignored_count: 0,
-          stage_counts: { original: 1, intermediate: 0, artifact: 0, builtin: 0, other: 0 },
+          stage_counts: {
+            original: 1,
+            intermediate: 0,
+            artifact: 0,
+            builtin: 0,
+            other: 0,
+          },
           content_type_counts: { markdown: 1, text: 0, script: 0, other: 0 },
         },
         query_meta: {
@@ -695,10 +815,14 @@ describe("ProjectDetailPage refresh scheduling", { timeout: 30000 }, () => {
     const view = renderPage();
     try {
       await waitFor(() => {
-        expect(mockedQueryProjectFiles.mock.calls.length).toBeGreaterThanOrEqual(2);
+        expect(
+          mockedQueryProjectFiles.mock.calls.length,
+        ).toBeGreaterThanOrEqual(2);
       });
       expect(mockedQueryProjectFiles.mock.calls[0]?.[1]).toBe("proj-1");
-      expect(mockedMessageError).not.toHaveBeenCalledWith("projects.loadFilesFailed");
+      expect(mockedMessageError).not.toHaveBeenCalledWith(
+        "projects.loadFilesFailed",
+      );
     } finally {
       view.unmount();
     }
@@ -711,7 +835,8 @@ describe("ProjectDetailPage refresh scheduling", { timeout: 30000 }, () => {
     const view = renderPage();
     try {
       await waitFor(() => {
-        const noticeText = screen.getByTestId("realtime-health-notice").textContent || "";
+        const noticeText =
+          screen.getByTestId("realtime-health-notice").textContent || "";
         expect(noticeText).toContain("Realtime degraded");
         expect(noticeText).toContain("Attempt 3");
       });
@@ -719,5 +844,4 @@ describe("ProjectDetailPage refresh scheduling", { timeout: 30000 }, () => {
       view.unmount();
     }
   });
-
 });

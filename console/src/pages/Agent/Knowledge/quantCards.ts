@@ -15,7 +15,10 @@ export interface KnowledgeQuantCardViewModel {
   key: string;
   labelI18nKey: string;
   value: string | number;
-  assessment: { tone: "neutral" | "positive" | "warning"; status: "healthy" | "attention" | "neutral" };
+  assessment: {
+    tone: "neutral" | "positive" | "warning";
+    status: "healthy" | "attention" | "neutral";
+  };
   reason: { key: string; params?: Record<string, number | string> };
   action?: KnowledgeQuantCardActionViewModel;
 }

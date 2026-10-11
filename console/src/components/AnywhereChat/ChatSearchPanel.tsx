@@ -27,7 +27,10 @@ interface SearchResult {
   timestamp?: string | null;
 }
 
-export function renderHighlightedText(text: string, query: string): React.ReactNode {
+export function renderHighlightedText(
+  text: string,
+  query: string,
+): React.ReactNode {
   const segments = splitHighlightSegments(text, query);
   if (segments.length === 1 && !segments[0].highlighted) {
     return segments[0].text;
@@ -68,7 +71,9 @@ export function formatTimestamp(raw: string | null | undefined): string {
     return "";
   }
   const pad = (num: number) => String(num).padStart(2, "0");
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(
+    date.getDate(),
+  )} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }
 
 const ChatSearchPanel: React.FC<ChatSearchPanelProps> = ({
@@ -128,13 +133,18 @@ const ChatSearchPanel: React.FC<ChatSearchPanelProps> = ({
       try {
         const query = searchQuery.toLowerCase();
         const results: SearchResult[] = [];
-        const chats = await chatApi.listChats({ user_id: "default", channel: "console" });
+        const chats = await chatApi.listChats({
+          user_id: "default",
+          channel: "console",
+        });
 
         if (seq !== searchSeqRef.current) {
           return;
         }
 
-        const validChats = chats.filter((chat): chat is typeof chat & { id: string } => !!chat.id);
+        const validChats = chats.filter(
+          (chat): chat is typeof chat & { id: string } => !!chat.id,
+        );
 
         for (let index = 0; index < validChats.length; index += 1) {
           if (seq !== searchSeqRef.current) {
@@ -194,7 +204,10 @@ const ChatSearchPanel: React.FC<ChatSearchPanelProps> = ({
             if (seq !== searchSeqRef.current) {
               return;
             }
-            results.sort((a, b) => Date.parse(b.timestamp || "") - Date.parse(a.timestamp || ""));
+            results.sort(
+              (a, b) =>
+                Date.parse(b.timestamp || "") - Date.parse(a.timestamp || ""),
+            );
             setSearchResults([...results]);
           }
         }
@@ -259,7 +272,11 @@ const ChatSearchPanel: React.FC<ChatSearchPanelProps> = ({
           <span className={styles.headerTitle}>{t("chat.search.title")}</span>
         </div>
         <div className={styles.headerRight}>
-          <IconButton bordered={false} icon={<SparkOperateRightLine />} onClick={onClose} />
+          <IconButton
+            bordered={false}
+            icon={<SparkOperateRightLine />}
+            onClick={onClose}
+          />
         </div>
       </div>
 
@@ -281,8 +298,8 @@ const ChatSearchPanel: React.FC<ChatSearchPanelProps> = ({
             {loading && searchProgress
               ? t("chat.search.searching", { progress: searchProgress })
               : loading
-                ? t("chat.search.loading")
-                : t("chat.search.resultsCount", { count: searchResults.length })}
+              ? t("chat.search.loading")
+              : t("chat.search.resultsCount", { count: searchResults.length })}
           </Typography.Text>
         </div>
       ) : null}
@@ -295,14 +312,22 @@ const ChatSearchPanel: React.FC<ChatSearchPanelProps> = ({
               <Spin />
             </div>
           ) : searchQuery.trim() && !loading && searchResults.length === 0 ? (
-            <Empty description={t("chat.search.noResults")} style={{ marginTop: 40 }} />
+            <Empty
+              description={t("chat.search.noResults")}
+              style={{ marginTop: 40 }}
+            />
           ) : (
             <List
               dataSource={searchResults}
               renderItem={(item) => (
-                <div className={styles.searchResultItem} onClick={() => handleResultClick(item)}>
+                <div
+                  className={styles.searchResultItem}
+                  onClick={() => handleResultClick(item)}
+                >
                   <div className={styles.resultHeader}>
-                    <span className={styles.resultChatName}>{item.chatName}</span>
+                    <span className={styles.resultChatName}>
+                      {item.chatName}
+                    </span>
                     <span className={styles.resultRole}>{item.roleLabel}</span>
                   </div>
                   <div className={styles.resultContent}>
@@ -311,7 +336,9 @@ const ChatSearchPanel: React.FC<ChatSearchPanelProps> = ({
                     </Typography.Text>
                   </div>
                   {item.timestamp ? (
-                    <div className={styles.resultTime}>{formatTimestamp(item.timestamp)}</div>
+                    <div className={styles.resultTime}>
+                      {formatTimestamp(item.timestamp)}
+                    </div>
                   ) : null}
                 </div>
               )}

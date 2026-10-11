@@ -27,10 +27,9 @@ describe("recordsToVisualizationData", () => {
       buildRecord({ subject: "Gamma" }),
     ];
 
-    expect(limitGraphVisualizationRecords(records, 2).map((item) => item.subject)).toEqual([
-      "Alpha",
-      "Beta",
-    ]);
+    expect(
+      limitGraphVisualizationRecords(records, 2).map((item) => item.subject),
+    ).toEqual(["Alpha", "Beta"]);
     expect(limitGraphVisualizationRecords(records, Number.NaN)).toHaveLength(3);
   });
 
@@ -38,7 +37,11 @@ describe("recordsToVisualizationData", () => {
     const data = recordsToVisualizationData(
       [
         buildRecord({ subject: "Alpha", predicate: "uses", object: "Beta" }),
-        buildRecord({ subject: "Beta", predicate: "depends_on", object: "Gamma；Delta" }),
+        buildRecord({
+          subject: "Beta",
+          predicate: "depends_on",
+          object: "Gamma；Delta",
+        }),
       ],
       "summary",
       {},
@@ -50,7 +53,11 @@ describe("recordsToVisualizationData", () => {
       "entity-delta",
       "entity-gamma",
     ]);
-    expect(data.edges.map((edge) => `${edge.source}->${edge.target}:${edge.label}`).sort()).toEqual([
+    expect(
+      data.edges
+        .map((edge) => `${edge.source}->${edge.target}:${edge.label}`)
+        .sort(),
+    ).toEqual([
       "entity-alpha->entity-beta:uses",
       "entity-beta->entity-delta:depends_on",
       "entity-beta->entity-gamma:depends_on",

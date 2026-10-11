@@ -72,8 +72,12 @@ export function buildProjectKnowledgeProcessingRecentHistorySections(
   if (buildInterlinearItems.length) {
     sections.push({
       key: "build_interlinear",
-      title: t("copaw.projects.knowledge.processing.recentBuildInterlinearRuns"),
-      hint: t("copaw.projects.knowledge.processing.recentBuildInterlinearRunsHint"),
+      title: t(
+        "copaw.projects.knowledge.processing.recentBuildInterlinearRuns",
+      ),
+      hint: t(
+        "copaw.projects.knowledge.processing.recentBuildInterlinearRunsHint",
+      ),
       items: buildInterlinearItems,
     });
   }
@@ -124,8 +128,12 @@ export function buildProjectKnowledgeProcessingRecentHistorySections(
   if (semanticRoleLabelingItems.length) {
     sections.push({
       key: "semantic_role_labeling",
-      title: t("copaw.projects.knowledge.processing.recentSemanticRoleLabelingRuns"),
-      hint: t("copaw.projects.knowledge.processing.recentSemanticRoleLabelingRunsHint"),
+      title: t(
+        "copaw.projects.knowledge.processing.recentSemanticRoleLabelingRuns",
+      ),
+      hint: t(
+        "copaw.projects.knowledge.processing.recentSemanticRoleLabelingRunsHint",
+      ),
       items: semanticRoleLabelingItems,
     });
   }
@@ -144,7 +152,8 @@ export function buildProjectKnowledgeProcessingRecentHistorySectionsFromState(
     tokenizeHistory: state.projectStepStats?.tokenize?.history,
     posTaggingHistory: state.projectStepStats?.pos_tagging?.history,
     syntaxParseHistory: state.projectStepStats?.syntax_parse?.history,
-    semanticRoleLabelingHistory: state.projectStepStats?.semantic_role_labeling?.history,
+    semanticRoleLabelingHistory:
+      state.projectStepStats?.semantic_role_labeling?.history,
   });
 }
 

@@ -39,11 +39,14 @@ export const flowsApi = {
     request<FlowRunTimeline>(`/flows/runs/${encodeURIComponent(runId)}`),
 
   commandFlowRun: (runId: string, payload: FlowCommandRequest) =>
-    request<FlowCommandResponse>(`/flows/runs/${encodeURIComponent(runId)}/commands`, {
-      method: "POST",
-      body: JSON.stringify({
-        command_type: payload.command_type,
-        payload: payload.payload ?? {},
-      }),
-    }),
+    request<FlowCommandResponse>(
+      `/flows/runs/${encodeURIComponent(runId)}/commands`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          command_type: payload.command_type,
+          payload: payload.payload ?? {},
+        }),
+      },
+    ),
 };

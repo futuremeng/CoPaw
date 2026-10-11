@@ -66,16 +66,14 @@ export default function ProjectEditorPanel({
   // Use the shared coding tabs store, keyed by the upstream files-workspace
   // scope key so project tabs persist under the agent bucket.
   const { selectedAgent } = useAgentStore();
-  const scopeKey = agentFilesScopeKey({ kind: "agent", agentId: selectedAgent });
+  const scopeKey = agentFilesScopeKey({
+    kind: "agent",
+    agentId: selectedAgent,
+  });
   const tabs = useTabsForScope(scopeKey);
   const activeTabPath = useActiveTabPathForScope(scopeKey);
-  const {
-    openTab,
-    closeTab,
-    setActiveTab,
-    setTabContent,
-    setTabDirty,
-  } = useCodingTabsStore();
+  const { openTab, closeTab, setActiveTab, setTabContent, setTabDirty } =
+    useCodingTabsStore();
 
   // Track which files have been opened as tabs to avoid re-opening
   const openedFilesRef = useRef<Set<string>>(new Set());
@@ -101,7 +99,15 @@ export default function ProjectEditorPanel({
     openedFilesRef.current.add(selectedFilePath);
     openTab(scopeKey, { path: selectedFilePath, content, dirty: false });
     setActiveTab(scopeKey, selectedFilePath);
-  }, [selectedFilePath, selectedAgent, scopeKey, projectWorkspaceFacade, loadFileContent, openTab, setActiveTab]);
+  }, [
+    selectedFilePath,
+    selectedAgent,
+    scopeKey,
+    projectWorkspaceFacade,
+    loadFileContent,
+    openTab,
+    setActiveTab,
+  ]);
 
   // When fileContent updates for the active tab, sync it
   useEffect(() => {
@@ -110,26 +116,39 @@ export default function ProjectEditorPanel({
     if (currentTab && currentTab.content !== fileContent && !currentTab.dirty) {
       setTabContent(scopeKey, activeTabPath, fileContent);
     }
-  }, [fileContent, activeTabPath, selectedAgent, scopeKey, tabs, setTabContent]);
+  }, [
+    fileContent,
+    activeTabPath,
+    selectedAgent,
+    scopeKey,
+    tabs,
+    setTabContent,
+  ]);
 
   // Build project-scoped file operations for the TabbedEditor
-  const projectLoadFile = useCallback(async (path: string) => {
-    if (!projectWorkspaceFacade) return "";
-    try {
-      return (await projectWorkspaceFacade.readText(path)).content ?? "";
-    } catch {
-      return "";
-    }
-  }, [projectWorkspaceFacade]);
+  const projectLoadFile = useCallback(
+    async (path: string) => {
+      if (!projectWorkspaceFacade) return "";
+      try {
+        return (await projectWorkspaceFacade.readText(path)).content ?? "";
+      } catch {
+        return "";
+      }
+    },
+    [projectWorkspaceFacade],
+  );
 
-  const projectSaveFile = useCallback(async (path: string, content: string) => {
-    if (!projectWorkspaceFacade) return;
-    try {
-      await projectWorkspaceFacade.writeText(path, content);
-    } catch {
-      // TabbedEditor keeps the tab dirty and surfaces the failure
-    }
-  }, [projectWorkspaceFacade]);
+  const projectSaveFile = useCallback(
+    async (path: string, content: string) => {
+      if (!projectWorkspaceFacade) return;
+      try {
+        await projectWorkspaceFacade.writeText(path, content);
+      } catch {
+        // TabbedEditor keeps the tab dirty and surfaces the failure
+      }
+    },
+    [projectWorkspaceFacade],
+  );
 
   const handleTabSelect = useCallback(
     (path: string) => setActiveTab(scopeKey, path),
@@ -169,19 +188,32 @@ export default function ProjectEditorPanel({
   );
 
   const showKnowledgeVisualization = Boolean(
-    selectedFilePath
-    && !shouldHideKnowledgeVisualization(selectedFilePath)
-    && knowledgeState,
+    selectedFilePath &&
+      !shouldHideKnowledgeVisualization(selectedFilePath) &&
+      knowledgeState,
   );
 
   const hasAttachments = selectedAttachPaths.length > 0;
 
   return (
-    <div style={{ height: "100%", display: "flex", flexDirection: "column", minHeight: 0 }}>
-      <div style={{ flex: 1, display: "flex", minHeight: 0, overflow: "hidden" }}>
+    <div
+      style={{
+        height: "100%",
+        display: "flex",
+        flexDirection: "column",
+        minHeight: 0,
+      }}
+    >
+      <div
+        style={{ flex: 1, display: "flex", minHeight: 0, overflow: "hidden" }}
+      >
         {showKnowledgeVisualization ? (
           <Splitter style={{ height: "100%" }}>
-            <Splitter.Panel defaultSize="68%" min="45%" style={{ overflow: "hidden" }}>
+            <Splitter.Panel
+              defaultSize="68%"
+              min="45%"
+              style={{ overflow: "hidden" }}
+            >
               <TabbedEditor
                 tabs={tabs}
                 activeTabPath={activeTabPath}

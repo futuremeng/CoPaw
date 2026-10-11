@@ -32,7 +32,9 @@ vi.mock("react-router-dom", () => ({
 // The app renders the English bundle (i18n default language is "en"), so the
 // double resolves copy from that bundle instead of an inline default.
 vi.mock("react-i18next", async () => {
-  const { t } = await vi.importActual<typeof import("./enLocaleTranslate")>("./enLocaleTranslate");
+  const { t } = await vi.importActual<typeof import("./enLocaleTranslate")>(
+    "./enLocaleTranslate",
+  );
   return { useTranslation: () => ({ t, i18n: { language: "en" } }) };
 });
 
@@ -139,10 +141,9 @@ describe("ProjectsListPage", () => {
     render(<ProjectsListPage />);
 
     await waitFor(() => {
-      expect(screen.getAllByTestId("project-name").map((item) => item.textContent)).toEqual([
-        "Project New",
-        "Project Old",
-      ]);
+      expect(
+        screen.getAllByTestId("project-name").map((item) => item.textContent),
+      ).toEqual(["Project New", "Project Old"]);
     });
   });
 
@@ -184,17 +185,20 @@ describe("ProjectsListPage", () => {
     render(<ProjectsListPage />);
 
     await waitFor(() => {
-      expect(screen.getAllByTestId("project-name").map((item) => item.textContent)).toEqual([
-        "Project Earlier",
-        "Project Later",
-      ]);
+      expect(
+        screen.getAllByTestId("project-name").map((item) => item.textContent),
+      ).toEqual(["Project Earlier", "Project Later"]);
     });
 
-    await user.click(screen.getByRole("combobox", { name: "Sort projects by" }));
+    await user.click(
+      screen.getByRole("combobox", { name: "Sort projects by" }),
+    );
     await user.click(screen.getByText("Created time"));
     await user.click(screen.getByLabelText("Toggle sort order"));
 
-    const names = screen.getAllByTestId("project-name").map((item) => item.textContent);
+    const names = screen
+      .getAllByTestId("project-name")
+      .map((item) => item.textContent);
 
     expect(names).toEqual(["Project Earlier", "Project Later"]);
   });
@@ -211,7 +215,10 @@ describe("ProjectsListPage", () => {
     await user.click(screen.getAllByRole("button", { name: "New Project" })[0]);
     await user.type(screen.getByLabelText("Name"), "Project One");
     await user.type(screen.getByLabelText("Description"), "demo");
-    await user.type(screen.getByLabelText("Tags (comma separated)"), "demo, draft");
+    await user.type(
+      screen.getByLabelText("Tags (comma separated)"),
+      "demo, draft",
+    );
     await user.click(screen.getByRole("button", { name: "Create" }));
 
     await waitFor(() => {

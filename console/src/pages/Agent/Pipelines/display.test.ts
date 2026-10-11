@@ -9,7 +9,9 @@ describe("pipelines display helpers", () => {
   });
 
   it("labels canonical stages", () => {
-    expect(getCanonicalStageLabel("semantic_role_labeling")).toBe("Semantic Role Labeling");
+    expect(getCanonicalStageLabel("semantic_role_labeling")).toBe(
+      "Semantic Role Labeling",
+    );
     expect(getCanonicalStageLabel("custom_stage")).toBe("Custom Stage");
   });
 });

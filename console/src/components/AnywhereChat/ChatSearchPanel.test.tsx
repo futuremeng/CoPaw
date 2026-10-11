@@ -18,7 +18,9 @@ const formatTimestamp = (raw: string | null | undefined): string => {
     return "";
   }
   const pad = (num: number) => String(num).padStart(2, "0");
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(
+    date.getDate(),
+  )} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
 };
 
 describe("formatTimestamp", () => {
@@ -37,7 +39,9 @@ describe("formatTimestamp", () => {
 describe("renderHighlightedText logic", () => {
   it("marks all matched query fragments", () => {
     const parts = splitHighlightSegments("hello world hello", "hello");
-    const highlighted = parts.filter((part) => part.highlighted).map((part) => part.text);
+    const highlighted = parts
+      .filter((part) => part.highlighted)
+      .map((part) => part.text);
     expect(highlighted).toEqual(["hello", "hello"]);
   });
 

@@ -80,7 +80,9 @@ export function buildGraphDisplayData(
   };
 }
 
-export function summarizeGraphEntities(data: GraphDisplayData): GraphEntitySummary {
+export function summarizeGraphEntities(
+  data: GraphDisplayData,
+): GraphEntitySummary {
   const degree = new Map<string, number>();
   data.nodes.forEach((node) => {
     degree.set(node.id, 0);
@@ -97,7 +99,12 @@ export function summarizeGraphEntities(data: GraphDisplayData): GraphEntitySumma
       degree: degree.get(node.id) || 0,
       score: Number(node.score || 0),
     }))
-    .sort((left, right) => right.degree - left.degree || right.score - left.score || left.label.localeCompare(right.label))
+    .sort(
+      (left, right) =>
+        right.degree - left.degree ||
+        right.score - left.score ||
+        left.label.localeCompare(right.label),
+    )
     .slice(0, 6);
 
   return {

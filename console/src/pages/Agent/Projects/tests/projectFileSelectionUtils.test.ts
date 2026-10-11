@@ -21,52 +21,19 @@ describe("project file selection utils", () => {
   });
 
   it("selects the first previewable file from tree nodes", () => {
-    expect(pickPreviewablePathFromTreeNodes([
-      {
-        filename: "graphify",
-        path: "projects/demo/.knowledge/graphify",
-        size: 0,
-        modified_time: "",
-        is_directory: true,
-        child_count: 2,
-        descendant_file_count: 2,
-        direct_file_count: 2,
-        has_child_directories: false,
-      },
-      {
-        filename: "manifest.json",
-        path: "projects/demo/.knowledge/graphify/manifest.json",
-        size: 10,
-        modified_time: "",
-        is_directory: false,
-        child_count: 0,
-        descendant_file_count: 0,
-        direct_file_count: 0,
-        has_child_directories: false,
-      },
-    ])).toBe("projects/demo/.knowledge/graphify/manifest.json");
-  });
-
-  it("returns empty when a directory has no previewable child file", () => {
-    expect(pickPreviewablePathFromTreeNodes([
-      {
-        filename: "graphify",
-        path: "projects/demo/.knowledge/graphify",
-        size: 0,
-        modified_time: "",
-        is_directory: true,
-        child_count: 0,
-        descendant_file_count: 0,
-        direct_file_count: 0,
-        has_child_directories: false,
-      },
-    ])).toBe("");
-  });
-
-  it("resolves a directory artifact path to its first previewable child file", () => {
-    expect(resolveArtifactSelectionPath(
-      "projects/demo/.knowledge/graphify",
-      [
+    expect(
+      pickPreviewablePathFromTreeNodes([
+        {
+          filename: "graphify",
+          path: "projects/demo/.knowledge/graphify",
+          size: 0,
+          modified_time: "",
+          is_directory: true,
+          child_count: 2,
+          descendant_file_count: 2,
+          direct_file_count: 2,
+          has_child_directories: false,
+        },
         {
           filename: "manifest.json",
           path: "projects/demo/.knowledge/graphify/manifest.json",
@@ -78,25 +45,64 @@ describe("project file selection utils", () => {
           direct_file_count: 0,
           has_child_directories: false,
         },
-      ],
-    )).toEqual({
+      ]),
+    ).toBe("projects/demo/.knowledge/graphify/manifest.json");
+  });
+
+  it("returns empty when a directory has no previewable child file", () => {
+    expect(
+      pickPreviewablePathFromTreeNodes([
+        {
+          filename: "graphify",
+          path: "projects/demo/.knowledge/graphify",
+          size: 0,
+          modified_time: "",
+          is_directory: true,
+          child_count: 0,
+          descendant_file_count: 0,
+          direct_file_count: 0,
+          has_child_directories: false,
+        },
+      ]),
+    ).toBe("");
+  });
+
+  it("resolves a directory artifact path to its first previewable child file", () => {
+    expect(
+      resolveArtifactSelectionPath("projects/demo/.knowledge/graphify", [
+        {
+          filename: "manifest.json",
+          path: "projects/demo/.knowledge/graphify/manifest.json",
+          size: 10,
+          modified_time: "",
+          is_directory: false,
+          child_count: 0,
+          descendant_file_count: 0,
+          direct_file_count: 0,
+          has_child_directories: false,
+        },
+      ]),
+    ).toEqual({
       selectedPath: "projects/demo/.knowledge/graphify/manifest.json",
       expandedDirectoryPath: "projects/demo/.knowledge/graphify",
     });
   });
 
   it("keeps file artifact paths unchanged when no directory children are provided", () => {
-    expect(resolveArtifactSelectionPath("projects/demo/.knowledge/graphify-out/graph.json")).toEqual({
+    expect(
+      resolveArtifactSelectionPath(
+        "projects/demo/.knowledge/graphify-out/graph.json",
+      ),
+    ).toEqual({
       selectedPath: "projects/demo/.knowledge/graphify-out/graph.json",
       expandedDirectoryPath: null,
     });
   });
 
   it("expands the directory but leaves selection empty when no previewable child exists", () => {
-    expect(resolveArtifactSelectionPath(
-      "projects/demo/.knowledge/graphify",
-      [],
-    )).toEqual({
+    expect(
+      resolveArtifactSelectionPath("projects/demo/.knowledge/graphify", []),
+    ).toEqual({
       selectedPath: "",
       expandedDirectoryPath: "projects/demo/.knowledge/graphify",
     });

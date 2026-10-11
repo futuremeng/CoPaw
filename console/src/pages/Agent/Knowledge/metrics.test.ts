@@ -16,12 +16,11 @@ import {
   getKnowledgeQuantReason,
   getKnowledgeQuantStatusLabel,
 } from "./metrics";
-import type {
-  KnowledgeQuantMetricKey,
-  KnowledgeQuantMetrics,
-} from "./metrics";
+import type { KnowledgeQuantMetricKey, KnowledgeQuantMetrics } from "./metrics";
 
-function createSource(overrides: Partial<KnowledgeSourceItem>): KnowledgeSourceItem {
+function createSource(
+  overrides: Partial<KnowledgeSourceItem>,
+): KnowledgeSourceItem {
   return {
     id: "manual-file-a1b2c3",
     name: "Source",
@@ -43,7 +42,9 @@ function createSource(overrides: Partial<KnowledgeSourceItem>): KnowledgeSourceI
   };
 }
 
-function createMemifyTask(overrides: Partial<KnowledgeTaskProgress>): KnowledgeTaskProgress {
+function createMemifyTask(
+  overrides: Partial<KnowledgeTaskProgress>,
+): KnowledgeTaskProgress {
   return {
     task_id: "memify-1",
     task_type: "memify",
@@ -98,12 +99,9 @@ describe("knowledge metrics", () => {
       has_pending_history: true,
     };
 
-    const metrics = computeKnowledgeQuantMetrics(
-      sources,
-      [],
-      backfillStatus,
-      [createMemifyTask({ updated_at: "2026-04-12T10:00:00Z" })],
-    );
+    const metrics = computeKnowledgeQuantMetrics(sources, [], backfillStatus, [
+      createMemifyTask({ updated_at: "2026-04-12T10:00:00Z" }),
+    ]);
 
     expect(metrics.indexedRatio).toBe(1);
     expect(metrics.totalDocuments).toBe(87);
@@ -172,7 +170,9 @@ describe("knowledge metrics", () => {
       tone: "warning",
       status: "attention",
     });
-    expect(getKnowledgeQuantAssessment("relationNormCoverage", metrics)).toEqual({
+    expect(
+      getKnowledgeQuantAssessment("relationNormCoverage", metrics),
+    ).toEqual({
       tone: "warning",
       status: "attention",
     });
@@ -180,8 +180,12 @@ describe("knowledge metrics", () => {
       tone: "warning",
       status: "attention",
     });
-    expect(getKnowledgeQuantReason("relationNormCoverage", metrics).key).toBe("qualityCoverageLow");
-    expect(getKnowledgeQuantReason("missingEvidenceRatio", metrics).key).toBe("riskRatioHigh");
+    expect(getKnowledgeQuantReason("relationNormCoverage", metrics).key).toBe(
+      "qualityCoverageLow",
+    );
+    expect(getKnowledgeQuantReason("missingEvidenceRatio", metrics).key).toBe(
+      "riskRatioHigh",
+    );
   });
 
   it("ships bundle copy for every quant reason the producer can emit", () => {
@@ -252,17 +256,19 @@ describe("knowledge metrics", () => {
       }
     }
 
-    expect([...emitted].sort()).toEqual([
-      "activityPresent",
-      "emptyState",
-      "indexedCoverageHealthy",
-      "indexedCoverageLow",
-      "noActivity",
-      "qualityCoverageHealthy",
-      "qualityCoverageLow",
-      "riskRatioHealthy",
-      "riskRatioHigh",
-    ].sort());
+    expect([...emitted].sort()).toEqual(
+      [
+        "activityPresent",
+        "emptyState",
+        "indexedCoverageHealthy",
+        "indexedCoverageLow",
+        "noActivity",
+        "qualityCoverageHealthy",
+        "qualityCoverageLow",
+        "riskRatioHealthy",
+        "riskRatioHigh",
+      ].sort(),
+    );
   });
 
   it("renders the quant reason family in the languages the overlay ships", () => {
@@ -291,7 +297,10 @@ describe("knowledge metrics", () => {
 
     for (const lng of ["zh", "ja", "ru"] as const) {
       for (const key of reasonKeys) {
-        const rendered = i18n.t(`knowledge.quantReason.${key}`, { lng, percent: 42 });
+        const rendered = i18n.t(`knowledge.quantReason.${key}`, {
+          lng,
+          percent: 42,
+        });
         expect(rendered).not.toBe(`knowledge.quantReason.${key}`);
         expect(rendered).not.toContain("{{");
         expect(rendered).not.toBe(english[key]);
@@ -303,9 +312,9 @@ describe("knowledge metrics", () => {
 
     for (const lng of ["pt-BR", "id"] as const) {
       for (const key of reasonKeys) {
-        expect(i18n.t(`knowledge.quantReason.${key}`, { lng, percent: 42 })).toBe(
-          english[key],
-        );
+        expect(
+          i18n.t(`knowledge.quantReason.${key}`, { lng, percent: 42 }),
+        ).toBe(english[key]);
       }
     }
   });
@@ -328,10 +337,14 @@ describe("knowledge metrics", () => {
       [],
     );
 
-    expect(getKnowledgeQuantActionKey("indexed", weakMetrics)).toBe("rebuildIndex");
+    expect(getKnowledgeQuantActionKey("indexed", weakMetrics)).toBe(
+      "rebuildIndex",
+    );
 
     const emptyMetrics = computeKnowledgeQuantMetrics([], [], null, []);
-    expect(getKnowledgeQuantActionKey("documents", emptyMetrics)).toBe("addSource");
+    expect(getKnowledgeQuantActionKey("documents", emptyMetrics)).toBe(
+      "addSource",
+    );
     expect(getKnowledgeQuantActionDescriptor("addSource")).toEqual({
       key: "addSource",
       labelI18nKey: "knowledge.addSource",
@@ -349,7 +362,9 @@ describe("knowledge metrics", () => {
   });
 
   it("ships bundle copy for every card, status and action label", () => {
-    const cards = buildKnowledgeQuantCardModels(computeKnowledgeQuantMetrics([], [], null));
+    const cards = buildKnowledgeQuantCardModels(
+      computeKnowledgeQuantMetrics([], [], null),
+    );
     expect(cards).toHaveLength(9);
     for (const card of cards) {
       expect(t(card.labelI18nKey)).not.toBe(card.labelI18nKey);
@@ -359,8 +374,14 @@ describe("knowledge metrics", () => {
         getKnowledgeQuantStatusLabel(status).i18nKey,
       );
     }
-    for (const actionKey of ["addSource", "rebuildIndex", "backfillHistory", "retryRemote"] as const) {
-      const labelI18nKey = getKnowledgeQuantActionDescriptor(actionKey).labelI18nKey;
+    for (const actionKey of [
+      "addSource",
+      "rebuildIndex",
+      "backfillHistory",
+      "retryRemote",
+    ] as const) {
+      const labelI18nKey =
+        getKnowledgeQuantActionDescriptor(actionKey).labelI18nKey;
       expect(t(labelI18nKey)).not.toBe(labelI18nKey);
     }
   });

@@ -9,7 +9,9 @@ export type FileMetricFilterKey =
   | "flow"
   | "case"
   | "builtin";
-export type ProjectFileFilterKey = FileMetricFilterKey | ProjectKnowledgeFilterKey;
+export type ProjectFileFilterKey =
+  | FileMetricFilterKey
+  | ProjectKnowledgeFilterKey;
 
 export interface FilterLabelDescriptor {
   i18nKey: string;

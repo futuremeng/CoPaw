@@ -102,11 +102,16 @@ export interface ProjectWorkspaceAdapterError {
 export interface ProjectWorkspaceAdapter {
   getScope: () => ProjectWorkspaceScope;
   getCapabilities: () => ProjectWorkspaceCapabilities;
-  queryFiles: (input: ProjectWorkspaceQueryInput) => Promise<ProjectWorkspaceQueryOutput>;
+  queryFiles: (
+    input: ProjectWorkspaceQueryInput,
+  ) => Promise<ProjectWorkspaceQueryOutput>;
   getFileSummary: () => Promise<AgentProjectFileSummary>;
   listTree: (dirPath?: string) => Promise<AgentProjectFileTreeNode[]>;
   readText: (path: string) => Promise<ProjectWorkspaceReadOutput>;
-  writeText: (path: string, content: string) => Promise<ProjectWorkspaceWriteOutput>;
+  writeText: (
+    path: string,
+    content: string,
+  ) => Promise<ProjectWorkspaceWriteOutput>;
   getBinaryUrl: (path: string) => string;
   mkdir: (path: string) => Promise<ProjectWorkspaceMkdirOutput>;
   move: (
@@ -114,7 +119,16 @@ export interface ProjectWorkspaceAdapter {
     targetPath: string,
     conflictStrategy?: "fail_if_exists" | "overwrite",
   ) => Promise<ProjectWorkspaceMoveOutput>;
-  remove: (path: string, isDirectory?: boolean) => Promise<ProjectWorkspaceDeleteOutput>;
-  upload: (file: File, targetDir?: string, relativePath?: string) => Promise<void>;
-  watch: (subscriber: (events: ProjectWorkspaceWatchEvent[]) => void) => () => void;
+  remove: (
+    path: string,
+    isDirectory?: boolean,
+  ) => Promise<ProjectWorkspaceDeleteOutput>;
+  upload: (
+    file: File,
+    targetDir?: string,
+    relativePath?: string,
+  ) => Promise<void>;
+  watch: (
+    subscriber: (events: ProjectWorkspaceWatchEvent[]) => void,
+  ) => () => void;
 }

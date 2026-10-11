@@ -39,10 +39,15 @@ function buildProjectFlowBindingKey(params: {
   projectId: string;
   templateId: string;
 }): string {
-  return `project-flow-design:${params.projectId}:${params.templateId || "draft"}`;
+  return `project-flow-design:${params.projectId}:${
+    params.templateId || "draft"
+  }`;
 }
 
-function getMetaString(meta: Record<string, unknown> | undefined, key: string): string {
+function getMetaString(
+  meta: Record<string, unknown> | undefined,
+  key: string,
+): string {
   const value = meta?.[key];
   return typeof value === "string" ? value : "";
 }
@@ -61,7 +66,9 @@ function sortChatsForRestore<T extends ChatSpec>(chats: T[]): T[] {
 }
 
 function pickLeafChatCandidates(chats: ChatSpec[]): ChatSpec[] {
-  const parentIds = new Set(chats.map((chat) => chat.session_id).filter(Boolean) as string[]);
+  const parentIds = new Set(
+    chats.map((chat) => chat.session_id).filter(Boolean) as string[],
+  );
   const leaves = chats.filter((chat) => !parentIds.has(chat.id));
   return leaves.length > 0 ? leaves : chats;
 }
@@ -118,77 +125,10 @@ export default function useProjectDesignChatController({
   setError,
   startFailedText,
 }: UseProjectDesignChatControllerParams) {
-  const resolveLatestDesignBoundChatId = useCallback(async (): Promise<string> => {
-    if (!selectedProject || !currentAgent) {
-      return "";
-    }
-
-    const templateId = selectedTemplateId || "draft";
-    const bindingKey = buildProjectFlowBindingKey({
-      projectId: selectedProject.id,
-      templateId,
-    });
-
-    const chats = await chatApi.listChats({ user_id: "default", channel: "console" });
-    const matched = chats.filter((chat) => {
-      const meta =
-        chat.meta && typeof chat.meta === "object"
-          ? (chat.meta as Record<string, unknown>)
-          : undefined;
-      const metaType = getMetaString(meta, "focus_type") || getMetaString(meta, "binding_type");
-      const metaKey =
-        getMetaString(meta, "focus_binding_key") || getMetaString(meta, "pipeline_binding_key");
-      const metaAgentId = getMetaString(meta, "agent_id");
-      if (metaType !== "pipeline_edit" || metaKey !== bindingKey) {
-        return false;
-      }
-      if (metaAgentId && metaAgentId !== currentAgent.id) {
-        return false;
-      }
-      return true;
-    });
-
-    if (matched.length === 0) {
-      const sessionPrefix = `project-flow-design-${selectedProject.id}-`;
-      const bySession = chats.filter((chat) =>
-        (chat.session_id || "").startsWith(sessionPrefix),
-      );
-      if (bySession.length > 0) {
-        const sorted = sortChatsForRestore(pickLeafChatCandidates(bySession));
-        return pickChatWithHistory(sorted);
-      }
-    }
-
-    if (matched.length === 0) {
-      return "";
-    }
-
-    const sorted = sortChatsForRestore(pickLeafChatCandidates(matched));
-    return pickChatWithHistory(sorted);
-  }, [currentAgent, selectedProject, selectedTemplateId]);
-
-  const handleEnsureDesignChat = useCallback(async (
-    forceNew = false,
-    allowCreate = true,
-  ): Promise<string> => {
-    if (!selectedProject || !currentAgent) {
-      return "";
-    }
-
-    if (!forceNew && activeDesignChatId) {
-      return activeDesignChatId;
-    }
-
-    setChatStarting(true);
-    try {
-      const previousChatId = designFocusChatIdRef.current;
-      if (forceNew && previousChatId) {
-        void chatApi
-          .clearChatMeta(previousChatId, {
-            user_id: "default",
-            channel: "console",
-          })
-          .catch(() => {});
+  const resolveLatestDesignBoundChatId =
+    useCallback(async (): Promise<string> => {
+      if (!selectedProject || !currentAgent) {
+        return "";
       }
 
       const templateId = selectedTemplateId || "draft";
@@ -196,95 +136,173 @@ export default function useProjectDesignChatController({
         projectId: selectedProject.id,
         templateId,
       });
-      const focusPath = buildProjectFlowWorkspaceRelativePath(selectedProject.id);
-      const flowMemoryPath = buildProjectFlowMemoryRelativePath(selectedProject.id);
 
-      if (!forceNew) {
-        const restoredChatId = await resolveLatestDesignBoundChatId();
-        if (restoredChatId) {
-          setDesignFocusChatId(restoredChatId);
-          setError("");
-          return restoredChatId;
+      const chats = await chatApi.listChats({
+        user_id: "default",
+        channel: "console",
+      });
+      const matched = chats.filter((chat) => {
+        const meta =
+          chat.meta && typeof chat.meta === "object"
+            ? (chat.meta as Record<string, unknown>)
+            : undefined;
+        const metaType =
+          getMetaString(meta, "focus_type") ||
+          getMetaString(meta, "binding_type");
+        const metaKey =
+          getMetaString(meta, "focus_binding_key") ||
+          getMetaString(meta, "pipeline_binding_key");
+        const metaAgentId = getMetaString(meta, "agent_id");
+        if (metaType !== "pipeline_edit" || metaKey !== bindingKey) {
+          return false;
         }
+        if (metaAgentId && metaAgentId !== currentAgent.id) {
+          return false;
+        }
+        return true;
+      });
 
-        if (!allowCreate) {
-          return "";
+      if (matched.length === 0) {
+        const sessionPrefix = `project-flow-design-${selectedProject.id}-`;
+        const bySession = chats.filter((chat) =>
+          (chat.session_id || "").startsWith(sessionPrefix),
+        );
+        if (bySession.length > 0) {
+          const sorted = sortChatsForRestore(pickLeafChatCandidates(bySession));
+          return pickChatWithHistory(sorted);
         }
       }
 
-      const created = await chatApi.createChat({
-        name: `[flow] ${selectedProject.name}`,
-        session_id: `project-flow-design-${selectedProject.id}-${Date.now()}`,
-        user_id: "default",
-        channel: "console",
-        meta: {
-          focus_type: "pipeline_edit",
-          focus_binding_key: bindingKey,
-          focus_id: templateId,
-          focus_path: focusPath,
-          focus_scope: "project",
-          focus_flow_memory_path: flowMemoryPath,
-          // Legacy compatibility fields
-          binding_type: "pipeline_edit",
-          pipeline_binding_key: bindingKey,
-          pipeline_id: templateId,
-          pipeline_name: selectedTemplateName || selectedProject.name,
-          pipeline_version: (selectedTemplateVersion || "0").trim() || "0",
-          pipeline_scope: "project",
-          agent_id: currentAgent.id,
-          flow_memory_path: flowMemoryPath,
-          project_id: selectedProject.id,
-          project_request_id: resolvedProjectRequestId || selectedProject.id,
-        },
-      });
+      if (matched.length === 0) {
+        return "";
+      }
 
-      setDesignFocusChatId(created.id);
-      const sourceFiles = projectFiles
-        .map((item) => item.path)
-        .filter((item) => isPreviewablePath(item))
-        .slice(0, 200);
-      const bootstrapPrompt = buildProjectFlowBootstrapPrompt({
-        projectName: selectedProject.name,
-        selectedTemplateName: selectedTemplateName || selectedProject.name,
-        flowMemoryPath,
-        workspaceDir: selectedProject.workspace_dir || "",
-        sourceFiles,
-      });
-      void chatApi
-        .startConsoleChat({
-          sessionId: created.session_id,
-          prompt: bootstrapPrompt,
-          userId: "default",
-          channel: "console",
-        })
-        .catch((err) => {
-          console.warn("failed to start design bootstrap prompt", err);
+      const sorted = sortChatsForRestore(pickLeafChatCandidates(matched));
+      return pickChatWithHistory(sorted);
+    }, [currentAgent, selectedProject, selectedTemplateId]);
+
+  const handleEnsureDesignChat = useCallback(
+    async (forceNew = false, allowCreate = true): Promise<string> => {
+      if (!selectedProject || !currentAgent) {
+        return "";
+      }
+
+      if (!forceNew && activeDesignChatId) {
+        return activeDesignChatId;
+      }
+
+      setChatStarting(true);
+      try {
+        const previousChatId = designFocusChatIdRef.current;
+        if (forceNew && previousChatId) {
+          void chatApi
+            .clearChatMeta(previousChatId, {
+              user_id: "default",
+              channel: "console",
+            })
+            .catch(() => {});
+        }
+
+        const templateId = selectedTemplateId || "draft";
+        const bindingKey = buildProjectFlowBindingKey({
+          projectId: selectedProject.id,
+          templateId,
         });
-      setError("");
-      return created.id;
-    } catch (err) {
-      console.error("failed to create project flow design chat", err);
-      setError(startFailedText);
-      return "";
-    } finally {
-      setChatStarting(false);
-    }
-  }, [
-    activeDesignChatId,
-    currentAgent,
-    designFocusChatIdRef,
-    projectFiles,
-    resolvedProjectRequestId,
-    resolveLatestDesignBoundChatId,
-    selectedProject,
-    selectedTemplateId,
-    selectedTemplateName,
-    selectedTemplateVersion,
-    setChatStarting,
-    setDesignFocusChatId,
-    setError,
-    startFailedText,
-  ]);
+        const focusPath = buildProjectFlowWorkspaceRelativePath(
+          selectedProject.id,
+        );
+        const flowMemoryPath = buildProjectFlowMemoryRelativePath(
+          selectedProject.id,
+        );
+
+        if (!forceNew) {
+          const restoredChatId = await resolveLatestDesignBoundChatId();
+          if (restoredChatId) {
+            setDesignFocusChatId(restoredChatId);
+            setError("");
+            return restoredChatId;
+          }
+
+          if (!allowCreate) {
+            return "";
+          }
+        }
+
+        const created = await chatApi.createChat({
+          name: `[flow] ${selectedProject.name}`,
+          session_id: `project-flow-design-${selectedProject.id}-${Date.now()}`,
+          user_id: "default",
+          channel: "console",
+          meta: {
+            focus_type: "pipeline_edit",
+            focus_binding_key: bindingKey,
+            focus_id: templateId,
+            focus_path: focusPath,
+            focus_scope: "project",
+            focus_flow_memory_path: flowMemoryPath,
+            // Legacy compatibility fields
+            binding_type: "pipeline_edit",
+            pipeline_binding_key: bindingKey,
+            pipeline_id: templateId,
+            pipeline_name: selectedTemplateName || selectedProject.name,
+            pipeline_version: (selectedTemplateVersion || "0").trim() || "0",
+            pipeline_scope: "project",
+            agent_id: currentAgent.id,
+            flow_memory_path: flowMemoryPath,
+            project_id: selectedProject.id,
+            project_request_id: resolvedProjectRequestId || selectedProject.id,
+          },
+        });
+
+        setDesignFocusChatId(created.id);
+        const sourceFiles = projectFiles
+          .map((item) => item.path)
+          .filter((item) => isPreviewablePath(item))
+          .slice(0, 200);
+        const bootstrapPrompt = buildProjectFlowBootstrapPrompt({
+          projectName: selectedProject.name,
+          selectedTemplateName: selectedTemplateName || selectedProject.name,
+          flowMemoryPath,
+          workspaceDir: selectedProject.workspace_dir || "",
+          sourceFiles,
+        });
+        void chatApi
+          .startConsoleChat({
+            sessionId: created.session_id,
+            prompt: bootstrapPrompt,
+            userId: "default",
+            channel: "console",
+          })
+          .catch((err) => {
+            console.warn("failed to start design bootstrap prompt", err);
+          });
+        setError("");
+        return created.id;
+      } catch (err) {
+        console.error("failed to create project flow design chat", err);
+        setError(startFailedText);
+        return "";
+      } finally {
+        setChatStarting(false);
+      }
+    },
+    [
+      activeDesignChatId,
+      currentAgent,
+      designFocusChatIdRef,
+      projectFiles,
+      resolvedProjectRequestId,
+      resolveLatestDesignBoundChatId,
+      selectedProject,
+      selectedTemplateId,
+      selectedTemplateName,
+      selectedTemplateVersion,
+      setChatStarting,
+      setDesignFocusChatId,
+      setError,
+      startFailedText,
+    ],
+  );
 
   return {
     handleEnsureDesignChat,

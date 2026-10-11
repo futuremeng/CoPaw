@@ -47,7 +47,9 @@ export function isScriptPath(path: string): boolean {
   return SCRIPT_EXTENSIONS.has(extensionOf(path));
 }
 
-function resolveContentType(file: Pick<AgentProjectFileInfo, "path" | "content_type">): ProjectKnowledgeFilterKey {
+function resolveContentType(
+  file: Pick<AgentProjectFileInfo, "path" | "content_type">,
+): ProjectKnowledgeFilterKey {
   if (file.content_type === "markdown") {
     return "markdown";
   }

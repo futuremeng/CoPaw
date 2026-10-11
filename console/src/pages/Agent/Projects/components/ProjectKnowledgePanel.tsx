@@ -1,4 +1,12 @@
-import { Suspense, lazy, memo, useCallback, useEffect, useMemo, useRef } from "react";
+import {
+  Suspense,
+  lazy,
+  memo,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+} from "react";
 import {
   Alert,
   Button,
@@ -27,7 +35,10 @@ import {
 import { buildProjectKnowledgeLatestSummaryModelFromState } from "../utils/projectKnowledgeLatestSummaryModel";
 import { getProjectKnowledgePipelineStageLabel } from "../utils/projectKnowledgePipelineUi";
 import styles from "../index.module.less";
-import type { ProjectKnowledgeProcessingMode, ProjectKnowledgeState } from "../hooks/useProjectKnowledgeState";
+import type {
+  ProjectKnowledgeProcessingMode,
+  ProjectKnowledgeState,
+} from "../hooks/useProjectKnowledgeState";
 
 type ProjectKnowledgeNlpStageKey = "tokenize" | "ner" | "syntax" | "cor";
 
@@ -84,15 +95,15 @@ function ProjectKnowledgePanel(props: ProjectKnowledgePanelProps) {
 
   useEffect(() => {
     const normalizedRequestedQuery = (requestedQuery || "").trim();
-    if (!normalizedRequestedQuery || handledRequestedQueryRef.current === normalizedRequestedQuery) {
+    if (
+      !normalizedRequestedQuery ||
+      handledRequestedQueryRef.current === normalizedRequestedQuery
+    ) {
       return;
     }
     handledRequestedQueryRef.current = normalizedRequestedQuery;
     setGraphQueryText(normalizedRequestedQuery);
-    void runGraphQuery(
-      normalizedRequestedQuery,
-      graphQueryMode,
-    );
+    void runGraphQuery(normalizedRequestedQuery, graphQueryMode);
     onRequestedQueryHandled?.();
   }, [
     graphQueryMode,
@@ -122,25 +133,37 @@ function ProjectKnowledgePanel(props: ProjectKnowledgePanelProps) {
     [quantMetrics.entityCount],
   );
 
-  const sourceOptions = useMemo(() => (
-    knowledgeState.projectSources.map((source) => ({
-      value: source.id,
-      label: String(source.name || source.id || "").trim() || source.id,
-    }))
-  ), [knowledgeState.projectSources]);
+  const sourceOptions = useMemo(
+    () =>
+      knowledgeState.projectSources.map((source) => ({
+        value: source.id,
+        label: String(source.name || source.id || "").trim() || source.id,
+      })),
+    [knowledgeState.projectSources],
+  );
 
   const effectiveSourceId = String(
     knowledgeState.selectedSourceId || sourceOptions[0]?.value || "",
   ).trim();
 
-  const selectedSource = useMemo(() => (
-    knowledgeState.projectSources.find((source) => source.id === effectiveSourceId)
-    || null
-  ), [effectiveSourceId, knowledgeState.projectSources]);
+  const selectedSource = useMemo(
+    () =>
+      knowledgeState.projectSources.find(
+        (source) => source.id === effectiveSourceId,
+      ) || null,
+    [effectiveSourceId, knowledgeState.projectSources],
+  );
 
   const isSyncRunning = useMemo(() => {
-    const status = String(knowledgeState.syncState?.status || "").trim().toLowerCase();
-    return status === "pending" || status === "running" || status === "indexing" || status === "graphifying";
+    const status = String(knowledgeState.syncState?.status || "")
+      .trim()
+      .toLowerCase();
+    return (
+      status === "pending" ||
+      status === "running" ||
+      status === "indexing" ||
+      status === "graphifying"
+    );
   }, [knowledgeState.syncState?.status]);
 
   const l1Status = useMemo(() => {
@@ -158,65 +181,84 @@ function ProjectKnowledgePanel(props: ProjectKnowledgePanelProps) {
     return "idle";
   }, [isSyncRunning, selectedSource]);
 
-  const nlpMode = useMemo(() => (
-    knowledgeState.processingCompareModes.find((mode) => mode.mode === "nlp")
-    || knowledgeState.processingModes.find((mode) => mode.mode === "nlp")
-    || null
-  ), [knowledgeState.processingCompareModes, knowledgeState.processingModes]);
+  const nlpMode = useMemo(
+    () =>
+      knowledgeState.processingCompareModes.find(
+        (mode) => mode.mode === "nlp",
+      ) ||
+      knowledgeState.processingModes.find((mode) => mode.mode === "nlp") ||
+      null,
+    [knowledgeState.processingCompareModes, knowledgeState.processingModes],
+  );
 
-  const agenticMode = useMemo(() => (
-    knowledgeState.processingCompareModes.find((mode) => mode.mode === "agentic")
-    || knowledgeState.processingModes.find((mode) => mode.mode === "agentic")
-    || null
-  ), [knowledgeState.processingCompareModes, knowledgeState.processingModes]);
+  const agenticMode = useMemo(
+    () =>
+      knowledgeState.processingCompareModes.find(
+        (mode) => mode.mode === "agentic",
+      ) ||
+      knowledgeState.processingModes.find((mode) => mode.mode === "agentic") ||
+      null,
+    [knowledgeState.processingCompareModes, knowledgeState.processingModes],
+  );
 
-  const formatLayerStatus = useCallback((status: string) => {
-    if (status === "ready") {
+  const formatLayerStatus = useCallback(
+    (status: string) => {
+      if (status === "ready") {
+        return {
+          text: t("copaw.projects.knowledge.processing.statusReady"),
+          color: "success",
+        } as const;
+      }
+      if (status === "running") {
+        return {
+          text: t("copaw.projects.knowledge.processing.statusRunning"),
+          color: "processing",
+        } as const;
+      }
+      if (status === "queued") {
+        return {
+          text: t("copaw.projects.knowledge.processing.statusQueued"),
+          color: "gold",
+        } as const;
+      }
+      if (status === "blocked") {
+        return {
+          text: t("copaw.projects.knowledge.processing.statusBlocked"),
+          color: "orange",
+        } as const;
+      }
+      if (status === "failed") {
+        return {
+          text: t("copaw.projects.knowledge.processing.statusFailed"),
+          color: "error",
+        } as const;
+      }
+      if (status === "missing") {
+        return {
+          text: t("copaw.projects.knowledge.processing.statusMissing"),
+          color: "default",
+        } as const;
+      }
       return {
-        text: t("copaw.projects.knowledge.processing.statusReady"),
-        color: "success",
-      } as const;
-    }
-    if (status === "running") {
-      return {
-        text: t("copaw.projects.knowledge.processing.statusRunning"),
-        color: "processing",
-      } as const;
-    }
-    if (status === "queued") {
-      return {
-        text: t("copaw.projects.knowledge.processing.statusQueued"),
-        color: "gold",
-      } as const;
-    }
-    if (status === "blocked") {
-      return {
-        text: t("copaw.projects.knowledge.processing.statusBlocked"),
-        color: "orange",
-      } as const;
-    }
-    if (status === "failed") {
-      return {
-        text: t("copaw.projects.knowledge.processing.statusFailed"),
-        color: "error",
-      } as const;
-    }
-    if (status === "missing") {
-      return {
-        text: t("copaw.projects.knowledge.processing.statusMissing"),
+        text: t("copaw.projects.knowledge.processing.statusIdle"),
         color: "default",
       } as const;
-    }
-    return {
-      text: t("copaw.projects.knowledge.processing.statusIdle"),
-      color: "default",
-    } as const;
-  }, [t]);
+    },
+    [t],
+  );
 
   const layerStatusItems = useMemo(() => {
     const l1 = formatLayerStatus(l1Status);
-    const l2 = formatLayerStatus(String(nlpMode?.status || "idle").trim().toLowerCase());
-    const l3 = formatLayerStatus(String(agenticMode?.status || "idle").trim().toLowerCase());
+    const l2 = formatLayerStatus(
+      String(nlpMode?.status || "idle")
+        .trim()
+        .toLowerCase(),
+    );
+    const l3 = formatLayerStatus(
+      String(agenticMode?.status || "idle")
+        .trim()
+        .toLowerCase(),
+    );
     return [
       {
         key: "l1",
@@ -255,7 +297,9 @@ function ProjectKnowledgePanel(props: ProjectKnowledgePanelProps) {
         key: "sentences",
         label: t("copaw.projects.knowledge.metricSentences"),
         value: metrics.sentenceCount || 0,
-        hint: `${metrics.sentenceWithEntitiesCount || 0} sentences with entities`,
+        hint: `${
+          metrics.sentenceWithEntitiesCount || 0
+        } sentences with entities`,
       },
       {
         key: "entities",
@@ -266,24 +310,29 @@ function ProjectKnowledgePanel(props: ProjectKnowledgePanelProps) {
     ];
   }, [knowledgeState.quantMetrics, t]);
 
-  const latestSummaryModel = useMemo(() => buildProjectKnowledgeLatestSummaryModelFromState(t, knowledgeState), [
-    knowledgeState.fileAnalysisStats?.latest,
-    knowledgeState.outputResolution.activeMode,
-    knowledgeState.projectStepStats.build_interlinear?.latest,
-    knowledgeState.projectStepStats.tokenize?.latest,
-    knowledgeState.projectStepStats.pos_tagging?.latest,
-    knowledgeState.projectStepStats.syntax_parse?.latest,
-    knowledgeState.projectStepStats.semantic_role_labeling?.latest,
-    knowledgeState.sourceScanStats?.latest,
-    t,
-  ]);
+  const latestSummaryModel = useMemo(
+    () => buildProjectKnowledgeLatestSummaryModelFromState(t, knowledgeState),
+    [
+      knowledgeState.fileAnalysisStats?.latest,
+      knowledgeState.outputResolution.activeMode,
+      knowledgeState.projectStepStats.build_interlinear?.latest,
+      knowledgeState.projectStepStats.tokenize?.latest,
+      knowledgeState.projectStepStats.pos_tagging?.latest,
+      knowledgeState.projectStepStats.syntax_parse?.latest,
+      knowledgeState.projectStepStats.semantic_role_labeling?.latest,
+      knowledgeState.sourceScanStats?.latest,
+      t,
+    ],
+  );
 
   const pipelineStageTags = useMemo(() => {
     const stages = knowledgeState.syncState?.pipeline_trace?.stages || [];
     return stages.slice(0, 3).map((stage) => ({
       key: `${stage.key}-${stage.label}`,
       label: getProjectKnowledgePipelineStageLabel(stage, t),
-      status: String(stage.status || "idle").trim().toLowerCase(),
+      status: String(stage.status || "idle")
+        .trim()
+        .toLowerCase(),
       summary: stage.summary,
     }));
   }, [knowledgeState.syncState?.pipeline_trace?.stages, t]);
@@ -296,15 +345,34 @@ function ProjectKnowledgePanel(props: ProjectKnowledgePanelProps) {
       targetMode?: ProjectKnowledgeProcessingMode;
       targetStage?: ProjectKnowledgeNlpStageKey;
     }> = [];
-    const l2ChunkCount = Math.max(0, Number(nlpMode?.chunkCount || quantMetrics.chunkCount || 0));
-    const nlpStatus = String(nlpMode?.status || "idle").trim().toLowerCase();
+    const l2ChunkCount = Math.max(
+      0,
+      Number(nlpMode?.chunkCount || quantMetrics.chunkCount || 0),
+    );
+    const nlpStatus = String(nlpMode?.status || "idle")
+      .trim()
+      .toLowerCase();
     const nlpBusy = nlpStatus === "running" || nlpStatus === "queued";
-    const nerReadyChunks = Math.max(0, Number(nlpMode?.nerReadyChunkCount || 0));
-    const syntaxReadyChunks = Math.max(0, Number(nlpMode?.syntaxReadyChunkCount || 0));
-    const corReadyChunks = Math.max(0, Number(nlpMode?.corReadyChunkCount || 0));
-    const corReason = String(nlpMode?.corReason || nlpMode?.corReasonCode || "").trim();
+    const nerReadyChunks = Math.max(
+      0,
+      Number(nlpMode?.nerReadyChunkCount || 0),
+    );
+    const syntaxReadyChunks = Math.max(
+      0,
+      Number(nlpMode?.syntaxReadyChunkCount || 0),
+    );
+    const corReadyChunks = Math.max(
+      0,
+      Number(nlpMode?.corReadyChunkCount || 0),
+    );
+    const corReason = String(
+      nlpMode?.corReason || nlpMode?.corReasonCode || "",
+    ).trim();
 
-    if ((nlpStatus === "failed" || nlpStatus === "blocked") && String(nlpMode?.summary || "").trim()) {
+    if (
+      (nlpStatus === "failed" || nlpStatus === "blocked") &&
+      String(nlpMode?.summary || "").trim()
+    ) {
       issues.push({
         key: "nlp-blocked",
         level: "error",
@@ -315,7 +383,11 @@ function ProjectKnowledgePanel(props: ProjectKnowledgePanelProps) {
       });
     }
 
-    if (nlpBusy && l2ChunkCount > 0 && (nerReadyChunks <= 0 || syntaxReadyChunks <= 0)) {
+    if (
+      nlpBusy &&
+      l2ChunkCount > 0 &&
+      (nerReadyChunks <= 0 || syntaxReadyChunks <= 0)
+    ) {
       issues.push({
         key: "nlp-pending",
         level: "warning",
@@ -361,15 +433,21 @@ function ProjectKnowledgePanel(props: ProjectKnowledgePanelProps) {
       });
     }
 
-    const nlpTraceStage = (knowledgeState.syncState?.pipeline_trace?.stages || [])
-      .find((stage) => stage.key === "nlp");
+    const nlpTraceStage = (
+      knowledgeState.syncState?.pipeline_trace?.stages || []
+    ).find((stage) => stage.key === "nlp");
     const nlpStageMetrics = nlpTraceStage?.metrics;
-    const graphDocCount = typeof nlpStageMetrics?.document_graph_count === "number"
-      ? nlpStageMetrics.document_graph_count
-      : typeof nlpStageMetrics?.graph_document_count === "number"
+    const graphDocCount =
+      typeof nlpStageMetrics?.document_graph_count === "number"
+        ? nlpStageMetrics.document_graph_count
+        : typeof nlpStageMetrics?.graph_document_count === "number"
         ? nlpStageMetrics.graph_document_count
         : null;
-    if (!nlpBusy && graphDocCount === 0 && (quantMetrics.documentCount || 0) > 0) {
+    if (
+      !nlpBusy &&
+      graphDocCount === 0 &&
+      (quantMetrics.documentCount || 0) > 0
+    ) {
       issues.push({
         key: "graphify-empty",
         level: "warning",
@@ -379,11 +457,21 @@ function ProjectKnowledgePanel(props: ProjectKnowledgePanelProps) {
     }
 
     return issues;
-  }, [knowledgeState.syncState?.pipeline_trace?.stages, nlpMode, quantMetrics.chunkCount, quantMetrics.documentCount, t]);
+  }, [
+    knowledgeState.syncState?.pipeline_trace?.stages,
+    nlpMode,
+    quantMetrics.chunkCount,
+    quantMetrics.documentCount,
+    t,
+  ]);
 
-  const diagnosticsAlertType = useMemo(() => (
-    diagnosticsIssues.some((item) => item.level === "error") ? "error" : "warning"
-  ), [diagnosticsIssues]);
+  const diagnosticsAlertType = useMemo(
+    () =>
+      diagnosticsIssues.some((item) => item.level === "error")
+        ? "error"
+        : "warning",
+    [diagnosticsIssues],
+  );
 
   const activeEntityDetail = useMemo(() => {
     const nodeId = knowledgeState.activeGraphNodeId;
@@ -425,7 +513,9 @@ function ProjectKnowledgePanel(props: ProjectKnowledgePanelProps) {
           <Select
             size="small"
             value={effectiveSourceId || undefined}
-            classNames={{ popup: { root: styles.projectKnowledgeSelectDropdown } }}
+            classNames={{
+              popup: { root: styles.projectKnowledgeSelectDropdown },
+            }}
             options={sourceOptions}
             placeholder={t("copaw.projects.knowledge.dataSourceSelect")}
             onChange={(value) => {
@@ -441,7 +531,10 @@ function ProjectKnowledgePanel(props: ProjectKnowledgePanelProps) {
         </div>
         <div className={styles.projectKnowledgeLayerStatusRow}>
           {layerStatusItems.map((item) => (
-            <div key={item.key} className={styles.projectKnowledgeLayerStatusItem}>
+            <div
+              key={item.key}
+              className={styles.projectKnowledgeLayerStatusItem}
+            >
               <Typography.Text type="secondary">{item.label}</Typography.Text>
               <Tag color={item.color}>{item.text}</Tag>
             </div>
@@ -461,11 +554,23 @@ function ProjectKnowledgePanel(props: ProjectKnowledgePanelProps) {
         <Select
           size="small"
           value={props.knowledgeState.graphQueryMode}
-          classNames={{ popup: { root: styles.projectKnowledgeSelectDropdown } }}
-          onChange={(value) => props.knowledgeState.setGraphQueryMode(value as "template" | "cypher")}
+          classNames={{
+            popup: { root: styles.projectKnowledgeSelectDropdown },
+          }}
+          onChange={(value) =>
+            props.knowledgeState.setGraphQueryMode(
+              value as "template" | "cypher",
+            )
+          }
           options={[
-            { label: t("copaw.projects.knowledge.queryModeTemplate"), value: "template" },
-            { label: t("copaw.projects.knowledge.queryModeCypherMvp"), value: "cypher" },
+            {
+              label: t("copaw.projects.knowledge.queryModeTemplate"),
+              value: "template",
+            },
+            {
+              label: t("copaw.projects.knowledge.queryModeCypherMvp"),
+              value: "cypher",
+            },
           ]}
           style={{ width: 160 }}
         />
@@ -473,10 +578,18 @@ function ProjectKnowledgePanel(props: ProjectKnowledgePanelProps) {
           mode="multiple"
           size="small"
           value={props.knowledgeState.graphEntityTypeFilters}
-          classNames={{ popup: { root: styles.projectKnowledgeSelectDropdown } }}
-          onChange={(value) => props.knowledgeState.setGraphEntityTypeFilters((value as string[]).map(String))}
+          classNames={{
+            popup: { root: styles.projectKnowledgeSelectDropdown },
+          }}
+          onChange={(value) =>
+            props.knowledgeState.setGraphEntityTypeFilters(
+              (value as string[]).map(String),
+            )
+          }
           options={props.knowledgeState.graphEntityTypeOptions.map((item) => ({
-            label: formatGraphEntityTypeLabel(item, (key, defaultValue) => t(key, defaultValue)),
+            label: formatGraphEntityTypeLabel(item, (key, defaultValue) =>
+              t(key, defaultValue),
+            ),
             value: item,
           }))}
           placeholder={t("copaw.projects.knowledge.entityTypeFilter")}
@@ -488,12 +601,22 @@ function ProjectKnowledgePanel(props: ProjectKnowledgePanelProps) {
           mode="multiple"
           size="small"
           value={props.knowledgeState.graphRelationTypeFilters}
-          classNames={{ popup: { root: styles.projectKnowledgeSelectDropdown } }}
-          onChange={(value) => props.knowledgeState.setGraphRelationTypeFilters((value as string[]).map(String))}
-          options={props.knowledgeState.graphRelationTypeOptions.map((item) => ({
-            label: formatGraphRelationTypeLabel(item, (key, defaultValue) => t(key, defaultValue)),
-            value: item,
-          }))}
+          classNames={{
+            popup: { root: styles.projectKnowledgeSelectDropdown },
+          }}
+          onChange={(value) =>
+            props.knowledgeState.setGraphRelationTypeFilters(
+              (value as string[]).map(String),
+            )
+          }
+          options={props.knowledgeState.graphRelationTypeOptions.map(
+            (item) => ({
+              label: formatGraphRelationTypeLabel(item, (key, defaultValue) =>
+                t(key, defaultValue),
+              ),
+              value: item,
+            }),
+          )}
           placeholder={t("copaw.projects.knowledge.relationTypeFilter")}
           allowClear
           maxTagCount="responsive"
@@ -501,9 +624,14 @@ function ProjectKnowledgePanel(props: ProjectKnowledgePanelProps) {
         />
         <Input.Search
           value={props.knowledgeState.graphQueryText}
-          onChange={(event) => props.knowledgeState.setGraphQueryText(event.target.value)}
+          onChange={(event) =>
+            props.knowledgeState.setGraphQueryText(event.target.value)
+          }
           onSearch={(value) => {
-            if (!value.trim() && props.knowledgeState.graphQueryMode === "cypher") {
+            if (
+              !value.trim() &&
+              props.knowledgeState.graphQueryMode === "cypher"
+            ) {
               message.warning(t("copaw.projects.knowledge.emptyQuery"));
               return;
             }
@@ -519,9 +647,15 @@ function ProjectKnowledgePanel(props: ProjectKnowledgePanelProps) {
   );
 
   return (
-    <div className={`${styles.projectKnowledgeWorkbench} ${styles.projectKnowledgeWorkbenchCompact}`}>
+    <div
+      className={`${styles.projectKnowledgeWorkbench} ${styles.projectKnowledgeWorkbenchCompact}`}
+    >
       {props.knowledgeState.graphError ? (
-        <Alert type="error" showIcon message={props.knowledgeState.graphError} />
+        <Alert
+          type="error"
+          showIcon
+          message={props.knowledgeState.graphError}
+        />
       ) : null}
 
       <div className={styles.projectKnowledgeSignalGrid}>
@@ -550,7 +684,7 @@ function ProjectKnowledgePanel(props: ProjectKnowledgePanelProps) {
           type={diagnosticsAlertType}
           showIcon
           message={t("copaw.projects.knowledge.gapSummaryTitle")}
-          description={(
+          description={
             <div>
               {diagnosticsIssues.map((item) => (
                 <div key={item.key}>
@@ -559,7 +693,9 @@ function ProjectKnowledgePanel(props: ProjectKnowledgePanelProps) {
                     <Button
                       type="link"
                       size="small"
-                      onClick={() => onOpenProcessing(item.targetMode, item.targetStage)}
+                      onClick={() =>
+                        onOpenProcessing(item.targetMode, item.targetStage)
+                      }
                     >
                       {t("copaw.projects.knowledge.openProcessingAction")}
                     </Button>
@@ -567,26 +703,29 @@ function ProjectKnowledgePanel(props: ProjectKnowledgePanelProps) {
                 </div>
               ))}
             </div>
-          )}
+          }
         />
       ) : null}
 
       {pipelineStageTags.length ? (
         <div className={styles.projectKnowledgeLayerStatusRow}>
           {pipelineStageTags.map((stage) => (
-            <div key={stage.key} className={styles.projectKnowledgeLayerStatusItem}>
+            <div
+              key={stage.key}
+              className={styles.projectKnowledgeLayerStatusItem}
+            >
               <Typography.Text type="secondary">{stage.label}</Typography.Text>
               <Tag
                 color={
                   stage.status === "ready"
                     ? "success"
                     : stage.status === "failed"
-                      ? "error"
-                      : stage.status === "blocked"
-                        ? "orange"
-                        : stage.status === "running"
-                          ? "processing"
-                          : "default"
+                    ? "error"
+                    : stage.status === "blocked"
+                    ? "orange"
+                    : stage.status === "running"
+                    ? "processing"
+                    : "default"
                 }
               >
                 {stage.summary}
@@ -597,11 +736,21 @@ function ProjectKnowledgePanel(props: ProjectKnowledgePanelProps) {
       ) : null}
 
       <div className={styles.projectKnowledgeWorkbenchSplit}>
-        <div className={`${styles.projectKnowledgePrimaryPanel} ${styles.projectKnowledgeSurfaceFlat} ${styles.projectKnowledgeExplorePane}`}>
+        <div
+          className={`${styles.projectKnowledgePrimaryPanel} ${styles.projectKnowledgeSurfaceFlat} ${styles.projectKnowledgeExplorePane}`}
+        >
           {props.knowledgeState.graphLoading && !visualizationData ? (
-            <div className={styles.projectKnowledgeEmpty}><Spin /></div>
+            <div className={styles.projectKnowledgeEmpty}>
+              <Spin />
+            </div>
           ) : visualizationData ? (
-            <Suspense fallback={<div className={styles.projectKnowledgeEmpty}><Spin size="small" /></div>}>
+            <Suspense
+              fallback={
+                <div className={styles.projectKnowledgeEmpty}>
+                  <Spin size="small" />
+                </div>
+              }
+            >
               <GraphVisualizationComponent
                 compact
                 hideEntityDetail
@@ -612,22 +761,39 @@ function ProjectKnowledgePanel(props: ProjectKnowledgePanelProps) {
                 minTopK={20}
                 maxTopK={maxByEntity}
                 onTopKChange={(value) => {
-                  const next = Math.max(20, Math.min(maxByEntity, Math.round(value)));
+                  const next = Math.max(
+                    20,
+                    Math.min(maxByEntity, Math.round(value)),
+                  );
                   props.knowledgeState.setGraphQueryTopK(next);
                 }}
                 onTopKCommit={(value) => {
-                  const next = Math.max(20, Math.min(maxByEntity, Math.round(value)));
+                  const next = Math.max(
+                    20,
+                    Math.min(maxByEntity, Math.round(value)),
+                  );
                   props.knowledgeState.setGraphQueryTopK(next);
-                  if (props.knowledgeState.graphQueryMode === "cypher" && !props.knowledgeState.graphQueryText.trim()) {
+                  if (
+                    props.knowledgeState.graphQueryMode === "cypher" &&
+                    !props.knowledgeState.graphQueryText.trim()
+                  ) {
                     return;
                   }
-                  void props.knowledgeState.runGraphQuery(undefined, undefined, next);
+                  void props.knowledgeState.runGraphQuery(
+                    undefined,
+                    undefined,
+                    next,
+                  );
                 }}
                 activeNodeId={props.knowledgeState.activeGraphNodeId}
                 onActiveNodeChange={props.knowledgeState.setActiveGraphNodeId}
-                onNodeClick={(node) => props.knowledgeState.setActiveGraphNodeId(node.id)}
+                onNodeClick={(node) =>
+                  props.knowledgeState.setActiveGraphNodeId(node.id)
+                }
                 onInsightFocusChange={(payload) => {
-                  props.knowledgeState.setRelationKeywordSeed(payload.active ? payload.keyword : "");
+                  props.knowledgeState.setRelationKeywordSeed(
+                    payload.active ? payload.keyword : "",
+                  );
                   if (payload.active && payload.keyword.trim()) {
                     onOpenOutputs?.();
                   }
@@ -652,19 +818,28 @@ function ProjectKnowledgePanel(props: ProjectKnowledgePanelProps) {
           )}
         </div>
 
-        <div className={`${styles.projectKnowledgeSecondaryPanel} ${styles.projectKnowledgeSurfaceFlat} ${styles.projectKnowledgeExplorePane} ${activeEntityDetail ? styles.projectKnowledgeQuerySplitPanel : ""}`}>
+        <div
+          className={`${styles.projectKnowledgeSecondaryPanel} ${
+            styles.projectKnowledgeSurfaceFlat
+          } ${styles.projectKnowledgeExplorePane} ${
+            activeEntityDetail ? styles.projectKnowledgeQuerySplitPanel : ""
+          }`}
+        >
           {activeEntityDetail ? (
             <div className={styles.projectKnowledgeEntityDetailCol}>
               <div className={styles.projectKnowledgeEntityDetailHeader}>
                 <Typography.Text strong>
                   {t("knowledge.graphQuery.entityDetail")}
                 </Typography.Text>
-                <Typography.Text type="secondary">{activeEntityDetail.nodeLabel}</Typography.Text>
+                <Typography.Text type="secondary">
+                  {activeEntityDetail.nodeLabel}
+                </Typography.Text>
               </div>
               <div className={styles.projectKnowledgeEntityDetailBody}>
                 <div className={styles.projectKnowledgeEntitySection}>
                   <Typography.Text type="secondary">
-                    {t("knowledge.graphQuery.outgoing")} ({activeEntityDetail.outgoing.length})
+                    {t("knowledge.graphQuery.outgoing")} (
+                    {activeEntityDetail.outgoing.length})
                   </Typography.Text>
                   <div className={styles.projectKnowledgeEntityRelationList}>
                     {activeEntityDetail.outgoing.slice(0, 8).map((item) => (
@@ -672,15 +847,36 @@ function ProjectKnowledgePanel(props: ProjectKnowledgePanelProps) {
                         key={item.edgeId}
                         type="button"
                         className={styles.projectKnowledgeEntityRelationItem}
-                        onClick={() => props.knowledgeState.setActiveGraphNodeId(item.nodeId)}
+                        onClick={() =>
+                          props.knowledgeState.setActiveGraphNodeId(item.nodeId)
+                        }
                       >
-                        <span className={styles.projectKnowledgeEntityRelationLabel}>{item.label}</span>
-                        <span className={styles.projectKnowledgeEntityRelationTarget}>{item.nodeLabel}</span>
-                        <span className={styles.projectKnowledgeEntityRelationStrength}>{Math.round(item.strength * 100)}%</span>
+                        <span
+                          className={styles.projectKnowledgeEntityRelationLabel}
+                        >
+                          {item.label}
+                        </span>
+                        <span
+                          className={
+                            styles.projectKnowledgeEntityRelationTarget
+                          }
+                        >
+                          {item.nodeLabel}
+                        </span>
+                        <span
+                          className={
+                            styles.projectKnowledgeEntityRelationStrength
+                          }
+                        >
+                          {Math.round(item.strength * 100)}%
+                        </span>
                       </button>
                     ))}
                     {!activeEntityDetail.outgoing.length ? (
-                      <Typography.Text type="secondary" className={styles.projectKnowledgeEntityEmpty}>
+                      <Typography.Text
+                        type="secondary"
+                        className={styles.projectKnowledgeEntityEmpty}
+                      >
                         {t("knowledge.graphQuery.none")}
                       </Typography.Text>
                     ) : null}
@@ -688,7 +884,8 @@ function ProjectKnowledgePanel(props: ProjectKnowledgePanelProps) {
                 </div>
                 <div className={styles.projectKnowledgeEntitySection}>
                   <Typography.Text type="secondary">
-                    {t("knowledge.graphQuery.incoming")} ({activeEntityDetail.incoming.length})
+                    {t("knowledge.graphQuery.incoming")} (
+                    {activeEntityDetail.incoming.length})
                   </Typography.Text>
                   <div className={styles.projectKnowledgeEntityRelationList}>
                     {activeEntityDetail.incoming.slice(0, 8).map((item) => (
@@ -696,15 +893,36 @@ function ProjectKnowledgePanel(props: ProjectKnowledgePanelProps) {
                         key={item.edgeId}
                         type="button"
                         className={styles.projectKnowledgeEntityRelationItem}
-                        onClick={() => props.knowledgeState.setActiveGraphNodeId(item.nodeId)}
+                        onClick={() =>
+                          props.knowledgeState.setActiveGraphNodeId(item.nodeId)
+                        }
                       >
-                        <span className={styles.projectKnowledgeEntityRelationTarget}>{item.nodeLabel}</span>
-                        <span className={styles.projectKnowledgeEntityRelationLabel}>{item.label}</span>
-                        <span className={styles.projectKnowledgeEntityRelationStrength}>{Math.round(item.strength * 100)}%</span>
+                        <span
+                          className={
+                            styles.projectKnowledgeEntityRelationTarget
+                          }
+                        >
+                          {item.nodeLabel}
+                        </span>
+                        <span
+                          className={styles.projectKnowledgeEntityRelationLabel}
+                        >
+                          {item.label}
+                        </span>
+                        <span
+                          className={
+                            styles.projectKnowledgeEntityRelationStrength
+                          }
+                        >
+                          {Math.round(item.strength * 100)}%
+                        </span>
                       </button>
                     ))}
                     {!activeEntityDetail.incoming.length ? (
-                      <Typography.Text type="secondary" className={styles.projectKnowledgeEntityEmpty}>
+                      <Typography.Text
+                        type="secondary"
+                        className={styles.projectKnowledgeEntityEmpty}
+                      >
                         {t("knowledge.graphQuery.none")}
                       </Typography.Text>
                     ) : null}
@@ -715,13 +933,22 @@ function ProjectKnowledgePanel(props: ProjectKnowledgePanelProps) {
           ) : null}
 
           <div className={styles.projectKnowledgeQueryCol}>
-            {props.knowledgeState.graphLoading && !props.knowledgeState.graphResult ? (
+            {props.knowledgeState.graphLoading &&
+            !props.knowledgeState.graphResult ? (
               <div className={styles.projectKnowledgeExploreQueryPane}>
                 {queryControls}
-                <div className={styles.projectKnowledgeEmpty}><Spin /></div>
+                <div className={styles.projectKnowledgeEmpty}>
+                  <Spin />
+                </div>
               </div>
             ) : props.knowledgeState.graphResult ? (
-              <Suspense fallback={<div className={styles.projectKnowledgeEmpty}><Spin size="small" /></div>}>
+              <Suspense
+                fallback={
+                  <div className={styles.projectKnowledgeEmpty}>
+                    <Spin size="small" />
+                  </div>
+                }
+              >
                 <GraphQueryResultsComponent
                   compact
                   frameless
@@ -744,7 +971,9 @@ function ProjectKnowledgePanel(props: ProjectKnowledgePanelProps) {
               <div className={styles.projectKnowledgeExploreQueryPane}>
                 {queryControls}
                 <div className={styles.projectKnowledgeEmpty}>
-                  <Empty description={t("copaw.projects.knowledge.emptyResult")} />
+                  <Empty
+                    description={t("copaw.projects.knowledge.emptyResult")}
+                  />
                 </div>
               </div>
             )}

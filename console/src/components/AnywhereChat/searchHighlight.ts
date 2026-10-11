@@ -3,7 +3,10 @@ export interface HighlightSegment {
   highlighted: boolean;
 }
 
-export function splitHighlightSegments(text: string, query: string): HighlightSegment[] {
+export function splitHighlightSegments(
+  text: string,
+  query: string,
+): HighlightSegment[] {
   const trimmedQuery = query.trim();
   if (!trimmedQuery) {
     return [{ text, highlighted: false }];

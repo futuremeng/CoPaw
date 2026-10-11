@@ -10,10 +10,21 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import * as ReactDOM from "react-dom";
 import { createPortal } from "react-dom";
 import { Button, Empty, Modal, Popover, Spin, Tooltip, message } from "antd";
-import { CopyOutlined, DeleteOutlined, FileMarkdownOutlined } from "@ant-design/icons";
-import { SparkAttachmentLine, SparkHistoryLine, SparkNewChatFill, SparkSearchLine } from "@agentscope-ai/icons";
+import {
+  CopyOutlined,
+  DeleteOutlined,
+  FileMarkdownOutlined,
+} from "@ant-design/icons";
+import {
+  SparkAttachmentLine,
+  SparkHistoryLine,
+  SparkNewChatFill,
+  SparkSearchLine,
+} from "@agentscope-ai/icons";
 import { useTranslation } from "react-i18next";
-import defaultConfig, { getDefaultConfig } from "../../pages/Chat/OptionsPanel/defaultConfig";
+import defaultConfig, {
+  getDefaultConfig,
+} from "../../pages/Chat/OptionsPanel/defaultConfig";
 import ModelSelector from "../../pages/Chat/ModelSelector";
 import sessionApi from "../../pages/Chat/sessionApi";
 import { chatApi } from "../../api/modules/chat";
@@ -140,7 +151,11 @@ function applyRelaxedFlushSyncPatch(): void {
     reactDomWithFlushSync,
     "flushSync",
   );
-  if (flushSyncDescriptor && !flushSyncDescriptor.writable && typeof flushSyncDescriptor.set !== "function") {
+  if (
+    flushSyncDescriptor &&
+    !flushSyncDescriptor.writable &&
+    typeof flushSyncDescriptor.set !== "function"
+  ) {
     // Some ESM runtime namespace objects expose flushSync as getter-only.
     // Attempting to overwrite it throws and breaks route rendering.
     return;
@@ -149,7 +164,9 @@ function applyRelaxedFlushSyncPatch(): void {
   try {
     // @agentscope-ai/chat 当前版本在生命周期内高频调用 flushSync，
     // 在 VS Code 内置渲染器中容易导致渲染线程异常退出。
-    reactDomWithFlushSync.flushSync = (function relaxedFlushSync<R>(callback: () => R): R {
+    reactDomWithFlushSync.flushSync = function relaxedFlushSync<R>(
+      callback: () => R,
+    ): R {
       if (typeof queueMicrotask === "function") {
         queueMicrotask(() => {
           callback();
@@ -160,7 +177,7 @@ function applyRelaxedFlushSyncPatch(): void {
         }, 0);
       }
       return undefined as R;
-    }) as typeof reactDomWithFlushSync.flushSync;
+    } as typeof reactDomWithFlushSync.flushSync;
 
     runtimeWindow[FLUSH_SYNC_PATCH_FLAG] = true;
   } catch (error) {
@@ -273,14 +290,18 @@ function cloneValue<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T;
 }
 
-function cloneRuntimeMessages(messages: RuntimeUiMessage[]): RuntimeUiMessage[] {
+function cloneRuntimeMessages(
+  messages: RuntimeUiMessage[],
+): RuntimeUiMessage[] {
   return cloneValue(messages);
 }
 
 function renderSuggestionLabel(command: string, description: string) {
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-      <span style={{ fontFamily: "monospace", fontWeight: 600 }}>{command}</span>
+      <span style={{ fontFamily: "monospace", fontWeight: 600 }}>
+        {command}
+      </span>
       <span style={{ opacity: 0.75 }}>{description}</span>
     </div>
   );
@@ -383,7 +404,9 @@ function dedupeOutputMessagesByStableId<T>(messages: T[]): T[] {
   return deduped;
 }
 
-function getResponseCardData(message?: RuntimeUiMessage): StreamResponseData | null {
+function getResponseCardData(
+  message?: RuntimeUiMessage,
+): StreamResponseData | null {
   const responseCard = message?.cards?.find(
     (card) => card.code === "AgentScopeRuntimeResponseCard",
   );
@@ -395,21 +418,27 @@ function getResponseCardData(message?: RuntimeUiMessage): StreamResponseData | n
   return cloneValue(responseCard.data as StreamResponseData);
 }
 
-function getStreamingAssistantMessageId(messages: RuntimeUiMessage[]): string | null {
+function getStreamingAssistantMessageId(
+  messages: RuntimeUiMessage[],
+): string | null {
   return (
     [...messages]
       .reverse()
       .find(
         (message) =>
           message.role === "assistant" &&
-          (message.msgStatus === "generating" || (message.cards?.length ?? 0) === 0),
+          (message.msgStatus === "generating" ||
+            (message.cards?.length ?? 0) === 0),
       )?.id ||
-    [...messages].reverse().find((message) => message.role === "assistant")?.id ||
+    [...messages].reverse().find((message) => message.role === "assistant")
+      ?.id ||
     null
   );
 }
 
-function hasVisibleGeneratingAssistantMessage(message: RuntimeUiMessage): boolean {
+function hasVisibleGeneratingAssistantMessage(
+  message: RuntimeUiMessage,
+): boolean {
   if (message.role !== "assistant" || message.msgStatus !== "generating") {
     return false;
   }
@@ -419,7 +448,10 @@ function hasVisibleGeneratingAssistantMessage(message: RuntimeUiMessage): boolea
     return false;
   }
 
-  return hasRenderableOutput(responseData) || extractAssistantText(responseData).trim().length > 0;
+  return (
+    hasRenderableOutput(responseData) ||
+    extractAssistantText(responseData).trim().length > 0
+  );
 }
 
 function sanitizeStreamEventPayload(rawData: string): string {
@@ -515,8 +547,7 @@ function sanitizeConsoleChatSseStream(
     }
 
     const useCrLf =
-      crlfBoundary !== -1 &&
-      (lfBoundary === -1 || crlfBoundary < lfBoundary);
+      crlfBoundary !== -1 && (lfBoundary === -1 || crlfBoundary < lfBoundary);
     const boundary = useCrLf ? crlfBoundary : lfBoundary;
     const sepLength = useCrLf ? 4 : 2;
     const frame = input.slice(0, boundary);
@@ -571,34 +602,37 @@ function sanitizeConsoleChatSseStream(
       let buffer = "";
 
       const pump = (): void => {
-        void reader.read().then(({ done, value }) => {
-          if (done) {
-            buffer += decoder.decode();
-            if (buffer.length > 0) {
-              controller.enqueue(
-                encoder.encode(`${transformFrame(buffer)}\n\n`),
-              );
+        void reader
+          .read()
+          .then(({ done, value }) => {
+            if (done) {
+              buffer += decoder.decode();
+              if (buffer.length > 0) {
+                controller.enqueue(
+                  encoder.encode(`${transformFrame(buffer)}\n\n`),
+                );
+              }
+              controller.close();
+              return;
             }
-            controller.close();
-            return;
-          }
 
-          buffer += decoder.decode(value, { stream: true });
+            buffer += decoder.decode(value, { stream: true });
 
-          let eventParts = splitNextEvent(buffer);
-          while (eventParts) {
-            const [frame, rest] = eventParts;
-            buffer = rest;
-            controller.enqueue(
-              encoder.encode(`${transformFrame(frame)}\n\n`),
-            );
-            eventParts = splitNextEvent(buffer);
-          }
+            let eventParts = splitNextEvent(buffer);
+            while (eventParts) {
+              const [frame, rest] = eventParts;
+              buffer = rest;
+              controller.enqueue(
+                encoder.encode(`${transformFrame(frame)}\n\n`),
+              );
+              eventParts = splitNextEvent(buffer);
+            }
 
-          pump();
-        }).catch((error) => {
-          controller.error(error);
-        });
+            pump();
+          })
+          .catch((error) => {
+            controller.error(error);
+          });
       };
 
       pump();
@@ -662,7 +696,10 @@ function toTimestamp(raw?: string | null): number {
   return Number.isFinite(ts) ? ts : 0;
 }
 
-function collectDescendantChatIds(chats: ChatSpec[], seedIds: string[]): Set<string> {
+function collectDescendantChatIds(
+  chats: ChatSpec[],
+  seedIds: string[],
+): Set<string> {
   const childrenByParent = new Map<string, ChatSpec[]>();
   for (const chat of chats) {
     if (!chat.session_id) {
@@ -696,7 +733,13 @@ function resolveChatScopeFromAncestors(chats: ChatSpec[], chat?: ChatSpec) {
 
   while (current) {
     const scope = getChatScope(current);
-    if (scope.focusType || scope.projectId || scope.runId || scope.bindingKey || scope.focusPath) {
+    if (
+      scope.focusType ||
+      scope.projectId ||
+      scope.runId ||
+      scope.bindingKey ||
+      scope.focusPath
+    ) {
       return scope;
     }
     if (!current.session_id) {
@@ -753,8 +796,9 @@ function extractRawMarkdownText(response: CopyableResponse): string {
     for (const part of message.content) {
       if (part.type === "text" && typeof part.text === "string") {
         const rawText =
-          typeof (part as { copaw_raw_text?: unknown }).copaw_raw_text === "string"
-            ? ((part as { copaw_raw_text: string }).copaw_raw_text)
+          typeof (part as { copaw_raw_text?: unknown }).copaw_raw_text ===
+          "string"
+            ? (part as { copaw_raw_text: string }).copaw_raw_text
             : part.text;
         textBlocks.push(rawText);
         continue;
@@ -762,8 +806,9 @@ function extractRawMarkdownText(response: CopyableResponse): string {
 
       if (part.type === "refusal" && typeof part.refusal === "string") {
         const rawRefusal =
-          typeof (part as { copaw_raw_refusal?: unknown }).copaw_raw_refusal === "string"
-            ? ((part as { copaw_raw_refusal: string }).copaw_raw_refusal)
+          typeof (part as { copaw_raw_refusal?: unknown }).copaw_raw_refusal ===
+          "string"
+            ? (part as { copaw_raw_refusal: string }).copaw_raw_refusal
             : part.refusal;
         textBlocks.push(rawRefusal);
         continue;
@@ -779,7 +824,8 @@ function expandFullReferencesForMarkdownCopy(markdown: string): string {
     return "";
   }
 
-  const fullBlockRe = /<!--\s*COPAW_REFERENCES_FULL_BEGIN([\s\S]*?)COPAW_REFERENCES_FULL_END\s*-->/i;
+  const fullBlockRe =
+    /<!--\s*COPAW_REFERENCES_FULL_BEGIN([\s\S]*?)COPAW_REFERENCES_FULL_END\s*-->/i;
   const match = markdown.match(fullBlockRe);
   if (!match) {
     return markdown;
@@ -795,7 +841,9 @@ function expandFullReferencesForMarkdownCopy(markdown: string): string {
     return withoutHidden;
   }
 
-  const fullSection = `\n---\n\n### References\n${fullLines.map((line) => `- ${line}`).join("\n")}\n`;
+  const fullSection = `\n---\n\n### References\n${fullLines
+    .map((line) => `- ${line}`)
+    .join("\n")}\n`;
   const visualSectionRe = /\n---\n\n### References[\s\S]*$/;
   if (visualSectionRe.test(withoutHidden)) {
     return withoutHidden.replace(visualSectionRe, fullSection).trim();
@@ -847,10 +895,15 @@ export default function AnywhereChat({
   const [refreshKey, setRefreshKey] = useState(0);
   const [searchPanelOpen, setSearchPanelOpen] = useState(false);
   const [whisperEnabled, setWhisperEnabled] = useState(false);
-  const [approvalRequests, setApprovalRequests] = useState<Map<string, ApprovalMessageData>>(new Map());
+  const [approvalRequests, setApprovalRequests] = useState<
+    Map<string, ApprovalMessageData>
+  >(new Map());
   const [providerList, setProviderList] = useState<ProviderInfo[]>([]);
-  const [activeModels, setActiveModels] = useState<ActiveModelsInfo | null>(null);
-  const [runningConfig, setRunningConfig] = useState<AgentsRunningConfig | null>(null);
+  const [activeModels, setActiveModels] = useState<ActiveModelsInfo | null>(
+    null,
+  );
+  const [runningConfig, setRunningConfig] =
+    useState<AgentsRunningConfig | null>(null);
   const [chatHistory, setChatHistory] = useState<ChatHistory | null>(null);
   const [historyPopoverOpen, setHistoryPopoverOpen] = useState(false);
   const [historyLoading, setHistoryLoading] = useState(false);
@@ -859,7 +912,8 @@ export default function AnywhereChat({
   const [isChatStreaming, setIsChatStreaming] = useState(false);
   const [recoveredTailUserDraft, setRecoveredTailUserDraft] = useState("");
   const [isDeletingTailUser, setIsDeletingTailUser] = useState(false);
-  const [tailUserActionHost, setTailUserActionHost] = useState<HTMLElement | null>(null);
+  const [tailUserActionHost, setTailUserActionHost] =
+    useState<HTMLElement | null>(null);
   const [tailUserActionMessageId, setTailUserActionMessageId] = useState("");
   const chatRef = useRef<IAgentScopeRuntimeWebUIRef>(null);
   const whisperSpeechRef = useRef<WhisperSpeechButtonRef>(null);
@@ -878,7 +932,10 @@ export default function AnywhereChat({
   const autoContinueInFlightRef = useRef<Record<string, boolean>>({});
   const autoContinueTailRef = useRef<Record<string, string>>({});
   const pendingClearHistoryRef = useRef(false);
-  const pendingSearchAnchorRef = useRef<{ query: string; messageId?: string } | null>(null);
+  const pendingSearchAnchorRef = useRef<{
+    query: string;
+    messageId?: string;
+  } | null>(null);
   const highlightedSearchAnchorRef = useRef<HTMLElement | null>(null);
   const searchAnchorHighlightTimerRef = useRef<number | null>(null);
   const [closingApprovalIds, setClosingApprovalIds] = useState<string[]>([]);
@@ -917,12 +974,15 @@ export default function AnywhereChat({
     };
   }, [activeModels, providerList]);
 
-  const isAnywhereChatInput = useCallback((eventTarget: EventTarget | null): boolean => {
-    const target = eventTarget as HTMLElement | null;
-    if (!target) return false;
-    if (target.tagName !== "TEXTAREA") return false;
-    return Boolean(target.closest(".copaw-chat-anywhere-layout"));
-  }, []);
+  const isAnywhereChatInput = useCallback(
+    (eventTarget: EventTarget | null): boolean => {
+      const target = eventTarget as HTMLElement | null;
+      if (!target) return false;
+      if (target.tagName !== "TEXTAREA") return false;
+      return Boolean(target.closest(".copaw-chat-anywhere-layout"));
+    },
+    [],
+  );
 
   useEffect(() => {
     const handleCompositionStart = (event: CompositionEvent) => {
@@ -954,8 +1014,16 @@ export default function AnywhereChat({
     document.addEventListener("keydown", suppressImeEnter, true);
 
     return () => {
-      document.removeEventListener("compositionstart", handleCompositionStart, true);
-      document.removeEventListener("compositionend", handleCompositionEnd, true);
+      document.removeEventListener(
+        "compositionstart",
+        handleCompositionStart,
+        true,
+      );
+      document.removeEventListener(
+        "compositionend",
+        handleCompositionEnd,
+        true,
+      );
       document.removeEventListener("keydown", suppressImeEnter, true);
     };
   }, [isAnywhereChatInput]);
@@ -977,37 +1045,40 @@ export default function AnywhereChat({
 
   const setDraftInputValue = useCallback(
     (nextValue: string, shouldFocus = true) => {
-    const textArea = getInputTextarea();
-    if (!textArea) {
-      return false;
-    }
-    const prototype = Object.getPrototypeOf(textArea) as {
-      value?: PropertyDescriptor;
-    };
-    const descriptor = Object.getOwnPropertyDescriptor(prototype, "value");
-    if (descriptor?.set) {
-      descriptor.set.call(textArea, nextValue);
-    } else {
-      textArea.value = nextValue;
-    }
-    textArea.dispatchEvent(new Event("input", { bubbles: true }));
-    if (shouldFocus) {
-      textArea.focus();
-    }
-    return true;
-  }, [getInputTextarea]);
+      const textArea = getInputTextarea();
+      if (!textArea) {
+        return false;
+      }
+      const prototype = Object.getPrototypeOf(textArea) as {
+        value?: PropertyDescriptor;
+      };
+      const descriptor = Object.getOwnPropertyDescriptor(prototype, "value");
+      if (descriptor?.set) {
+        descriptor.set.call(textArea, nextValue);
+      } else {
+        textArea.value = nextValue;
+      }
+      textArea.dispatchEvent(new Event("input", { bubbles: true }));
+      if (shouldFocus) {
+        textArea.focus();
+      }
+      return true;
+    },
+    [getInputTextarea],
+  );
 
-  const appendPromptToDraftInput = useCallback((promptText: string) => {
-    const textArea = getInputTextarea();
-    if (!textArea) {
-      return;
-    }
-    const current = (textArea.value || "").trim();
-    const nextValue = current
-      ? `${current}\n\n${promptText}`
-      : promptText;
-    setDraftInputValue(nextValue);
-  }, [getInputTextarea, setDraftInputValue]);
+  const appendPromptToDraftInput = useCallback(
+    (promptText: string) => {
+      const textArea = getInputTextarea();
+      if (!textArea) {
+        return;
+      }
+      const current = (textArea.value || "").trim();
+      const nextValue = current ? `${current}\n\n${promptText}` : promptText;
+      setDraftInputValue(nextValue);
+    },
+    [getInputTextarea, setDraftInputValue],
+  );
 
   const focusChatInput = useCallback(() => {
     window.setTimeout(() => {
@@ -1038,53 +1109,60 @@ export default function AnywhereChat({
     }
   }, []);
 
-  const highlightSearchAnchorNode = useCallback((node: HTMLElement) => {
-    clearSearchAnchorHighlight();
-    node.classList.add(styles.searchAnchorHighlight);
-    highlightedSearchAnchorRef.current = node;
-    searchAnchorHighlightTimerRef.current = window.setTimeout(() => {
-      node.classList.remove(styles.searchAnchorHighlight);
-      if (highlightedSearchAnchorRef.current === node) {
-        highlightedSearchAnchorRef.current = null;
+  const highlightSearchAnchorNode = useCallback(
+    (node: HTMLElement) => {
+      clearSearchAnchorHighlight();
+      node.classList.add(styles.searchAnchorHighlight);
+      highlightedSearchAnchorRef.current = node;
+      searchAnchorHighlightTimerRef.current = window.setTimeout(() => {
+        node.classList.remove(styles.searchAnchorHighlight);
+        if (highlightedSearchAnchorRef.current === node) {
+          highlightedSearchAnchorRef.current = null;
+        }
+        searchAnchorHighlightTimerRef.current = null;
+      }, SEARCH_ANCHOR_HIGHLIGHT_MS);
+    },
+    [clearSearchAnchorHighlight],
+  );
+
+  const tryScrollToSearchAnchor = useCallback(
+    (query: string, messageId?: string): boolean => {
+      const root = getInputRoot();
+      if (!root || !query.trim()) {
+        return false;
       }
-      searchAnchorHighlightTimerRef.current = null;
-    }, SEARCH_ANCHOR_HIGHLIGHT_MS);
-  }, [clearSearchAnchorHighlight]);
 
-  const tryScrollToSearchAnchor = useCallback((query: string, messageId?: string): boolean => {
-    const root = getInputRoot();
-    if (!root || !query.trim()) {
-      return false;
-    }
-
-    if (messageId) {
-      const scopedById = root.querySelector<HTMLElement>(`#msg_${CSS.escape(messageId)}`)
-        || root.querySelector<HTMLElement>(`[id*="${messageId}"]`);
-      if (scopedById) {
-        scopedById.scrollIntoView({ block: "center", behavior: "smooth" });
-        highlightSearchAnchorNode(scopedById);
-        return true;
+      if (messageId) {
+        const scopedById =
+          root.querySelector<HTMLElement>(`#msg_${CSS.escape(messageId)}`) ||
+          root.querySelector<HTMLElement>(`[id*="${messageId}"]`);
+        if (scopedById) {
+          scopedById.scrollIntoView({ block: "center", behavior: "smooth" });
+          highlightSearchAnchorNode(scopedById);
+          return true;
+        }
       }
-    }
 
-    const lowered = query.toLowerCase();
-    const candidates = Array.from(
-      root.querySelectorAll<HTMLElement>(
-        '[data-role="assistant"], [data-role="user"], [class*="bubble"]',
-      ),
-    );
-    const matchedNode = candidates.find((node) =>
-      (node.textContent || "").toLowerCase().includes(lowered),
-    );
+      const lowered = query.toLowerCase();
+      const candidates = Array.from(
+        root.querySelectorAll<HTMLElement>(
+          '[data-role="assistant"], [data-role="user"], [class*="bubble"]',
+        ),
+      );
+      const matchedNode = candidates.find((node) =>
+        (node.textContent || "").toLowerCase().includes(lowered),
+      );
 
-    if (!matchedNode) {
-      return false;
-    }
+      if (!matchedNode) {
+        return false;
+      }
 
-    matchedNode.scrollIntoView({ block: "center", behavior: "smooth" });
-    highlightSearchAnchorNode(matchedNode);
-    return true;
-  }, [getInputRoot, highlightSearchAnchorNode]);
+      matchedNode.scrollIntoView({ block: "center", behavior: "smooth" });
+      highlightSearchAnchorNode(matchedNode);
+      return true;
+    },
+    [getInputRoot, highlightSearchAnchorNode],
+  );
 
   useEffect(() => {
     return () => {
@@ -1092,16 +1170,19 @@ export default function AnywhereChat({
     };
   }, [clearSearchAnchorHighlight]);
 
-  const handleWhisperTranscription = useCallback((text: string) => {
-    const textarea = getInputTextarea();
-    if (!textarea) {
-      return;
-    }
-    const currentValue = textarea.value || "";
-    const nextValue = currentValue ? `${currentValue} ${text}` : text;
-    setTextareaValue(textarea, nextValue);
-    textarea.focus();
-  }, [getInputTextarea]);
+  const handleWhisperTranscription = useCallback(
+    (text: string) => {
+      const textarea = getInputTextarea();
+      if (!textarea) {
+        return;
+      }
+      const currentValue = textarea.value || "";
+      const nextValue = currentValue ? `${currentValue} ${text}` : text;
+      setTextareaValue(textarea, nextValue);
+      textarea.focus();
+    },
+    [getInputTextarea],
+  );
 
   const getUserMessagesWithText = useCallback((): string[] => {
     if (!chatRef.current?.messages?.getMessages) {
@@ -1114,8 +1195,8 @@ export default function AnywhereChat({
     }
 
     if (
-      userMessagesCacheRef.current.length > 0
-      && cachedMessageCountRef.current === allMessages.length
+      userMessagesCacheRef.current.length > 0 &&
+      cachedMessageCountRef.current === allMessages.length
     ) {
       return userMessagesCacheRef.current;
     }
@@ -1132,17 +1213,24 @@ export default function AnywhereChat({
 
   useEffect(() => {
     const handleShortcut = (event: KeyboardEvent) => {
-      const isWithinAnywhere = isAnywhereChatInput(event.target)
-        || Boolean((event.target as HTMLElement | null)?.closest(".copaw-chat-anywhere-layout"));
+      const isWithinAnywhere =
+        isAnywhereChatInput(event.target) ||
+        Boolean(
+          (event.target as HTMLElement | null)?.closest(
+            ".copaw-chat-anywhere-layout",
+          ),
+        );
 
-      if (shouldTriggerWhisperShortcut({
-        isWithinAnywhere,
-        whisperEnabled,
-        ctrlKey: event.ctrlKey,
-        metaKey: event.metaKey,
-        shiftKey: event.shiftKey,
-        key: event.key,
-      })) {
+      if (
+        shouldTriggerWhisperShortcut({
+          isWithinAnywhere,
+          whisperEnabled,
+          ctrlKey: event.ctrlKey,
+          metaKey: event.metaKey,
+          shiftKey: event.shiftKey,
+          key: event.key,
+        })
+      ) {
         event.preventDefault();
         whisperSpeechRef.current?.toggleRecording();
       }
@@ -1264,10 +1352,20 @@ export default function AnywhereChat({
       }
 
       const target = event.target as HTMLTextAreaElement | null;
-      if (!target || target.tagName !== "TEXTAREA" || !isAnywhereChatInput(target)) {
+      if (
+        !target ||
+        target.tagName !== "TEXTAREA" ||
+        !isAnywhereChatInput(target)
+      ) {
         return;
       }
-      if (isComposingRef.current || event.isComposing || event.ctrlKey || event.metaKey || event.altKey) {
+      if (
+        isComposingRef.current ||
+        event.isComposing ||
+        event.ctrlKey ||
+        event.metaKey ||
+        event.altKey
+      ) {
         return;
       }
 
@@ -1293,7 +1391,11 @@ export default function AnywhereChat({
           draftRef.current = target.value;
         }
 
-        const messageText = findMessageInDirection(userMessages, historyIndexRef.current + 1, 1);
+        const messageText = findMessageInDirection(
+          userMessages,
+          historyIndexRef.current + 1,
+          1,
+        );
         if (!messageText) {
           return;
         }
@@ -1312,7 +1414,11 @@ export default function AnywhereChat({
         return;
       }
 
-      const messageText = findMessageInDirection(userMessages, historyIndexRef.current - 1, -1);
+      const messageText = findMessageInDirection(
+        userMessages,
+        historyIndexRef.current - 1,
+        -1,
+      );
       event.preventDefault();
       if (!messageText) {
         historyIndexRef.current = -1;
@@ -1344,15 +1450,20 @@ export default function AnywhereChat({
   const resolveCurrentChatName = useCallback(
     (chats: ChatSpec[]): string => {
       const current = chats.find((chat) => chat.id === sessionId);
-      return (current?.name || current?.session_id || current?.id || "").trim()
-        || t("chat.newChat");
+      return (
+        (current?.name || current?.session_id || current?.id || "").trim() ||
+        t("chat.newChat")
+      );
     },
     [sessionId, t],
   );
 
   const loadCurrentChatName = useCallback(async () => {
     try {
-      const chats = await chatApi.listChats({ user_id: "default", channel: "console" });
+      const chats = await chatApi.listChats({
+        user_id: "default",
+        channel: "console",
+      });
       const current = chats.find((chat) => chat.id === sessionId);
       backendSessionIdRef.current = current?.session_id || sessionId;
       setCurrentChatName(resolveCurrentChatName(chats));
@@ -1365,7 +1476,10 @@ export default function AnywhereChat({
   const loadHistoryChats = useCallback(async () => {
     setHistoryLoading(true);
     try {
-      const chats = await chatApi.listChats({ user_id: "default", channel: "console" });
+      const chats = await chatApi.listChats({
+        user_id: "default",
+        channel: "console",
+      });
       setCurrentChatName(resolveCurrentChatName(chats));
       const current = chats.find((chat) => chat.id === sessionId);
       backendSessionIdRef.current = current?.session_id || sessionId;
@@ -1376,7 +1490,8 @@ export default function AnywhereChat({
           return (
             currentScope.focusType === "project_workspace" &&
             scope.focusType === "project_workspace" &&
-            (!currentScope.projectId || scope.projectId === currentScope.projectId)
+            (!currentScope.projectId ||
+              scope.projectId === currentScope.projectId)
           );
         })
         .map((chat) => chat.id);
@@ -1401,13 +1516,16 @@ export default function AnywhereChat({
           return (
             scope.focusType === "project_run" &&
             (!currentScope.runId || scope.runId === currentScope.runId) &&
-            (!currentScope.projectId || !scope.projectId || scope.projectId === currentScope.projectId)
+            (!currentScope.projectId ||
+              !scope.projectId ||
+              scope.projectId === currentScope.projectId)
           );
         }
         if (currentScope.focusType === "pipeline_edit") {
           return (
             scope.focusType === "pipeline_edit" &&
-            (!currentScope.bindingKey || scope.bindingKey === currentScope.bindingKey)
+            (!currentScope.bindingKey ||
+              scope.bindingKey === currentScope.bindingKey)
           );
         }
         if (currentScope.bindingKey) {
@@ -1428,7 +1546,8 @@ export default function AnywhereChat({
 
       setHistoryChats(
         filtered.filter(
-          (chat, index, array) => array.findIndex((item) => item.id === chat.id) === index,
+          (chat, index, array) =>
+            array.findIndex((item) => item.id === chat.id) === index,
         ),
       );
     } catch (error) {
@@ -1476,7 +1595,10 @@ export default function AnywhereChat({
   );
 
   const persistStreamSession = useCallback(
-    (persistedSessionId: string, readableStream: ReadableStream<Uint8Array>) => {
+    (
+      persistedSessionId: string,
+      readableStream: ReadableStream<Uint8Array>,
+    ) => {
       if (!persistedSessionId) {
         return;
       }
@@ -1485,7 +1607,8 @@ export default function AnywhereChat({
         (chatRef.current?.messages.getMessages() as RuntimeUiMessage[]) || [],
       );
       const assistantMessageId =
-        getStreamingAssistantMessageId(initialMessages) || `stream-${persistedSessionId}`;
+        getStreamingAssistantMessageId(initialMessages) ||
+        `stream-${persistedSessionId}`;
       const responseBuilder = new AgentScopeRuntimeResponseBuilder({
         id: "",
         status: AgentScopeRuntimeRunStatus.Created,
@@ -1507,12 +1630,15 @@ export default function AnywhereChat({
             const responseData = responseBuilder.handle(
               chunkData as never,
             ) as unknown as StreamResponseData;
-            const renderableResponse = materializeThinkingOnlyFallback(responseData);
+            const renderableResponse =
+              materializeThinkingOnlyFallback(responseData);
             const isFinalChunk = isFinalResponseStatus(responseData.status);
             const existingAssistantMessage = cachedMessages.find(
               (message) => message.id === assistantMessageId,
             );
-            const previousResponseData = getResponseCardData(existingAssistantMessage);
+            const previousResponseData = getResponseCardData(
+              existingAssistantMessage,
+            );
 
             let nextResponseData: StreamResponseData | null = null;
             if (hasRenderableOutput(renderableResponse)) {
@@ -1559,7 +1685,10 @@ export default function AnywhereChat({
             await persistSessionMessages(persistedSessionId, cachedMessages);
           }
         } catch (error) {
-          console.error("AnywhereChat failed to persist background chat stream", error);
+          console.error(
+            "AnywhereChat failed to persist background chat stream",
+            error,
+          );
         }
       })();
     },
@@ -1586,7 +1715,9 @@ export default function AnywhereChat({
         setRecoveredTailUserDraft(tailUserState.text);
 
         if (dismissedTailUserKeyRef.current === recoverKey) {
-          setChatHistory(removeLastVisibleUserMessage(history) as ChatHistory | null);
+          setChatHistory(
+            removeLastVisibleUserMessage(history) as ChatHistory | null,
+          );
         } else {
           setChatHistory(history);
         }
@@ -1594,7 +1725,6 @@ export default function AnywhereChat({
         setRecoveredTailUserDraft("");
         setChatHistory(history);
       }
-
     } catch (error) {
       console.warn("AnywhereChat: failed to load chat history", error);
       if (sessionIdRef.current !== requestedSessionId) {
@@ -1604,36 +1734,44 @@ export default function AnywhereChat({
     }
   }, [sessionId, t]);
 
-  const copyAsText = useCallback(async (response: CopyableResponse) => {
-    const payload = extractCopyableText(response) || stripMarkdownSyntax(extractRawMarkdownText(response));
-    if (!payload) {
-      message.warning(t("common.nothingToCopy"));
-      return;
-    }
-    try {
-      await copyText(payload);
-      message.success(t("common.copiedText"));
-    } catch {
-      message.error(t("common.copyTextFailed"));
-    }
-  }, [t]);
+  const copyAsText = useCallback(
+    async (response: CopyableResponse) => {
+      const payload =
+        extractCopyableText(response) ||
+        stripMarkdownSyntax(extractRawMarkdownText(response));
+      if (!payload) {
+        message.warning(t("common.nothingToCopy"));
+        return;
+      }
+      try {
+        await copyText(payload);
+        message.success(t("common.copiedText"));
+      } catch {
+        message.error(t("common.copyTextFailed"));
+      }
+    },
+    [t],
+  );
 
-  const copyAsMarkdown = useCallback(async (response: CopyableResponse) => {
-    const raw = extractRawMarkdownText(response);
-    const payload = expandFullReferencesForMarkdownCopy(
-      raw || extractAssistantText(response as StreamResponseData | null),
-    );
-    if (!payload) {
-      message.warning(t("common.nothingToCopy"));
-      return;
-    }
-    try {
-      await copyText(payload);
-      message.success(t("common.copiedMarkdown"));
-    } catch {
-      message.error(t("common.copyMarkdownFailed"));
-    }
-  }, [t]);
+  const copyAsMarkdown = useCallback(
+    async (response: CopyableResponse) => {
+      const raw = extractRawMarkdownText(response);
+      const payload = expandFullReferencesForMarkdownCopy(
+        raw || extractAssistantText(response as StreamResponseData | null),
+      );
+      if (!payload) {
+        message.warning(t("common.nothingToCopy"));
+        return;
+      }
+      try {
+        await copyText(payload);
+        message.success(t("common.copiedMarkdown"));
+      } catch {
+        message.error(t("common.copyMarkdownFailed"));
+      }
+    },
+    [t],
+  );
 
   const handleFileUpload = useCallback(
     async (options: {
@@ -1660,7 +1798,9 @@ export default function AnywhereChat({
             t("chat.attachments.fileSizeExceeded", {
               limit: CHAT_ATTACHMENT_MAX_MB,
               size: sizeMb.toFixed(2),
-              defaultValue: `File size exceeds ${CHAT_ATTACHMENT_MAX_MB} MB (current ${sizeMb.toFixed(2)} MB).`,
+              defaultValue: `File size exceeds ${CHAT_ATTACHMENT_MAX_MB} MB (current ${sizeMb.toFixed(
+                2,
+              )} MB).`,
             }),
           );
           onError?.(new Error(`File size exceeds ${CHAT_ATTACHMENT_MAX_MB}MB`));
@@ -1692,7 +1832,6 @@ export default function AnywhereChat({
     userMessagesCacheRef.current = [];
     cachedMessageCountRef.current = 0;
     setShowAllApprovals(false);
-
   }, [loadCurrentChatName, sessionId]);
 
   useEffect(() => {
@@ -1763,14 +1902,18 @@ export default function AnywhereChat({
           throw new Error("chat_input_not_found");
         }
 
-        const sourceFiles = Array.isArray(autoAttachRequest.files) && autoAttachRequest.files.length > 0
-          ? autoAttachRequest.files
-          : autoAttachRequest.fileName && autoAttachRequest.content
-            ? [{
-                fileName: autoAttachRequest.fileName,
-                content: autoAttachRequest.content,
-                mimeType: autoAttachRequest.mimeType,
-              }]
+        const sourceFiles =
+          Array.isArray(autoAttachRequest.files) &&
+          autoAttachRequest.files.length > 0
+            ? autoAttachRequest.files
+            : autoAttachRequest.fileName && autoAttachRequest.content
+            ? [
+                {
+                  fileName: autoAttachRequest.fileName,
+                  content: autoAttachRequest.content,
+                  mimeType: autoAttachRequest.mimeType,
+                },
+              ]
             : [];
 
         if (sourceFiles.length === 0) {
@@ -1834,11 +1977,7 @@ export default function AnywhereChat({
     return () => {
       cancelled = true;
     };
-  }, [
-    autoAttachRequest,
-    onAutoAttachHandled,
-    setDraftInputValue,
-  ]);
+  }, [autoAttachRequest, onAutoAttachHandled, setDraftInputValue]);
 
   useEffect(() => {
     void loadRuntimeInputs();
@@ -1866,13 +2005,13 @@ export default function AnywhereChat({
 
   useEffect(() => {
     const currentBackendSession = backendSessionIdRef.current || sessionId;
-    const sessionApprovals = approvals.filter((approval) =>
-      approval.root_session_id === sessionId
-      || approval.session_id === sessionId
-      || (currentBackendSession && (
-        approval.root_session_id === currentBackendSession
-        || approval.session_id === currentBackendSession
-      )),
+    const sessionApprovals = approvals.filter(
+      (approval) =>
+        approval.root_session_id === sessionId ||
+        approval.session_id === sessionId ||
+        (currentBackendSession &&
+          (approval.root_session_id === currentBackendSession ||
+            approval.session_id === currentBackendSession)),
     );
 
     const key = sessionApprovals
@@ -1906,57 +2045,79 @@ export default function AnywhereChat({
     setApprovalRequests(nextMap);
   }, [approvals, sessionId]);
 
-  const handleApprove = useCallback(async (requestId: string) => {
-    const request = approvalRequests.get(requestId);
-    if (!request) {
-      return;
-    }
+  const handleApprove = useCallback(
+    async (requestId: string) => {
+      const request = approvalRequests.get(requestId);
+      if (!request) {
+        return;
+      }
 
-    const rootSessionId = request.rootSessionId || sessionId;
-    setClosingApprovalIds((prev) => (prev.includes(requestId) ? prev : [...prev, requestId]));
-    try {
-      await commandsApi.sendApprovalCommand("approve", requestId, rootSessionId);
-      setApprovals((prev) => prev.filter((item) => item.request_id !== requestId));
-      window.setTimeout(() => {
-        setApprovalRequests((prev) => {
-          const next = new Map(prev);
-          next.delete(requestId);
-          return next;
-        });
+      const rootSessionId = request.rootSessionId || sessionId;
+      setClosingApprovalIds((prev) =>
+        prev.includes(requestId) ? prev : [...prev, requestId],
+      );
+      try {
+        await commandsApi.sendApprovalCommand(
+          "approve",
+          requestId,
+          rootSessionId,
+        );
+        setApprovals((prev) =>
+          prev.filter((item) => item.request_id !== requestId),
+        );
+        window.setTimeout(() => {
+          setApprovalRequests((prev) => {
+            const next = new Map(prev);
+            next.delete(requestId);
+            return next;
+          });
+          setClosingApprovalIds((prev) =>
+            prev.filter((id) => id !== requestId),
+          );
+        }, 320);
+        message.success(t("approval.approved"));
+      } catch (error) {
         setClosingApprovalIds((prev) => prev.filter((id) => id !== requestId));
-      }, 320);
-      message.success(t("approval.approved"));
-    } catch (error) {
-      setClosingApprovalIds((prev) => prev.filter((id) => id !== requestId));
-      throw error;
-    }
-  }, [approvalRequests, sessionId, setApprovals, t]);
+        throw error;
+      }
+    },
+    [approvalRequests, sessionId, setApprovals, t],
+  );
 
-  const handleDeny = useCallback(async (requestId: string) => {
-    const request = approvalRequests.get(requestId);
-    if (!request) {
-      return;
-    }
+  const handleDeny = useCallback(
+    async (requestId: string) => {
+      const request = approvalRequests.get(requestId);
+      if (!request) {
+        return;
+      }
 
-    const rootSessionId = request.rootSessionId || sessionId;
-    setClosingApprovalIds((prev) => (prev.includes(requestId) ? prev : [...prev, requestId]));
-    try {
-      await commandsApi.sendApprovalCommand("deny", requestId, rootSessionId);
-      setApprovals((prev) => prev.filter((item) => item.request_id !== requestId));
-      window.setTimeout(() => {
-        setApprovalRequests((prev) => {
-          const next = new Map(prev);
-          next.delete(requestId);
-          return next;
-        });
+      const rootSessionId = request.rootSessionId || sessionId;
+      setClosingApprovalIds((prev) =>
+        prev.includes(requestId) ? prev : [...prev, requestId],
+      );
+      try {
+        await commandsApi.sendApprovalCommand("deny", requestId, rootSessionId);
+        setApprovals((prev) =>
+          prev.filter((item) => item.request_id !== requestId),
+        );
+        window.setTimeout(() => {
+          setApprovalRequests((prev) => {
+            const next = new Map(prev);
+            next.delete(requestId);
+            return next;
+          });
+          setClosingApprovalIds((prev) =>
+            prev.filter((id) => id !== requestId),
+          );
+        }, 320);
+        message.success(t("approval.denied"));
+      } catch (error) {
         setClosingApprovalIds((prev) => prev.filter((id) => id !== requestId));
-      }, 320);
-      message.success(t("approval.denied"));
-    } catch (error) {
-      setClosingApprovalIds((prev) => prev.filter((id) => id !== requestId));
-      throw error;
-    }
-  }, [approvalRequests, sessionId, setApprovals, t]);
+        throw error;
+      }
+    },
+    [approvalRequests, sessionId, setApprovals, t],
+  );
 
   useEffect(() => {
     const pendingAnchor = pendingSearchAnchorRef.current;
@@ -1968,7 +2129,10 @@ export default function AnywhereChat({
     const maxAttempts = 10;
     const timer = window.setInterval(() => {
       attempts += 1;
-      const done = tryScrollToSearchAnchor(pendingAnchor.query, pendingAnchor.messageId);
+      const done = tryScrollToSearchAnchor(
+        pendingAnchor.query,
+        pendingAnchor.messageId,
+      );
       if (shouldStopSearchAnchorRetry({ done, attempts, maxAttempts })) {
         pendingSearchAnchorRef.current = null;
         window.clearInterval(timer);
@@ -2070,10 +2234,10 @@ export default function AnywhereChat({
 
   const executeRestoreTailUserDraft = useCallback(async () => {
     if (
-      !sessionId
-      || !recoveredTailUserDraft
-      || !recoveredTailUserKeyRef.current
-      || isDeletingTailUser
+      !sessionId ||
+      !recoveredTailUserDraft ||
+      !recoveredTailUserKeyRef.current ||
+      isDeletingTailUser
     ) {
       return;
     }
@@ -2082,14 +2246,14 @@ export default function AnywhereChat({
     try {
       const result = await chatApi.deleteTailUserMessage(sessionId);
       if (!result?.deleted) {
-        throw new Error(
-          t("chat.deleteLastUserFailed"),
-        );
+        throw new Error(t("chat.deleteLastUserFailed"));
       }
 
       dismissedTailUserKeyRef.current = recoveredTailUserKeyRef.current;
       setChatHistory((previousHistory) => {
-        return removeLastVisibleUserMessage(previousHistory) as ChatHistory | null;
+        return removeLastVisibleUserMessage(
+          previousHistory,
+        ) as ChatHistory | null;
       });
       const visibleLastUserMessage = chatRef.current?.messages
         .getMessages()
@@ -2097,7 +2261,9 @@ export default function AnywhereChat({
         .reverse()
         .find((message) => message.role === "user");
       if (visibleLastUserMessage?.id) {
-        chatRef.current?.messages.removeMessage({ id: visibleLastUserMessage.id });
+        chatRef.current?.messages.removeMessage({
+          id: visibleLastUserMessage.id,
+        });
       }
       sessionApi.removeLastUserMessage(sessionId);
       const resolvedSessionId = sessionApi.getRealIdForSession(sessionId);
@@ -2111,9 +2277,7 @@ export default function AnywhereChat({
       await loadChatHistory();
     } catch (error) {
       message.error(
-        error instanceof Error
-          ? error.message
-          : t("chat.deleteLastUserFailed"),
+        error instanceof Error ? error.message : t("chat.deleteLastUserFailed"),
       );
       throw error;
     } finally {
@@ -2147,7 +2311,8 @@ export default function AnywhereChat({
             </span>
             <div
               style={{
-                fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
+                fontFamily:
+                  'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
                 fontSize: 12,
                 wordBreak: "break-all",
               }}
@@ -2208,21 +2373,23 @@ export default function AnywhereChat({
       const candidates = Array.from(
         root.querySelectorAll<HTMLElement>('[data-role="user"][id^="msg_"]'),
       ).filter((node) => node.offsetParent !== null);
-      const target = candidates
-        .map((node) => ({
-          node,
-          rect: node.getBoundingClientRect(),
-        }))
-        .filter(({ rect }) => rect.bottom > 0)
-        .sort((left, right) => {
-          if (left.rect.top !== right.rect.top) {
-            return right.rect.top - left.rect.top;
-          }
-          return right.rect.bottom - left.rect.bottom;
-        })[0]?.node || null;
+      const target =
+        candidates
+          .map((node) => ({
+            node,
+            rect: node.getBoundingClientRect(),
+          }))
+          .filter(({ rect }) => rect.bottom > 0)
+          .sort((left, right) => {
+            if (left.rect.top !== right.rect.top) {
+              return right.rect.top - left.rect.top;
+            }
+            return right.rect.bottom - left.rect.bottom;
+          })[0]?.node || null;
       const host =
-        target?.querySelector<HTMLElement>(":scope > .copaw-bubble-content-wrapper")
-        || target;
+        target?.querySelector<HTMLElement>(
+          ":scope > .copaw-bubble-content-wrapper",
+        ) || target;
       setTailUserActionHost(host || null);
     };
 
@@ -2374,18 +2541,21 @@ export default function AnywhereChat({
               };
 
               const pump = (): void => {
-                void reader.read().then(({ done, value }) => {
-                  if (done) {
-                    controller.close();
+                void reader
+                  .read()
+                  .then(({ done, value }) => {
+                    if (done) {
+                      controller.close();
+                      finalize();
+                      return;
+                    }
+                    controller.enqueue(value);
+                    pump();
+                  })
+                  .catch((error) => {
+                    controller.error(error);
                     finalize();
-                    return;
-                  }
-                  controller.enqueue(value);
-                  pump();
-                }).catch((error) => {
-                  controller.error(error);
-                  finalize();
-                });
+                  });
               };
 
               pump();
@@ -2478,7 +2648,10 @@ export default function AnywhereChat({
       let backendSessionId = backendSessionIdRef.current || sessionId;
       if (!backendSessionId || backendSessionId === sessionId) {
         try {
-          const chats = await chatApi.listChats({ user_id: "default", channel: "console" });
+          const chats = await chatApi.listChats({
+            user_id: "default",
+            channel: "console",
+          });
           const current = chats.find((chat) => chat.id === sessionId);
           backendSessionId = current?.session_id || backendSessionId;
           backendSessionIdRef.current = backendSessionId;
@@ -2553,7 +2726,9 @@ export default function AnywhereChat({
           let latestRenderable: StreamResponseData | null = null;
 
           try {
-            for await (const chunk of Stream({ readableStream: callbackReadable })) {
+            for await (const chunk of Stream({
+              readableStream: callbackReadable,
+            })) {
               let chunkData: unknown;
               try {
                 chunkData = JSON.parse(chunk.data);
@@ -2564,7 +2739,8 @@ export default function AnywhereChat({
               const responseData = responseBuilder.handle(
                 chunkData as never,
               ) as unknown as StreamResponseData;
-              const renderableResponse = materializeThinkingOnlyFallback(responseData);
+              const renderableResponse =
+                materializeThinkingOnlyFallback(responseData);
 
               if (hasRenderableOutput(renderableResponse)) {
                 latestRenderable = JSON.parse(
@@ -2586,7 +2762,10 @@ export default function AnywhereChat({
             }
           } catch (error) {
             finalize();
-            console.warn("AnywhereChat stream side-channel parse failed", error);
+            console.warn(
+              "AnywhereChat stream side-channel parse failed",
+              error,
+            );
           }
         })();
       }
@@ -2602,7 +2781,9 @@ export default function AnywhereChat({
         let latestRenderable: StreamResponseData | null = null;
 
         try {
-          for await (const chunk of Stream({ readableStream: cacheMonitorStream })) {
+          for await (const chunk of Stream({
+            readableStream: cacheMonitorStream,
+          })) {
             let chunkData: unknown;
             try {
               chunkData = JSON.parse(chunk.data);
@@ -2613,7 +2794,8 @@ export default function AnywhereChat({
             const responseData = responseBuilder.handle(
               chunkData as never,
             ) as unknown as StreamResponseData;
-            const renderableResponse = materializeThinkingOnlyFallback(responseData);
+            const renderableResponse =
+              materializeThinkingOnlyFallback(responseData);
             lastStatus = responseData.status;
             if (hasRenderableOutput(renderableResponse)) {
               latestRenderable = JSON.parse(
@@ -2629,8 +2811,8 @@ export default function AnywhereChat({
         }
 
         if (
-          !persistedSessionId
-          || runningConfig?.auto_continue_enabled === false
+          !persistedSessionId ||
+          runningConfig?.auto_continue_enabled === false
         ) {
           return;
         }
@@ -2645,7 +2827,8 @@ export default function AnywhereChat({
           assistantText,
         });
         const tail = buildAssistantTailFingerprint(assistantText);
-        const previousTail = autoContinueTailRef.current[persistedSessionId] || "";
+        const previousTail =
+          autoContinueTailRef.current[persistedSessionId] || "";
 
         if (!shouldContinue) {
           autoContinueAttemptsRef.current[persistedSessionId] = 0;
@@ -2653,7 +2836,8 @@ export default function AnywhereChat({
           return;
         }
 
-        const attempts = autoContinueAttemptsRef.current[persistedSessionId] || 0;
+        const attempts =
+          autoContinueAttemptsRef.current[persistedSessionId] || 0;
         if (attempts >= AUTO_CONTINUE_MAX_ATTEMPTS) {
           return;
         }
@@ -2677,9 +2861,7 @@ export default function AnywhereChat({
         autoContinueInFlightRef.current[persistedSessionId] = true;
         autoContinueTailRef.current[persistedSessionId] = tail;
 
-        message.info(
-          t("chat.autoContinue.triggered"),
-        );
+        message.info(t("chat.autoContinue.triggered"));
 
         try {
           const continueResponse = await fetch(getApiUrl("/console/chat"), {
@@ -2698,7 +2880,9 @@ export default function AnywhereChat({
           if (!continueResponse.ok || !continueResponse.body) {
             return;
           }
-          const continueStream = sanitizeConsoleChatSseStream(continueResponse.body);
+          const continueStream = sanitizeConsoleChatSseStream(
+            continueResponse.body,
+          );
           persistStreamSession(persistedSessionId, continueStream);
         } finally {
           autoContinueInFlightRef.current[persistedSessionId] = false;
@@ -2710,18 +2894,21 @@ export default function AnywhereChat({
           const reader = uiStream.getReader();
 
           const pump = (): void => {
-            void reader.read().then(({ done, value }) => {
-              if (done) {
-                controller.close();
+            void reader
+              .read()
+              .then(({ done, value }) => {
+                if (done) {
+                  controller.close();
+                  finalize();
+                  return;
+                }
+                controller.enqueue(value);
+                pump();
+              })
+              .catch((error) => {
+                controller.error(error);
                 finalize();
-                return;
-              }
-              controller.enqueue(value);
-              pump();
-            }).catch((error) => {
-              controller.error(error);
-              finalize();
-            });
+              });
           };
 
           pump();
@@ -2781,11 +2968,12 @@ export default function AnywhereChat({
       },
     ];
     const welcomeConfig = (i18nConfig.welcome || {}) as WelcomeConfigShape;
-    const selectedPromptValues = welcomePromptsWhenEmpty || welcomePrompts || [];
+    const selectedPromptValues =
+      welcomePromptsWhenEmpty || welcomePrompts || [];
     const prompts =
       Array.isArray(selectedPromptValues) && selectedPromptValues.length > 0
         ? selectedPromptValues.map((value) => ({ value }))
-        : (welcomeConfig.prompts || []);
+        : welcomeConfig.prompts || [];
 
     const handleBeforeSubmit = async () => {
       if (isComposingRef.current) return false;
@@ -2839,8 +3027,8 @@ export default function AnywhereChat({
             const tooltipKey = !multimodalCaps.supportsMultimodal
               ? "chat.attachments.tooltipNoMultimodal"
               : multimodalCaps.supportsImage && !multimodalCaps.supportsVideo
-                ? "chat.attachments.tooltipImageOnly"
-                : "chat.attachments.tooltip";
+              ? "chat.attachments.tooltipImageOnly"
+              : "chat.attachments.tooltip";
             return (
               <Tooltip title={t(tooltipKey, { limit: CHAT_ATTACHMENT_MAX_MB })}>
                 <IconButton
@@ -2915,7 +3103,9 @@ export default function AnywhereChat({
             icon: (
               <span
                 key="copy-md-action-icon"
-                title={`${t("chat.copyMarkdown")} · ${t("chat.copyMarkdownHint")}`}
+                title={`${t("chat.copyMarkdown")} · ${t(
+                  "chat.copyMarkdownHint",
+                )}`}
                 className={styles.markdownCopyBadge}
               >
                 <FileMarkdownOutlined />
@@ -2957,7 +3147,13 @@ export default function AnywhereChat({
   const historyPopoverContent = useMemo(() => {
     if (historyLoading) {
       return (
-        <div style={{ display: "flex", justifyContent: "center", padding: "16px 8px" }}>
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "center",
+            padding: "16px 8px",
+          }}
+        >
           <Spin size="small" />
         </div>
       );
@@ -2975,19 +3171,26 @@ export default function AnywhereChat({
     return (
       <div className={styles.historyPopover}>
         {historyChats.map((chat) => {
-          const title = (chat.name || chat.session_id || chat.id || "").trim() || t("chat.untitled");
-          const updatedAt = formatLocalDateTime(chat.updated_at || chat.created_at || "");
+          const title =
+            (chat.name || chat.session_id || chat.id || "").trim() ||
+            t("chat.untitled");
+          const updatedAt = formatLocalDateTime(
+            chat.updated_at || chat.created_at || "",
+          );
           const isActive = chat.id === sessionId;
           return (
             <Button
               key={chat.id}
               type={isActive ? "primary" : "text"}
-              style={{ justifyContent: "flex-start", height: "auto", paddingBlock: 8, textAlign: "left" }}
+              style={{
+                justifyContent: "flex-start",
+                height: "auto",
+                paddingBlock: 8,
+                textAlign: "left",
+              }}
               onClick={() => {
                 if (!onSelectHistoryChat) {
-                  message.warning(
-                    t("chat.historySwitchUnavailable"),
-                  );
+                  message.warning(t("chat.historySwitchUnavailable"));
                   return;
                 }
                 onSelectHistoryChat(chat.id);
@@ -3055,11 +3258,12 @@ export default function AnywhereChat({
   ]);
 
   const approvalVisibility = useMemo(
-    () => resolveApprovalVisibility(
-      Array.from(approvalRequests.values()),
-      APPROVAL_VISIBLE_LIMIT,
-      showAllApprovals,
-    ),
+    () =>
+      resolveApprovalVisibility(
+        Array.from(approvalRequests.values()),
+        APPROVAL_VISIBLE_LIMIT,
+        showAllApprovals,
+      ),
     [approvalRequests, showAllApprovals],
   );
 
@@ -3071,9 +3275,7 @@ export default function AnywhereChat({
     <div
       className={`${hostClassName} copaw-chat-anywhere-layout ${styles.anywhereLayout}`}
     >
-      <div
-        className={`copaw-chat-anywhere-header ${styles.header}`}
-      >
+      <div className={`copaw-chat-anywhere-header ${styles.header}`}>
         <div className={styles.headerLeft}>
           <span className={styles.chatName} title={currentChatName}>
             {currentChatName || t("chat.newChat")}
@@ -3119,15 +3321,15 @@ export default function AnywhereChat({
           </Popover>
         </div>
       </div>
-      <div
-        className={`copaw-chat-anywhere-chat ${styles.chatArea}`}
-      >
+      <div className={`copaw-chat-anywhere-chat ${styles.chatArea}`}>
         <AgentScopeRuntimeWebUI
           ref={chatRef}
           key={`${sessionId}-${refreshKey}`}
           options={options}
         />
-        {isLastVisibleMessageUser && recoveredTailUserDraft && tailUserActionHost
+        {isLastVisibleMessageUser &&
+        recoveredTailUserDraft &&
+        tailUserActionHost
           ? createPortal(
               <div className={styles.lastUserActionRow}>
                 <Button
@@ -3157,7 +3359,8 @@ export default function AnywhereChat({
             })}
           </Button>
         ) : null}
-        {showAllApprovals && sortedApprovalRequests.length > APPROVAL_VISIBLE_LIMIT ? (
+        {showAllApprovals &&
+        sortedApprovalRequests.length > APPROVAL_VISIBLE_LIMIT ? (
           <Button
             size="small"
             type="text"
@@ -3171,7 +3374,11 @@ export default function AnywhereChat({
         {visibleApprovalRequests.map((request, index) => (
           <div
             key={request.requestId}
-            className={`${styles.approvalCardOverlay} ${closingApprovalIds.includes(request.requestId) ? styles.approvalCardOverlayExit : ""}`}
+            className={`${styles.approvalCardOverlay} ${
+              closingApprovalIds.includes(request.requestId)
+                ? styles.approvalCardOverlayExit
+                : ""
+            }`}
             style={{
               right: 12,
               bottom: 12 + index * 18,
@@ -3225,9 +3432,7 @@ export default function AnywhereChat({
           }
 
           if (!onSelectHistoryChat) {
-            message.warning(
-              t("chat.historySwitchUnavailable"),
-            );
+            message.warning(t("chat.historySwitchUnavailable"));
             return;
           }
           onSelectHistoryChat(chatId);

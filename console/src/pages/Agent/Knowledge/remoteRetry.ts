@@ -15,12 +15,16 @@ export function collectRemoteRetrySources(
   return sources
     .filter((source) => {
       const state = source.status.remote_cache_state;
-      return typeof state === "string" && state.length > 0 && state !== "cached";
+      return (
+        typeof state === "string" && state.length > 0 && state !== "cached"
+      );
     })
     .map((source) => ({ id: source.id, name: source.name || source.id }));
 }
 
-export function buildRemoteRetryNotice(summary: RemoteRetrySummary): RemoteRetryNotice {
+export function buildRemoteRetryNotice(
+  summary: RemoteRetrySummary,
+): RemoteRetryNotice {
   if (summary.failedCount === 0) {
     return {
       level: "success",

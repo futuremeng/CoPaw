@@ -1,7 +1,10 @@
 import { render, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import useArtifactSelectionGuards from "../hooks/useArtifactSelectionGuards";
-import type { AgentProjectFileInfo, ProjectPipelineArtifactRecord } from "../../../../api/types/agents";
+import type {
+  AgentProjectFileInfo,
+  ProjectPipelineArtifactRecord,
+} from "../../../../api/types/agents";
 
 function TestHarness(params: {
   selectedStepId?: string;
@@ -21,7 +24,8 @@ function TestHarness(params: {
     currentStepIds: params.currentStepIds || [],
     selectedFilePath: params.selectedFilePath,
     setSelectedFilePath: params.setSelectedFilePath,
-    relatedArtifactPathsForSelectedStep: params.relatedArtifactPathsForSelectedStep || new Set<string>(),
+    relatedArtifactPathsForSelectedStep:
+      params.relatedArtifactPathsForSelectedStep || new Set<string>(),
     artifactRecords: params.artifactRecords || [],
     filesLoading: Boolean(params.filesLoading),
     knownProjectFilePaths: params.knownProjectFilePaths || new Set<string>(),

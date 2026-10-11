@@ -74,16 +74,23 @@ function ProjectChatPanel({
       return false;
     }
     const ua = navigator.userAgent.toLowerCase();
-    return ua.includes("vscode") || typeof (window as Window & { acquireVsCodeApi?: unknown }).acquireVsCodeApi === "function";
+    return (
+      ua.includes("vscode") ||
+      typeof (window as Window & { acquireVsCodeApi?: unknown })
+        .acquireVsCodeApi === "function"
+    );
   }, []);
-  const activeSessionId = chatMode === "run"
-    ? activeRunChatId
-    : chatMode === "design"
+  const activeSessionId =
+    chatMode === "run"
+      ? activeRunChatId
+      : chatMode === "design"
       ? activeDesignChatId
       : activeWorkspaceChatId;
   const [stableSessionId, setStableSessionId] = useState(activeSessionId);
   const [chatMountReady, setChatMountReady] = useState(!activeSessionId);
-  const [chatRuntimeEnabled, setChatRuntimeEnabled] = useState(!isVsCodeEmbedded);
+  const [chatRuntimeEnabled, setChatRuntimeEnabled] = useState(
+    !isVsCodeEmbedded,
+  );
   const [chatViewActivated, setChatViewActivated] = useState(!activeSessionId);
   const sessionSwitchDebounceMs = isVsCodeEmbedded ? 320 : 140;
   const mountDelayMs = isVsCodeEmbedded ? 240 : 80;
@@ -129,16 +136,21 @@ function ProjectChatPanel({
     };
   }, [activeSessionId, mountDelayMs, sessionSwitchDebounceMs, stableSessionId]);
 
-  const shouldRenderActiveChat = chatRuntimeEnabled && chatViewActivated && chatMountReady && stableSessionId === activeSessionId;
+  const shouldRenderActiveChat =
+    chatRuntimeEnabled &&
+    chatViewActivated &&
+    chatMountReady &&
+    stableSessionId === activeSessionId;
 
-  const handleAutoAttachHandled = useCallback((payload: AutoAttachHandledPayload) => {
-    if (!payload.ok) {
-      message.error(
-        t("projects.chat.autoAttachFailed"),
-      );
-    }
-    onAutoAttachHandled(payload);
-  }, [onAutoAttachHandled, t]);
+  const handleAutoAttachHandled = useCallback(
+    (payload: AutoAttachHandledPayload) => {
+      if (!payload.ok) {
+        message.error(t("projects.chat.autoAttachFailed"));
+      }
+      onAutoAttachHandled(payload);
+    },
+    [onAutoAttachHandled, t],
+  );
 
   const handleActivateChatView = useCallback(() => {
     setChatViewActivated(true);
@@ -159,20 +171,29 @@ function ProjectChatPanel({
     onStartRunChat();
   }, [onStartRunChat]);
 
-  const handleSelectWorkspaceHistoryChat = useCallback((chatId: string) => {
-    setChatViewActivated(true);
-    onSelectWorkspaceHistoryChat(chatId);
-  }, [onSelectWorkspaceHistoryChat]);
+  const handleSelectWorkspaceHistoryChat = useCallback(
+    (chatId: string) => {
+      setChatViewActivated(true);
+      onSelectWorkspaceHistoryChat(chatId);
+    },
+    [onSelectWorkspaceHistoryChat],
+  );
 
-  const handleSelectDesignHistoryChat = useCallback((chatId: string) => {
-    setChatViewActivated(true);
-    onSelectDesignHistoryChat(chatId);
-  }, [onSelectDesignHistoryChat]);
+  const handleSelectDesignHistoryChat = useCallback(
+    (chatId: string) => {
+      setChatViewActivated(true);
+      onSelectDesignHistoryChat(chatId);
+    },
+    [onSelectDesignHistoryChat],
+  );
 
-  const handleSelectRunHistoryChat = useCallback((chatId: string) => {
-    setChatViewActivated(true);
-    onSelectRunHistoryChat(chatId);
-  }, [onSelectRunHistoryChat]);
+  const handleSelectRunHistoryChat = useCallback(
+    (chatId: string) => {
+      setChatViewActivated(true);
+      onSelectRunHistoryChat(chatId);
+    },
+    [onSelectRunHistoryChat],
+  );
 
   const renderChatLoadGate = (description: string) => (
     <div className={styles.chatEmptyAction}>
@@ -193,125 +214,8 @@ function ProjectChatPanel({
         </div>
       ) : (
         (() => {
-            if (chatMode === "run") {
-              if (activeRunChatId) {
-                return (
-                  <>
-                    {!chatRuntimeEnabled ? (
-                      <div className={styles.chatEmptyAction}>
-                        <div className={styles.chatEmptyActions}>
-                          <Text type="secondary">
-                            {t("projects.chat.previewRuntimeGuard")}
-                          </Text>
-                          <Button onClick={() => setChatRuntimeEnabled(true)}>
-                            {t("projects.chat.enablePreviewRuntime")}
-                          </Button>
-                        </div>
-                      </div>
-                    ) : shouldRenderActiveChat ? (
-                      <AnywhereChat
-                        sessionId={stableSessionId}
-                        autoAttachRequest={autoAttachRequest}
-                        onAutoAttachHandled={handleAutoAttachHandled}
-                        onNewChat={handleStartRunChat}
-                        onSelectHistoryChat={handleSelectRunHistoryChat}
-                        historyMenuActionLabel={t("projects.chat.manualRecover")}
-                        onHistoryMenuAction={onOpenManualRecoverDialog}
-                        onAssistantTurnCompleted={onAssistantTurnCompleted}
-                        inputPlaceholder={t("projects.chat.placeholder")}
-                        welcomeGreeting={t("projects.chat.welcomeGreeting")}
-                        welcomeDescription={t("projects.chat.welcomeDescription")}
-                        welcomePrompts={[
-                          t("projects.chat.prompt1"),
-                          t("projects.chat.prompt2"),
-                        ]}
-                      />
-                    ) : chatViewActivated ? (
-                      <div className={styles.centerState}>
-                        <Spin />
-                      </div>
-                    ) : renderChatLoadGate(
-                      t("projects.chat.loadRunConversationHint"),
-                    )
-                    }
-                  </>
-                );
-              }
-
-              return (
-                <div className={styles.chatEmptyAction}>
-                  <Empty
-                    image={Empty.PRESENTED_IMAGE_SIMPLE}
-                    description={t("projects.chat.noSession")}
-                  >
-                    <Button type="primary" onClick={handleStartRunChat}>
-                      {t("projects.chat.start")}
-                    </Button>
-                  </Empty>
-                </div>
-              );
-            }
-
-            if (chatMode === "design") {
-              if (activeDesignChatId) {
-                return (
-                  <>
-                    {!chatRuntimeEnabled ? (
-                      <div className={styles.chatEmptyAction}>
-                        <div className={styles.chatEmptyActions}>
-                          <Text type="secondary">
-                            {t("projects.chat.previewRuntimeGuard")}
-                          </Text>
-                          <Button onClick={() => setChatRuntimeEnabled(true)}>
-                            {t("projects.chat.enablePreviewRuntime")}
-                          </Button>
-                        </div>
-                      </div>
-                    ) : shouldRenderActiveChat ? (
-                      <AnywhereChat
-                        sessionId={stableSessionId}
-                        autoAttachRequest={autoAttachRequest}
-                        onAutoAttachHandled={handleAutoAttachHandled}
-                        onNewChat={handleStartDesignChat}
-                        onSelectHistoryChat={handleSelectDesignHistoryChat}
-                        historyMenuActionLabel={t("projects.chat.manualRecover")}
-                        onHistoryMenuAction={onOpenManualRecoverDialog}
-                        onAssistantTurnCompleted={onAssistantTurnCompleted}
-                        inputPlaceholder={t("projects.chat.designPlaceholder")}
-                        welcomeGreeting={t("projects.chat.designWelcomeGreeting")}
-                        welcomeDescription={t("projects.chat.designWelcomeDescription")}
-                        welcomePrompts={[
-                          t("projects.chat.designPrompt1"),
-                          t("projects.chat.designPrompt2"),
-                        ]}
-                      />
-                    ) : chatViewActivated ? (
-                      <div className={styles.centerState}>
-                        <Spin />
-                      </div>
-                    ) : renderChatLoadGate(
-                      t("projects.chat.loadDesignConversationHint"),
-                    )
-                    }
-                  </>
-                );
-              }
-
-                return (
-                  <div className={styles.chatEmptyAction}>
-                    <Empty
-                      image={Empty.PRESENTED_IMAGE_SIMPLE}
-                      description={t("projects.chat.noDesignSession")}
-                    >
-                      <Button type="primary" onClick={handleStartDesignChat}>
-                        {t("projects.chat.start")}
-                      </Button>
-                    </Empty>
-                  </div>
-                );
-            }
-
-            if (activeWorkspaceChatId) {
+          if (chatMode === "run") {
+            if (activeRunChatId) {
               return (
                 <>
                   {!chatRuntimeEnabled ? (
@@ -330,47 +234,28 @@ function ProjectChatPanel({
                       sessionId={stableSessionId}
                       autoAttachRequest={autoAttachRequest}
                       onAutoAttachHandled={handleAutoAttachHandled}
-                      onNewChat={handleStartWorkspaceChat}
-                      onSelectHistoryChat={handleSelectWorkspaceHistoryChat}
+                      onNewChat={handleStartRunChat}
+                      onSelectHistoryChat={handleSelectRunHistoryChat}
                       historyMenuActionLabel={t("projects.chat.manualRecover")}
                       onHistoryMenuAction={onOpenManualRecoverDialog}
                       onAssistantTurnCompleted={onAssistantTurnCompleted}
-                      welcomePromptClickBehavior="append"
-                      inputPlaceholder={t("projects.chat.collaborationPlaceholder")}
-                      welcomeGreeting={t("projects.chat.collaborationWelcomeGreeting")}
-                      welcomeDescription={t(
-                        hasUserFiles
-                          ? "projects.chat.collaborationWelcomeDescription"
-                          : "projects.chat.collaborationWelcomeDescriptionEmptyProject",
-                        hasUserFiles
-                          ? "Use this space to understand the project, organize materials, and plan the next step. In your first reply, confirm workspace root and default new files to the project root unless a subdirectory is explicitly needed."
-                          : "This is a new project. Start by clarifying goals, scope, and expected outcomes, then confirm workspace root and default new files to the project root before preparing the first batch of materials.",
-                      )}
-                      welcomePromptsWhenEmpty={[
-                        t(
-                          hasUserFiles
-                            ? "projects.chat.collaborationPromptEmpty1"
-                            : "projects.chat.collaborationPromptEmptyNewProject1",
-                          hasUserFiles
-                            ? "First confirm workspace root and default new files to the project root. Then help me clarify this project's goal, current stage, and expected deliverable."
-                            : "This is a new project. First confirm workspace root and that new files should default to the project root, then help me define goal, scope, milestones, and acceptance criteria.",
-                        ),
-                        t(
-                          hasUserFiles
-                            ? "projects.chat.collaborationPromptEmpty2"
-                            : "projects.chat.collaborationPromptEmptyNewProject2",
-                          hasUserFiles
-                            ? "I have provided materials. Summarize current state with exact file paths, point out missing information, and avoid guessing non-existent paths."
-                            : "Give me a from-zero-to-one kickoff checklist with the first three actions, and include where each artifact should be stored (skills/scripts/flows/cases).",
-                        ),
+                      inputPlaceholder={t("projects.chat.placeholder")}
+                      welcomeGreeting={t("projects.chat.welcomeGreeting")}
+                      welcomeDescription={t("projects.chat.welcomeDescription")}
+                      welcomePrompts={[
+                        t("projects.chat.prompt1"),
+                        t("projects.chat.prompt2"),
                       ]}
                     />
-                  ) : (
+                  ) : chatViewActivated ? (
                     <div className={styles.centerState}>
                       <Spin />
                     </div>
-                  )
-                  }
+                  ) : (
+                    renderChatLoadGate(
+                      t("projects.chat.loadRunConversationHint"),
+                    )
+                  )}
                 </>
               );
             }
@@ -379,15 +264,158 @@ function ProjectChatPanel({
               <div className={styles.chatEmptyAction}>
                 <Empty
                   image={Empty.PRESENTED_IMAGE_SIMPLE}
-                  description={t("projects.chat.noWorkspaceSession")}
-                  >
-                    <Button type="primary" onClick={handleStartWorkspaceChat}>
-                      {t("projects.chat.start")}
-                    </Button>
-                  </Empty>
+                  description={t("projects.chat.noSession")}
+                >
+                  <Button type="primary" onClick={handleStartRunChat}>
+                    {t("projects.chat.start")}
+                  </Button>
+                </Empty>
               </div>
             );
-          })()
+          }
+
+          if (chatMode === "design") {
+            if (activeDesignChatId) {
+              return (
+                <>
+                  {!chatRuntimeEnabled ? (
+                    <div className={styles.chatEmptyAction}>
+                      <div className={styles.chatEmptyActions}>
+                        <Text type="secondary">
+                          {t("projects.chat.previewRuntimeGuard")}
+                        </Text>
+                        <Button onClick={() => setChatRuntimeEnabled(true)}>
+                          {t("projects.chat.enablePreviewRuntime")}
+                        </Button>
+                      </div>
+                    </div>
+                  ) : shouldRenderActiveChat ? (
+                    <AnywhereChat
+                      sessionId={stableSessionId}
+                      autoAttachRequest={autoAttachRequest}
+                      onAutoAttachHandled={handleAutoAttachHandled}
+                      onNewChat={handleStartDesignChat}
+                      onSelectHistoryChat={handleSelectDesignHistoryChat}
+                      historyMenuActionLabel={t("projects.chat.manualRecover")}
+                      onHistoryMenuAction={onOpenManualRecoverDialog}
+                      onAssistantTurnCompleted={onAssistantTurnCompleted}
+                      inputPlaceholder={t("projects.chat.designPlaceholder")}
+                      welcomeGreeting={t("projects.chat.designWelcomeGreeting")}
+                      welcomeDescription={t(
+                        "projects.chat.designWelcomeDescription",
+                      )}
+                      welcomePrompts={[
+                        t("projects.chat.designPrompt1"),
+                        t("projects.chat.designPrompt2"),
+                      ]}
+                    />
+                  ) : chatViewActivated ? (
+                    <div className={styles.centerState}>
+                      <Spin />
+                    </div>
+                  ) : (
+                    renderChatLoadGate(
+                      t("projects.chat.loadDesignConversationHint"),
+                    )
+                  )}
+                </>
+              );
+            }
+
+            return (
+              <div className={styles.chatEmptyAction}>
+                <Empty
+                  image={Empty.PRESENTED_IMAGE_SIMPLE}
+                  description={t("projects.chat.noDesignSession")}
+                >
+                  <Button type="primary" onClick={handleStartDesignChat}>
+                    {t("projects.chat.start")}
+                  </Button>
+                </Empty>
+              </div>
+            );
+          }
+
+          if (activeWorkspaceChatId) {
+            return (
+              <>
+                {!chatRuntimeEnabled ? (
+                  <div className={styles.chatEmptyAction}>
+                    <div className={styles.chatEmptyActions}>
+                      <Text type="secondary">
+                        {t("projects.chat.previewRuntimeGuard")}
+                      </Text>
+                      <Button onClick={() => setChatRuntimeEnabled(true)}>
+                        {t("projects.chat.enablePreviewRuntime")}
+                      </Button>
+                    </div>
+                  </div>
+                ) : shouldRenderActiveChat ? (
+                  <AnywhereChat
+                    sessionId={stableSessionId}
+                    autoAttachRequest={autoAttachRequest}
+                    onAutoAttachHandled={handleAutoAttachHandled}
+                    onNewChat={handleStartWorkspaceChat}
+                    onSelectHistoryChat={handleSelectWorkspaceHistoryChat}
+                    historyMenuActionLabel={t("projects.chat.manualRecover")}
+                    onHistoryMenuAction={onOpenManualRecoverDialog}
+                    onAssistantTurnCompleted={onAssistantTurnCompleted}
+                    welcomePromptClickBehavior="append"
+                    inputPlaceholder={t(
+                      "projects.chat.collaborationPlaceholder",
+                    )}
+                    welcomeGreeting={t(
+                      "projects.chat.collaborationWelcomeGreeting",
+                    )}
+                    welcomeDescription={t(
+                      hasUserFiles
+                        ? "projects.chat.collaborationWelcomeDescription"
+                        : "projects.chat.collaborationWelcomeDescriptionEmptyProject",
+                      hasUserFiles
+                        ? "Use this space to understand the project, organize materials, and plan the next step. In your first reply, confirm workspace root and default new files to the project root unless a subdirectory is explicitly needed."
+                        : "This is a new project. Start by clarifying goals, scope, and expected outcomes, then confirm workspace root and default new files to the project root before preparing the first batch of materials.",
+                    )}
+                    welcomePromptsWhenEmpty={[
+                      t(
+                        hasUserFiles
+                          ? "projects.chat.collaborationPromptEmpty1"
+                          : "projects.chat.collaborationPromptEmptyNewProject1",
+                        hasUserFiles
+                          ? "First confirm workspace root and default new files to the project root. Then help me clarify this project's goal, current stage, and expected deliverable."
+                          : "This is a new project. First confirm workspace root and that new files should default to the project root, then help me define goal, scope, milestones, and acceptance criteria.",
+                      ),
+                      t(
+                        hasUserFiles
+                          ? "projects.chat.collaborationPromptEmpty2"
+                          : "projects.chat.collaborationPromptEmptyNewProject2",
+                        hasUserFiles
+                          ? "I have provided materials. Summarize current state with exact file paths, point out missing information, and avoid guessing non-existent paths."
+                          : "Give me a from-zero-to-one kickoff checklist with the first three actions, and include where each artifact should be stored (skills/scripts/flows/cases).",
+                      ),
+                    ]}
+                  />
+                ) : (
+                  <div className={styles.centerState}>
+                    <Spin />
+                  </div>
+                )}
+              </>
+            );
+          }
+
+          return (
+            <div className={styles.chatEmptyAction}>
+              <Empty
+                image={Empty.PRESENTED_IMAGE_SIMPLE}
+                description={t("projects.chat.noWorkspaceSession")}
+              >
+                <Button type="primary" onClick={handleStartWorkspaceChat}>
+                  {t("projects.chat.start")}
+                </Button>
+              </Empty>
+            </div>
+          );
+        })()
       )}
     </div>
   );

@@ -51,9 +51,19 @@ import {
 import { appendUniqueContextLine, buildPathContextLine } from "./pathContext";
 import { buildUnifiedBatchProgress } from "./progress";
 import { buildKnowledgeQuantCardViewModels } from "./quantCards";
-import { buildRemoteRetryNotice, collectRemoteRetrySources } from "./remoteRetry";
-import { graphEntityNodeId, recordsToVisualizationData, formatScore } from "./graphQuery";
-import { GraphQueryResults, GraphVisualization } from "./graphVisualization.tsx";
+import {
+  buildRemoteRetryNotice,
+  collectRemoteRetrySources,
+} from "./remoteRetry";
+import {
+  graphEntityNodeId,
+  recordsToVisualizationData,
+  formatScore,
+} from "./graphQuery";
+import {
+  GraphQueryResults,
+  GraphVisualization,
+} from "./graphVisualization.tsx";
 import {
   knowledgeScopeOptions,
   sourceTypeOptions,
@@ -77,10 +87,9 @@ function extractHopNodeId(rawObject: string): string {
   return safeGraphNodeId(head.replace(/--\[[^\]]+\]--/g, " "));
 }
 
-function inferSourceOrigin(source: KnowledgeSourceItem): Exclude<
-  SourceOriginFilter,
-  "all"
-> {
+function inferSourceOrigin(
+  source: KnowledgeSourceItem,
+): Exclude<SourceOriginFilter, "all"> {
   const tags = source.tags || [];
   const isAuto =
     tags.includes("auto") ||
@@ -131,17 +140,17 @@ function KnowledgePage() {
   const [form] = Form.useForm<KnowledgeSourceSpec>();
   const [enableConfigForm] = Form.useForm<AgentsRunningConfig>();
   const [config, setConfig] = useState<KnowledgeConfig | null>(null);
-  const [runningConfig, setRunningConfig] = useState<AgentsRunningConfig | null>(
-    null,
-  );
+  const [runningConfig, setRunningConfig] =
+    useState<AgentsRunningConfig | null>(null);
   const knowledgeRuntimeEnabled = runningConfig?.knowledge_enabled ?? true;
   const knowledgePageDisabled = !knowledgeRuntimeEnabled;
   const [backfillStatus, setBackfillStatus] =
     useState<KnowledgeHistoryBackfillStatus | null>(null);
   const [backfillProgress, setBackfillProgress] =
     useState<KnowledgeHistoryBackfillProgress | null>(null);
-  const [activeKnowledgeTasks, setActiveKnowledgeTasks] =
-    useState<KnowledgeTaskProgress[]>([]);
+  const [activeKnowledgeTasks, setActiveKnowledgeTasks] = useState<
+    KnowledgeTaskProgress[]
+  >([]);
   const [sources, setSources] = useState<KnowledgeSourceItem[]>([]);
   const [hits, setHits] = useState<KnowledgeSearchHit[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
@@ -169,8 +178,11 @@ function KnowledgePage() {
   const [graphQueryError, setGraphQueryError] = useState<string | null>(null);
   const [graphQueryTopK, setGraphQueryTopK] = useState(20);
   const [graphQueryTimeoutSec, setGraphQueryTimeoutSec] = useState(20);
-  const [graphQueryDatasetScopeText, setGraphQueryDatasetScopeText] = useState("");
-  const [graphQueryClickedNode, setGraphQueryClickedNode] = useState<string | null>(null);
+  const [graphQueryDatasetScopeText, setGraphQueryDatasetScopeText] =
+    useState("");
+  const [graphQueryClickedNode, setGraphQueryClickedNode] = useState<
+    string | null
+  >(null);
   const [graphQueryNodeDrawerOpen, setGraphQueryNodeDrawerOpen] =
     useState(false);
   const [graphQueryNodePath, setGraphQueryNodePath] = useState<string[]>([]);
@@ -189,7 +201,9 @@ function KnowledgePage() {
   const [indexingAll, setIndexingAll] = useState(false);
   const [clearingKnowledge, setClearingKnowledge] = useState(false);
   const [exportingAll, setExportingAll] = useState(false);
-  const [exportingSourceId, setExportingSourceId] = useState<string | null>(null);
+  const [exportingSourceId, setExportingSourceId] = useState<string | null>(
+    null,
+  );
   const [importingBackup, setImportingBackup] = useState(false);
   const [indexingId, setIndexingId] = useState<string | null>(null);
   const [detailDrawerOpen, setDetailDrawerOpen] = useState(false);
@@ -202,7 +216,9 @@ function KnowledgePage() {
   const [retryingRemoteSources, setRetryingRemoteSources] = useState(false);
   const [selectedType, setSelectedType] = useState<KnowledgeSourceType>("file");
   const [isFileDragActive, setIsFileDragActive] = useState(false);
-  const [selectedUploadFile, setSelectedUploadFile] = useState<File | null>(null);
+  const [selectedUploadFile, setSelectedUploadFile] = useState<File | null>(
+    null,
+  );
   const [selectedFileName, setSelectedFileName] = useState("");
   const [selectedDirectoryFiles, setSelectedDirectoryFiles] = useState<
     Array<{ file: File; relativePath: string }>
@@ -219,7 +235,13 @@ function KnowledgePage() {
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
-      const [knowledgeConfig, sourceData, runtimeConfig, historyStatus, taskSnapshot] = await Promise.all([
+      const [
+        knowledgeConfig,
+        sourceData,
+        runtimeConfig,
+        historyStatus,
+        taskSnapshot,
+      ] = await Promise.all([
         api.getKnowledgeConfig(),
         api.listKnowledgeSources({ includeSemantic: true }),
         api.getAgentRunningConfig(),
@@ -269,7 +291,9 @@ function KnowledgePage() {
 
   const refreshKnowledgeCards = useCallback(async () => {
     try {
-      const sourceData = await api.listKnowledgeSources({ includeSemantic: true });
+      const sourceData = await api.listKnowledgeSources({
+        includeSemantic: true,
+      });
       const nextRemoteStateMap: Record<string, string | undefined> = {};
       sourceData.sources.forEach((source) => {
         nextRemoteStateMap[source.id] = source.status.remote_cache_state;
@@ -331,11 +355,16 @@ function KnowledgePage() {
             return;
           }
           const tasks = Array.isArray((snapshot as { tasks?: unknown }).tasks)
-            ? ((snapshot as { tasks: KnowledgeTaskProgress[] }).tasks || [])
+            ? (snapshot as { tasks: KnowledgeTaskProgress[] }).tasks || []
             : [];
           setActiveKnowledgeTasks(tasks);
-          const backfillTask = tasks.find((task) => task.task_type === "history_backfill");
-          setBackfillProgress((backfillTask as KnowledgeHistoryBackfillProgress | undefined) || null);
+          const backfillTask = tasks.find(
+            (task) => task.task_type === "history_backfill",
+          );
+          setBackfillProgress(
+            (backfillTask as KnowledgeHistoryBackfillProgress | undefined) ||
+              null,
+          );
         } catch {
           // ignore malformed websocket messages
         }
@@ -569,7 +598,9 @@ function KnowledgePage() {
     try {
       const values = await form.validateFields();
       setSaving(true);
-      const sourceId = `manual-${values.type}-${Math.random().toString(36).slice(2, 8)}`;
+      const sourceId = `manual-${values.type}-${Math.random()
+        .toString(36)
+        .slice(2, 8)}`;
       let location = values.location ?? "";
       let content = values.content ?? "";
 
@@ -578,7 +609,10 @@ function KnowledgePage() {
           message.error(t("knowledge.fileRequired"));
           return;
         }
-        const uploaded = await api.uploadKnowledgeFile(sourceId, selectedUploadFile);
+        const uploaded = await api.uploadKnowledgeFile(
+          sourceId,
+          selectedUploadFile,
+        );
         location = uploaded.location;
         content = "";
       }
@@ -632,22 +666,25 @@ function KnowledgePage() {
     }
   };
 
-  const handleIndexSource = useCallback(async (sourceId: string) => {
-    if (knowledgePageDisabled) {
-      return;
-    }
-    try {
-      setIndexingId(sourceId);
-      await api.indexKnowledgeSource(sourceId);
-      message.success(t("knowledge.indexSuccess"));
-      await loadData();
-    } catch (error) {
-      console.error("Failed to index knowledge source", error);
-      message.error(t("knowledge.indexFailed"));
-    } finally {
-      setIndexingId(null);
-    }
-  }, [knowledgePageDisabled, loadData, t]);
+  const handleIndexSource = useCallback(
+    async (sourceId: string) => {
+      if (knowledgePageDisabled) {
+        return;
+      }
+      try {
+        setIndexingId(sourceId);
+        await api.indexKnowledgeSource(sourceId);
+        message.success(t("knowledge.indexSuccess"));
+        await loadData();
+      } catch (error) {
+        console.error("Failed to index knowledge source", error);
+        message.error(t("knowledge.indexFailed"));
+      } finally {
+        setIndexingId(null);
+      }
+    },
+    [knowledgePageDisabled, loadData, t],
+  );
 
   const handleIndexAll = async () => {
     if (knowledgePageDisabled) {
@@ -731,9 +768,10 @@ function KnowledgePage() {
         setExportingSourceId(sourceId);
         const blob = await api.downloadKnowledgeSourceBackup(sourceId);
         const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
-        const normalizedName = (sourceName || sourceId)
-          .replace(/[^A-Za-z0-9._-]+/g, "-")
-          .replace(/^-+|-+$/g, "") || sourceId;
+        const normalizedName =
+          (sourceName || sourceId)
+            .replace(/[^A-Za-z0-9._-]+/g, "-")
+            .replace(/^-+|-+$/g, "") || sourceId;
         triggerBlobDownload(
           blob,
           `copaw_knowledge_${normalizedName}_${timestamp}.zip`,
@@ -833,7 +871,8 @@ function KnowledgePage() {
       const result = await api.searchKnowledge({
         query,
         limit: 10,
-        scopeType: searchScopeFilter === "combined" ? undefined : searchScopeFilter,
+        scopeType:
+          searchScopeFilter === "combined" ? undefined : searchScopeFilter,
         sourceTypes:
           searchTypeFilter === "all" ? undefined : [searchTypeFilter],
       });
@@ -853,60 +892,66 @@ function KnowledgePage() {
     setHits([]);
   }, []);
 
-  const handleGraphQuery = useCallback(async (overrideQuery?: string) => {
-    if (knowledgePageDisabled) {
-      return;
-    }
-    const query = (overrideQuery ?? graphQueryText).trim();
-    const datasetScope = graphQueryDatasetScopeText
-      .split(",")
-      .map((item) => item.trim())
-      .filter(Boolean);
-    if (!query) {
-      message.warning(t("knowledge.graphQuery.emptyQuery"));
-      return;
-    }
-    try {
-      setGraphQueryLoading(true);
-      setGraphQueryError(null);
-      const result = await api.graphQuery({
-        query,
-        mode: graphQueryMode,
-        scopeType: graphQueryScopeFilter === "combined" ? undefined : graphQueryScopeFilter,
-        scopeId:
-          graphQueryScopeFilter === "combined"
-            ? undefined
-            : (graphQueryScopeId || "").trim() || undefined,
-        topK: graphQueryTopK,
-        timeoutSec: graphQueryTimeoutSec,
-        datasetScope: datasetScope.length ? datasetScope : undefined,
-      });
-      setGraphQueryResults(result);
-      setGraphQueryClickedNode(null);
-      setGraphQueryNodeDrawerOpen(false);
-      setGraphQueryNodePath([]);
-      setGraphRelationPredicateFilter("all");
-      setGraphRelationSortMode("score_desc");
-    } catch (error) {
-      const message_text =
-        error instanceof Error ? error.message : "Graph query failed";
-      setGraphQueryError(message_text);
-      console.error("Failed to execute graph query", error);
-      message.error(message_text);
-    } finally {
-      setGraphQueryLoading(false);
-    }
-  }, [
-    graphQueryText,
-    graphQueryScopeFilter,
-    graphQueryScopeId,
-    graphQueryMode,
-    graphQueryTopK,
-    graphQueryTimeoutSec,
-    graphQueryDatasetScopeText,
-    knowledgePageDisabled,
-    t,
-  ]);
+  const handleGraphQuery = useCallback(
+    async (overrideQuery?: string) => {
+      if (knowledgePageDisabled) {
+        return;
+      }
+      const query = (overrideQuery ?? graphQueryText).trim();
+      const datasetScope = graphQueryDatasetScopeText
+        .split(",")
+        .map((item) => item.trim())
+        .filter(Boolean);
+      if (!query) {
+        message.warning(t("knowledge.graphQuery.emptyQuery"));
+        return;
+      }
+      try {
+        setGraphQueryLoading(true);
+        setGraphQueryError(null);
+        const result = await api.graphQuery({
+          query,
+          mode: graphQueryMode,
+          scopeType:
+            graphQueryScopeFilter === "combined"
+              ? undefined
+              : graphQueryScopeFilter,
+          scopeId:
+            graphQueryScopeFilter === "combined"
+              ? undefined
+              : (graphQueryScopeId || "").trim() || undefined,
+          topK: graphQueryTopK,
+          timeoutSec: graphQueryTimeoutSec,
+          datasetScope: datasetScope.length ? datasetScope : undefined,
+        });
+        setGraphQueryResults(result);
+        setGraphQueryClickedNode(null);
+        setGraphQueryNodeDrawerOpen(false);
+        setGraphQueryNodePath([]);
+        setGraphRelationPredicateFilter("all");
+        setGraphRelationSortMode("score_desc");
+      } catch (error) {
+        const message_text =
+          error instanceof Error ? error.message : "Graph query failed";
+        setGraphQueryError(message_text);
+        console.error("Failed to execute graph query", error);
+        message.error(message_text);
+      } finally {
+        setGraphQueryLoading(false);
+      }
+    },
+    [
+      graphQueryText,
+      graphQueryScopeFilter,
+      graphQueryScopeId,
+      graphQueryMode,
+      graphQueryTopK,
+      graphQueryTimeoutSec,
+      graphQueryDatasetScopeText,
+      knowledgePageDisabled,
+      t,
+    ],
+  );
 
   const handleResetGraphQuery = useCallback(() => {
     setGraphQueryText("");
@@ -935,7 +980,9 @@ function KnowledgePage() {
     }
 
     const nodeIdSet = new Set(
-      graphQueryResults.records.map((record) => safeGraphNodeId(record.subject)),
+      graphQueryResults.records.map((record) =>
+        safeGraphNodeId(record.subject),
+      ),
     );
 
     const outgoing = graphQueryResults.records.filter(
@@ -966,7 +1013,10 @@ function KnowledgePage() {
     () => [
       { label: t("knowledge.graphQuery.sortScoreDesc"), value: "score_desc" },
       { label: t("knowledge.graphQuery.sortScoreAsc"), value: "score_asc" },
-      { label: t("knowledge.graphQuery.sortPredicate"), value: "predicate_asc" },
+      {
+        label: t("knowledge.graphQuery.sortPredicate"),
+        value: "predicate_asc",
+      },
     ],
     [t],
   );
@@ -976,7 +1026,9 @@ function KnowledgePage() {
       const filtered =
         graphRelationPredicateFilter === "all"
           ? records
-          : records.filter((record) => record.predicate === graphRelationPredicateFilter);
+          : records.filter(
+              (record) => record.predicate === graphRelationPredicateFilter,
+            );
 
       const sorted = [...filtered];
       sorted.sort((a, b) => {
@@ -1020,16 +1072,19 @@ function KnowledgePage() {
     });
   }, []);
 
-  const handleDeleteSource = useCallback(async (sourceId: string) => {
-    try {
-      await api.deleteKnowledgeSource(sourceId);
-      message.success(t("knowledge.deleteSuccess"));
-      await loadData();
-    } catch (error) {
-      console.error("Failed to delete knowledge source", error);
-      message.error(t("knowledge.deleteFailed"));
-    }
-  }, [loadData, t]);
+  const handleDeleteSource = useCallback(
+    async (sourceId: string) => {
+      try {
+        await api.deleteKnowledgeSource(sourceId);
+        message.success(t("knowledge.deleteSuccess"));
+        await loadData();
+      } catch (error) {
+        console.error("Failed to delete knowledge source", error);
+        message.error(t("knowledge.deleteFailed"));
+      }
+    },
+    [loadData, t],
+  );
 
   const handleConfirmDeleteSource = useCallback(
     (sourceId: string, sourceName: string) => {
@@ -1163,7 +1218,8 @@ function KnowledgePage() {
     setSourceContent(null);
     setDetailDrawerOpen(true);
     setSourceContentLoading(true);
-    api.getKnowledgeSourceContent(record.id)
+    api
+      .getKnowledgeSourceContent(record.id)
       .then((data) => setSourceContent(data))
       .catch(() => setSourceContent({ indexed: false, documents: [] }))
       .finally(() => setSourceContentLoading(false));
@@ -1232,7 +1288,11 @@ function KnowledgePage() {
       status: progress.status,
       label: progress.labelI18nKey
         ? progress.labelDefault
-          ? t(progress.labelI18nKey, progress.labelDefault, progress.labelParams)
+          ? t(
+              progress.labelI18nKey,
+              progress.labelDefault,
+              progress.labelParams,
+            )
           : t(progress.labelI18nKey, progress.labelParams)
         : "",
     };
@@ -1246,7 +1306,13 @@ function KnowledgePage() {
   ]);
 
   const knowledgeQuantMetrics = useMemo(
-    () => computeKnowledgeQuantMetrics(sources, hits, backfillStatus, activeKnowledgeTasks),
+    () =>
+      computeKnowledgeQuantMetrics(
+        sources,
+        hits,
+        backfillStatus,
+        activeKnowledgeTasks,
+      ),
     [activeKnowledgeTasks, backfillStatus, hits, sources],
   );
   const quantCards = buildKnowledgeQuantCardViewModels({
@@ -1358,260 +1424,329 @@ function KnowledgePage() {
       <Space
         direction="vertical"
         size={16}
-        className={`${styles.contentStack} ${knowledgePageDisabled ? styles.disabledPanel : ""}`}
+        className={`${styles.contentStack} ${
+          knowledgePageDisabled ? styles.disabledPanel : ""
+        }`}
       >
-
-      <Card>
-        <Space className={styles.fullWidth} direction="vertical" size={12}>
-          <div className={styles.quantHeader}>
-            <Typography.Text>{t("knowledge.quantPanelTitle")}</Typography.Text>
-            <Typography.Text type="secondary">
-              {t("knowledge.quantPanelHint")}
-            </Typography.Text>
-          </div>
-          <div className={styles.quantGrid}>
-            {quantCards.map((item) => {
-              const statusLabel = getKnowledgeQuantStatusLabel(item.assessment.status);
-              return (
-                <div
-                  key={item.key}
-                  className={`${styles.quantCard} ${item.assessment.tone === "positive" ? styles.quantCardPositive : item.assessment.tone === "warning" ? styles.quantCardWarning : styles.quantCardNeutral}`}
-                >
-                  <Typography.Text className={styles.quantLabel}>{item.label}</Typography.Text>
-                  <Typography.Text className={styles.quantValue}>{item.value}</Typography.Text>
-                  <Typography.Text className={styles.quantNote}>
-                    {t(statusLabel.i18nKey)}
-                  </Typography.Text>
-                  <Typography.Text className={styles.quantReason}>
-                    {t(`knowledge.quantReason.${item.reason.key}`, item.reason.params || {})}
-                  </Typography.Text>
-                  {item.action ? (
-                    <div className={styles.quantActionRow}>
-                      <Button
-                        size="small"
-                        type="link"
-                        onClick={item.action.onClick}
-                        loading={item.action.loading}
-                        disabled={knowledgePageDisabled}
-                        className={styles.quantActionButton}
-                      >
-                        {item.action.label}
-                      </Button>
-                    </div>
-                  ) : null}
-                </div>
-              );
-            })}
-          </div>
-        </Space>
-      </Card>
-
-      {unifiedBatchProgress.visible ? (
         <Card>
-          <div className={styles.unifiedProgressRowAfterMetrics}>
-            <Typography.Text className={styles.unifiedProgressLabel}>
-              {unifiedBatchProgress.label}
-            </Typography.Text>
-            <Progress
-              percent={unifiedBatchProgress.percent}
-              size="small"
-              status={unifiedBatchProgress.status}
-            />
-            {activeKnowledgeTasks.length > 0 ? (
-              <Space direction="vertical" size={4} className={styles.taskStateList}>
-                {activeKnowledgeTasks.slice(0, 3).map((task) => (
-                  <Typography.Text key={task.task_id} type="secondary" className={styles.taskStateItem}>
-                    {`${String(task.task_type || "knowledge")} · ${String(task.stage_message || task.current_stage || task.status || "running")}`}
-                    {typeof task.percent === "number" ? ` · ${Math.max(0, Math.min(100, task.percent))}%` : ""}
-                    {typeof task.current === "number" && typeof task.total === "number" && task.total > 0
-                      ? ` (${task.current}/${task.total})`
-                      : ""}
-                  </Typography.Text>
-                ))}
-              </Space>
-            ) : null}
-          </div>
-        </Card>
-      ) : null}
-
-      <Card>
-        <Space className={styles.fullWidth} direction="vertical" size={12}>
-          <div className={styles.searchHeader}>
-            <Typography.Text >{t("knowledge.search")}</Typography.Text>
-            {hits.length > 0 ? (
-              <Tag color="blue">
-                {t("knowledge.searchHitCount", { count: hits.length })}
-              </Tag>
-            ) : null}
-          </div>
-          <div className={styles.searchControls}>
-            <Space.Compact className={styles.searchCompact}>
-              <Select
-                value={searchScopeFilter}
-                onChange={(value) =>
-                  setSearchScopeFilter(value as KnowledgeSearchScopeFilter)
-                }
-                options={knowledgeScopeOptions(t)}
-                className={styles.searchTypeSelect}
-              />
-              <Select
-                value={searchTypeFilter}
-                onChange={(value) =>
-                  setSearchTypeFilter(value as KnowledgeSourceType | "all")
-                }
-                options={[
-                  { label: t("knowledge.allTypes"), value: "all" },
-                  ...sourceTypeOptions(t),
-                ]}
-                className={styles.searchTypeSelect}
-              />
-              <Input
-                value={searchQuery}
-                onChange={(event) => {
-                  const value = event.target.value;
-                  setSearchQuery(value);
-                  if (!value.trim() && hits.length > 0) {
-                    setHits([]);
-                  }
-                }}
-                placeholder={t("knowledge.searchPlaceholder")}
-                onPressEnter={handleSearch}
-              />
-            </Space.Compact>
-            <div className={styles.searchButtons}>
-              <Button onClick={handleResetSearch}>{t("common.reset")}</Button>
-              <Button
-                type="primary"
-                icon={<SearchOutlined />}
-                loading={searching}
-                onClick={handleSearch}
-              >
-                {t("knowledge.search")}
-              </Button>
+          <Space className={styles.fullWidth} direction="vertical" size={12}>
+            <div className={styles.quantHeader}>
+              <Typography.Text>
+                {t("knowledge.quantPanelTitle")}
+              </Typography.Text>
+              <Typography.Text type="secondary">
+                {t("knowledge.quantPanelHint")}
+              </Typography.Text>
             </div>
-          </div>
-        </Space>
-        {showSearchPanel ? (
-          <div className={styles.searchResultsWrap}>
-            {searching ? (
-              <div className={styles.searchStatusText}>
-                <Spin size="small" />
-              </div>
-            ) : hits.length === 0 ? (
-              <div className={styles.searchStatusText}>{t("knowledge.searchEmpty")}</div>
-            ) : (
-              <div className={styles.searchResultList}>
-                <Space direction="vertical" size={12} className={styles.fullWidth}>
-                  {hits.map((hit) => (
-                    <Card
-                      key={`${hit.source_id}-${hit.document_path}-${hit.score}`}
-                      className={styles.searchHitCard}
-                    >
-                      <div className={styles.searchHitTopRow}>
-                        <Space>
-                          <Tag color="blue">{hit.source_name}</Tag>
-                          <Tag>{hit.source_type}</Tag>
-                          {hit.scope_type ? (
-                            <Tag color={hit.scope_type === "project" ? "geekblue" : "green"}>
-                              {hit.scope_type}
-                            </Tag>
-                          ) : null}
-                        </Space>
-                        <Tag color="geekblue">
-                          {t("knowledge.scoreLabel", {
-                            score: Number(hit.score).toFixed(2),
-                          })}
-                        </Tag>
+            <div className={styles.quantGrid}>
+              {quantCards.map((item) => {
+                const statusLabel = getKnowledgeQuantStatusLabel(
+                  item.assessment.status,
+                );
+                return (
+                  <div
+                    key={item.key}
+                    className={`${styles.quantCard} ${
+                      item.assessment.tone === "positive"
+                        ? styles.quantCardPositive
+                        : item.assessment.tone === "warning"
+                        ? styles.quantCardWarning
+                        : styles.quantCardNeutral
+                    }`}
+                  >
+                    <Typography.Text className={styles.quantLabel}>
+                      {item.label}
+                    </Typography.Text>
+                    <Typography.Text className={styles.quantValue}>
+                      {item.value}
+                    </Typography.Text>
+                    <Typography.Text className={styles.quantNote}>
+                      {t(statusLabel.i18nKey)}
+                    </Typography.Text>
+                    <Typography.Text className={styles.quantReason}>
+                      {t(
+                        `knowledge.quantReason.${item.reason.key}`,
+                        item.reason.params || {},
+                      )}
+                    </Typography.Text>
+                    {item.action ? (
+                      <div className={styles.quantActionRow}>
+                        <Button
+                          size="small"
+                          type="link"
+                          onClick={item.action.onClick}
+                          loading={item.action.loading}
+                          disabled={knowledgePageDisabled}
+                          className={styles.quantActionButton}
+                        >
+                          {item.action.label}
+                        </Button>
                       </div>
-                      <Typography.Text >{hit.document_title}</Typography.Text>
-                      <Typography.Text type="secondary" className={styles.searchHitPath}>
-                        {hit.document_path}
-                      </Typography.Text>
-                      <Typography.Paragraph className={styles.searchHitSnippet}>
-                        {hit.snippet}
-                      </Typography.Paragraph>
-                    </Card>
+                    ) : null}
+                  </div>
+                );
+              })}
+            </div>
+          </Space>
+        </Card>
+
+        {unifiedBatchProgress.visible ? (
+          <Card>
+            <div className={styles.unifiedProgressRowAfterMetrics}>
+              <Typography.Text className={styles.unifiedProgressLabel}>
+                {unifiedBatchProgress.label}
+              </Typography.Text>
+              <Progress
+                percent={unifiedBatchProgress.percent}
+                size="small"
+                status={unifiedBatchProgress.status}
+              />
+              {activeKnowledgeTasks.length > 0 ? (
+                <Space
+                  direction="vertical"
+                  size={4}
+                  className={styles.taskStateList}
+                >
+                  {activeKnowledgeTasks.slice(0, 3).map((task) => (
+                    <Typography.Text
+                      key={task.task_id}
+                      type="secondary"
+                      className={styles.taskStateItem}
+                    >
+                      {`${String(task.task_type || "knowledge")} · ${String(
+                        task.stage_message ||
+                          task.current_stage ||
+                          task.status ||
+                          "running",
+                      )}`}
+                      {typeof task.percent === "number"
+                        ? ` · ${Math.max(0, Math.min(100, task.percent))}%`
+                        : ""}
+                      {typeof task.current === "number" &&
+                      typeof task.total === "number" &&
+                      task.total > 0
+                        ? ` (${task.current}/${task.total})`
+                        : ""}
+                    </Typography.Text>
                   ))}
                 </Space>
-              </div>
-            )}
-          </div>
+              ) : null}
+            </div>
+          </Card>
         ) : null}
-      </Card>
 
-      <div className={styles.addSourceRow}>
-        <Button icon={<PlusOutlined />} onClick={() => setModalOpen(true)}>
-          {t("knowledge.addSource")}
-        </Button>
-      </div>
-
-      <div>
-      <Card loading={loading}>
-        <div className={styles.filterBar}>
-          <div className={styles.filterGroup}>
-            <Typography.Text className={styles.filterLabel}>
-              {t("knowledge.sourceOriginFilter")}
-            </Typography.Text>
-            <Select
-              value={sourceOriginFilter}
-              onChange={(value) => setSourceOriginFilter(value as SourceOriginFilter)}
-              options={[
-                { label: t("knowledge.originAll"), value: "all" },
-                { label: t("knowledge.originManual"), value: "manual" },
-                { label: t("knowledge.originAuto"), value: "auto" },
-              ]}
-              className={styles.filterSelect}
-            />
-          </div>
-          <div className={styles.filterGroup}>
-            <Typography.Text className={styles.filterLabel}>
-              {t("knowledge.sourceTypeFilter")}
-            </Typography.Text>
-            <Select
-              value={sourceTypeFilter}
-              onChange={(value) => setSourceTypeFilter(value as KnowledgeSourceType | "all")}
-              options={[
-                { label: t("knowledge.allTypes"), value: "all" },
-                ...sourceTypeOptions(t),
-              ]}
-              className={styles.filterSelect}
-            />
-          </div>
-        </div>
-        {filteredSources.length === 0 ? (
-          <Empty description={t("knowledge.empty")} />
-        ) : (
-          <div className={styles.cardsGrid}>
-            {filteredSources.map((record) => {
-              const originText = getSourceOriginText(record, t);
-              const remoteLine = formatRemoteStatus(record, t);
-              const isActiveCard = indexingId === record.id;
-              const cardSubject = (record.subject || record.name || "").trim();
-              const summaryText = (record.summary || "").trim();
-              const summaryKeywords = record.keywords || [];
-              const hideSummaryBlock =
-                cardSubject.length > 0 &&
-                summaryText.length > 0 &&
-                cardSubject === summaryText;
-              const indexedCountText = record.status.indexed
-                ? t("knowledge.indexedCount", {
-                    documents: record.status.document_count,
-                    chunks: record.status.chunk_count,
-                  })
-                : "-";
-              return (
-                <div key={record.id}>
-                  <div
-                    className={`${styles.cardContainer} ${isActiveCard ? styles.cardContainerActive : ""}`}
-                    aria-busy={isActiveCard}
+        <Card>
+          <Space className={styles.fullWidth} direction="vertical" size={12}>
+            <div className={styles.searchHeader}>
+              <Typography.Text>{t("knowledge.search")}</Typography.Text>
+              {hits.length > 0 ? (
+                <Tag color="blue">
+                  {t("knowledge.searchHitCount", { count: hits.length })}
+                </Tag>
+              ) : null}
+            </div>
+            <div className={styles.searchControls}>
+              <Space.Compact className={styles.searchCompact}>
+                <Select
+                  value={searchScopeFilter}
+                  onChange={(value) =>
+                    setSearchScopeFilter(value as KnowledgeSearchScopeFilter)
+                  }
+                  options={knowledgeScopeOptions(t)}
+                  className={styles.searchTypeSelect}
+                />
+                <Select
+                  value={searchTypeFilter}
+                  onChange={(value) =>
+                    setSearchTypeFilter(value as KnowledgeSourceType | "all")
+                  }
+                  options={[
+                    { label: t("knowledge.allTypes"), value: "all" },
+                    ...sourceTypeOptions(t),
+                  ]}
+                  className={styles.searchTypeSelect}
+                />
+                <Input
+                  value={searchQuery}
+                  onChange={(event) => {
+                    const value = event.target.value;
+                    setSearchQuery(value);
+                    if (!value.trim() && hits.length > 0) {
+                      setHits([]);
+                    }
+                  }}
+                  placeholder={t("knowledge.searchPlaceholder")}
+                  onPressEnter={handleSearch}
+                />
+              </Space.Compact>
+              <div className={styles.searchButtons}>
+                <Button onClick={handleResetSearch}>{t("common.reset")}</Button>
+                <Button
+                  type="primary"
+                  icon={<SearchOutlined />}
+                  loading={searching}
+                  onClick={handleSearch}
+                >
+                  {t("knowledge.search")}
+                </Button>
+              </div>
+            </div>
+          </Space>
+          {showSearchPanel ? (
+            <div className={styles.searchResultsWrap}>
+              {searching ? (
+                <div className={styles.searchStatusText}>
+                  <Spin size="small" />
+                </div>
+              ) : hits.length === 0 ? (
+                <div className={styles.searchStatusText}>
+                  {t("knowledge.searchEmpty")}
+                </div>
+              ) : (
+                <div className={styles.searchResultList}>
+                  <Space
+                    direction="vertical"
+                    size={12}
+                    className={styles.fullWidth}
                   >
+                    {hits.map((hit) => (
+                      <Card
+                        key={`${hit.source_id}-${hit.document_path}-${hit.score}`}
+                        className={styles.searchHitCard}
+                      >
+                        <div className={styles.searchHitTopRow}>
+                          <Space>
+                            <Tag color="blue">{hit.source_name}</Tag>
+                            <Tag>{hit.source_type}</Tag>
+                            {hit.scope_type ? (
+                              <Tag
+                                color={
+                                  hit.scope_type === "project"
+                                    ? "geekblue"
+                                    : "green"
+                                }
+                              >
+                                {hit.scope_type}
+                              </Tag>
+                            ) : null}
+                          </Space>
+                          <Tag color="geekblue">
+                            {t("knowledge.scoreLabel", {
+                              score: Number(hit.score).toFixed(2),
+                            })}
+                          </Tag>
+                        </div>
+                        <Typography.Text>{hit.document_title}</Typography.Text>
+                        <Typography.Text
+                          type="secondary"
+                          className={styles.searchHitPath}
+                        >
+                          {hit.document_path}
+                        </Typography.Text>
+                        <Typography.Paragraph
+                          className={styles.searchHitSnippet}
+                        >
+                          {hit.snippet}
+                        </Typography.Paragraph>
+                      </Card>
+                    ))}
+                  </Space>
+                </div>
+              )}
+            </div>
+          ) : null}
+        </Card>
+
+        <div className={styles.addSourceRow}>
+          <Button icon={<PlusOutlined />} onClick={() => setModalOpen(true)}>
+            {t("knowledge.addSource")}
+          </Button>
+        </div>
+
+        <div>
+          <Card loading={loading}>
+            <div className={styles.filterBar}>
+              <div className={styles.filterGroup}>
+                <Typography.Text className={styles.filterLabel}>
+                  {t("knowledge.sourceOriginFilter")}
+                </Typography.Text>
+                <Select
+                  value={sourceOriginFilter}
+                  onChange={(value) =>
+                    setSourceOriginFilter(value as SourceOriginFilter)
+                  }
+                  options={[
+                    { label: t("knowledge.originAll"), value: "all" },
+                    { label: t("knowledge.originManual"), value: "manual" },
+                    { label: t("knowledge.originAuto"), value: "auto" },
+                  ]}
+                  className={styles.filterSelect}
+                />
+              </div>
+              <div className={styles.filterGroup}>
+                <Typography.Text className={styles.filterLabel}>
+                  {t("knowledge.sourceTypeFilter")}
+                </Typography.Text>
+                <Select
+                  value={sourceTypeFilter}
+                  onChange={(value) =>
+                    setSourceTypeFilter(value as KnowledgeSourceType | "all")
+                  }
+                  options={[
+                    { label: t("knowledge.allTypes"), value: "all" },
+                    ...sourceTypeOptions(t),
+                  ]}
+                  className={styles.filterSelect}
+                />
+              </div>
+            </div>
+            {filteredSources.length === 0 ? (
+              <Empty description={t("knowledge.empty")} />
+            ) : (
+              <div className={styles.cardsGrid}>
+                {filteredSources.map((record) => {
+                  const originText = getSourceOriginText(record, t);
+                  const remoteLine = formatRemoteStatus(record, t);
+                  const isActiveCard = indexingId === record.id;
+                  const cardSubject = (
+                    record.subject ||
+                    record.name ||
+                    ""
+                  ).trim();
+                  const summaryText = (record.summary || "").trim();
+                  const summaryKeywords = record.keywords || [];
+                  const hideSummaryBlock =
+                    cardSubject.length > 0 &&
+                    summaryText.length > 0 &&
+                    cardSubject === summaryText;
+                  const indexedCountText = record.status.indexed
+                    ? t("knowledge.indexedCount", {
+                        documents: record.status.document_count,
+                        chunks: record.status.chunk_count,
+                      })
+                    : "-";
+                  return (
+                    <div key={record.id}>
+                      <div
+                        className={`${styles.cardContainer} ${
+                          isActiveCard ? styles.cardContainerActive : ""
+                        }`}
+                        aria-busy={isActiveCard}
+                      >
                         <div className={styles.cardHeader}>
                           <div className={styles.cardHeaderRow}>
-                            <Typography.Text type="secondary" className={styles.cardHeaderId}>
+                            <Typography.Text
+                              type="secondary"
+                              className={styles.cardHeaderId}
+                            >
                               {record.id}
                             </Typography.Text>
-                            <span className={styles.typeTag}>{record.type}</span>
-                            <span className={styles.originTag}>{originText}</span>
+                            <span className={styles.typeTag}>
+                              {record.type}
+                            </span>
+                            <span className={styles.originTag}>
+                              {originText}
+                            </span>
                           </div>
                         </div>
 
@@ -1658,7 +1793,9 @@ function KnowledgePage() {
                               >
                                 <Typography.Text
                                   className={styles.cardTitle}
-                                  title={summaryText || t("knowledge.inlineText")}
+                                  title={
+                                    summaryText || t("knowledge.inlineText")
+                                  }
                                 >
                                   {summaryText || t("knowledge.inlineText")}
                                 </Typography.Text>
@@ -1674,7 +1811,10 @@ function KnowledgePage() {
                               <div className={styles.infoBlock}>
                                 <div className={styles.keywordList}>
                                   {summaryKeywords.map((keyword) => (
-                                    <Tag key={`${record.id}-${keyword}`} className={styles.keywordTag}>
+                                    <Tag
+                                      key={`${record.id}-${keyword}`}
+                                      className={styles.keywordTag}
+                                    >
                                       {keyword}
                                     </Tag>
                                   ))}
@@ -1739,11 +1879,16 @@ function KnowledgePage() {
                                   <Typography.Text type="secondary">
                                     {t("knowledge.table.remote")}
                                   </Typography.Text>
-                                  <Typography.Text type="secondary">{remoteLine}</Typography.Text>
+                                  <Typography.Text type="secondary">
+                                    {remoteLine}
+                                  </Typography.Text>
                                 </div>
                               ) : null}
                               {record.status.remote_last_error ? (
-                                <Typography.Text type="secondary" className={styles.remoteError}>
+                                <Typography.Text
+                                  type="secondary"
+                                  className={styles.remoteError}
+                                >
                                   {t("knowledge.remoteLastError", {
                                     error: record.status.remote_last_error,
                                   })}
@@ -1784,190 +1929,230 @@ function KnowledgePage() {
                               icon={<DeleteOutlined />}
                               className={styles.deleteButton}
                               onClick={() =>
-                                handleConfirmDeleteSource(record.id, record.name)
+                                handleConfirmDeleteSource(
+                                  record.id,
+                                  record.name,
+                                )
                               }
                               title={t("common.delete")}
                             />
                           </div>
                         </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </Card>
-      </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </Card>
+        </div>
 
-      {/* Graph Query Section */}
-      <Card>
-        <Space className={styles.fullWidth} direction="vertical" size={12}>
-          <div className={styles.searchHeader}>
-            <Typography.Text>{t("knowledge.graphQuery.title")}</Typography.Text>
-            <Typography.Text type="secondary">
-              {t("knowledge.graphQuery.subtitle")}
-            </Typography.Text>
-          </div>
-          <div className={styles.searchControls}>
-            <Space.Compact className={styles.searchCompact}>
-              <Select
-                value={graphQueryMode}
-                onChange={(value) => setGraphQueryMode(value as "template" | "cypher")}
-                options={[
-                  { label: t("knowledge.graphQuery.template"), value: "template" },
-                  { label: t("knowledge.graphQuery.cypher"), value: "cypher" },
-                ]}
-                className={styles.searchTypeSelect}
-              />
-              <Input
-                value={graphQueryText}
-                onChange={(e) => setGraphQueryText(e.target.value)}
-                placeholder={t("knowledge.graphQuery.placeholder")}
-                onPressEnter={() => {
-                  void handleGraphQuery();
-                }}
-              />
-            </Space.Compact>
-            <div className={styles.searchButtons}>
-              <Button onClick={handleResetGraphQuery}>{t("common.reset")}</Button>
-              <Button
-                type="primary"
-                icon={<SearchOutlined />}
-                loading={graphQueryLoading}
-                onClick={() => {
-                  void handleGraphQuery();
-                }}
-                disabled={knowledgePageDisabled}
-              >
-                {t("knowledge.graphQuery.execute")}
-              </Button>
+        {/* Graph Query Section */}
+        <Card>
+          <Space className={styles.fullWidth} direction="vertical" size={12}>
+            <div className={styles.searchHeader}>
+              <Typography.Text>
+                {t("knowledge.graphQuery.title")}
+              </Typography.Text>
+              <Typography.Text type="secondary">
+                {t("knowledge.graphQuery.subtitle")}
+              </Typography.Text>
             </div>
-          </div>
-          <div className={styles.searchParams}>
-            <Space size="small" wrap>
-              <div className={styles.paramControl}>
-                <Typography.Text type="secondary" className={styles.paramLabel}>
-                  {t("knowledge.graphQuery.scope")}:
-                </Typography.Text>
+            <div className={styles.searchControls}>
+              <Space.Compact className={styles.searchCompact}>
                 <Select
-                  value={graphQueryScopeFilter}
+                  value={graphQueryMode}
                   onChange={(value) =>
-                    setGraphQueryScopeFilter(value as KnowledgeSearchScopeFilter)
+                    setGraphQueryMode(value as "template" | "cypher")
                   }
-                  options={knowledgeScopeOptions(t)}
-                  style={{ width: 140 }}
+                  options={[
+                    {
+                      label: t("knowledge.graphQuery.template"),
+                      value: "template",
+                    },
+                    {
+                      label: t("knowledge.graphQuery.cypher"),
+                      value: "cypher",
+                    },
+                  ]}
+                  className={styles.searchTypeSelect}
                 />
-              </div>
-              <div className={styles.paramControl}>
-                <Typography.Text type="secondary" className={styles.paramLabel}>
-                  {t("knowledge.graphQuery.scopeId")}:
-                </Typography.Text>
                 <Input
-                  value={graphQueryScopeId}
-                  disabled={graphQueryScopeFilter === "combined"}
-                  onChange={(event) => setGraphQueryScopeId(event.target.value)}
-                  placeholder={t("knowledge.graphQuery.scopeIdOptional")}
-                  style={{ width: 180 }}
+                  value={graphQueryText}
+                  onChange={(e) => setGraphQueryText(e.target.value)}
+                  placeholder={t("knowledge.graphQuery.placeholder")}
+                  onPressEnter={() => {
+                    void handleGraphQuery();
+                  }}
                 />
+              </Space.Compact>
+              <div className={styles.searchButtons}>
+                <Button onClick={handleResetGraphQuery}>
+                  {t("common.reset")}
+                </Button>
+                <Button
+                  type="primary"
+                  icon={<SearchOutlined />}
+                  loading={graphQueryLoading}
+                  onClick={() => {
+                    void handleGraphQuery();
+                  }}
+                  disabled={knowledgePageDisabled}
+                >
+                  {t("knowledge.graphQuery.execute")}
+                </Button>
               </div>
-              <div className={styles.paramControl}>
-                <Typography.Text type="secondary" className={styles.paramLabel}>
-                  {t("knowledge.graphQuery.topK")}:
-                </Typography.Text>
-                <InputNumber
-                  min={1}
-                  max={100}
-                  value={graphQueryTopK}
-                  onChange={(value) => setGraphQueryTopK(value || 20)}
-                  style={{ width: 88 }}
-                />
-              </div>
-              <div className={styles.paramControl}>
-                <Typography.Text type="secondary" className={styles.paramLabel}>
-                  {t("knowledge.graphQuery.timeout")}:
-                </Typography.Text>
-                <InputNumber
-                  min={1}
-                  max={300}
-                  value={graphQueryTimeoutSec}
-                  onChange={(value) => setGraphQueryTimeoutSec(value || 20)}
-                  style={{ width: 88 }}
-                />
-              </div>
-              <div className={styles.paramControl}>
-                <Typography.Text type="secondary" className={styles.paramLabel}>
-                  {t("knowledge.graphQuery.datasetScope")}:
-                </Typography.Text>
-                <Input
-                  value={graphQueryDatasetScopeText}
-                  onChange={(e) => setGraphQueryDatasetScopeText(e.target.value)}
-                  placeholder={t("knowledge.graphQuery.datasetScopePlaceholder")}
-                  style={{ width: 220 }}
-                />
-              </div>
-            </Space>
-          </div>
-        </Space>
+            </div>
+            <div className={styles.searchParams}>
+              <Space size="small" wrap>
+                <div className={styles.paramControl}>
+                  <Typography.Text
+                    type="secondary"
+                    className={styles.paramLabel}
+                  >
+                    {t("knowledge.graphQuery.scope")}:
+                  </Typography.Text>
+                  <Select
+                    value={graphQueryScopeFilter}
+                    onChange={(value) =>
+                      setGraphQueryScopeFilter(
+                        value as KnowledgeSearchScopeFilter,
+                      )
+                    }
+                    options={knowledgeScopeOptions(t)}
+                    style={{ width: 140 }}
+                  />
+                </div>
+                <div className={styles.paramControl}>
+                  <Typography.Text
+                    type="secondary"
+                    className={styles.paramLabel}
+                  >
+                    {t("knowledge.graphQuery.scopeId")}:
+                  </Typography.Text>
+                  <Input
+                    value={graphQueryScopeId}
+                    disabled={graphQueryScopeFilter === "combined"}
+                    onChange={(event) =>
+                      setGraphQueryScopeId(event.target.value)
+                    }
+                    placeholder={t("knowledge.graphQuery.scopeIdOptional")}
+                    style={{ width: 180 }}
+                  />
+                </div>
+                <div className={styles.paramControl}>
+                  <Typography.Text
+                    type="secondary"
+                    className={styles.paramLabel}
+                  >
+                    {t("knowledge.graphQuery.topK")}:
+                  </Typography.Text>
+                  <InputNumber
+                    min={1}
+                    max={100}
+                    value={graphQueryTopK}
+                    onChange={(value) => setGraphQueryTopK(value || 20)}
+                    style={{ width: 88 }}
+                  />
+                </div>
+                <div className={styles.paramControl}>
+                  <Typography.Text
+                    type="secondary"
+                    className={styles.paramLabel}
+                  >
+                    {t("knowledge.graphQuery.timeout")}:
+                  </Typography.Text>
+                  <InputNumber
+                    min={1}
+                    max={300}
+                    value={graphQueryTimeoutSec}
+                    onChange={(value) => setGraphQueryTimeoutSec(value || 20)}
+                    style={{ width: 88 }}
+                  />
+                </div>
+                <div className={styles.paramControl}>
+                  <Typography.Text
+                    type="secondary"
+                    className={styles.paramLabel}
+                  >
+                    {t("knowledge.graphQuery.datasetScope")}:
+                  </Typography.Text>
+                  <Input
+                    value={graphQueryDatasetScopeText}
+                    onChange={(e) =>
+                      setGraphQueryDatasetScopeText(e.target.value)
+                    }
+                    placeholder={t(
+                      "knowledge.graphQuery.datasetScopePlaceholder",
+                    )}
+                    style={{ width: 220 }}
+                  />
+                </div>
+              </Space>
+            </div>
+          </Space>
 
-        {graphQueryResults && (
-          <div style={{ marginTop: 20 }}>
-            <GraphQueryResults
-              records={graphQueryResults.records}
-              summary={graphQueryResults.summary}
-              warnings={graphQueryResults.warnings}
-              provenance={graphQueryResults.provenance}
-              query={graphQueryText}
-              loading={graphQueryLoading}
-              onRefresh={handleGraphQuery}
-              activeNodeId={graphQueryClickedNode}
-              onRecordClick={(nodeId: string) => handleGraphNodeOpen(nodeId)}
-            />
-          </div>
-        )}
+          {graphQueryResults && (
+            <div style={{ marginTop: 20 }}>
+              <GraphQueryResults
+                records={graphQueryResults.records}
+                summary={graphQueryResults.summary}
+                warnings={graphQueryResults.warnings}
+                provenance={graphQueryResults.provenance}
+                query={graphQueryText}
+                loading={graphQueryLoading}
+                onRefresh={handleGraphQuery}
+                activeNodeId={graphQueryClickedNode}
+                onRecordClick={(nodeId: string) => handleGraphNodeOpen(nodeId)}
+              />
+            </div>
+          )}
 
-        {graphQueryResults && (
-          <div style={{ marginTop: 20 }}>
-            <GraphVisualization
-              data={recordsToVisualizationData(
-                graphQueryResults.records,
-                graphQueryResults.summary,
-                graphQueryResults.provenance,
-              )}
-              loading={graphQueryLoading}
-              activeNodeId={graphQueryClickedNode}
-              onActiveNodeChange={setGraphQueryClickedNode}
-              onNodeClick={(node: GraphNode) => handleGraphNodeOpen(node.id)}
-              onUsePathContext={(pathSummary, runNow) => {
-                const contextLine = buildPathContextLine(pathSummary);
-                setGraphQueryText((prev) => {
-                  const nextQuery = appendUniqueContextLine(prev, contextLine);
-                  if (runNow) {
-                    void handleGraphQuery(nextQuery);
-                  }
-                  return nextQuery;
-                });
+          {graphQueryResults && (
+            <div style={{ marginTop: 20 }}>
+              <GraphVisualization
+                data={recordsToVisualizationData(
+                  graphQueryResults.records,
+                  graphQueryResults.summary,
+                  graphQueryResults.provenance,
+                )}
+                loading={graphQueryLoading}
+                activeNodeId={graphQueryClickedNode}
+                onActiveNodeChange={setGraphQueryClickedNode}
+                onNodeClick={(node: GraphNode) => handleGraphNodeOpen(node.id)}
+                onUsePathContext={(pathSummary, runNow) => {
+                  const contextLine = buildPathContextLine(pathSummary);
+                  setGraphQueryText((prev) => {
+                    const nextQuery = appendUniqueContextLine(
+                      prev,
+                      contextLine,
+                    );
+                    if (runNow) {
+                      void handleGraphQuery(nextQuery);
+                    }
+                    return nextQuery;
+                  });
+                }}
+              />
+            </div>
+          )}
+
+          {graphQueryError && (
+            <div
+              style={{
+                marginTop: 16,
+                padding: "12px 16px",
+                backgroundColor: "#fff1f0",
+                border: "1px solid #ffccc7",
+                borderRadius: 4,
               }}
-            />
-          </div>
-        )}
-
-        {graphQueryError && (
-          <div
-            style={{
-              marginTop: 16,
-              padding: "12px 16px",
-              backgroundColor: "#fff1f0",
-              border: "1px solid #ffccc7",
-              borderRadius: 4,
-            }}
-          >
-            <Typography.Text type="danger">
-              <strong>{t("common.error")}:</strong> {graphQueryError}
-            </Typography.Text>
-          </div>
-        )}
-      </Card>
-
+            >
+              <Typography.Text type="danger">
+                <strong>{t("common.error")}:</strong> {graphQueryError}
+              </Typography.Text>
+            </div>
+          )}
+        </Card>
       </Space>
 
       <Modal
@@ -2031,8 +2216,12 @@ function KnowledgePage() {
                   }}
                   className={dragZoneClassName}
                 >
-                  <Space direction="vertical" size={6} className={styles.fullWidth}>
-                    <Typography.Text >
+                  <Space
+                    direction="vertical"
+                    size={6}
+                    className={styles.fullWidth}
+                  >
+                    <Typography.Text>
                       {t("knowledge.dragFileTitle")}
                     </Typography.Text>
                     <Typography.Text type="secondary">
@@ -2059,7 +2248,8 @@ function KnowledgePage() {
                   {t("knowledge.pickDirectory")}
                 </Button>
                 <Typography.Text type="secondary">
-                  {selectedDirectorySummary || t("knowledge.noDirectorySelected")}
+                  {selectedDirectorySummary ||
+                    t("knowledge.noDirectorySelected")}
                 </Typography.Text>
               </Space>
             </Form.Item>
@@ -2084,7 +2274,10 @@ function KnowledgePage() {
               label={t("knowledge.form.content")}
               rules={[{ required: true }]}
             >
-              <Input.TextArea rows={5} placeholder={t("knowledge.form.contentPlaceholder")} />
+              <Input.TextArea
+                rows={5}
+                placeholder={t("knowledge.form.contentPlaceholder")}
+              />
             </Form.Item>
           )}
           {selectedType === "chat" && (
@@ -2105,7 +2298,10 @@ function KnowledgePage() {
             <Input placeholder={t("knowledge.form.summaryPlaceholder")} />
           </Form.Item>
           <Form.Item name="enabled" valuePropName="checked">
-            <Switch checkedChildren={t("knowledge.form.enabled")} unCheckedChildren={t("knowledge.form.disabled")} />
+            <Switch
+              checkedChildren={t("knowledge.form.enabled")}
+              unCheckedChildren={t("knowledge.form.disabled")}
+            />
           </Form.Item>
         </Form>
       </Modal>
@@ -2256,7 +2452,9 @@ function KnowledgePage() {
               <Select
                 value={graphRelationPredicateFilter}
                 options={graphRelationPredicateOptions}
-                onChange={(value) => setGraphRelationPredicateFilter(String(value))}
+                onChange={(value) =>
+                  setGraphRelationPredicateFilter(String(value))
+                }
                 className={styles.graphNodeToolbarSelect}
               />
               <Select
@@ -2273,14 +2471,19 @@ function KnowledgePage() {
 
             {graphQueryNodePath.length > 0 ? (
               <div className={styles.graphNodePathWrap}>
-                <Typography.Text type="secondary" className={styles.graphNodePathLabel}>
+                <Typography.Text
+                  type="secondary"
+                  className={styles.graphNodePathLabel}
+                >
                   {t("knowledge.graphQuery.path")}:
                 </Typography.Text>
                 <Space size={6} wrap>
                   {graphQueryNodePath.map((nodeId, idx) => (
                     <Button
                       key={`${nodeId}-${idx}`}
-                      type={nodeId === graphQueryClickedNode ? "primary" : "default"}
+                      type={
+                        nodeId === graphQueryClickedNode ? "primary" : "default"
+                      }
                       size="small"
                       onClick={() => handleGraphNodeHop(nodeId)}
                     >
@@ -2292,7 +2495,9 @@ function KnowledgePage() {
             ) : null}
 
             <div className={styles.infoSection}>
-              <div className={styles.infoLabel}>{t("knowledge.graphQuery.nodeId")}</div>
+              <div className={styles.infoLabel}>
+                {t("knowledge.graphQuery.nodeId")}
+              </div>
               <div className={`${styles.infoBlock} ${styles.singleLineValue}`}>
                 {graphQueryClickedNode}
               </div>
@@ -2303,13 +2508,21 @@ function KnowledgePage() {
                 {t("knowledge.graphQuery.outgoingRelations")}
               </div>
               {filteredOutgoingRelations.length ? (
-                <Space direction="vertical" size={8} className={styles.fullWidth}>
+                <Space
+                  direction="vertical"
+                  size={8}
+                  className={styles.fullWidth}
+                >
                   {filteredOutgoingRelations.slice(0, 8).map((rel, idx) => {
                     const hopNodeId = extractHopNodeId(rel.object);
-                    const canHop = Boolean(hopNodeId) && graphNodeDetails.nodeIdSet.has(hopNodeId);
+                    const canHop =
+                      Boolean(hopNodeId) &&
+                      graphNodeDetails.nodeIdSet.has(hopNodeId);
                     return (
                       <div key={`out-${idx}`} className={styles.infoBlock}>
-                        <Typography.Text type="secondary">{rel.predicate}</Typography.Text>
+                        <Typography.Text type="secondary">
+                          {rel.predicate}
+                        </Typography.Text>
                         <div>{rel.object}</div>
                         <Space size={8} style={{ marginTop: 6 }}>
                           <Tag color="blue">{formatScore(rel.score).value}</Tag>
@@ -2317,7 +2530,9 @@ function KnowledgePage() {
                             size="small"
                             type="link"
                             disabled={!canHop}
-                            onClick={() => canHop && handleGraphNodeHop(hopNodeId)}
+                            onClick={() =>
+                              canHop && handleGraphNodeHop(hopNodeId)
+                            }
                           >
                             {t("knowledge.graphQuery.hop")}
                           </Button>
@@ -2336,21 +2551,33 @@ function KnowledgePage() {
                 {t("knowledge.graphQuery.incomingRelations")}
               </div>
               {filteredIncomingRelations.length ? (
-                <Space direction="vertical" size={8} className={styles.fullWidth}>
+                <Space
+                  direction="vertical"
+                  size={8}
+                  className={styles.fullWidth}
+                >
                   {filteredIncomingRelations.slice(0, 8).map((rel, idx) => {
                     const sourceNodeId = safeGraphNodeId(rel.subject);
-                    const canHop = Boolean(sourceNodeId) && graphNodeDetails.nodeIdSet.has(sourceNodeId);
+                    const canHop =
+                      Boolean(sourceNodeId) &&
+                      graphNodeDetails.nodeIdSet.has(sourceNodeId);
                     return (
                       <div key={`in-${idx}`} className={styles.infoBlock}>
-                        <Typography.Text type="secondary">{rel.subject}</Typography.Text>
+                        <Typography.Text type="secondary">
+                          {rel.subject}
+                        </Typography.Text>
                         <div>{rel.predicate}</div>
                         <Space size={8} style={{ marginTop: 6 }}>
-                          <Tag color="purple">{formatScore(rel.score).value}</Tag>
+                          <Tag color="purple">
+                            {formatScore(rel.score).value}
+                          </Tag>
                           <Button
                             size="small"
                             type="link"
                             disabled={!canHop}
-                            onClick={() => canHop && handleGraphNodeHop(sourceNodeId)}
+                            onClick={() =>
+                              canHop && handleGraphNodeHop(sourceNodeId)
+                            }
                           >
                             {t("knowledge.graphQuery.hop")}
                           </Button>
@@ -2378,15 +2605,21 @@ function KnowledgePage() {
           <Space direction="vertical" size={12} className={styles.fullWidth}>
             {selectedSource.name?.trim() ? (
               <div className={styles.infoSection}>
-                <div className={styles.infoLabel}>{t("knowledge.table.subject")}</div>
-                <div className={`${styles.infoBlock} ${styles.singleLineValue}`}>
+                <div className={styles.infoLabel}>
+                  {t("knowledge.table.subject")}
+                </div>
+                <div
+                  className={`${styles.infoBlock} ${styles.singleLineValue}`}
+                >
                   {selectedSource.subject || selectedSource.name}
                 </div>
               </div>
             ) : null}
 
             <div className={styles.infoSection}>
-              <div className={styles.infoLabel}>{t("knowledge.table.source")}</div>
+              <div className={styles.infoLabel}>
+                {t("knowledge.table.source")}
+              </div>
               <div className={styles.infoBlock}>
                 {selectedSourceSummaryData.summary || t("knowledge.inlineText")}
               </div>
@@ -2394,11 +2627,16 @@ function KnowledgePage() {
 
             {selectedSourceSummaryData.keywords.length > 0 ? (
               <div className={styles.infoSection}>
-                <div className={styles.infoLabel}>{t("knowledge.table.keywords")}</div>
+                <div className={styles.infoLabel}>
+                  {t("knowledge.table.keywords")}
+                </div>
                 <div className={styles.infoBlock}>
                   <div className={styles.keywordList}>
                     {selectedSourceSummaryData.keywords.map((keyword) => (
-                      <Tag key={`drawer-${selectedSource.id}-${keyword}`} className={styles.keywordTag}>
+                      <Tag
+                        key={`drawer-${selectedSource.id}-${keyword}`}
+                        className={styles.keywordTag}
+                      >
                         {keyword}
                       </Tag>
                     ))}
@@ -2408,7 +2646,9 @@ function KnowledgePage() {
             ) : null}
 
             <div className={styles.detailTagRow}>
-              <span className={styles.originTag}>{selectedSourceOriginText}</span>
+              <span className={styles.originTag}>
+                {selectedSourceOriginText}
+              </span>
               <span className={styles.typeTag}>{selectedSource.type}</span>
             </div>
 
@@ -2421,20 +2661,28 @@ function KnowledgePage() {
 
             {selectedSource.location ? (
               <div className={styles.infoSection}>
-                <div className={styles.infoLabel}>{t("knowledge.table.location")}</div>
-                <div className={styles.infoBlock}>{selectedSource.location}</div>
+                <div className={styles.infoLabel}>
+                  {t("knowledge.table.location")}
+                </div>
+                <div className={styles.infoBlock}>
+                  {selectedSource.location}
+                </div>
               </div>
             ) : null}
 
             <div className={styles.infoSection}>
-              <div className={styles.infoLabel}>{t("knowledge.table.chunkStats")}</div>
+              <div className={styles.infoLabel}>
+                {t("knowledge.table.chunkStats")}
+              </div>
               <div className={`${styles.infoBlock} ${styles.singleLineValue}`}>
                 {selectedSourceIndexedCountText}
               </div>
             </div>
 
             <div className={styles.infoSection}>
-              <div className={styles.infoLabel}>{t("knowledge.table.status")}</div>
+              <div className={styles.infoLabel}>
+                {t("knowledge.table.status")}
+              </div>
               <div>
                 <span
                   className={
@@ -2452,8 +2700,12 @@ function KnowledgePage() {
 
             {selectedSourceRemoteLine ? (
               <div className={styles.infoSection}>
-                <div className={styles.infoLabel}>{t("knowledge.table.remote")}</div>
-                <div className={styles.infoBlock}>{selectedSourceRemoteLine}</div>
+                <div className={styles.infoLabel}>
+                  {t("knowledge.table.remote")}
+                </div>
+                <div className={styles.infoBlock}>
+                  {selectedSourceRemoteLine}
+                </div>
               </div>
             ) : null}
 
@@ -2468,13 +2720,18 @@ function KnowledgePage() {
             <Divider style={{ margin: "4px 0" }} />
 
             <div className={styles.infoSection}>
-              <div className={styles.infoLabel}>{t("knowledge.documentContent")}</div>
+              <div className={styles.infoLabel}>
+                {t("knowledge.documentContent")}
+              </div>
               {sourceContentLoading ? (
                 <div className={styles.contentLoadingWrap}>
                   <Spin size="small" />
                 </div>
               ) : !sourceContent?.indexed ? (
-                <Typography.Text type="secondary" className={styles.contentEmpty}>
+                <Typography.Text
+                  type="secondary"
+                  className={styles.contentEmpty}
+                >
                   {selectedSource.status.indexed
                     ? t("knowledge.documentContentEmpty")
                     : t("knowledge.documentContentNotIndexed")}
@@ -2484,7 +2741,7 @@ function KnowledgePage() {
                   {sourceContent.documents.map((doc, idx) => (
                     <div key={doc.path || idx} className={styles.documentItem}>
                       {sourceContent.documents.length > 1 && (
-                        <Typography.Text  className={styles.documentTitle}>
+                        <Typography.Text className={styles.documentTitle}>
                           {doc.title || doc.path}
                         </Typography.Text>
                       )}

@@ -28,7 +28,8 @@ vi.mock("react-i18next", () => ({
       maybeOptions?: Record<string, unknown>,
     ) => {
       const fallback = typeof maybeFallback === "string" ? maybeFallback : key;
-      const options = typeof maybeFallback === "object" ? maybeFallback : maybeOptions;
+      const options =
+        typeof maybeFallback === "object" ? maybeFallback : maybeOptions;
       if (options && "count" in options) {
         return fallback.replace("{{count}}", String(options.count));
       }
@@ -37,7 +38,9 @@ vi.mock("react-i18next", () => ({
   }),
 }));
 
-function TestHarness({ onUploadCompleted }: {
+function TestHarness({
+  onUploadCompleted,
+}: {
   onUploadCompleted: ReturnType<typeof vi.fn>;
 }) {
   const controller = useProjectUploadController({
@@ -74,9 +77,14 @@ function TestHarness({ onUploadCompleted }: {
     },
     resolvedProjectRequestId: "proj-1",
     setResolvedProjectRequestId: vi.fn(),
-    getProjectAdapter: () => ({
-      upload: mockedAdapterUpload,
-    }) as unknown as Parameters<typeof useProjectUploadController>[0]["getProjectAdapter"] extends (...args: unknown[]) => infer R ? R : never,
+    getProjectAdapter: () =>
+      ({
+        upload: mockedAdapterUpload,
+      }) as unknown as Parameters<
+        typeof useProjectUploadController
+      >[0]["getProjectAdapter"] extends (...args: unknown[]) => infer R
+        ? R
+        : never,
     onUploadCompleted,
   });
 

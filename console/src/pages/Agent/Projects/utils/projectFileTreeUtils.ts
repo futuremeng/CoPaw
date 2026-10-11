@@ -46,11 +46,11 @@ export function isPathInStandardDir(
 export function isIntermediateFile(path: string): boolean {
   const normalized = normalizeProjectPath(path);
   return (
-    isPathInStandardDir(path, "intermediate")
-    || normalized.startsWith("metadata/")
-    || normalized.startsWith("cross-book/")
-    || normalized.startsWith("term-candidates/")
-    || normalized.startsWith("review/")
+    isPathInStandardDir(path, "intermediate") ||
+    normalized.startsWith("metadata/") ||
+    normalized.startsWith("cross-book/") ||
+    normalized.startsWith("term-candidates/") ||
+    normalized.startsWith("review/")
   );
 }
 
@@ -58,12 +58,21 @@ export function isArtifactFile(path: string): boolean {
   return isPathInStandardDir(path, "output");
 }
 
-export type ProjectFileStage = "original" | "intermediate" | "artifact" | "other";
+export type ProjectFileStage =
+  | "original"
+  | "intermediate"
+  | "artifact"
+  | "other";
 
-export function resolveProjectFileStage(
-  file: { path: string; stage?: string },
-): ProjectFileStage {
-  if (file.stage === "original" || file.stage === "intermediate" || file.stage === "artifact") {
+export function resolveProjectFileStage(file: {
+  path: string;
+  stage?: string;
+}): ProjectFileStage {
+  if (
+    file.stage === "original" ||
+    file.stage === "intermediate" ||
+    file.stage === "artifact"
+  ) {
     return file.stage;
   }
   if (isOriginalInputFile(file.path)) {
@@ -103,7 +112,10 @@ export function matchesProjectPathQuery(
   }
   const normalizedPath = normalizeProjectPath(path);
   const fileName = normalizedPath.split("/").pop() || "";
-  return normalizedPath.includes(normalizedQuery) || fileName.includes(normalizedQuery);
+  return (
+    normalizedPath.includes(normalizedQuery) ||
+    fileName.includes(normalizedQuery)
+  );
 }
 
 export function collectDirectoryKeys(
@@ -132,8 +144,9 @@ export function resolveRangePaths(
   if (anchorIndex < 0 || targetIndex < 0) {
     return [targetPath];
   }
-  const [start, end] = anchorIndex <= targetIndex
-    ? [anchorIndex, targetIndex]
-    : [targetIndex, anchorIndex];
+  const [start, end] =
+    anchorIndex <= targetIndex
+      ? [anchorIndex, targetIndex]
+      : [targetIndex, anchorIndex];
   return paths.slice(start, end + 1);
 }

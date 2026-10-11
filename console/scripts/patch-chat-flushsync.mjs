@@ -1,11 +1,15 @@
 import fs from "node:fs";
 import path from "node:path";
 
-const projectRoot = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..");
+const projectRoot = path.resolve(
+  path.dirname(new URL(import.meta.url).pathname),
+  "..",
+);
 
 const patches = [
   {
-    relativePath: "node_modules/@agentscope-ai/chat/lib/AgentScopeRuntimeWebUI/core/Chat/hooks/useChatMessageHandler.js",
+    relativePath:
+      "node_modules/@agentscope-ai/chat/lib/AgentScopeRuntimeWebUI/core/Chat/hooks/useChatMessageHandler.js",
     replacements: [
       {
         from: 'import ReactDOM from "react-dom";\n',
@@ -26,7 +30,8 @@ const patches = [
     ],
   },
   {
-    relativePath: "node_modules/@agentscope-ai/chat/lib/AgentScopeRuntimeWebUI/core/Chat/hooks/useChatController.js",
+    relativePath:
+      "node_modules/@agentscope-ai/chat/lib/AgentScopeRuntimeWebUI/core/Chat/hooks/useChatController.js",
     replacements: [
       {
         from: 'import ReactDOM from "react-dom";\n',
@@ -39,7 +44,8 @@ const patches = [
     ],
   },
   {
-    relativePath: "node_modules/@agentscope-ai/chat/lib/AgentScopeRuntimeWebUI/core/Context/ChatAnywhereSessionsContext.js",
+    relativePath:
+      "node_modules/@agentscope-ai/chat/lib/AgentScopeRuntimeWebUI/core/Context/ChatAnywhereSessionsContext.js",
     replacements: [
       {
         from: "          ReactDOM.flushSync(function () {\n            setMessages([]);\n          });\n",
@@ -48,7 +54,8 @@ const patches = [
     ],
   },
   {
-    relativePath: "node_modules/@agentscope-ai/chat/lib/ChatAnywhere/hooks/useSessionList.js",
+    relativePath:
+      "node_modules/@agentscope-ai/chat/lib/ChatAnywhere/hooks/useSessionList.js",
     replacements: [
       {
         from: "import ReactDOM from 'react-dom';\n",
@@ -61,7 +68,8 @@ const patches = [
     ],
   },
   {
-    relativePath: "node_modules/@agentscope-ai/chat/lib/Bubble/hooks/usePaginationItemsData.js",
+    relativePath:
+      "node_modules/@agentscope-ai/chat/lib/Bubble/hooks/usePaginationItemsData.js",
     replacements: [
       {
         from: 'import { flushSync } from "react-dom";\n',
@@ -74,7 +82,8 @@ const patches = [
     ],
   },
   {
-    relativePath: "node_modules/@agentscope-ai/chat/lib/Markdown/core/components/Link.js",
+    relativePath:
+      "node_modules/@agentscope-ai/chat/lib/Markdown/core/components/Link.js",
     replacements: [
       {
         from: 'var _excluded = ["href"];\n',
@@ -124,5 +133,7 @@ if (touchedCount === 0) {
 } else if (changedCount === 0) {
   console.log("[patch-chat-flushsync] already applied");
 } else {
-  console.log(`[patch-chat-flushsync] patched ${changedCount}/${touchedCount} files`);
+  console.log(
+    `[patch-chat-flushsync] patched ${changedCount}/${touchedCount} files`,
+  );
 }

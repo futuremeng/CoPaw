@@ -92,46 +92,86 @@ describe("projectKnowledgeL1StatsUi", () => {
       },
     };
 
-    expect(formatProjectKnowledgeStatsRecordTimestamp(snapshotRaw)).toMatch(/05\/12/);
-    expect(summarizeProjectKnowledgeSourceScanStats(t, snapshotRaw)).toBe("5 files / 2 changed / 1 sources");
-    expect(summarizeProjectKnowledgeFileAnalysisStats(t, buildChunks)).toBe("3 docs / 7 chunks / 11 sentences");
-    expect(summarizeProjectKnowledgeDomainGraphBuildStats(t, syntaxParse)).toBe("3 docs / 9 nodes / 12 relations");
-    expect(summarizeProjectKnowledgeQualityReviewStats(t, semanticRoleLabeling)).toBe("0.91 -> 0.95 / delta 0.04 / 1 rounds");
-    expect(buildProjectKnowledgeLatestL1SummaryParts(t, { snapshotRaw, buildChunks })).toEqual([
+    expect(formatProjectKnowledgeStatsRecordTimestamp(snapshotRaw)).toMatch(
+      /05\/12/,
+    );
+    expect(summarizeProjectKnowledgeSourceScanStats(t, snapshotRaw)).toBe(
+      "5 files / 2 changed / 1 sources",
+    );
+    expect(summarizeProjectKnowledgeFileAnalysisStats(t, buildChunks)).toBe(
+      "3 docs / 7 chunks / 11 sentences",
+    );
+    expect(summarizeProjectKnowledgeDomainGraphBuildStats(t, syntaxParse)).toBe(
+      "3 docs / 9 nodes / 12 relations",
+    );
+    expect(
+      summarizeProjectKnowledgeQualityReviewStats(t, semanticRoleLabeling),
+    ).toBe("0.91 -> 0.95 / delta 0.04 / 1 rounds");
+    expect(
+      buildProjectKnowledgeLatestL1SummaryParts(t, {
+        snapshotRaw,
+        buildChunks,
+      }),
+    ).toEqual([
       expect.stringContaining("scan"),
       expect.stringContaining("analysis"),
     ]);
-    expect(buildProjectKnowledgeLatestL23SummaryParts(t, { buildInterlinear, tokenize, posTagging, syntaxParse, semanticRoleLabeling })).toEqual([
+    expect(
+      buildProjectKnowledgeLatestL23SummaryParts(t, {
+        buildInterlinear,
+        tokenize,
+        posTagging,
+        syntaxParse,
+        semanticRoleLabeling,
+      }),
+    ).toEqual([
       expect.stringContaining("interlinear"),
       expect.stringContaining("tokenize"),
       expect.stringContaining("pos"),
       expect.stringContaining("syntax"),
       expect.stringContaining("srl"),
     ]);
-    expect(buildProjectKnowledgeLatestOutputSummaryParts(t, {
-      selectedMode: "nlp",
-      syntaxParse,
-      semanticRoleLabeling,
-    })).toEqual([
-      expect.stringContaining("syntax provenance"),
-    ]);
-    expect(buildProjectKnowledgeLatestOutputSummaryParts(t, {
-      selectedMode: "agentic",
-      syntaxParse,
-      semanticRoleLabeling,
-    })).toEqual([
+    expect(
+      buildProjectKnowledgeLatestOutputSummaryParts(t, {
+        selectedMode: "nlp",
+        syntaxParse,
+        semanticRoleLabeling,
+      }),
+    ).toEqual([expect.stringContaining("syntax provenance")]);
+    expect(
+      buildProjectKnowledgeLatestOutputSummaryParts(t, {
+        selectedMode: "agentic",
+        syntaxParse,
+        semanticRoleLabeling,
+      }),
+    ).toEqual([
       expect.stringContaining("syntax provenance"),
       expect.stringContaining("srl outcome"),
     ]);
   });
 
   it("skips empty latest records", () => {
-    expect(buildProjectKnowledgeLatestL1SummaryParts(t, { snapshotRaw: {}, buildChunks: null })).toEqual([]);
-    expect(buildProjectKnowledgeLatestL23SummaryParts(t, { buildInterlinear: {}, tokenize: null, posTagging: null, syntaxParse: null, semanticRoleLabeling: null })).toEqual([]);
-    expect(buildProjectKnowledgeLatestOutputSummaryParts(t, {
-      selectedMode: "fast",
-      syntaxParse: {},
-      semanticRoleLabeling: null,
-    })).toEqual([]);
+    expect(
+      buildProjectKnowledgeLatestL1SummaryParts(t, {
+        snapshotRaw: {},
+        buildChunks: null,
+      }),
+    ).toEqual([]);
+    expect(
+      buildProjectKnowledgeLatestL23SummaryParts(t, {
+        buildInterlinear: {},
+        tokenize: null,
+        posTagging: null,
+        syntaxParse: null,
+        semanticRoleLabeling: null,
+      }),
+    ).toEqual([]);
+    expect(
+      buildProjectKnowledgeLatestOutputSummaryParts(t, {
+        selectedMode: "fast",
+        syntaxParse: {},
+        semanticRoleLabeling: null,
+      }),
+    ).toEqual([]);
   });
 });

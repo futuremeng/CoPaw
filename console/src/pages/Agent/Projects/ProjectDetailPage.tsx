@@ -1,4 +1,11 @@
-import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useDeferredValue,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
   Alert,
   Badge,
@@ -21,7 +28,10 @@ import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { chatApi } from "../../../api/modules/chat";
 import { knowledgeApi } from "../../../api/modules/knowledge";
-import { setProjectIdHeader, clearProjectIdHeader } from "../../../api/authHeaders";
+import {
+  setProjectIdHeader,
+  clearProjectIdHeader,
+} from "../../../api/authHeaders";
 import ProjectAutomationPanel from "./components/ProjectAutomationPanel";
 import ProjectChatPanel, {
   type ProjectChatAutoAttachRequest,
@@ -154,7 +164,11 @@ const DEFAULT_KNOWLEDGE_HEADER_SIGNALS: ProjectKnowledgeHeaderSignals = {
   qualityAssessmentScore: 0,
 };
 
-type RuntimeTaskDetail = MemifyJobStatus | QualityLoopJobStatus | ProjectKnowledgePipelineState | null;
+type RuntimeTaskDetail =
+  | MemifyJobStatus
+  | QualityLoopJobStatus
+  | ProjectKnowledgePipelineState
+  | null;
 
 const STAGE_FILTERS: Record<ProjectStageKey, ProjectFileFilterKey[]> = {
   source: ["original", "intermediate", "artifact"],
@@ -163,7 +177,9 @@ const STAGE_FILTERS: Record<ProjectStageKey, ProjectFileFilterKey[]> = {
   builtin: ["builtin"],
 };
 
-function resolveStageFromFilter(filter: ProjectFileFilterKey | ""): ProjectStageKey {
+function resolveStageFromFilter(
+  filter: ProjectFileFilterKey | "",
+): ProjectStageKey {
   if (!filter) {
     return "source";
   }
@@ -266,39 +282,75 @@ function buildProjectFilesQueryFromViewState(params: {
 }
 
 function getRuntimeTaskKey(task: KnowledgeTaskProgress): string {
-  return String(task.job_id || task.task_id || `${task.task_type || "task"}:${task.updated_at || ""}`);
+  return String(
+    task.job_id ||
+      task.task_id ||
+      `${task.task_type || "task"}:${task.updated_at || ""}`,
+  );
 }
 
-function getRuntimeTaskLabel(taskType: string | undefined, translate: (key: string, fallback: string) => string): string {
+function getRuntimeTaskLabel(
+  taskType: string | undefined,
+  translate: (key: string, fallback: string) => string,
+): string {
   switch (String(taskType || "")) {
     case "project_pipeline":
-      return translate("copaw.projects.knowledge.runtimeTaskProjectPipeline", "Project Pipeline");
+      return translate(
+        "copaw.projects.knowledge.runtimeTaskProjectPipeline",
+        "Project Pipeline",
+      );
     case "memify":
-      return translate("copaw.projects.knowledge.runtimeTaskMemify", "Graph Build");
+      return translate(
+        "copaw.projects.knowledge.runtimeTaskMemify",
+        "Graph Build",
+      );
     case "quality_loop":
-      return translate("copaw.projects.knowledge.runtimeTaskQualityLoop", "Quality Loop");
+      return translate(
+        "copaw.projects.knowledge.runtimeTaskQualityLoop",
+        "Quality Loop",
+      );
     case "history_backfill":
-      return translate("copaw.projects.knowledge.runtimeTaskHistoryBackfill", "History Backfill");
+      return translate(
+        "copaw.projects.knowledge.runtimeTaskHistoryBackfill",
+        "History Backfill",
+      );
     default:
-      return translate("copaw.projects.knowledge.runtimeTaskGeneric", "Knowledge Task");
+      return translate(
+        "copaw.projects.knowledge.runtimeTaskGeneric",
+        "Knowledge Task",
+      );
   }
 }
 
-function getRuntimeTaskStage(task: {
-  stage_message?: string;
-  current_stage?: string;
-  stage?: string;
-  status?: string;
-} | null | undefined): string {
+function getRuntimeTaskStage(
+  task:
+    | {
+        stage_message?: string;
+        current_stage?: string;
+        stage?: string;
+        status?: string;
+      }
+    | null
+    | undefined,
+): string {
   return String(
-    task?.stage_message || task?.current_stage || task?.stage || task?.status || "",
+    task?.stage_message ||
+      task?.current_stage ||
+      task?.stage ||
+      task?.status ||
+      "",
   ).trim();
 }
 
-function getRuntimeTaskPercent(task: {
-  percent?: number;
-  progress?: number;
-} | null | undefined): number | null {
+function getRuntimeTaskPercent(
+  task:
+    | {
+        percent?: number;
+        progress?: number;
+      }
+    | null
+    | undefined,
+): number | null {
   if (typeof task?.percent === "number" && Number.isFinite(task.percent)) {
     return Math.max(0, Math.min(100, Math.round(task.percent)));
   }
@@ -312,24 +364,39 @@ function formatQuantizationStageLabel(
   stage: string | null | undefined,
   translate: (key: string, fallback: string) => string,
 ): string {
-  const normalized = String(stage || "").trim().toLowerCase();
+  const normalized = String(stage || "")
+    .trim()
+    .toLowerCase();
   if (!normalized) {
     return "";
   }
   if (normalized === "l1") {
-    return translate("copaw.projects.knowledge.processing.quantStageL1", "Sources");
+    return translate(
+      "copaw.projects.knowledge.processing.quantStageL1",
+      "Sources",
+    );
   }
   if (normalized === "l2") {
-    return translate("copaw.projects.knowledge.processing.quantStageL2", "Structured");
+    return translate(
+      "copaw.projects.knowledge.processing.quantStageL2",
+      "Structured",
+    );
   }
   if (normalized === "l3") {
-    return translate("copaw.projects.knowledge.processing.quantStageL3", "Enhanced");
+    return translate(
+      "copaw.projects.knowledge.processing.quantStageL3",
+      "Enhanced",
+    );
   }
   return normalized.toUpperCase();
 }
 
-function getRuntimeBadgeStatus(status: string): "processing" | "success" | "warning" | "error" | "default" {
-  if (["running", "indexing", "graphifying", "pending", "queued"].includes(status)) {
+function getRuntimeBadgeStatus(
+  status: string,
+): "processing" | "success" | "warning" | "error" | "default" {
+  if (
+    ["running", "indexing", "graphifying", "pending", "queued"].includes(status)
+  ) {
     return "processing";
   }
   if (["succeeded", "completed"].includes(status)) {
@@ -344,7 +411,10 @@ function getRuntimeBadgeStatus(status: string): "processing" | "success" | "warn
   return "warning";
 }
 
-function formatRuntimeTimestamp(value: string | null | undefined, locale: string): string {
+function formatRuntimeTimestamp(
+  value: string | null | undefined,
+  locale: string,
+): string {
   if (!value) {
     return "";
   }
@@ -367,7 +437,9 @@ function getCurrentAgent(
   return agents.find((agent) => agent.id === selectedAgent);
 }
 
-function toProjectFileInfo(node: AgentProjectFileTreeNode): AgentProjectFileInfo {
+function toProjectFileInfo(
+  node: AgentProjectFileTreeNode,
+): AgentProjectFileInfo {
   return {
     filename: node.filename,
     path: node.path,
@@ -436,8 +508,13 @@ function formatRunTimeLabel(raw: string): string {
   return `${y}-${m}-${d} ${hh}:${mm}:${ss}`;
 }
 
-function buildProjectWorkspaceChatPath(projectId: string, chatId: string): string {
-  return `/projects/${encodeURIComponent(projectId)}/chat/${encodeURIComponent(chatId)}`;
+function buildProjectWorkspaceChatPath(
+  projectId: string,
+  chatId: string,
+): string {
+  return `/projects/${encodeURIComponent(projectId)}/chat/${encodeURIComponent(
+    chatId,
+  )}`;
 }
 
 function normalizeProjectTreeKey(path: string): string {
@@ -477,30 +554,46 @@ function buildProjectAncestorDirectoryPaths(path: string): string[] {
     return [];
   }
 
-  return segments.slice(0, -1).map((_, index) => segments.slice(0, index + 1).join("/"));
+  return segments
+    .slice(0, -1)
+    .map((_, index) => segments.slice(0, index + 1).join("/"));
 }
 
-function mergeExpandedProjectTreeKeys(current: string[], extra: string[]): string[] {
+function mergeExpandedProjectTreeKeys(
+  current: string[],
+  extra: string[],
+): string[] {
   const next = normalizeProjectTreeKeys([...current, ...extra]);
-  if (next.length === current.length && next.every((item, index) => item === current[index])) {
+  if (
+    next.length === current.length &&
+    next.every((item, index) => item === current[index])
+  ) {
     return current;
   }
   return next;
 }
 
-function budgetRestoredProjectTreeKeys(paths: string[], selectedFilePath: string): string[] {
+function budgetRestoredProjectTreeKeys(
+  paths: string[],
+  selectedFilePath: string,
+): string[] {
   const normalizedKeys = normalizeProjectTreeKeys(paths);
   if (normalizedKeys.length === 0) {
     return normalizedKeys;
   }
 
-  const selectedAncestors = buildProjectAncestorDirectoryPaths(selectedFilePath);
+  const selectedAncestors =
+    buildProjectAncestorDirectoryPaths(selectedFilePath);
   const selectedAncestorSet = new Set(selectedAncestors);
   const shallowKeys = normalizedKeys.filter(
-    (path) => getProjectTreeDepth(path) <= PROJECT_TREE_AUTO_RESTORE_SHALLOW_DEPTH,
+    (path) =>
+      getProjectTreeDepth(path) <= PROJECT_TREE_AUTO_RESTORE_SHALLOW_DEPTH,
   );
   const deepKeys = normalizedKeys
-    .filter((path) => getProjectTreeDepth(path) > PROJECT_TREE_AUTO_RESTORE_SHALLOW_DEPTH)
+    .filter(
+      (path) =>
+        getProjectTreeDepth(path) > PROJECT_TREE_AUTO_RESTORE_SHALLOW_DEPTH,
+    )
     .sort((left, right) => {
       const leftSelected = selectedAncestorSet.has(left) ? 0 : 1;
       const rightSelected = selectedAncestorSet.has(right) ? 0 : 1;
@@ -517,7 +610,10 @@ function budgetRestoredProjectTreeKeys(paths: string[], selectedFilePath: string
     })
     .slice(0, PROJECT_TREE_AUTO_RESTORE_MAX_DEEP_KEYS);
 
-  return mergeExpandedProjectTreeKeys(shallowKeys, [...selectedAncestors, ...deepKeys]);
+  return mergeExpandedProjectTreeKeys(shallowKeys, [
+    ...selectedAncestors,
+    ...deepKeys,
+  ]);
 }
 
 function isSucceededStatus(status: string): boolean {
@@ -532,12 +628,17 @@ function toTimestamp(raw?: string | null): number {
   return Number.isFinite(ts) ? ts : 0;
 }
 
-function pickLatestRecentUpdatePath(summary: AgentProjectFileSummary | null | undefined): string {
+function pickLatestRecentUpdatePath(
+  summary: AgentProjectFileSummary | null | undefined,
+): string {
   return String(summary?.recent_updates?.[0]?.path || "").trim();
 }
 
 function normalizeProjectPath(path: string): string {
-  return String(path || "").trim().replace(/\\/g, "/").replace(/^\//, "");
+  return String(path || "")
+    .trim()
+    .replace(/\\/g, "/")
+    .replace(/^\//, "");
 }
 
 function resolveCharStatsArtifactPath(
@@ -557,7 +658,9 @@ function resolveCharStatsArtifactPath(
   const prefix = `.knowledge/interlinear/${stem}.snapshot_`;
   const candidates = files
     .map((item) => normalizeProjectPath(item.path))
-    .filter((item) => item.startsWith(prefix) && item.endsWith(".char-stats.json"));
+    .filter(
+      (item) => item.startsWith(prefix) && item.endsWith(".char-stats.json"),
+    );
 
   if (candidates.length === 0) {
     return "";
@@ -603,7 +706,10 @@ export default function ProjectDetailPage() {
   );
   const location = useLocation();
   const navigate = useNavigate();
-  const { projectId, chatId } = useParams<{ projectId?: string; chatId?: string }>();
+  const { projectId, chatId } = useParams<{
+    projectId?: string;
+    chatId?: string;
+  }>();
   const { selectedAgent, agents, setAgents } = useAgentStore();
   const routeProjectId = useMemo(
     () => (projectId ? decodeURIComponent(projectId) : ""),
@@ -621,13 +727,18 @@ export default function ProjectDetailPage() {
 
   const [resolvedProjectRequestId, setResolvedProjectRequestId] = useState("");
   const [projectFiles, setProjectFiles] = useState<AgentProjectFileInfo[]>([]);
-  const [projectTreeNodes, setProjectTreeNodes] = useState<AgentProjectFileTreeNode[]>([]);
-  const [projectFileSummary, setProjectFileSummary] = useState<AgentProjectFileSummary | null>(null);
-  const [knownProjectFilesByPath, setKnownProjectFilesByPath] =
-    useState<Record<string, AgentProjectFileInfo>>({});
+  const [projectTreeNodes, setProjectTreeNodes] = useState<
+    AgentProjectFileTreeNode[]
+  >([]);
+  const [projectFileSummary, setProjectFileSummary] =
+    useState<AgentProjectFileSummary | null>(null);
+  const [knownProjectFilesByPath, setKnownProjectFilesByPath] = useState<
+    Record<string, AgentProjectFileInfo>
+  >({});
   const [selectedFilePath, setSelectedFilePath] = useState("");
   const [treeExpandedKeys, setTreeExpandedKeys] = useState<string[]>([]);
-  const [staleProjectTreeDirectoryPaths, setStaleProjectTreeDirectoryPaths] = useState<string[]>([]);
+  const [staleProjectTreeDirectoryPaths, setStaleProjectTreeDirectoryPaths] =
+    useState<string[]>([]);
   const [latestUpdatedFilePath, setLatestUpdatedFilePath] = useState("");
   const [fileContent, setFileContent] = useState("");
   const [charStatsContent, setCharStatsContent] = useState("");
@@ -648,50 +759,76 @@ export default function ProjectDetailPage() {
   );
   const [pipelineLoading, setPipelineLoading] = useState(false);
   const [createRunLoading, setCreateRunLoading] = useState(false);
-  const [platformTemplates, setPlatformTemplates] = useState<PlatformFlowTemplateInfo[]>([]);
+  const [platformTemplates, setPlatformTemplates] = useState<
+    PlatformFlowTemplateInfo[]
+  >([]);
   const [importModalOpen, setImportModalOpen] = useState(false);
   const [importLoading, setImportLoading] = useState(false);
-  const [selectedPlatformTemplateId, setSelectedPlatformTemplateId] = useState("");
+  const [selectedPlatformTemplateId, setSelectedPlatformTemplateId] =
+    useState("");
   const [runFocusChatId, setRunFocusChatId] = useState("");
   const [workspaceFocusChatId, setWorkspaceFocusChatId] = useState("");
   const [designFocusChatId, setDesignFocusChatId] = useState("");
   const [manualRecoverOpen, setManualRecoverOpen] = useState(false);
   const [manualRecoverLoading, setManualRecoverLoading] = useState(false);
-  const [manualRecoverCandidates, setManualRecoverCandidates] = useState<ChatSpec[]>([]);
+  const [manualRecoverCandidates, setManualRecoverCandidates] = useState<
+    ChatSpec[]
+  >([]);
   const [manualRecoverChatId, setManualRecoverChatId] = useState("");
   const [chatStarting, setChatStarting] = useState(false);
   const [selectedStepId, setSelectedStepId] = useState("");
   const [deletingProject, setDeletingProject] = useState(false);
-  const [deletingProjectPaths, setDeletingProjectPaths] = useState<string[]>([]);
+  const [deletingProjectPaths, setDeletingProjectPaths] = useState<string[]>(
+    [],
+  );
   const [automationDrawerOpen, setAutomationDrawerOpen] = useState(false);
-  const [autoAttachRequest, setAutoAttachRequest] = useState<ProjectChatAutoAttachRequest | null>(null);
+  const [autoAttachRequest, setAutoAttachRequest] =
+    useState<ProjectChatAutoAttachRequest | null>(null);
   const [selectedAttachPaths, setSelectedAttachPaths] = useState<string[]>([]);
   const [sendingSelectedFiles, setSendingSelectedFiles] = useState(false);
   const [autoAnalyzeOnAttach, setAutoAnalyzeOnAttach] = useState(true);
   const [activeStage, setActiveStage] = useState<ProjectStageKey>("source");
-  const [knowledgeModuleCollapsed, setKnowledgeModuleCollapsed] = useState(false);
-  const [knowledgeDockTab, setKnowledgeDockTab] = useState<KnowledgeDockTabKey>("explore");
-  const effectiveKnowledgeDockTab = knowledgeDockTab === "ner" ? "processing" : knowledgeDockTab;
-  const [knowledgeProcessingFocusMode, setKnowledgeProcessingFocusMode] = useState<ProjectKnowledgeProcessingMode | "">("");
-  const [knowledgeProcessingFocusStage, setKnowledgeProcessingFocusStage] = useState<"tokenize" | "ner" | "syntax" | "cor" | "">("");
-  const [knowledgeProcessingFocusScope, setKnowledgeProcessingFocusScope] = useState<"global" | "source" | "">("");
-  const [knowledgeProcessingFocusToken, setKnowledgeProcessingFocusToken] = useState(0);
+  const [knowledgeModuleCollapsed, setKnowledgeModuleCollapsed] =
+    useState(false);
+  const [knowledgeDockTab, setKnowledgeDockTab] =
+    useState<KnowledgeDockTabKey>("explore");
+  const effectiveKnowledgeDockTab =
+    knowledgeDockTab === "ner" ? "processing" : knowledgeDockTab;
+  const [knowledgeProcessingFocusMode, setKnowledgeProcessingFocusMode] =
+    useState<ProjectKnowledgeProcessingMode | "">("");
+  const [knowledgeProcessingFocusStage, setKnowledgeProcessingFocusStage] =
+    useState<"tokenize" | "ner" | "syntax" | "cor" | "">("");
+  const [knowledgeProcessingFocusScope, setKnowledgeProcessingFocusScope] =
+    useState<"global" | "source" | "">("");
+  const [knowledgeProcessingFocusToken, setKnowledgeProcessingFocusToken] =
+    useState(0);
   const [projectKnowledgeIncludeGlobal] = useState(true);
   const [knowledgeHeaderSignals, setKnowledgeHeaderSignals] =
     useState<ProjectKnowledgeHeaderSignals>(DEFAULT_KNOWLEDGE_HEADER_SIGNALS);
-  const [runtimeSignalTooltipOpen, setRuntimeSignalTooltipOpen] = useState(false);
+  const [runtimeSignalTooltipOpen, setRuntimeSignalTooltipOpen] =
+    useState(false);
   const [runtimeSignalLoading, setRuntimeSignalLoading] = useState(false);
-  const [runtimeSignalDetails, setRuntimeSignalDetails] =
-    useState<Record<string, RuntimeTaskDetail>>({});
+  const [runtimeSignalDetails, setRuntimeSignalDetails] = useState<
+    Record<string, RuntimeTaskDetail>
+  >({});
   const [pendingKnowledgeQuery, setPendingKnowledgeQuery] = useState("");
-  const [selectedMetricFilter, setSelectedMetricFilter] = useState<ProjectFileFilterKey | "">("");
+  const [selectedMetricFilter, setSelectedMetricFilter] = useState<
+    ProjectFileFilterKey | ""
+  >("");
   const [projectFileSearchQuery, setProjectFileSearchQuery] = useState("");
-  const deferredProjectFileSearchQuery = useDeferredValue(projectFileSearchQuery);
-  const [treeDisplayMode, setTreeDisplayMode] = useState<TreeDisplayMode>("filter");
+  const deferredProjectFileSearchQuery = useDeferredValue(
+    projectFileSearchQuery,
+  );
+  const [treeDisplayMode, setTreeDisplayMode] =
+    useState<TreeDisplayMode>("filter");
   const [leftPaneSize, setLeftPaneSize] = useState(LEFT_PANE_EXPANDED_SIZE);
-  const [workbenchPaneSize, setWorkbenchPaneSize] = useState(WORKBENCH_PANE_DEFAULT_SIZE);
+  const [workbenchPaneSize, setWorkbenchPaneSize] = useState(
+    WORKBENCH_PANE_DEFAULT_SIZE,
+  );
   const [chatPaneSize, setChatPaneSize] = useState(CHAT_PANE_DEFAULT_SIZE);
-  const [knowledgeDockSize, setKnowledgeDockSize] = useState(KNOWLEDGE_DOCK_DEFAULT_SIZE);
+  const [knowledgeDockSize, setKnowledgeDockSize] = useState(
+    KNOWLEDGE_DOCK_DEFAULT_SIZE,
+  );
   const runFocusChatIdRef = useRef("");
   const workspaceFocusChatIdRef = useRef("");
   const designFocusChatIdRef = useRef("");
@@ -717,7 +854,8 @@ export default function ProjectDetailPage() {
   );
 
   const selectedProject = useMemo(
-    () => projects.find((project) => matchesRouteProject(project, routeProjectId)),
+    () =>
+      projects.find((project) => matchesRouteProject(project, routeProjectId)),
     [projects, routeProjectId],
   );
 
@@ -730,11 +868,12 @@ export default function ProjectDetailPage() {
   const projectAgentFacade = useProjectAgentFacade();
 
   const projectFilesQueryBody = useMemo(
-    () => buildProjectFilesQueryFromViewState({
-      activeStage,
-      selectedMetricFilter,
-      searchQuery: deferredProjectFileSearchQuery,
-    }),
+    () =>
+      buildProjectFilesQueryFromViewState({
+        activeStage,
+        selectedMetricFilter,
+        searchQuery: deferredProjectFileSearchQuery,
+      }),
     [activeStage, deferredProjectFileSearchQuery, selectedMetricFilter],
   );
 
@@ -750,10 +889,10 @@ export default function ProjectDetailPage() {
     includeGlobal: projectKnowledgeIncludeGlobal,
     onSignalsChange: setKnowledgeHeaderSignals,
     eagerSourceLoad:
-      knowledgeDockTab === "sources"
-      || effectiveKnowledgeDockTab === "processing"
-      || knowledgeDockTab === "health"
-      || knowledgeDockTab === "settings",
+      knowledgeDockTab === "sources" ||
+      effectiveKnowledgeDockTab === "processing" ||
+      knowledgeDockTab === "health" ||
+      knowledgeDockTab === "settings",
     eagerExploreLoad: knowledgeDockTab === "explore",
   });
 
@@ -774,14 +913,21 @@ export default function ProjectDetailPage() {
 
     let disposed = false;
 
-    void projectAgentFacade.acquireProjectKnowledgeWatchLease(agentId, activeProjectId)
+    void projectAgentFacade
+      .acquireProjectKnowledgeWatchLease(agentId, activeProjectId)
       .then((payload) => {
         const leaseId = String(payload?.lease_id || "").trim();
         if (!leaseId) {
           return;
         }
         if (disposed) {
-          void projectAgentFacade.releaseProjectKnowledgeWatchLease(agentId, activeProjectId, leaseId).catch(() => undefined);
+          void projectAgentFacade
+            .releaseProjectKnowledgeWatchLease(
+              agentId,
+              activeProjectId,
+              leaseId,
+            )
+            .catch(() => undefined);
           return;
         }
         knowledgeWatchLeaseRef.current = {
@@ -798,15 +944,20 @@ export default function ProjectDetailPage() {
       if (!currentLease) {
         return;
       }
-      if (currentLease.agentId !== agentId || currentLease.projectId !== activeProjectId) {
+      if (
+        currentLease.agentId !== agentId ||
+        currentLease.projectId !== activeProjectId
+      ) {
         return;
       }
       knowledgeWatchLeaseRef.current = null;
-      void projectAgentFacade.releaseProjectKnowledgeWatchLease(
-        currentLease.agentId,
-        currentLease.projectId,
-        currentLease.leaseId,
-      ).catch(() => undefined);
+      void projectAgentFacade
+        .releaseProjectKnowledgeWatchLease(
+          currentLease.agentId,
+          currentLease.projectId,
+          currentLease.leaseId,
+        )
+        .catch(() => undefined);
     };
   }, [currentAgent?.id, projectAgentFacade, selectedProject?.id]);
 
@@ -824,7 +975,10 @@ export default function ProjectDetailPage() {
   }, [selectedProject?.id]);
 
   const fetchRuntimeSignalDetails = useCallback(async () => {
-    if (!selectedProject?.id || !projectKnowledgeState.activeKnowledgeTasks.length) {
+    if (
+      !selectedProject?.id ||
+      !projectKnowledgeState.activeKnowledgeTasks.length
+    ) {
       setRuntimeSignalDetails({});
       return;
     }
@@ -863,27 +1017,47 @@ export default function ProjectDetailPage() {
     } finally {
       setRuntimeSignalLoading(false);
     }
-  }, [projectKnowledgeState.activeKnowledgeTasks, projectKnowledgeState.syncState, selectedProject?.id]);
+  }, [
+    projectKnowledgeState.activeKnowledgeTasks,
+    projectKnowledgeState.syncState,
+    selectedProject?.id,
+  ]);
 
   const runtimeSignalValue = useMemo(() => {
     const primaryTask = projectKnowledgeState.activeKnowledgeTask;
     if (!primaryTask) {
       return t("copaw.projects.knowledge.runtimeStatusIdle");
     }
-    const taskLabel = getRuntimeTaskLabel(primaryTask.task_type, translateWithFallback);
+    const taskLabel = getRuntimeTaskLabel(
+      primaryTask.task_type,
+      translateWithFallback,
+    );
     const percent = getRuntimeTaskPercent(primaryTask);
     const stageLabel = getRuntimeTaskStage(primaryTask);
-    const quantizationStage = primaryTask.task_type === "project_pipeline"
-      ? formatQuantizationStageLabel(projectKnowledgeState.syncState?.quantization_stage, translateWithFallback)
-      : "";
+    const quantizationStage =
+      primaryTask.task_type === "project_pipeline"
+        ? formatQuantizationStageLabel(
+            projectKnowledgeState.syncState?.quantization_stage,
+            translateWithFallback,
+          )
+        : "";
     return [
       taskLabel,
       typeof percent === "number" ? `${percent}%` : stageLabel,
-      quantizationStage ? `${t("copaw.projects.knowledge.syncQuantizationStage")}: ${quantizationStage}` : "",
+      quantizationStage
+        ? `${t(
+            "copaw.projects.knowledge.syncQuantizationStage",
+          )}: ${quantizationStage}`
+        : "",
     ]
       .filter(Boolean)
       .join(" · ");
-  }, [projectKnowledgeState.activeKnowledgeTask, projectKnowledgeState.syncState?.quantization_stage, t, translateWithFallback]);
+  }, [
+    projectKnowledgeState.activeKnowledgeTask,
+    projectKnowledgeState.syncState?.quantization_stage,
+    t,
+    translateWithFallback,
+  ]);
 
   const runtimeSignalTooltipContent = useMemo(() => {
     const activeTasks = projectKnowledgeState.activeKnowledgeTasks;
@@ -900,7 +1074,9 @@ export default function ProjectDetailPage() {
     return (
       <div className={styles.knowledgeRuntimeTooltip}>
         <div className={styles.knowledgeRuntimeTooltipHeader}>
-          <Text strong>{t("copaw.projects.knowledge.signalRuntimeStatus")}</Text>
+          <Text strong>
+            {t("copaw.projects.knowledge.signalRuntimeStatus")}
+          </Text>
           <Text type="secondary">
             {t("copaw.projects.knowledge.runtimeStatusTaskCount", {
               count: activeTasks.length,
@@ -913,70 +1089,99 @@ export default function ProjectDetailPage() {
             const taskKey = getRuntimeTaskKey(task);
             const detail = runtimeSignalDetails[taskKey];
             const liveTask = detail || task;
-            const stageLabel = getRuntimeTaskStage(liveTask) || getRuntimeTaskStage(task);
-            const percent = getRuntimeTaskPercent(liveTask) ?? getRuntimeTaskPercent(task);
-            const current = typeof (liveTask as { current?: number }).current === "number"
-              ? (liveTask as { current?: number }).current
-              : task.current;
-            const total = typeof (liveTask as { total?: number }).total === "number"
-              ? (liveTask as { total?: number }).total
-              : task.total;
+            const stageLabel =
+              getRuntimeTaskStage(liveTask) || getRuntimeTaskStage(task);
+            const percent =
+              getRuntimeTaskPercent(liveTask) ?? getRuntimeTaskPercent(task);
+            const current =
+              typeof (liveTask as { current?: number }).current === "number"
+                ? (liveTask as { current?: number }).current
+                : task.current;
+            const total =
+              typeof (liveTask as { total?: number }).total === "number"
+                ? (liveTask as { total?: number }).total
+                : task.total;
             const updatedAt = formatRuntimeTimestamp(
-              (liveTask as { updated_at?: string | null }).updated_at || task.updated_at,
+              (liveTask as { updated_at?: string | null }).updated_at ||
+                task.updated_at,
               i18n.language,
             );
-            const warnings = Array.isArray((liveTask as { warnings?: string[] }).warnings)
+            const warnings = Array.isArray(
+              (liveTask as { warnings?: string[] }).warnings,
+            )
               ? (liveTask as { warnings?: string[] }).warnings || []
               : task.warnings || [];
             const errorText = String(
-              (liveTask as { error?: string | null }).error
-                || ((detail as ProjectKnowledgePipelineState | null)?.last_error ?? "")
-                || task.error
-                || "",
+              (liveTask as { error?: string | null }).error ||
+                ((detail as ProjectKnowledgePipelineState | null)?.last_error ??
+                  "") ||
+                task.error ||
+                "",
             ).trim();
-            const qualityLoopDetail = task.task_type === "quality_loop"
-              ? (detail as QualityLoopJobStatus | null)
-              : null;
-            const projectPipelineDetail = task.task_type === "project_pipeline"
-              ? ((detail as ProjectKnowledgePipelineState | null) || projectKnowledgeState.syncState || null)
-              : null;
+            const qualityLoopDetail =
+              task.task_type === "quality_loop"
+                ? (detail as QualityLoopJobStatus | null)
+                : null;
+            const projectPipelineDetail =
+              task.task_type === "project_pipeline"
+                ? (detail as ProjectKnowledgePipelineState | null) ||
+                  projectKnowledgeState.syncState ||
+                  null
+                : null;
             const semanticEngine = projectPipelineDetail?.semantic_engine;
             const quantizationStageLabel = formatQuantizationStageLabel(
               projectPipelineDetail?.quantization_stage,
               translateWithFallback,
             );
-            const semanticReasonLabel = getProjectKnowledgeSemanticReasonLabel(semanticEngine, t);
-            const semanticDescription = getProjectKnowledgeSemanticDescription(semanticEngine, t);
-            const scoreBefore = typeof qualityLoopDetail?.score_before === "number"
-              ? qualityLoopDetail.score_before
-              : null;
-            const scoreAfter = typeof qualityLoopDetail?.score_after === "number"
-              ? qualityLoopDetail.score_after
-              : null;
-            const delta = typeof qualityLoopDetail?.delta === "number"
-              ? qualityLoopDetail.delta
-              : null;
-            const stopReason = String(qualityLoopDetail?.stop_reason || "").trim();
-            const changedCount = typeof projectPipelineDetail?.changed_count === "number"
-              ? projectPipelineDetail.changed_count
-              : null;
+            const semanticReasonLabel = getProjectKnowledgeSemanticReasonLabel(
+              semanticEngine,
+              t,
+            );
+            const semanticDescription = getProjectKnowledgeSemanticDescription(
+              semanticEngine,
+              t,
+            );
+            const scoreBefore =
+              typeof qualityLoopDetail?.score_before === "number"
+                ? qualityLoopDetail.score_before
+                : null;
+            const scoreAfter =
+              typeof qualityLoopDetail?.score_after === "number"
+                ? qualityLoopDetail.score_after
+                : null;
+            const delta =
+              typeof qualityLoopDetail?.delta === "number"
+                ? qualityLoopDetail.delta
+                : null;
+            const stopReason = String(
+              qualityLoopDetail?.stop_reason || "",
+            ).trim();
+            const changedCount =
+              typeof projectPipelineDetail?.changed_count === "number"
+                ? projectPipelineDetail.changed_count
+                : null;
 
             return (
               <div className={styles.knowledgeRuntimeTooltipItem} key={taskKey}>
                 <div className={styles.knowledgeRuntimeTooltipTitle}>
-                  <Text strong>{getRuntimeTaskLabel(task.task_type, translateWithFallback)}</Text>
+                  <Text strong>
+                    {getRuntimeTaskLabel(task.task_type, translateWithFallback)}
+                  </Text>
                   <Badge
                     status={getRuntimeBadgeStatus(String(task.status || ""))}
                     text={String(task.status || "")}
                   />
                 </div>
                 {stageLabel ? (
-                  <Text className={styles.knowledgeRuntimeTooltipStage}>{stageLabel}</Text>
+                  <Text className={styles.knowledgeRuntimeTooltipStage}>
+                    {stageLabel}
+                  </Text>
                 ) : null}
                 <div className={styles.knowledgeRuntimeTooltipMeta}>
                   {typeof percent === "number" ? (
                     <Text type="secondary">
-                      {t("copaw.projects.knowledge.runtimeStatusProgress")}: {percent}%
+                      {t("copaw.projects.knowledge.runtimeStatusProgress")}:{" "}
+                      {percent}%
                     </Text>
                   ) : null}
                   {typeof current === "number" && typeof total === "number" ? (
@@ -984,47 +1189,59 @@ export default function ProjectDetailPage() {
                   ) : null}
                   {updatedAt ? (
                     <Text type="secondary">
-                      {t("copaw.projects.knowledge.runtimeStatusUpdatedAt")}: {updatedAt}
+                      {t("copaw.projects.knowledge.runtimeStatusUpdatedAt")}:{" "}
+                      {updatedAt}
                     </Text>
                   ) : null}
                   {typeof changedCount === "number" ? (
                     <Text type="secondary">
-                      {t("copaw.projects.knowledge.syncChangedCount", { count: changedCount })}
+                      {t("copaw.projects.knowledge.syncChangedCount", {
+                        count: changedCount,
+                      })}
                     </Text>
                   ) : null}
                   {quantizationStageLabel ? (
                     <Text type="secondary">
-                      {t("copaw.projects.knowledge.syncQuantizationStage")}: {quantizationStageLabel}
+                      {t("copaw.projects.knowledge.syncQuantizationStage")}:{" "}
+                      {quantizationStageLabel}
                     </Text>
                   ) : null}
                   {scoreBefore !== null && scoreAfter !== null ? (
-                    <Text type="secondary">{`${Math.round((scoreBefore ?? 0) * 100)} -> ${Math.round((scoreAfter ?? 0) * 100)}`}</Text>
+                    <Text type="secondary">{`${Math.round(
+                      (scoreBefore ?? 0) * 100,
+                    )} -> ${Math.round((scoreAfter ?? 0) * 100)}`}</Text>
                   ) : null}
                   {delta !== null ? (
                     <Text type="secondary">
-                      {t("copaw.projects.knowledge.runtimeStatusScoreDelta")}: {(delta ?? 0) >= 0 ? "+" : ""}{Math.round((delta ?? 0) * 100)}
+                      {t("copaw.projects.knowledge.runtimeStatusScoreDelta")}:{" "}
+                      {(delta ?? 0) >= 0 ? "+" : ""}
+                      {Math.round((delta ?? 0) * 100)}
                     </Text>
                   ) : null}
                 </div>
                 {stopReason ? (
                   <Text type="secondary">
-                    {t("copaw.projects.knowledge.runtimeStatusStopReason")}: {stopReason}
+                    {t("copaw.projects.knowledge.runtimeStatusStopReason")}:{" "}
+                    {stopReason}
                   </Text>
                 ) : null}
                 {warnings.length ? (
                   <Text type="secondary">
-                    {t("copaw.projects.knowledge.runtimeStatusWarnings")}: {warnings.join("; ")}
+                    {t("copaw.projects.knowledge.runtimeStatusWarnings")}:{" "}
+                    {warnings.join("; ")}
                   </Text>
                 ) : null}
                 {semanticEngine ? (
                   <Text type="secondary">
-                    {t("copaw.projects.knowledge.semanticEngineStatus")}: {semanticReasonLabel}
+                    {t("copaw.projects.knowledge.semanticEngineStatus")}:{" "}
+                    {semanticReasonLabel}
                     {semanticDescription ? `. ${semanticDescription}` : ""}
                   </Text>
                 ) : null}
                 {errorText ? (
                   <Text type="danger">
-                    {t("copaw.projects.knowledge.runtimeStatusError")}: {errorText}
+                    {t("copaw.projects.knowledge.runtimeStatusError")}:{" "}
+                    {errorText}
                   </Text>
                 ) : null}
               </div>
@@ -1043,11 +1260,7 @@ export default function ProjectDetailPage() {
     translateWithFallback,
   ]);
 
-  const leaveConfirmText = useMemo(
-    () =>
-      t("projects.leaveConfirm"),
-    [t],
-  );
+  const leaveConfirmText = useMemo(() => t("projects.leaveConfirm"), [t]);
 
   const effectiveProjectFiles = useMemo(() => {
     if (projectFiles.length === 0) {
@@ -1063,7 +1276,9 @@ export default function ProjectDetailPage() {
 
   const artifactRecords = useMemo<ProjectPipelineArtifactRecord[]>(() => {
     if (runDetail?.artifact_records?.length) {
-      return runDetail.artifact_records.filter((item) => isPreviewablePath(item.path));
+      return runDetail.artifact_records.filter((item) =>
+        isPreviewablePath(item.path),
+      );
     }
 
     return effectiveProjectFiles
@@ -1112,7 +1327,8 @@ export default function ProjectDetailPage() {
     if (selectedArtifactRecord?.producer_step_id) {
       ids.add(selectedArtifactRecord.producer_step_id);
     }
-    for (const consumerStepId of selectedArtifactRecord?.consumer_step_ids || []) {
+    for (const consumerStepId of selectedArtifactRecord?.consumer_step_ids ||
+      []) {
       ids.add(consumerStepId);
     }
     return ids;
@@ -1121,7 +1337,8 @@ export default function ProjectDetailPage() {
   const selectedRunSummary = useMemo(
     () =>
       pipelineRuns.find(
-        (run) => run.id === selectedRunId && run.template_id === selectedTemplateId,
+        (run) =>
+          run.id === selectedRunId && run.template_id === selectedTemplateId,
       ),
     [pipelineRuns, selectedRunId, selectedTemplateId],
   );
@@ -1151,14 +1368,19 @@ export default function ProjectDetailPage() {
 
   const currentStepIds = useMemo(
     () =>
-      (runDetail?.steps?.map((step) => step.id) || activeRunTemplate?.steps?.map((step) => step.id) || []).filter(
-        Boolean,
-      ),
+      (
+        runDetail?.steps?.map((step) => step.id) ||
+        activeRunTemplate?.steps?.map((step) => step.id) ||
+        []
+      ).filter(Boolean),
     [activeRunTemplate?.steps, runDetail?.steps],
   );
 
   const stepContractById = useMemo(() => {
-    const mapping = new Map<string, ProjectPipelineTemplateInfo["steps"][number]>();
+    const mapping = new Map<
+      string,
+      ProjectPipelineTemplateInfo["steps"][number]
+    >();
     for (const item of activeRunTemplate?.steps || []) {
       mapping.set(item.id, item);
     }
@@ -1166,13 +1388,27 @@ export default function ProjectDetailPage() {
   }, [activeRunTemplate?.steps]);
 
   const activeRunChatId = useMemo(
-    () => runFocusChatId || runDetail?.focus_chat_id || selectedRunSummary?.focus_chat_id || "",
-    [runDetail?.focus_chat_id, runFocusChatId, selectedRunSummary?.focus_chat_id],
+    () =>
+      runFocusChatId ||
+      runDetail?.focus_chat_id ||
+      selectedRunSummary?.focus_chat_id ||
+      "",
+    [
+      runDetail?.focus_chat_id,
+      runFocusChatId,
+      selectedRunSummary?.focus_chat_id,
+    ],
   );
 
-  const activeWorkspaceChatId = useMemo(() => workspaceFocusChatId, [workspaceFocusChatId]);
+  const activeWorkspaceChatId = useMemo(
+    () => workspaceFocusChatId,
+    [workspaceFocusChatId],
+  );
 
-  const activeDesignChatId = useMemo(() => designFocusChatId, [designFocusChatId]);
+  const activeDesignChatId = useMemo(
+    () => designFocusChatId,
+    [designFocusChatId],
+  );
 
   const projectChatMode = useMemo<ProjectChatMode>(() => {
     if (selectedRunId) {
@@ -1191,7 +1427,10 @@ export default function ProjectDetailPage() {
     if (projectChatMode !== "workspace") {
       return;
     }
-    const expectedPath = buildProjectWorkspaceChatPath(selectedProject.id, activeWorkspaceChatId);
+    const expectedPath = buildProjectWorkspaceChatPath(
+      selectedProject.id,
+      activeWorkspaceChatId,
+    );
     if (location.pathname !== expectedPath) {
       navigate(expectedPath, { replace: true });
     }
@@ -1211,8 +1450,12 @@ export default function ProjectDetailPage() {
     const completed = runDetail.steps.filter(
       (step) => step.status === "succeeded" || step.status === "completed",
     ).length;
-    const running = runDetail.steps.filter((step) => step.status === "running").length;
-    const pending = runDetail.steps.filter((step) => step.status === "pending").length;
+    const running = runDetail.steps.filter(
+      (step) => step.status === "running",
+    ).length;
+    const pending = runDetail.steps.filter(
+      (step) => step.status === "pending",
+    ).length;
     return { total, completed, running, pending };
   }, [runDetail]);
 
@@ -1220,15 +1463,18 @@ export default function ProjectDetailPage() {
     if (runsForSelectedTemplate.length === 0) {
       return null;
     }
-    const sorted = [...runsForSelectedTemplate].sort((a, b) =>
-      toTimestamp(b.updated_at || b.created_at) -
-      toTimestamp(a.updated_at || a.created_at),
+    const sorted = [...runsForSelectedTemplate].sort(
+      (a, b) =>
+        toTimestamp(b.updated_at || b.created_at) -
+        toTimestamp(a.updated_at || a.created_at),
     );
     return sorted[0] || null;
   }, [runsForSelectedTemplate]);
 
   const succeededRunCountForSelectedTemplate = useMemo(
-    () => runsForSelectedTemplate.filter((item) => isSucceededStatus(item.status)).length,
+    () =>
+      runsForSelectedTemplate.filter((item) => isSucceededStatus(item.status))
+        .length,
     [runsForSelectedTemplate],
   );
 
@@ -1238,7 +1484,10 @@ export default function ProjectDetailPage() {
   );
 
   const projectFileCount = useMemo(
-    () => projectFileSummary?.visible_files ?? effectiveProjectFiles.filter((file) => !isBuiltInProjectFile(file.path)).length,
+    () =>
+      projectFileSummary?.visible_files ??
+      effectiveProjectFiles.filter((file) => !isBuiltInProjectFile(file.path))
+        .length,
     [effectiveProjectFiles, projectFileSummary?.visible_files],
   );
 
@@ -1252,29 +1501,35 @@ export default function ProjectDetailPage() {
     setChatPaneSize(nextChatSize);
   }, []);
 
-  const handleWorkspaceResize = useCallback((sizes: number[]) => {
-    pendingWorkspaceSizesRef.current = sizes;
-    if (workspaceResizeFrameRef.current !== null) {
-      return;
-    }
-    workspaceResizeFrameRef.current = window.requestAnimationFrame(() => {
-      workspaceResizeFrameRef.current = null;
-      const nextSizes = pendingWorkspaceSizesRef.current;
-      pendingWorkspaceSizesRef.current = null;
-      if (nextSizes) {
-        flushWorkspaceResize(nextSizes);
+  const handleWorkspaceResize = useCallback(
+    (sizes: number[]) => {
+      pendingWorkspaceSizesRef.current = sizes;
+      if (workspaceResizeFrameRef.current !== null) {
+        return;
       }
-    });
-  }, [flushWorkspaceResize]);
+      workspaceResizeFrameRef.current = window.requestAnimationFrame(() => {
+        workspaceResizeFrameRef.current = null;
+        const nextSizes = pendingWorkspaceSizesRef.current;
+        pendingWorkspaceSizesRef.current = null;
+        if (nextSizes) {
+          flushWorkspaceResize(nextSizes);
+        }
+      });
+    },
+    [flushWorkspaceResize],
+  );
 
-  const handleWorkspaceResizeEnd = useCallback((sizes: number[]) => {
-    if (workspaceResizeFrameRef.current !== null) {
-      window.cancelAnimationFrame(workspaceResizeFrameRef.current);
-      workspaceResizeFrameRef.current = null;
-    }
-    pendingWorkspaceSizesRef.current = null;
-    flushWorkspaceResize(sizes);
-  }, [flushWorkspaceResize]);
+  const handleWorkspaceResizeEnd = useCallback(
+    (sizes: number[]) => {
+      if (workspaceResizeFrameRef.current !== null) {
+        window.cancelAnimationFrame(workspaceResizeFrameRef.current);
+        workspaceResizeFrameRef.current = null;
+      }
+      pendingWorkspaceSizesRef.current = null;
+      flushWorkspaceResize(sizes);
+    },
+    [flushWorkspaceResize],
+  );
 
   const flushKnowledgeDockResize = useCallback((sizes: number[]) => {
     if (sizes.length !== 2) {
@@ -1286,29 +1541,35 @@ export default function ProjectDetailPage() {
     }
   }, []);
 
-  const handleKnowledgeDockResize = useCallback((sizes: number[]) => {
-    pendingKnowledgeDockSizesRef.current = sizes;
-    if (knowledgeDockResizeFrameRef.current !== null) {
-      return;
-    }
-    knowledgeDockResizeFrameRef.current = window.requestAnimationFrame(() => {
-      knowledgeDockResizeFrameRef.current = null;
-      const nextSizes = pendingKnowledgeDockSizesRef.current;
-      pendingKnowledgeDockSizesRef.current = null;
-      if (nextSizes) {
-        flushKnowledgeDockResize(nextSizes);
+  const handleKnowledgeDockResize = useCallback(
+    (sizes: number[]) => {
+      pendingKnowledgeDockSizesRef.current = sizes;
+      if (knowledgeDockResizeFrameRef.current !== null) {
+        return;
       }
-    });
-  }, [flushKnowledgeDockResize]);
+      knowledgeDockResizeFrameRef.current = window.requestAnimationFrame(() => {
+        knowledgeDockResizeFrameRef.current = null;
+        const nextSizes = pendingKnowledgeDockSizesRef.current;
+        pendingKnowledgeDockSizesRef.current = null;
+        if (nextSizes) {
+          flushKnowledgeDockResize(nextSizes);
+        }
+      });
+    },
+    [flushKnowledgeDockResize],
+  );
 
-  const handleKnowledgeDockResizeEnd = useCallback((sizes: number[]) => {
-    if (knowledgeDockResizeFrameRef.current !== null) {
-      window.cancelAnimationFrame(knowledgeDockResizeFrameRef.current);
-      knowledgeDockResizeFrameRef.current = null;
-    }
-    pendingKnowledgeDockSizesRef.current = null;
-    flushKnowledgeDockResize(sizes);
-  }, [flushKnowledgeDockResize]);
+  const handleKnowledgeDockResizeEnd = useCallback(
+    (sizes: number[]) => {
+      if (knowledgeDockResizeFrameRef.current !== null) {
+        window.cancelAnimationFrame(knowledgeDockResizeFrameRef.current);
+        knowledgeDockResizeFrameRef.current = null;
+      }
+      pendingKnowledgeDockSizesRef.current = null;
+      flushKnowledgeDockResize(sizes);
+    },
+    [flushKnowledgeDockResize],
+  );
 
   useEffect(() => {
     return () => {
@@ -1325,13 +1586,16 @@ export default function ProjectDetailPage() {
     };
   }, []);
 
-  const handleKnowledgeDockCollapseChange = useCallback((activeKey: string | string[]) => {
-    const nextExpanded = Array.isArray(activeKey)
-      ? activeKey.includes(KNOWLEDGE_DOCK_COLLAPSE_KEY)
-      : activeKey === KNOWLEDGE_DOCK_COLLAPSE_KEY;
+  const handleKnowledgeDockCollapseChange = useCallback(
+    (activeKey: string | string[]) => {
+      const nextExpanded = Array.isArray(activeKey)
+        ? activeKey.includes(KNOWLEDGE_DOCK_COLLAPSE_KEY)
+        : activeKey === KNOWLEDGE_DOCK_COLLAPSE_KEY;
 
-    setKnowledgeModuleCollapsed(!nextExpanded);
-  }, []);
+      setKnowledgeModuleCollapsed(!nextExpanded);
+    },
+    [],
+  );
 
   const priorityFilePaths = useMemo(
     () => selectSeedSourceFiles(effectiveProjectFiles.map((item) => item.path)),
@@ -1354,7 +1618,9 @@ export default function ProjectDetailPage() {
 
   const hasTwoSucceededRuns = succeededRunCountForSelectedTemplate >= 2;
   const canPromoteToTemplateDraft =
-    hasTwoSucceededRuns && selectedRunAllStepsSucceeded && selectedRunEvidenceCoverage;
+    hasTwoSucceededRuns &&
+    selectedRunAllStepsSucceeded &&
+    selectedRunEvidenceCoverage;
 
   const verificationGateSummary = useMemo(
     () =>
@@ -1363,7 +1629,11 @@ export default function ProjectDetailPage() {
         `当前运行步骤全成功: ${selectedRunAllStepsSucceeded ? "yes" : "no"}`,
         `当前运行证据覆盖: ${selectedRunEvidenceCoverage ? "yes" : "no"}`,
       ].join("; "),
-    [hasTwoSucceededRuns, selectedRunAllStepsSucceeded, selectedRunEvidenceCoverage],
+    [
+      hasTwoSucceededRuns,
+      selectedRunAllStepsSucceeded,
+      selectedRunEvidenceCoverage,
+    ],
   );
 
   const loadAgents = useCallback(async () => {
@@ -1374,80 +1644,80 @@ export default function ProjectDetailPage() {
       setAgents(data.agents);
     } catch (err) {
       console.error("failed to load agent projects", err);
-      setError(
-        t("projects.loadFailed"),
-      );
+      setError(t("projects.loadFailed"));
     } finally {
       setLoading(false);
     }
   }, [projectAgentFacade, setAgents, t]);
 
-  const loadAgentProjects = useCallback(async (agentId: string) => {
-    if (!agentId) {
-      setProjects([]);
-      return;
-    }
+  const loadAgentProjects = useCallback(
+    async (agentId: string) => {
+      if (!agentId) {
+        setProjects([]);
+        return;
+      }
 
-    setProjectsLoading(true);
-    setError("");
-    try {
-      const items = await projectAgentFacade.listAgentProjects(agentId);
-      setProjects(items);
-    } catch (err) {
-      console.error("failed to load project list", err);
-      setProjects([]);
-      setError(
-        t("projects.loadFailed"),
-      );
-    } finally {
-      setProjectsLoading(false);
-    }
-  }, [projectAgentFacade, t]);
+      setProjectsLoading(true);
+      setError("");
+      try {
+        const items = await projectAgentFacade.listAgentProjects(agentId);
+        setProjects(items);
+      } catch (err) {
+        console.error("failed to load project list", err);
+        setProjects([]);
+        setError(t("projects.loadFailed"));
+      } finally {
+        setProjectsLoading(false);
+      }
+    },
+    [projectAgentFacade, t],
+  );
 
-  const loadProjectFiles = useCallback(async (
-    agentId: string,
-    project: AgentProjectSummary,
-    options?: { preserveSelection?: boolean },
-  ): Promise<string> => {
-    void agentId;
-    setFilesLoading(true);
-    const preserveSelection = Boolean(options?.preserveSelection);
-    const previousSelection = preserveSelection ? selectedFilePath : "";
-    if (!preserveSelection) {
-      setSelectedFilePath("");
-      setFileContent("");
-    }
-    const projectIds = buildProjectRequestCandidates(project, {
-      preferredProjectRequestId: resolvedProjectRequestId,
-      routeProjectId,
-    });
-    try {
-      const resolved = await resolveProjectRequestCandidate({
-        projectRequestIds: projectIds,
-        retryCount: 1,
-        retryDelayMs: 300,
-        loader: async (projectRequestId) => {
-          const projectAdapter = projectWorkspaceFacade.getProjectAdapter(projectRequestId);
-          if (!projectAdapter) {
-            throw new Error("Project adapter unavailable");
-          }
-          return projectAdapter.queryFiles({
-            search: projectFilesQueryBody.search,
-            pathPrefix: projectFilesQueryBody.path_prefix,
-            stages: projectFilesQueryBody.stages,
-            contentTypes: projectFilesQueryBody.content_types,
-            includeBuiltin: projectFilesQueryBody.include_builtin,
-            includeIgnored: projectFilesQueryBody.include_ignored,
-            sortBy: projectFilesQueryBody.sort_by,
-            sortOrder: projectFilesQueryBody.sort_order,
-            offset: projectFilesQueryBody.offset,
-            limit: projectFilesQueryBody.limit,
-          });
-        },
+  const loadProjectFiles = useCallback(
+    async (
+      agentId: string,
+      project: AgentProjectSummary,
+      options?: { preserveSelection?: boolean },
+    ): Promise<string> => {
+      void agentId;
+      setFilesLoading(true);
+      const preserveSelection = Boolean(options?.preserveSelection);
+      const previousSelection = preserveSelection ? selectedFilePath : "";
+      if (!preserveSelection) {
+        setSelectedFilePath("");
+        setFileContent("");
+      }
+      const projectIds = buildProjectRequestCandidates(project, {
+        preferredProjectRequestId: resolvedProjectRequestId,
+        routeProjectId,
       });
-      const queryResponse = resolved.value;
-      const filteredFiles = queryResponse.items
-        .map((item) => ({
+      try {
+        const resolved = await resolveProjectRequestCandidate({
+          projectRequestIds: projectIds,
+          retryCount: 1,
+          retryDelayMs: 300,
+          loader: async (projectRequestId) => {
+            const projectAdapter =
+              projectWorkspaceFacade.getProjectAdapter(projectRequestId);
+            if (!projectAdapter) {
+              throw new Error("Project adapter unavailable");
+            }
+            return projectAdapter.queryFiles({
+              search: projectFilesQueryBody.search,
+              pathPrefix: projectFilesQueryBody.path_prefix,
+              stages: projectFilesQueryBody.stages,
+              contentTypes: projectFilesQueryBody.content_types,
+              includeBuiltin: projectFilesQueryBody.include_builtin,
+              includeIgnored: projectFilesQueryBody.include_ignored,
+              sortBy: projectFilesQueryBody.sort_by,
+              sortOrder: projectFilesQueryBody.sort_order,
+              offset: projectFilesQueryBody.offset,
+              limit: projectFilesQueryBody.limit,
+            });
+          },
+        });
+        const queryResponse = resolved.value;
+        const filteredFiles = queryResponse.items.map((item) => ({
           filename: item.filename,
           path: item.path,
           size: item.size,
@@ -1457,134 +1727,167 @@ export default function ProjectDetailPage() {
           builtin: item.builtin,
           ignored: item.ignored,
         }));
-      setProjectFiles(filteredFiles);
-      // Keep a superset cache so selection does not get invalidated by transient file-tree filters.
-      setKnownProjectFilesByPath((prev) => ({
-        ...prev,
-        ...buildProjectFilesByPath(filteredFiles),
-      }));
+        setProjectFiles(filteredFiles);
+        // Keep a superset cache so selection does not get invalidated by transient file-tree filters.
+        setKnownProjectFilesByPath((prev) => ({
+          ...prev,
+          ...buildProjectFilesByPath(filteredFiles),
+        }));
+        setResolvedProjectRequestId(resolved.projectRequestId);
+        const preservedFile = previousSelection
+          ? filteredFiles.find((item) => item.path === previousSelection)
+          : undefined;
+        const rootLevelDefaultFile = filteredFiles.find(
+          (item) => !item.path.includes("/") && isPreviewablePath(item.path),
+        );
+        const defaultFile = filteredFiles.find((item) =>
+          isPreviewablePath(item.path),
+        );
+        const nextSelectedPath =
+          preservedFile?.path ||
+          rootLevelDefaultFile?.path ||
+          defaultFile?.path ||
+          "";
+        if (nextSelectedPath) {
+          setSelectedFilePath(nextSelectedPath);
+        }
+        setError((prev) =>
+          prev === t("projects.loadFilesFailed") ? "" : prev,
+        );
+        return resolved.projectRequestId;
+      } catch (err) {
+        console.error("failed to load project files", err);
+        setProjectFiles([]);
+        setError(t("projects.loadFilesFailed"));
+        return "";
+      } finally {
+        setFilesLoading(false);
+      }
+    },
+    [
+      projectFilesQueryBody,
+      resolvedProjectRequestId,
+      routeProjectId,
+      selectedFilePath,
+      t,
+    ],
+  );
+
+  const loadProjectTreeDirectory = useCallback(
+    async (
+      agentId: string,
+      project: AgentProjectSummary,
+      dirPath = "",
+      preferredProjectRequestId = "",
+    ): Promise<AgentProjectFileTreeNode[]> => {
+      void agentId;
+      const projectIds = buildProjectRequestCandidates(project, {
+        preferredProjectRequestId:
+          preferredProjectRequestId || resolvedProjectRequestId,
+        routeProjectId,
+      });
+
+      const resolved = await resolveProjectRequestCandidate({
+        projectRequestIds: projectIds,
+        loader: async (projectRequestId) => {
+          const projectAdapter =
+            projectWorkspaceFacade.getProjectAdapter(projectRequestId);
+          if (!projectAdapter) {
+            throw new Error("Project adapter unavailable");
+          }
+          return projectAdapter.listTree(dirPath);
+        },
+      });
+      const visibleNodes = resolved.value.filter(
+        (item) => !isIgnoredProjectFile(item.path),
+      );
+      setKnownProjectFilesByPath((prev) =>
+        mergeProjectTreeNodesByPath(prev, visibleNodes),
+      );
       setResolvedProjectRequestId(resolved.projectRequestId);
-      const preservedFile = previousSelection
-        ? filteredFiles.find((item) => item.path === previousSelection)
-        : undefined;
-      const rootLevelDefaultFile = filteredFiles.find((item) => (
-        !item.path.includes("/") && isPreviewablePath(item.path)
-      ));
-      const defaultFile = filteredFiles.find((item) =>
-        isPreviewablePath(item.path),
+      return visibleNodes;
+    },
+    [projectWorkspaceFacade, resolvedProjectRequestId, routeProjectId],
+  );
+
+  const loadProjectFileSummary = useCallback(
+    async (
+      agentId: string,
+      project: AgentProjectSummary,
+      preferredProjectRequestId = "",
+    ) => {
+      void agentId;
+      const projectIds = buildProjectRequestCandidates(project, {
+        preferredProjectRequestId:
+          preferredProjectRequestId || resolvedProjectRequestId,
+        routeProjectId,
+      });
+
+      const resolved = await resolveProjectRequestCandidate({
+        projectRequestIds: projectIds,
+        loader: async (projectRequestId) => {
+          const projectAdapter =
+            projectWorkspaceFacade.getProjectAdapter(projectRequestId);
+          if (!projectAdapter) {
+            throw new Error("Project adapter unavailable");
+          }
+          return projectAdapter.getFileSummary();
+        },
+      });
+      setProjectFileSummary(resolved.value);
+      setLatestUpdatedFilePath(
+        (prev) => pickLatestRecentUpdatePath(resolved.value) || prev || "",
       );
-      const nextSelectedPath = preservedFile?.path || rootLevelDefaultFile?.path || defaultFile?.path || "";
-      if (nextSelectedPath) {
-        setSelectedFilePath(nextSelectedPath);
+      setResolvedProjectRequestId(resolved.projectRequestId);
+      return resolved.value;
+    },
+    [projectWorkspaceFacade, resolvedProjectRequestId, routeProjectId],
+  );
+
+  const loadProjectTreeRoot = useCallback(
+    async (
+      agentId: string,
+      project: AgentProjectSummary,
+      preferredProjectRequestId = "",
+    ) => {
+      setProjectTreeLoading(true);
+      try {
+        const nodes = await loadProjectTreeDirectory(
+          agentId,
+          project,
+          "",
+          preferredProjectRequestId,
+        );
+        setProjectTreeNodes(nodes);
+
+        if (!selectedFilePath) {
+          const previewPath =
+            nodes.find(
+              (item) => !item.is_directory && isPreviewablePath(item.path),
+            )?.path || "";
+
+          if (previewPath) {
+            setSelectedFilePath((prev) => prev || previewPath);
+          }
+        }
+      } catch (err) {
+        console.error("failed to load project tree root", err);
+        setProjectTreeNodes([]);
+      } finally {
+        setProjectTreeLoading(false);
       }
-      setError((prev) => (
-        prev === t("projects.loadFilesFailed") ? "" : prev
-      ));
-      return resolved.projectRequestId;
-    } catch (err) {
-      console.error("failed to load project files", err);
-      setProjectFiles([]);
-      setError(
-        t("projects.loadFilesFailed"),
-      );
-      return "";
-    } finally {
-      setFilesLoading(false);
-    }
-  }, [projectFilesQueryBody, resolvedProjectRequestId, routeProjectId, selectedFilePath, t]);
+    },
+    [loadProjectTreeDirectory, selectedFilePath],
+  );
 
-  const loadProjectTreeDirectory = useCallback(async (
-    agentId: string,
-    project: AgentProjectSummary,
-    dirPath = "",
-    preferredProjectRequestId = "",
-  ): Promise<AgentProjectFileTreeNode[]> => {
-    void agentId;
-    const projectIds = buildProjectRequestCandidates(project, {
-      preferredProjectRequestId: preferredProjectRequestId || resolvedProjectRequestId,
-      routeProjectId,
+  const { bootstrapProjectDetailData, handleRefreshProjectFiles } =
+    useProjectDetailBootstrap({
+      currentAgent,
+      selectedProject,
+      loadProjectFiles,
+      loadProjectTreeRoot,
+      loadProjectFileSummary,
     });
-
-    const resolved = await resolveProjectRequestCandidate({
-      projectRequestIds: projectIds,
-      loader: async (projectRequestId) => {
-        const projectAdapter = projectWorkspaceFacade.getProjectAdapter(projectRequestId);
-        if (!projectAdapter) {
-          throw new Error("Project adapter unavailable");
-        }
-        return projectAdapter.listTree(dirPath);
-      },
-    });
-    const visibleNodes = resolved.value.filter((item) => !isIgnoredProjectFile(item.path));
-    setKnownProjectFilesByPath((prev) => mergeProjectTreeNodesByPath(prev, visibleNodes));
-    setResolvedProjectRequestId(resolved.projectRequestId);
-    return visibleNodes;
-  }, [projectWorkspaceFacade, resolvedProjectRequestId, routeProjectId]);
-
-  const loadProjectFileSummary = useCallback(async (
-    agentId: string,
-    project: AgentProjectSummary,
-    preferredProjectRequestId = "",
-  ) => {
-    void agentId;
-    const projectIds = buildProjectRequestCandidates(project, {
-      preferredProjectRequestId: preferredProjectRequestId || resolvedProjectRequestId,
-      routeProjectId,
-    });
-
-    const resolved = await resolveProjectRequestCandidate({
-      projectRequestIds: projectIds,
-      loader: async (projectRequestId) => {
-        const projectAdapter = projectWorkspaceFacade.getProjectAdapter(projectRequestId);
-        if (!projectAdapter) {
-          throw new Error("Project adapter unavailable");
-        }
-        return projectAdapter.getFileSummary();
-      },
-    });
-    setProjectFileSummary(resolved.value);
-    setLatestUpdatedFilePath((prev) => pickLatestRecentUpdatePath(resolved.value) || prev || "");
-    setResolvedProjectRequestId(resolved.projectRequestId);
-    return resolved.value;
-  }, [projectWorkspaceFacade, resolvedProjectRequestId, routeProjectId]);
-
-  const loadProjectTreeRoot = useCallback(async (
-    agentId: string,
-    project: AgentProjectSummary,
-    preferredProjectRequestId = "",
-  ) => {
-    setProjectTreeLoading(true);
-    try {
-      const nodes = await loadProjectTreeDirectory(agentId, project, "", preferredProjectRequestId);
-      setProjectTreeNodes(nodes);
-
-      if (!selectedFilePath) {
-        const previewPath = nodes.find(
-          (item) => !item.is_directory && isPreviewablePath(item.path),
-        )?.path || "";
-
-        if (previewPath) {
-          setSelectedFilePath((prev) => prev || previewPath);
-        }
-      }
-    } catch (err) {
-      console.error("failed to load project tree root", err);
-      setProjectTreeNodes([]);
-    } finally {
-      setProjectTreeLoading(false);
-    }
-  }, [loadProjectTreeDirectory, selectedFilePath]);
-
-  const {
-    bootstrapProjectDetailData,
-    handleRefreshProjectFiles,
-  } = useProjectDetailBootstrap({
-    currentAgent,
-    selectedProject,
-    loadProjectFiles,
-    loadProjectTreeRoot,
-    loadProjectFileSummary,
-  });
 
   const {
     uploadModalOpen,
@@ -1609,9 +1912,13 @@ export default function ProjectDetailPage() {
 
   const uploadModalHint = useMemo(() => {
     if (selectedRunId) {
-      return `${t("projects.upload.batchHint", { runId: selectedRunId })} ${t("projects.upload.batchBehaviorHint")}`;
+      return `${t("projects.upload.batchHint", { runId: selectedRunId })} ${t(
+        "projects.upload.batchBehaviorHint",
+      )}`;
     }
-    return `${t("projects.upload.defaultHint")} ${t("projects.upload.batchBehaviorHint")}`;
+    return `${t("projects.upload.defaultHint")} ${t(
+      "projects.upload.batchBehaviorHint",
+    )}`;
   }, [selectedRunId, t]);
 
   const openProjectUploadModal = useCallback(() => {
@@ -1619,31 +1926,47 @@ export default function ProjectDetailPage() {
     setUploadTargetDir("");
     setUploadMode("files");
     setUploadModalOpen(true);
-  }, [setPendingUploads, setUploadTargetDir, setUploadMode, setUploadModalOpen]);
+  }, [
+    setPendingUploads,
+    setUploadTargetDir,
+    setUploadMode,
+    setUploadModalOpen,
+  ]);
 
   const openRunBatchUploadModal = useCallback(() => {
     setPendingUploads([]);
-    setUploadTargetDir(selectedRunId ? `original/batches/${selectedRunId}` : "original/batches/manual");
+    setUploadTargetDir(
+      selectedRunId
+        ? `original/batches/${selectedRunId}`
+        : "original/batches/manual",
+    );
     setUploadMode("files");
     setUploadModalOpen(true);
-  }, [selectedRunId, setPendingUploads, setUploadTargetDir, setUploadMode, setUploadModalOpen]);
+  }, [
+    selectedRunId,
+    setPendingUploads,
+    setUploadTargetDir,
+    setUploadMode,
+    setUploadModalOpen,
+  ]);
 
   const shouldBlockLeave = useMemo(() => {
-    const runInProgress = runDetail?.status === "running" || runDetail?.status === "pending";
+    const runInProgress =
+      runDetail?.status === "running" || runDetail?.status === "pending";
     const designSessionActive = Boolean(designFocusChatId && !selectedRunId);
 
     return Boolean(
       selectedAttachPaths.length > 0 ||
-      pendingUploads.length > 0 ||
-      deletingProjectPaths.length > 0 ||
-      uploadModalOpen ||
-      importModalOpen ||
-      sendingSelectedFiles ||
-      uploadingFiles ||
-      chatStarting ||
-      createRunLoading ||
-      runInProgress ||
-      designSessionActive,
+        pendingUploads.length > 0 ||
+        deletingProjectPaths.length > 0 ||
+        uploadModalOpen ||
+        importModalOpen ||
+        sendingSelectedFiles ||
+        uploadingFiles ||
+        chatStarting ||
+        createRunLoading ||
+        runInProgress ||
+        designSessionActive,
     );
   }, [
     chatStarting,
@@ -1659,156 +1982,171 @@ export default function ProjectDetailPage() {
     uploadModalOpen,
     uploadingFiles,
   ]);
-  useLeaveConfirmGuard({ enabled: shouldBlockLeave, confirmText: leaveConfirmText });
+  useLeaveConfirmGuard({
+    enabled: shouldBlockLeave,
+    confirmText: leaveConfirmText,
+  });
 
-  const loadFileContent = useCallback(async (
-    project: AgentProjectSummary,
-    filePath: string,
-  ) => {
-    setFileContent("");
-    try {
+  const loadFileContent = useCallback(
+    async (project: AgentProjectSummary, filePath: string) => {
+      setFileContent("");
+      try {
+        const resolved = await resolveProjectRequestCandidate({
+          projectRequestIds: buildProjectRequestCandidates(project, {
+            preferredProjectRequestId: resolvedProjectRequestId,
+            routeProjectId,
+          }),
+          loader: async (projectRequestId) => {
+            const projectAdapter =
+              projectWorkspaceFacade.getProjectAdapter(projectRequestId);
+            if (!projectAdapter) {
+              throw new Error("Project adapter unavailable");
+            }
+            return projectAdapter.readText(filePath);
+          },
+        });
+        setFileContent(resolved.value.content);
+        setResolvedProjectRequestId(resolved.projectRequestId);
+      } catch (err) {
+        console.error("failed to load project file content", err);
+        setFileContent(t("projects.previewLoadFailed"));
+      }
+    },
+    [projectWorkspaceFacade, resolvedProjectRequestId, routeProjectId, t],
+  );
+
+  const fetchProjectFileSnippet = useCallback(
+    async (project: AgentProjectSummary, filePath: string): Promise<string> => {
       const resolved = await resolveProjectRequestCandidate({
         projectRequestIds: buildProjectRequestCandidates(project, {
           preferredProjectRequestId: resolvedProjectRequestId,
           routeProjectId,
         }),
         loader: async (projectRequestId) => {
-          const projectAdapter = projectWorkspaceFacade.getProjectAdapter(projectRequestId);
+          const projectAdapter =
+            projectWorkspaceFacade.getProjectAdapter(projectRequestId);
           if (!projectAdapter) {
             throw new Error("Project adapter unavailable");
           }
           return projectAdapter.readText(filePath);
         },
       });
-      setFileContent(resolved.value.content);
       setResolvedProjectRequestId(resolved.projectRequestId);
-    } catch (err) {
-      console.error("failed to load project file content", err);
-      setFileContent(
-        t("projects.previewLoadFailed"),
-      );
-    }
-  }, [projectWorkspaceFacade, resolvedProjectRequestId, routeProjectId, t]);
+      return (resolved.value.content || "")
+        .replace(/\r\n/g, "\n")
+        .replace(/\n{3,}/g, "\n\n")
+        .trim()
+        .slice(0, 1200);
+    },
+    [projectWorkspaceFacade, resolvedProjectRequestId, routeProjectId],
+  );
 
-  const fetchProjectFileSnippet = useCallback(async (
-    project: AgentProjectSummary,
-    filePath: string,
-  ): Promise<string> => {
-    const resolved = await resolveProjectRequestCandidate({
-      projectRequestIds: buildProjectRequestCandidates(project, {
-        preferredProjectRequestId: resolvedProjectRequestId,
-        routeProjectId,
-      }),
-      loader: async (projectRequestId) => {
-        const projectAdapter = projectWorkspaceFacade.getProjectAdapter(projectRequestId);
-        if (!projectAdapter) {
-          throw new Error("Project adapter unavailable");
+  const loadRunDetail = useCallback(
+    async (agentId: string, project: AgentProjectSummary, runId: string) => {
+      try {
+        const resolved = await resolveProjectRequestCandidate({
+          projectRequestIds: buildProjectRequestCandidates(project, {
+            preferredProjectRequestId: resolvedProjectRequestId,
+            routeProjectId,
+          }),
+          loader: async (projectRequestId) =>
+            projectPipelineFacade.getProjectPipelineRun(
+              agentId,
+              projectRequestId,
+              runId,
+            ),
+        });
+        setRunDetail(resolved.value);
+        setResolvedProjectRequestId(resolved.projectRequestId);
+        if (resolved.value.artifacts.length > 0) {
+          setSelectedFilePath((prev) => prev || resolved.value.artifacts[0]);
         }
-        return projectAdapter.readText(filePath);
-      },
-    });
-    setResolvedProjectRequestId(resolved.projectRequestId);
-    return (resolved.value.content || "")
-      .replace(/\r\n/g, "\n")
-      .replace(/\n{3,}/g, "\n\n")
-      .trim()
-      .slice(0, 1200);
-  }, [projectWorkspaceFacade, resolvedProjectRequestId, routeProjectId]);
-
-  const loadRunDetail = useCallback(async (
-    agentId: string,
-    project: AgentProjectSummary,
-    runId: string,
-  ) => {
-    try {
-      const resolved = await resolveProjectRequestCandidate({
-        projectRequestIds: buildProjectRequestCandidates(project, {
-          preferredProjectRequestId: resolvedProjectRequestId,
-          routeProjectId,
-        }),
-        loader: async (projectRequestId) => projectPipelineFacade.getProjectPipelineRun(
-          agentId,
-          projectRequestId,
-          runId,
-        ),
-      });
-      setRunDetail(resolved.value);
-      setResolvedProjectRequestId(resolved.projectRequestId);
-      if (resolved.value.artifacts.length > 0) {
-        setSelectedFilePath((prev) => prev || resolved.value.artifacts[0]);
+      } catch (err) {
+        console.error("failed to load pipeline run detail", err);
+        setRunDetail(null);
+        setError(t("projects.pipeline.loadRunFailed"));
       }
-    } catch (err) {
-      console.error("failed to load pipeline run detail", err);
-      setRunDetail(null);
-      setError(
-        t("projects.pipeline.loadRunFailed"),
-      );
-    }
-  }, [projectPipelineFacade, resolvedProjectRequestId, routeProjectId, t]);
+    },
+    [projectPipelineFacade, resolvedProjectRequestId, routeProjectId, t],
+  );
 
-  const loadPipelineContext = useCallback(async (
-    agentId: string,
-    project: AgentProjectSummary,
-  ) => {
-    setPipelineLoading(true);
-    try {
-      const resolved = await resolveProjectRequestCandidate({
-        projectRequestIds: buildProjectRequestCandidates(project, {
-          preferredProjectRequestId: resolvedProjectRequestId,
-          routeProjectId,
-        }),
-        loader: async (projectRequestId) => Promise.all([
-          projectPipelineFacade.listProjectPipelineTemplates(agentId, projectRequestId),
-          projectPipelineFacade.listProjectPipelineRuns(agentId, projectRequestId),
-        ]),
-      });
-      const [templates, runs] = resolved.value;
-      setResolvedProjectRequestId(resolved.projectRequestId);
-      setError("");
-      setPipelineTemplates(templates);
-      setPipelineRuns(runs);
+  const loadPipelineContext = useCallback(
+    async (agentId: string, project: AgentProjectSummary) => {
+      setPipelineLoading(true);
+      try {
+        const resolved = await resolveProjectRequestCandidate({
+          projectRequestIds: buildProjectRequestCandidates(project, {
+            preferredProjectRequestId: resolvedProjectRequestId,
+            routeProjectId,
+          }),
+          loader: async (projectRequestId) =>
+            Promise.all([
+              projectPipelineFacade.listProjectPipelineTemplates(
+                agentId,
+                projectRequestId,
+              ),
+              projectPipelineFacade.listProjectPipelineRuns(
+                agentId,
+                projectRequestId,
+              ),
+            ]),
+        });
+        const [templates, runs] = resolved.value;
+        setResolvedProjectRequestId(resolved.projectRequestId);
+        setError("");
+        setPipelineTemplates(templates);
+        setPipelineRuns(runs);
 
-      if (templates.length > 0) {
-        setSelectedTemplateId((prev) =>
-          templates.some((item) => item.id === prev) ? prev : templates[0].id,
-        );
-      } else {
+        if (templates.length > 0) {
+          setSelectedTemplateId((prev) =>
+            templates.some((item) => item.id === prev) ? prev : templates[0].id,
+          );
+        } else {
+          setSelectedTemplateId("");
+        }
+
+        if (runs.length > 0) {
+          setSelectedRunId((prev) =>
+            runs.some((item) => item.id === prev) ? prev : "",
+          );
+        } else {
+          setSelectedRunId("");
+          setRunDetail(null);
+        }
+      } catch (err) {
+        console.error("failed to load pipeline context", err);
+        setPipelineTemplates([]);
+        setPipelineRuns([]);
         setSelectedTemplateId("");
-      }
-
-      if (runs.length > 0) {
-        setSelectedRunId((prev) => (runs.some((item) => item.id === prev) ? prev : ""));
-      } else {
         setSelectedRunId("");
         setRunDetail(null);
+        setError(
+          `${t("projects.pipeline.loadFailed")} ${
+            (err as Error)?.message || ""
+          }`.trim(),
+        );
+      } finally {
+        setPipelineLoading(false);
       }
-    } catch (err) {
-      console.error("failed to load pipeline context", err);
-      setPipelineTemplates([]);
-      setPipelineRuns([]);
-      setSelectedTemplateId("");
-      setSelectedRunId("");
-      setRunDetail(null);
-      setError(
-        `${t("projects.pipeline.loadFailed")} ${(err as Error)?.message || ""}`.trim(),
-      );
-    } finally {
-      setPipelineLoading(false);
-    }
-  }, [projectPipelineFacade, resolvedProjectRequestId, routeProjectId, t]);
+    },
+    [projectPipelineFacade, resolvedProjectRequestId, routeProjectId, t],
+  );
 
-  const handleRealtimeFileTreeInvalidated = useCallback((payload?: {
-    changedPaths: string[];
-    changedDirs: string[];
-    changedPathsTruncated: boolean;
-    reason: string;
-    fileSummary?: AgentProjectFileSummary;
-  }) => {
-    if (payload?.fileSummary) {
-      setProjectFileSummary(payload.fileSummary);
-    }
-    // Keep realtime scoped to knowledge-side health signals; file/workbench sync stays manual.
-  }, []);
+  const handleRealtimeFileTreeInvalidated = useCallback(
+    (payload?: {
+      changedPaths: string[];
+      changedDirs: string[];
+      changedPathsTruncated: boolean;
+      reason: string;
+      fileSummary?: AgentProjectFileSummary;
+    }) => {
+      if (payload?.fileSummary) {
+        setProjectFileSummary(payload.fileSummary);
+      }
+      // Keep realtime scoped to knowledge-side health signals; file/workbench sync stays manual.
+    },
+    [],
+  );
 
   const handleRealtimePipelineInvalidated = useCallback(() => {
     // Keep realtime as a lightweight signal channel; pipeline refresh stays manual.
@@ -1824,7 +2162,9 @@ export default function ProjectDetailPage() {
     }
     setImportLoading(true);
     try {
-      const templates = await projectPipelineFacade.listPlatformFlowTemplates(currentAgent.id);
+      const templates = await projectPipelineFacade.listPlatformFlowTemplates(
+        currentAgent.id,
+      );
       setPlatformTemplates(templates);
       setSelectedPlatformTemplateId((prev) => {
         if (prev && templates.some((item) => item.id === prev)) {
@@ -1835,9 +2175,7 @@ export default function ProjectDetailPage() {
       setImportModalOpen(true);
     } catch (err) {
       console.error("failed to load platform templates", err);
-      message.error(
-        t("projects.pipeline.loadGlobalFailed"),
-      );
+      message.error(t("projects.pipeline.loadGlobalFailed"));
     } finally {
       setImportLoading(false);
     }
@@ -1856,25 +2194,22 @@ export default function ProjectDetailPage() {
           preferredProjectRequestId: resolvedProjectRequestId,
           routeProjectId,
         }),
-        loader: async (projectRequestId) => projectPipelineFacade.importPlatformTemplateIntoProject(
-          currentAgent.id,
-          projectRequestId,
-          { platform_template_id: selectedPlatformTemplateId },
-        ),
+        loader: async (projectRequestId) =>
+          projectPipelineFacade.importPlatformTemplateIntoProject(
+            currentAgent.id,
+            projectRequestId,
+            { platform_template_id: selectedPlatformTemplateId },
+          ),
       });
       setResolvedProjectRequestId(resolved.projectRequestId);
 
       await loadPipelineContext(currentAgent.id, selectedProject);
       setSelectedTemplateId(resolved.value.id);
       setImportModalOpen(false);
-      message.success(
-        t("projects.pipeline.importGlobalSuccess"),
-      );
+      message.success(t("projects.pipeline.importGlobalSuccess"));
     } catch (err) {
       console.error("failed to import global template", err);
-      message.error(
-        t("projects.pipeline.importGlobalFailed"),
-      );
+      message.error(t("projects.pipeline.importGlobalFailed"));
     } finally {
       setImportLoading(false);
     }
@@ -1889,69 +2224,79 @@ export default function ProjectDetailPage() {
     t,
   ]);
 
-  const pollPipelineRun = useCallback(async (
-    agentId: string,
-    project: AgentProjectSummary,
-    runId: string,
-  ) => {
-    try {
-      const resolved = await resolveProjectRequestCandidate({
-        projectRequestIds: buildProjectRequestCandidates(project, {
-          preferredProjectRequestId: resolvedProjectRequestId,
-          routeProjectId,
-        }),
-        loader: async (projectRequestId) => Promise.all([
-          projectPipelineFacade.listProjectPipelineRuns(agentId, projectRequestId),
-          projectPipelineFacade.getProjectPipelineRun(agentId, projectRequestId, runId),
-        ]),
-      });
-      const [runs, detail] = resolved.value;
-      setPipelineRuns(runs);
-      setRunDetail(detail);
-      setResolvedProjectRequestId(resolved.projectRequestId);
-    } catch (err) {
-      console.error("failed to poll pipeline run", err);
-    }
-  }, [projectPipelineFacade, resolvedProjectRequestId, routeProjectId]);
+  const pollPipelineRun = useCallback(
+    async (agentId: string, project: AgentProjectSummary, runId: string) => {
+      try {
+        const resolved = await resolveProjectRequestCandidate({
+          projectRequestIds: buildProjectRequestCandidates(project, {
+            preferredProjectRequestId: resolvedProjectRequestId,
+            routeProjectId,
+          }),
+          loader: async (projectRequestId) =>
+            Promise.all([
+              projectPipelineFacade.listProjectPipelineRuns(
+                agentId,
+                projectRequestId,
+              ),
+              projectPipelineFacade.getProjectPipelineRun(
+                agentId,
+                projectRequestId,
+                runId,
+              ),
+            ]),
+        });
+        const [runs, detail] = resolved.value;
+        setPipelineRuns(runs);
+        setRunDetail(detail);
+        setResolvedProjectRequestId(resolved.projectRequestId);
+      } catch (err) {
+        console.error("failed to poll pipeline run", err);
+      }
+    },
+    [projectPipelineFacade, resolvedProjectRequestId, routeProjectId],
+  );
 
-  const handleSwitchToRunFocusChat = useCallback((params: {
-    runId: string;
-    projectRequestId?: string;
-  }) => {
-    if (!selectedProject) {
-      return;
-    }
+  const handleSwitchToRunFocusChat = useCallback(
+    (params: { runId: string; projectRequestId?: string }) => {
+      if (!selectedProject) {
+        return;
+      }
 
-    const prevFocusChatId = runFocusChatIdRef.current;
-    if (prevFocusChatId) {
+      const prevFocusChatId = runFocusChatIdRef.current;
+      if (prevFocusChatId) {
+        void chatApi
+          .clearChatMeta(prevFocusChatId, {
+            user_id: "default",
+            channel: "console",
+          })
+          .catch(() => {});
+      }
+
+      setRunFocusChatId("");
       void chatApi
-        .clearChatMeta(prevFocusChatId, {
+        .createChat({
+          name: `[focus] ${selectedProject.name}`,
+          session_id: `project-run-${params.runId}`,
           user_id: "default",
           channel: "console",
+          meta: {
+            focus_type: "project_run",
+            focus_id: selectedProject.id,
+            project_id: selectedProject.id,
+            project_request_id: params.projectRequestId || selectedProject.id,
+            run_id: params.runId,
+            focus_path: `projects/${selectedProject.id}`,
+          },
         })
-        .catch(() => {});
-    }
-
-    setRunFocusChatId("");
-    void chatApi.createChat({
-      name: `[focus] ${selectedProject.name}`,
-      session_id: `project-run-${params.runId}`,
-      user_id: "default",
-      channel: "console",
-      meta: {
-        focus_type: "project_run",
-        focus_id: selectedProject.id,
-        project_id: selectedProject.id,
-        project_request_id: params.projectRequestId || selectedProject.id,
-        run_id: params.runId,
-        focus_path: `projects/${selectedProject.id}`,
-      },
-    }).then((chat) => {
-      setRunFocusChatId(chat.id);
-    }).catch((err) => {
-      console.warn("[focus] failed to create project focus chat", err);
-    });
-  }, [selectedProject]);
+        .then((chat) => {
+          setRunFocusChatId(chat.id);
+        })
+        .catch((err) => {
+          console.warn("[focus] failed to create project focus chat", err);
+        });
+    },
+    [selectedProject],
+  );
 
   const handleCreateRun = useCallback(async () => {
     if (!currentAgent || !selectedProject || !selectedTemplateId) {
@@ -1964,17 +2309,18 @@ export default function ProjectDetailPage() {
           preferredProjectRequestId: resolvedProjectRequestId,
           routeProjectId,
         }),
-        loader: async (projectRequestId) => projectPipelineFacade.createProjectPipelineRun(
-          currentAgent.id,
-          projectRequestId,
-          {
-            template_id: selectedTemplateId,
-            parameters: {
-              input_scope: "all_original",
-              input_scope_policy: "default_if_no_batch_upload",
+        loader: async (projectRequestId) =>
+          projectPipelineFacade.createProjectPipelineRun(
+            currentAgent.id,
+            projectRequestId,
+            {
+              template_id: selectedTemplateId,
+              parameters: {
+                input_scope: "all_original",
+                input_scope_policy: "default_if_no_batch_upload",
+              },
             },
-          },
-        ),
+          ),
       });
       const run = resolved.value;
       const requestProjectId = resolved.projectRequestId;
@@ -1989,32 +2335,38 @@ export default function ProjectDetailPage() {
       });
     } catch (err) {
       console.error("failed to create pipeline run", err);
-      setError(
-        t("projects.pipeline.createRunFailed"),
-      );
+      setError(t("projects.pipeline.createRunFailed"));
     } finally {
       setCreateRunLoading(false);
     }
-  }, [currentAgent, handleSwitchToRunFocusChat, loadPipelineContext, projectPipelineFacade, resolvedProjectRequestId, routeProjectId, selectedProject, selectedTemplateId, t]);
-
-  const {
-    handleEnsureRunChat,
-    handleEnsureWorkspaceChat,
-  } = useProjectChatEnsureController({
-    selectedProject,
-    routeWorkspaceChatId,
-    selectedRunId,
-    activeRunChatId,
-    workspaceFocusChatId,
+  }, [
+    currentAgent,
+    handleSwitchToRunFocusChat,
+    loadPipelineContext,
+    projectPipelineFacade,
     resolvedProjectRequestId,
-    runFocusChatIdRef,
-    workspaceFocusChatIdRef,
-    setRunFocusChatId,
-    setWorkspaceFocusChatId,
-    setChatStarting,
-    setError,
-    startFailedText: t("projects.chat.startFailed"),
-  });
+    routeProjectId,
+    selectedProject,
+    selectedTemplateId,
+    t,
+  ]);
+
+  const { handleEnsureRunChat, handleEnsureWorkspaceChat } =
+    useProjectChatEnsureController({
+      selectedProject,
+      routeWorkspaceChatId,
+      selectedRunId,
+      activeRunChatId,
+      workspaceFocusChatId,
+      resolvedProjectRequestId,
+      runFocusChatIdRef,
+      workspaceFocusChatIdRef,
+      setRunFocusChatId,
+      setWorkspaceFocusChatId,
+      setChatStarting,
+      setError,
+      startFailedText: t("projects.chat.startFailed"),
+    });
 
   const { handleEnsureDesignChat } = useProjectDesignChatController({
     activeDesignChatId,
@@ -2053,21 +2405,30 @@ export default function ProjectDetailPage() {
     setWorkspaceFocusChatId,
   });
 
-  const navigateToWorkspaceChat = useCallback((chatIdValue: string, replace = false) => {
-    if (!selectedProject?.id || !chatIdValue) {
-      return;
-    }
-    const targetPath = buildProjectWorkspaceChatPath(selectedProject.id, chatIdValue);
-    if (location.pathname === targetPath) {
-      return;
-    }
-    navigate(targetPath, { replace });
-  }, [location.pathname, navigate, selectedProject?.id]);
+  const navigateToWorkspaceChat = useCallback(
+    (chatIdValue: string, replace = false) => {
+      if (!selectedProject?.id || !chatIdValue) {
+        return;
+      }
+      const targetPath = buildProjectWorkspaceChatPath(
+        selectedProject.id,
+        chatIdValue,
+      );
+      if (location.pathname === targetPath) {
+        return;
+      }
+      navigate(targetPath, { replace });
+    },
+    [location.pathname, navigate, selectedProject?.id],
+  );
 
-  const selectWorkspaceChatSession = useCallback((chatIdValue: string, replace = false) => {
-    applyWorkspaceChatFocus(chatIdValue);
-    navigateToWorkspaceChat(chatIdValue, replace);
-  }, [applyWorkspaceChatFocus, navigateToWorkspaceChat]);
+  const selectWorkspaceChatSession = useCallback(
+    (chatIdValue: string, replace = false) => {
+      applyWorkspaceChatFocus(chatIdValue);
+      navigateToWorkspaceChat(chatIdValue, replace);
+    },
+    [applyWorkspaceChatFocus, navigateToWorkspaceChat],
+  );
 
   const selectDesignChatSession = useCallback((chatId: string) => {
     setRunFocusChatId("");
@@ -2116,21 +2477,24 @@ export default function ProjectDetailPage() {
     projectChatMode,
   ]);
 
-  const prepareDraftInChat = useCallback(async (params: {
-    ensureChat: () => Promise<string>;
-    request: ProjectChatAutoAttachRequest;
-    successText: string;
-  }): Promise<boolean> => {
-    const chatId = await params.ensureChat();
-    if (!chatId) {
-      message.error(t("projects.chat.startFailed"));
-      return false;
-    }
+  const prepareDraftInChat = useCallback(
+    async (params: {
+      ensureChat: () => Promise<string>;
+      request: ProjectChatAutoAttachRequest;
+      successText: string;
+    }): Promise<boolean> => {
+      const chatId = await params.ensureChat();
+      if (!chatId) {
+        message.error(t("projects.chat.startFailed"));
+        return false;
+      }
 
-    setAutoAttachRequest(params.request);
-    message.success(params.successText);
-    return true;
-  }, [t]);
+      setAutoAttachRequest(params.request);
+      message.success(params.successText);
+      return true;
+    },
+    [t],
+  );
 
   const loadManualRecoverCandidates = useCallback(async () => {
     setManualRecoverLoading(true);
@@ -2139,17 +2503,16 @@ export default function ProjectDetailPage() {
         user_id: "default",
         channel: "console",
       });
-      const sorted = [...chats].sort((a, b) =>
-        toTimestamp(b.updated_at || b.created_at) -
-        toTimestamp(a.updated_at || a.created_at),
+      const sorted = [...chats].sort(
+        (a, b) =>
+          toTimestamp(b.updated_at || b.created_at) -
+          toTimestamp(a.updated_at || a.created_at),
       );
       setManualRecoverCandidates(sorted);
     } catch (err) {
       console.error("failed to load recoverable chats", err);
       setManualRecoverCandidates([]);
-      setError(
-        t("projects.chat.manualRecoverListFailed"),
-      );
+      setError(t("projects.chat.manualRecoverListFailed"));
     } finally {
       setManualRecoverLoading(false);
     }
@@ -2174,7 +2537,9 @@ export default function ProjectDetailPage() {
         manualRecoverCandidates.length > 0
           ? manualRecoverCandidates
           : await chatApi.listChats({ user_id: "default", channel: "console" });
-      const target = fallbackChats.find((chat) => chat.id === manualRecoverChatId);
+      const target = fallbackChats.find(
+        (chat) => chat.id === manualRecoverChatId,
+      );
       if (!target) {
         throw new Error("recover_chat_not_found");
       }
@@ -2200,14 +2565,10 @@ export default function ProjectDetailPage() {
       selectWorkspaceChatSession(target.id);
       await syncPreferredWorkspaceChatBinding(target.id);
       setManualRecoverOpen(false);
-      message.success(
-        t("projects.chat.manualRecoverSuccess"),
-      );
+      message.success(t("projects.chat.manualRecoverSuccess"));
     } catch (err) {
       console.error("failed to manually recover project chat", err);
-      message.error(
-        t("projects.chat.manualRecoverFailed"),
-      );
+      message.error(t("projects.chat.manualRecoverFailed"));
     } finally {
       setManualRecoverLoading(false);
     }
@@ -2265,8 +2626,8 @@ export default function ProjectDetailPage() {
   }, [realtimeConnectionState.status, t]);
 
   const showRealtimeHealthNotice =
-    realtimeConnectionState.status === "reconnecting"
-    || realtimeConnectionState.status === "degraded";
+    realtimeConnectionState.status === "reconnecting" ||
+    realtimeConnectionState.status === "degraded";
 
   useEffect(() => {
     if (!currentAgent) {
@@ -2285,7 +2646,9 @@ export default function ProjectDetailPage() {
     if (ancestorKeys.length === 0) {
       return;
     }
-    setTreeExpandedKeys((prev) => mergeExpandedProjectTreeKeys(prev, ancestorKeys));
+    setTreeExpandedKeys((prev) =>
+      mergeExpandedProjectTreeKeys(prev, ancestorKeys),
+    );
   }, [selectedFilePath]);
 
   useEffect(() => {
@@ -2331,7 +2694,9 @@ export default function ProjectDetailPage() {
     try {
       const raw = window.localStorage.getItem(storageKey);
       const parsed = parseProjectLayoutPrefs(raw);
-      const restoredSelectedTreeFilePath = normalizeProjectTreeKey(parsed.selectedTreeFilePath);
+      const restoredSelectedTreeFilePath = normalizeProjectTreeKey(
+        parsed.selectedTreeFilePath,
+      );
       const restoredTreeExpandedKeys = budgetRestoredProjectTreeKeys(
         parsed.treeExpandedKeys,
         restoredSelectedTreeFilePath,
@@ -2345,9 +2710,13 @@ export default function ProjectDetailPage() {
       setTreeExpandedKeys(restoredTreeExpandedKeys);
       setSelectedFilePath(restoredSelectedTreeFilePath);
       setLeftPaneSize(Math.max(parsed.leftPaneSize, LEFT_PANE_MIN_SIZE));
-      setWorkbenchPaneSize(Math.max(parsed.workbenchPaneSize, WORKBENCH_PANE_MIN_SIZE));
+      setWorkbenchPaneSize(
+        Math.max(parsed.workbenchPaneSize, WORKBENCH_PANE_MIN_SIZE),
+      );
       setChatPaneSize(Math.max(parsed.chatPaneSize, CHAT_PANE_MIN_SIZE));
-      setKnowledgeDockSize(Math.max(parsed.knowledgeDockSize, KNOWLEDGE_DOCK_MIN_SIZE));
+      setKnowledgeDockSize(
+        Math.max(parsed.knowledgeDockSize, KNOWLEDGE_DOCK_MIN_SIZE),
+      );
     } catch {
       const parsed = parseProjectLayoutPrefs(null);
       setActiveStage(parsed.activeStage);
@@ -2359,9 +2728,13 @@ export default function ProjectDetailPage() {
       setTreeExpandedKeys(parsed.treeExpandedKeys);
       setSelectedFilePath(parsed.selectedTreeFilePath);
       setLeftPaneSize(Math.max(parsed.leftPaneSize, LEFT_PANE_MIN_SIZE));
-      setWorkbenchPaneSize(Math.max(parsed.workbenchPaneSize, WORKBENCH_PANE_MIN_SIZE));
+      setWorkbenchPaneSize(
+        Math.max(parsed.workbenchPaneSize, WORKBENCH_PANE_MIN_SIZE),
+      );
       setChatPaneSize(Math.max(parsed.chatPaneSize, CHAT_PANE_MIN_SIZE));
-      setKnowledgeDockSize(Math.max(parsed.knowledgeDockSize, KNOWLEDGE_DOCK_MIN_SIZE));
+      setKnowledgeDockSize(
+        Math.max(parsed.knowledgeDockSize, KNOWLEDGE_DOCK_MIN_SIZE),
+      );
     } finally {
       layoutPrefsLoadedRef.current = true;
     }
@@ -2446,8 +2819,15 @@ export default function ProjectDetailPage() {
     }
     projectFilesLoadKeyRef.current = loadKey;
     projectFilesViewLoadKeyRef.current = `${loadKey}:${projectFilesQuerySignature}`;
-    void bootstrapProjectDetailData(currentAgent.id, selectedProject, { preserveSelection: true });
-  }, [bootstrapProjectDetailData, currentAgent, projectFilesQuerySignature, selectedProject]);
+    void bootstrapProjectDetailData(currentAgent.id, selectedProject, {
+      preserveSelection: true,
+    });
+  }, [
+    bootstrapProjectDetailData,
+    currentAgent,
+    projectFilesQuerySignature,
+    selectedProject,
+  ]);
 
   useEffect(() => {
     if (!currentAgent || !selectedProject) {
@@ -2462,14 +2842,25 @@ export default function ProjectDetailPage() {
       return;
     }
     projectFilesViewLoadKeyRef.current = viewLoadKey;
-    void loadProjectFiles(currentAgent.id, selectedProject, { preserveSelection: true });
-  }, [currentAgent, loadProjectFiles, projectFilesQuerySignature, selectedProject]);
+    void loadProjectFiles(currentAgent.id, selectedProject, {
+      preserveSelection: true,
+    });
+  }, [
+    currentAgent,
+    loadProjectFiles,
+    projectFilesQuerySignature,
+    selectedProject,
+  ]);
 
   useEffect(() => {
     if (!currentAgent || !selectedProject) {
       return;
     }
-    if (pipelineLoading || pipelineTemplates.length > 0 || pipelineRuns.length > 0) {
+    if (
+      pipelineLoading ||
+      pipelineTemplates.length > 0 ||
+      pipelineRuns.length > 0
+    ) {
       return;
     }
     const allowManualStageLoad =
@@ -2494,9 +2885,7 @@ export default function ProjectDetailPage() {
       return;
     }
     if (!isPreviewablePath(selectedFilePath)) {
-      setFileContent(
-        t("projects.previewLoadFailed"),
-      );
+      setFileContent(t("projects.previewLoadFailed"));
       return;
     }
     void loadFileContent(selectedProject, selectedFilePath);
@@ -2508,7 +2897,10 @@ export default function ProjectDetailPage() {
       return;
     }
 
-    const charStatsPath = resolveCharStatsArtifactPath(selectedFilePath, effectiveProjectFiles);
+    const charStatsPath = resolveCharStatsArtifactPath(
+      selectedFilePath,
+      effectiveProjectFiles,
+    );
     if (!charStatsPath) {
       setCharStatsContent("");
       return;
@@ -2525,7 +2917,8 @@ export default function ProjectDetailPage() {
             routeProjectId,
           }),
           loader: async (projectRequestId) => {
-            const projectAdapter = projectWorkspaceFacade.getProjectAdapter(projectRequestId);
+            const projectAdapter =
+              projectWorkspaceFacade.getProjectAdapter(projectRequestId);
             if (!projectAdapter) {
               throw new Error("Project adapter unavailable");
             }
@@ -2565,7 +2958,10 @@ export default function ProjectDetailPage() {
       return;
     }
 
-    const nerPath = resolveNerStructuredArtifactPath(selectedFilePath, effectiveProjectFiles);
+    const nerPath = resolveNerStructuredArtifactPath(
+      selectedFilePath,
+      effectiveProjectFiles,
+    );
     if (!nerPath) {
       setNerStructuredContent("");
       return;
@@ -2582,7 +2978,8 @@ export default function ProjectDetailPage() {
             routeProjectId,
           }),
           loader: async (projectRequestId) => {
-            const projectAdapter = projectWorkspaceFacade.getProjectAdapter(projectRequestId);
+            const projectAdapter =
+              projectWorkspaceFacade.getProjectAdapter(projectRequestId);
             if (!projectAdapter) {
               throw new Error("Project adapter unavailable");
             }
@@ -2629,22 +3026,16 @@ export default function ProjectDetailPage() {
       return;
     }
 
-    const hasPreferredWorkspaceChat = Boolean(
-      preferredWorkspaceChatId,
-    );
+    const hasPreferredWorkspaceChat = Boolean(preferredWorkspaceChatId);
 
     setSelectedRunId((prev) =>
       runsForSelectedTemplate.some((item) => item.id === prev)
         ? prev
         : hasPreferredWorkspaceChat
-          ? ""
-          : runsForSelectedTemplate[0].id,
+        ? ""
+        : runsForSelectedTemplate[0].id,
     );
-  }, [
-    preferredWorkspaceChatId,
-    runsForSelectedTemplate,
-    selectedTemplateId,
-  ]);
+  }, [preferredWorkspaceChatId, runsForSelectedTemplate, selectedTemplateId]);
 
   useEffect(() => {
     if (!selectedRunId) {
@@ -2668,11 +3059,7 @@ export default function ProjectDetailPage() {
     }
     automationDrawerAutoOpenKeyRef.current = autoOpenKey;
     setAutomationDrawerOpen(true);
-  }, [
-    runDetail?.status,
-    selectedRunId,
-    selectedRunSummary?.status,
-  ]);
+  }, [runDetail?.status, selectedRunId, selectedRunSummary?.status]);
 
   useEffect(() => {
     if (!currentAgent || !selectedProject || !selectedRunId) {
@@ -2718,7 +3105,10 @@ export default function ProjectDetailPage() {
 
     setDeletingProject(true);
     try {
-      await projectAgentFacade.deleteProject(currentAgent.id, selectedProject.id);
+      await projectAgentFacade.deleteProject(
+        currentAgent.id,
+        selectedProject.id,
+      );
       message.success(
         t("projects.deleteSuccess", {
           name: selectedProject.name || selectedProject.id,
@@ -2732,115 +3122,153 @@ export default function ProjectDetailPage() {
     } finally {
       setDeletingProject(false);
     }
-  }, [currentAgent, loadAgents, navigate, projectAgentFacade, selectedProject, t]);
+  }, [
+    currentAgent,
+    loadAgents,
+    navigate,
+    projectAgentFacade,
+    selectedProject,
+    t,
+  ]);
 
-  const normalizeProjectArtifactPath = useCallback((inputPath: string): string => {
-    let nextPath = String(inputPath || "").trim().replace(/\\/g, "/");
-    if (!nextPath) {
-      return "";
-    }
-
-    // 兼容 file:// URL
-    if (nextPath.startsWith("file://")) {
-      nextPath = nextPath.replace(/^file:\/\//, "");
-    }
-
-    const workspaceDir = String(selectedProject?.workspace_dir || "").trim().replace(/\\/g, "/");
-    if (workspaceDir) {
-      const workspacePrefix = workspaceDir.endsWith("/") ? workspaceDir : `${workspaceDir}/`;
-      if (nextPath === workspaceDir) {
-        nextPath = "";
-      } else if (nextPath.startsWith(workspacePrefix)) {
-        nextPath = nextPath.slice(workspacePrefix.length);
-      }
-    }
-
-    const projectIdCandidates = buildProjectIdCandidates(selectedProject);
-    for (const candidate of projectIdCandidates) {
-      const normalizedCandidate = String(candidate || "").trim();
-      if (!normalizedCandidate) {
-        continue;
-      }
-      const prefix = `projects/${normalizedCandidate}/`;
-      if (nextPath.startsWith(prefix)) {
-        nextPath = nextPath.slice(prefix.length);
-        break;
-      }
-    }
-
-    return nextPath.replace(/^\.\//, "").replace(/^\/+/, "");
-  }, [selectedProject]);
-
-  const handleSelectArtifactFile = useCallback(async (path: string) => {
-    const normalizedPath = normalizeProjectArtifactPath(path);
-    if (!normalizedPath) {
-      return;
-    }
-
-    const parentDirPath = (() => {
-      const lastSlashIndex = normalizedPath.lastIndexOf("/");
-      if (lastSlashIndex <= 0) {
+  const normalizeProjectArtifactPath = useCallback(
+    (inputPath: string): string => {
+      let nextPath = String(inputPath || "")
+        .trim()
+        .replace(/\\/g, "/");
+      if (!nextPath) {
         return "";
       }
-      return normalizedPath.slice(0, lastSlashIndex);
-    })();
 
-    if (currentAgent && selectedProject) {
-      const treeProbePath = parentDirPath;
-      try {
-        const children = await loadProjectTreeDirectory(
-          currentAgent.id,
-          selectedProject,
-          treeProbePath,
-        );
-        if (!parentDirPath) {
-          setSelectedFilePath(normalizedPath);
-          return;
-        }
-        const selection = resolveArtifactSelectionPath(treeProbePath, children);
-        const expandedDirectoryPath = selection.expandedDirectoryPath;
-        if (typeof expandedDirectoryPath === "string" && expandedDirectoryPath.length > 0) {
-          setTreeExpandedKeys((prev) => mergeExpandedProjectTreeKeys(prev, [expandedDirectoryPath]));
-        }
-        if (parentDirPath) {
-          setSelectedFilePath(normalizedPath);
-          return;
-        }
-        if (selection.selectedPath) {
-          setSelectedFilePath(selection.selectedPath);
-          return;
-        }
-        if (children.length >= 0) {
-          return;
-        }
-      } catch {
-        // The path is likely a file rather than a directory.
+      // 兼容 file:// URL
+      if (nextPath.startsWith("file://")) {
+        nextPath = nextPath.replace(/^file:\/\//, "");
       }
-    }
 
-    setSelectedFilePath(normalizedPath);
-  }, [currentAgent, loadProjectTreeDirectory, normalizeProjectArtifactPath, selectedProject]);
+      const workspaceDir = String(selectedProject?.workspace_dir || "")
+        .trim()
+        .replace(/\\/g, "/");
+      if (workspaceDir) {
+        const workspacePrefix = workspaceDir.endsWith("/")
+          ? workspaceDir
+          : `${workspaceDir}/`;
+        if (nextPath === workspaceDir) {
+          nextPath = "";
+        } else if (nextPath.startsWith(workspacePrefix)) {
+          nextPath = nextPath.slice(workspacePrefix.length);
+        }
+      }
 
-  const handleLocateArtifactFile = useCallback(async (path: string) => {
-    const normalizedPath = normalizeProjectArtifactPath(path);
-    if (!normalizedPath) {
-      return;
-    }
+      const projectIdCandidates = buildProjectIdCandidates(selectedProject);
+      for (const candidate of projectIdCandidates) {
+        const normalizedCandidate = String(candidate || "").trim();
+        if (!normalizedCandidate) {
+          continue;
+        }
+        const prefix = `projects/${normalizedCandidate}/`;
+        if (nextPath.startsWith(prefix)) {
+          nextPath = nextPath.slice(prefix.length);
+          break;
+        }
+      }
 
-    // 定位链路：先写过滤条件触发文件树查询，再选中文件触发预览。
-    const filterKeyword = normalizedPath.split("/").pop() || normalizedPath;
-    setProjectFileSearchQuery(filterKeyword);
+      return nextPath.replace(/^\.\//, "").replace(/^\/+/, "");
+    },
+    [selectedProject],
+  );
 
-    await handleSelectArtifactFile(normalizedPath);
-  }, [handleSelectArtifactFile, normalizeProjectArtifactPath]);
+  const handleSelectArtifactFile = useCallback(
+    async (path: string) => {
+      const normalizedPath = normalizeProjectArtifactPath(path);
+      if (!normalizedPath) {
+        return;
+      }
 
-  const handleAttachArtifactToChat = useCallback((path: string) => {
-    setSelectedAttachPaths((prev) =>
-      prev.includes(path) ? prev.filter((item) => item !== path) : [...prev, path],
-    );
-  }, [
-    setSelectedAttachPaths,
-  ]);
+      const parentDirPath = (() => {
+        const lastSlashIndex = normalizedPath.lastIndexOf("/");
+        if (lastSlashIndex <= 0) {
+          return "";
+        }
+        return normalizedPath.slice(0, lastSlashIndex);
+      })();
+
+      if (currentAgent && selectedProject) {
+        const treeProbePath = parentDirPath;
+        try {
+          const children = await loadProjectTreeDirectory(
+            currentAgent.id,
+            selectedProject,
+            treeProbePath,
+          );
+          if (!parentDirPath) {
+            setSelectedFilePath(normalizedPath);
+            return;
+          }
+          const selection = resolveArtifactSelectionPath(
+            treeProbePath,
+            children,
+          );
+          const expandedDirectoryPath = selection.expandedDirectoryPath;
+          if (
+            typeof expandedDirectoryPath === "string" &&
+            expandedDirectoryPath.length > 0
+          ) {
+            setTreeExpandedKeys((prev) =>
+              mergeExpandedProjectTreeKeys(prev, [expandedDirectoryPath]),
+            );
+          }
+          if (parentDirPath) {
+            setSelectedFilePath(normalizedPath);
+            return;
+          }
+          if (selection.selectedPath) {
+            setSelectedFilePath(selection.selectedPath);
+            return;
+          }
+          if (children.length >= 0) {
+            return;
+          }
+        } catch {
+          // The path is likely a file rather than a directory.
+        }
+      }
+
+      setSelectedFilePath(normalizedPath);
+    },
+    [
+      currentAgent,
+      loadProjectTreeDirectory,
+      normalizeProjectArtifactPath,
+      selectedProject,
+    ],
+  );
+
+  const handleLocateArtifactFile = useCallback(
+    async (path: string) => {
+      const normalizedPath = normalizeProjectArtifactPath(path);
+      if (!normalizedPath) {
+        return;
+      }
+
+      // 定位链路：先写过滤条件触发文件树查询，再选中文件触发预览。
+      const filterKeyword = normalizedPath.split("/").pop() || normalizedPath;
+      setProjectFileSearchQuery(filterKeyword);
+
+      await handleSelectArtifactFile(normalizedPath);
+    },
+    [handleSelectArtifactFile, normalizeProjectArtifactPath],
+  );
+
+  const handleAttachArtifactToChat = useCallback(
+    (path: string) => {
+      setSelectedAttachPaths((prev) =>
+        prev.includes(path)
+          ? prev.filter((item) => item !== path)
+          : [...prev, path],
+      );
+    },
+    [setSelectedAttachPaths],
+  );
 
   const normalizeTreeNodeName = useCallback((value: string): string => {
     const next = String(value || "").trim();
@@ -2853,855 +3281,1006 @@ export default function ProjectDetailPage() {
     return next;
   }, []);
 
-  const remapPathWithPrefix = useCallback((path: string, sourcePath: string, targetPath: string): string => {
-    if (path === sourcePath) {
-      return targetPath;
-    }
-    const sourcePrefix = `${sourcePath}/`;
-    if (path.startsWith(sourcePrefix)) {
-      return `${targetPath}${path.slice(sourcePath.length)}`;
-    }
-    return path;
-  }, []);
+  const remapPathWithPrefix = useCallback(
+    (path: string, sourcePath: string, targetPath: string): string => {
+      if (path === sourcePath) {
+        return targetPath;
+      }
+      const sourcePrefix = `${sourcePath}/`;
+      if (path.startsWith(sourcePrefix)) {
+        return `${targetPath}${path.slice(sourcePath.length)}`;
+      }
+      return path;
+    },
+    [],
+  );
 
-  const performCreateProjectTreeDirectory = useCallback(async (
-    parentPath: string,
-    directoryName: string,
-  ) => {
-    if (!currentAgent || !selectedProject) {
-      return;
-    }
-
-    const normalizedParent = normalizeProjectArtifactPath(parentPath);
-    const normalizedName = normalizeTreeNodeName(directoryName);
-    if (!normalizedName) {
-      message.warning(t("projects.invalidDirectoryName"));
-      return;
-    }
-    const targetPath = normalizedParent ? `${normalizedParent}/${normalizedName}` : normalizedName;
-
-    setDeletingProjectPaths((prev) => (
-      prev.includes(targetPath) ? prev : [...prev, targetPath]
-    ));
-
-    let preferredProjectRequestId = resolvedProjectRequestId;
-
-    try {
-      const resolved = await resolveProjectRequestCandidate({
-        projectRequestIds: buildProjectRequestCandidates(selectedProject, {
-          preferredProjectRequestId,
-          routeProjectId,
-        }),
-        loader: async (projectRequestId) => {
-          const projectAdapter = projectWorkspaceFacade.getProjectAdapter(projectRequestId);
-          if (!projectAdapter) {
-            throw new Error("Project adapter unavailable");
-          }
-          await projectAdapter.mkdir(targetPath);
-          return undefined;
-        },
-      });
-      preferredProjectRequestId = resolved.projectRequestId;
-      setResolvedProjectRequestId(resolved.projectRequestId);
-
-      if (normalizedParent) {
-        setTreeExpandedKeys((prev) => mergeExpandedProjectTreeKeys(prev, [normalizedParent]));
-        setStaleProjectTreeDirectoryPaths((prev) => (
-          prev.includes(normalizedParent) ? prev : [...prev, normalizedParent]
-        ));
+  const performCreateProjectTreeDirectory = useCallback(
+    async (parentPath: string, directoryName: string) => {
+      if (!currentAgent || !selectedProject) {
+        return;
       }
 
-      await handleRefreshProjectFiles();
-      message.success(
-        t("projects.createDirectorySuccess", { path: targetPath }),
+      const normalizedParent = normalizeProjectArtifactPath(parentPath);
+      const normalizedName = normalizeTreeNodeName(directoryName);
+      if (!normalizedName) {
+        message.warning(t("projects.invalidDirectoryName"));
+        return;
+      }
+      const targetPath = normalizedParent
+        ? `${normalizedParent}/${normalizedName}`
+        : normalizedName;
+
+      setDeletingProjectPaths((prev) =>
+        prev.includes(targetPath) ? prev : [...prev, targetPath],
       );
-    } catch (err) {
-      console.error("failed to create project directory", err);
-      message.error(t("projects.createDirectoryFailed"));
-    } finally {
-      setDeletingProjectPaths((prev) => prev.filter((path) => path !== targetPath));
-    }
-  }, [
-    currentAgent,
-    handleRefreshProjectFiles,
-    normalizeProjectArtifactPath,
-    normalizeTreeNodeName,
-    resolvedProjectRequestId,
-    routeProjectId,
-    selectedProject,
-    setResolvedProjectRequestId,
-    projectWorkspaceFacade,
-    t,
-  ]);
 
-  const performRenameProjectTreePath = useCallback(async (
-    sourcePath: string,
-    isDirectory: boolean,
-    nextName: string,
-    targetPathOverride?: string,
-    conflictStrategy: "fail_if_exists" | "overwrite" = "fail_if_exists",
-    options?: { refresh?: boolean; showMessage?: boolean; showErrorMessage?: boolean },
-  ) => {
-    const classifyMoveError = (err: unknown): {
-      reason: "conflict" | "unsafe" | "permission" | "notFound" | "other";
-      detail: string;
-    } => {
-      const status = Number((err as { response?: { status?: number } })?.response?.status || 0);
-      const detail = String(
-        (err as { response?: { data?: { detail?: unknown } } })?.response?.data?.detail
-        || (err as { message?: unknown })?.message
-        || "",
-      ).trim();
-      const normalizedDetail = detail.toLowerCase();
+      let preferredProjectRequestId = resolvedProjectRequestId;
 
-      if (
-        status === 409
-        || normalizedDetail.includes("exist")
-        || normalizedDetail.includes("conflict")
-      ) {
-        return { reason: "conflict", detail };
-      }
-      if (
-        status === 400
-        && (
-          normalizedDetail.includes("unsafe")
-          || normalizedDetail.includes("invalid")
-          || normalizedDetail.includes("path")
-        )
-      ) {
-        return { reason: "unsafe", detail };
-      }
-      if (status === 403 || normalizedDetail.includes("permission") || normalizedDetail.includes("forbidden")) {
-        return { reason: "permission", detail };
-      }
-      if (status === 404 || normalizedDetail.includes("not found")) {
-        return { reason: "notFound", detail };
-      }
-      return { reason: "other", detail };
-    };
+      try {
+        const resolved = await resolveProjectRequestCandidate({
+          projectRequestIds: buildProjectRequestCandidates(selectedProject, {
+            preferredProjectRequestId,
+            routeProjectId,
+          }),
+          loader: async (projectRequestId) => {
+            const projectAdapter =
+              projectWorkspaceFacade.getProjectAdapter(projectRequestId);
+            if (!projectAdapter) {
+              throw new Error("Project adapter unavailable");
+            }
+            await projectAdapter.mkdir(targetPath);
+            return undefined;
+          },
+        });
+        preferredProjectRequestId = resolved.projectRequestId;
+        setResolvedProjectRequestId(resolved.projectRequestId);
 
-    if (!currentAgent || !selectedProject) {
-      return { ok: false, reason: "other" as const, detail: "missing context" };
-    }
-    const normalizedSourcePath = normalizeProjectArtifactPath(sourcePath);
-    const normalizedName = normalizeTreeNodeName(nextName);
-    if (!normalizedSourcePath || !normalizedName) {
-      message.warning(t("projects.invalidName"));
-      return { ok: false, reason: "unsafe" as const, detail: "invalid path or name" };
-    }
-
-    const slashIndex = normalizedSourcePath.lastIndexOf("/");
-    const parentPath = slashIndex >= 0 ? normalizedSourcePath.slice(0, slashIndex) : "";
-    const normalizedTargetOverride = normalizeProjectArtifactPath(targetPathOverride || "");
-    const targetPath = normalizedTargetOverride || (parentPath ? `${parentPath}/${normalizedName}` : normalizedName);
-    if (targetPath === normalizedSourcePath) {
-      return { ok: true };
-    }
-
-    const shouldRefresh = options?.refresh !== false;
-    const shouldShowMessage = options?.showMessage !== false;
-    const shouldShowErrorMessage = options?.showErrorMessage !== false;
-
-    setDeletingProjectPaths((prev) => (
-      prev.includes(normalizedSourcePath) ? prev : [...prev, normalizedSourcePath]
-    ));
-
-    let preferredProjectRequestId = resolvedProjectRequestId;
-
-    try {
-      const resolved = await resolveProjectRequestCandidate({
-        projectRequestIds: buildProjectRequestCandidates(selectedProject, {
-          preferredProjectRequestId,
-          routeProjectId,
-        }),
-        loader: async (projectRequestId) => {
-          const projectAdapter = projectWorkspaceFacade.getProjectAdapter(projectRequestId);
-          if (!projectAdapter) {
-            throw new Error("Project adapter unavailable");
-          }
-          await projectAdapter.move(normalizedSourcePath, targetPath, conflictStrategy);
-          return undefined;
-        },
-      });
-      preferredProjectRequestId = resolved.projectRequestId;
-      setResolvedProjectRequestId(resolved.projectRequestId);
-
-      setSelectedAttachPaths((prev) => {
-        const remapped = prev.map((path) => remapPathWithPrefix(path, normalizedSourcePath, targetPath));
-        return Array.from(new Set(remapped));
-      });
-
-      setTreeExpandedKeys((prev) => {
-        const remapped = prev.map((path) => remapPathWithPrefix(path, normalizedSourcePath, targetPath));
-        return Array.from(new Set(remapped));
-      });
-
-      setKnownProjectFilesByPath((prev) => {
-        const next: Record<string, AgentProjectFileInfo> = {};
-        for (const [path, info] of Object.entries(prev)) {
-          const remappedPath = remapPathWithPrefix(path, normalizedSourcePath, targetPath);
-          next[remappedPath] = {
-            ...info,
-            path: remappedPath,
-          };
+        if (normalizedParent) {
+          setTreeExpandedKeys((prev) =>
+            mergeExpandedProjectTreeKeys(prev, [normalizedParent]),
+          );
+          setStaleProjectTreeDirectoryPaths((prev) =>
+            prev.includes(normalizedParent)
+              ? prev
+              : [...prev, normalizedParent],
+          );
         }
-        return next;
-      });
 
-      setSelectedFilePath((prev) => remapPathWithPrefix(prev, normalizedSourcePath, targetPath));
-      setLatestUpdatedFilePath((prev) => remapPathWithPrefix(prev, normalizedSourcePath, targetPath));
-
-      if (parentPath) {
-        setStaleProjectTreeDirectoryPaths((prev) => (
-          prev.includes(parentPath) ? prev : [...prev, parentPath]
-        ));
-      }
-
-      if (shouldRefresh) {
         await handleRefreshProjectFiles();
-      }
-      if (shouldShowMessage) {
         message.success(
-          isDirectory
-            ? t("projects.renameDirectorySuccess", { path: targetPath })
-            : t("projects.renameFileSuccess", { path: targetPath }),
+          t("projects.createDirectorySuccess", { path: targetPath }),
+        );
+      } catch (err) {
+        console.error("failed to create project directory", err);
+        message.error(t("projects.createDirectoryFailed"));
+      } finally {
+        setDeletingProjectPaths((prev) =>
+          prev.filter((path) => path !== targetPath),
         );
       }
-      return { ok: true };
-    } catch (err) {
-      console.error("failed to rename project path", err);
-      const failure = classifyMoveError(err);
-      if (shouldShowErrorMessage) {
-        message.error(
-          isDirectory
-            ? t("projects.renameDirectoryFailed")
-            : t("projects.renameFileFailed"),
+    },
+    [
+      currentAgent,
+      handleRefreshProjectFiles,
+      normalizeProjectArtifactPath,
+      normalizeTreeNodeName,
+      resolvedProjectRequestId,
+      routeProjectId,
+      selectedProject,
+      setResolvedProjectRequestId,
+      projectWorkspaceFacade,
+      t,
+    ],
+  );
+
+  const performRenameProjectTreePath = useCallback(
+    async (
+      sourcePath: string,
+      isDirectory: boolean,
+      nextName: string,
+      targetPathOverride?: string,
+      conflictStrategy: "fail_if_exists" | "overwrite" = "fail_if_exists",
+      options?: {
+        refresh?: boolean;
+        showMessage?: boolean;
+        showErrorMessage?: boolean;
+      },
+    ) => {
+      const classifyMoveError = (
+        err: unknown,
+      ): {
+        reason: "conflict" | "unsafe" | "permission" | "notFound" | "other";
+        detail: string;
+      } => {
+        const status = Number(
+          (err as { response?: { status?: number } })?.response?.status || 0,
         );
-      }
-      return {
-        ok: false,
-        reason: failure.reason,
-        detail: failure.detail,
+        const detail = String(
+          (err as { response?: { data?: { detail?: unknown } } })?.response
+            ?.data?.detail ||
+            (err as { message?: unknown })?.message ||
+            "",
+        ).trim();
+        const normalizedDetail = detail.toLowerCase();
+
+        if (
+          status === 409 ||
+          normalizedDetail.includes("exist") ||
+          normalizedDetail.includes("conflict")
+        ) {
+          return { reason: "conflict", detail };
+        }
+        if (
+          status === 400 &&
+          (normalizedDetail.includes("unsafe") ||
+            normalizedDetail.includes("invalid") ||
+            normalizedDetail.includes("path"))
+        ) {
+          return { reason: "unsafe", detail };
+        }
+        if (
+          status === 403 ||
+          normalizedDetail.includes("permission") ||
+          normalizedDetail.includes("forbidden")
+        ) {
+          return { reason: "permission", detail };
+        }
+        if (status === 404 || normalizedDetail.includes("not found")) {
+          return { reason: "notFound", detail };
+        }
+        return { reason: "other", detail };
       };
-    } finally {
-      setDeletingProjectPaths((prev) => prev.filter((path) => path !== normalizedSourcePath));
-    }
-  }, [
-    currentAgent,
-    handleRefreshProjectFiles,
-    normalizeProjectArtifactPath,
-    normalizeTreeNodeName,
-    remapPathWithPrefix,
-    resolvedProjectRequestId,
-    routeProjectId,
-    selectedProject,
-    setResolvedProjectRequestId,
-    projectWorkspaceFacade,
-    t,
-  ]);
 
-  const handleRequestMoveProjectTreePath = useCallback((
-    sourcePath: string,
-    sourceIsDirectory: boolean,
-    targetDirPath: string,
-  ) => {
-    const normalizedSourcePath = normalizeProjectArtifactPath(sourcePath);
-    const normalizedTargetDir = normalizeProjectArtifactPath(targetDirPath);
-    if (!normalizedSourcePath) {
-      return;
-    }
-    const sourceName = normalizedSourcePath.split("/").filter(Boolean).pop() || "";
-    if (!sourceName) {
-      return;
-    }
-    const targetPath = normalizedTargetDir ? `${normalizedTargetDir}/${sourceName}` : sourceName;
-    if (targetPath === normalizedSourcePath) {
-      return;
-    }
-    const targetExists = Boolean(knownProjectFilesByPath[targetPath]);
+      if (!currentAgent || !selectedProject) {
+        return {
+          ok: false,
+          reason: "other" as const,
+          detail: "missing context",
+        };
+      }
+      const normalizedSourcePath = normalizeProjectArtifactPath(sourcePath);
+      const normalizedName = normalizeTreeNodeName(nextName);
+      if (!normalizedSourcePath || !normalizedName) {
+        message.warning(t("projects.invalidName"));
+        return {
+          ok: false,
+          reason: "unsafe" as const,
+          detail: "invalid path or name",
+        };
+      }
 
-    const executeMove = async (strategy: "fail_if_exists" | "overwrite") => {
-      await performRenameProjectTreePath(
-        normalizedSourcePath,
-        sourceIsDirectory,
-        sourceName,
-        targetPath,
-        strategy,
+      const slashIndex = normalizedSourcePath.lastIndexOf("/");
+      const parentPath =
+        slashIndex >= 0 ? normalizedSourcePath.slice(0, slashIndex) : "";
+      const normalizedTargetOverride = normalizeProjectArtifactPath(
+        targetPathOverride || "",
       );
-    };
+      const targetPath =
+        normalizedTargetOverride ||
+        (parentPath ? `${parentPath}/${normalizedName}` : normalizedName);
+      if (targetPath === normalizedSourcePath) {
+        return { ok: true };
+      }
 
-    const openMoveConfirm = () => {
+      const shouldRefresh = options?.refresh !== false;
+      const shouldShowMessage = options?.showMessage !== false;
+      const shouldShowErrorMessage = options?.showErrorMessage !== false;
+
+      setDeletingProjectPaths((prev) =>
+        prev.includes(normalizedSourcePath)
+          ? prev
+          : [...prev, normalizedSourcePath],
+      );
+
+      let preferredProjectRequestId = resolvedProjectRequestId;
+
+      try {
+        const resolved = await resolveProjectRequestCandidate({
+          projectRequestIds: buildProjectRequestCandidates(selectedProject, {
+            preferredProjectRequestId,
+            routeProjectId,
+          }),
+          loader: async (projectRequestId) => {
+            const projectAdapter =
+              projectWorkspaceFacade.getProjectAdapter(projectRequestId);
+            if (!projectAdapter) {
+              throw new Error("Project adapter unavailable");
+            }
+            await projectAdapter.move(
+              normalizedSourcePath,
+              targetPath,
+              conflictStrategy,
+            );
+            return undefined;
+          },
+        });
+        preferredProjectRequestId = resolved.projectRequestId;
+        setResolvedProjectRequestId(resolved.projectRequestId);
+
+        setSelectedAttachPaths((prev) => {
+          const remapped = prev.map((path) =>
+            remapPathWithPrefix(path, normalizedSourcePath, targetPath),
+          );
+          return Array.from(new Set(remapped));
+        });
+
+        setTreeExpandedKeys((prev) => {
+          const remapped = prev.map((path) =>
+            remapPathWithPrefix(path, normalizedSourcePath, targetPath),
+          );
+          return Array.from(new Set(remapped));
+        });
+
+        setKnownProjectFilesByPath((prev) => {
+          const next: Record<string, AgentProjectFileInfo> = {};
+          for (const [path, info] of Object.entries(prev)) {
+            const remappedPath = remapPathWithPrefix(
+              path,
+              normalizedSourcePath,
+              targetPath,
+            );
+            next[remappedPath] = {
+              ...info,
+              path: remappedPath,
+            };
+          }
+          return next;
+        });
+
+        setSelectedFilePath((prev) =>
+          remapPathWithPrefix(prev, normalizedSourcePath, targetPath),
+        );
+        setLatestUpdatedFilePath((prev) =>
+          remapPathWithPrefix(prev, normalizedSourcePath, targetPath),
+        );
+
+        if (parentPath) {
+          setStaleProjectTreeDirectoryPaths((prev) =>
+            prev.includes(parentPath) ? prev : [...prev, parentPath],
+          );
+        }
+
+        if (shouldRefresh) {
+          await handleRefreshProjectFiles();
+        }
+        if (shouldShowMessage) {
+          message.success(
+            isDirectory
+              ? t("projects.renameDirectorySuccess", { path: targetPath })
+              : t("projects.renameFileSuccess", { path: targetPath }),
+          );
+        }
+        return { ok: true };
+      } catch (err) {
+        console.error("failed to rename project path", err);
+        const failure = classifyMoveError(err);
+        if (shouldShowErrorMessage) {
+          message.error(
+            isDirectory
+              ? t("projects.renameDirectoryFailed")
+              : t("projects.renameFileFailed"),
+          );
+        }
+        return {
+          ok: false,
+          reason: failure.reason,
+          detail: failure.detail,
+        };
+      } finally {
+        setDeletingProjectPaths((prev) =>
+          prev.filter((path) => path !== normalizedSourcePath),
+        );
+      }
+    },
+    [
+      currentAgent,
+      handleRefreshProjectFiles,
+      normalizeProjectArtifactPath,
+      normalizeTreeNodeName,
+      remapPathWithPrefix,
+      resolvedProjectRequestId,
+      routeProjectId,
+      selectedProject,
+      setResolvedProjectRequestId,
+      projectWorkspaceFacade,
+      t,
+    ],
+  );
+
+  const handleRequestMoveProjectTreePath = useCallback(
+    (sourcePath: string, sourceIsDirectory: boolean, targetDirPath: string) => {
+      const normalizedSourcePath = normalizeProjectArtifactPath(sourcePath);
+      const normalizedTargetDir = normalizeProjectArtifactPath(targetDirPath);
+      if (!normalizedSourcePath) {
+        return;
+      }
+      const sourceName =
+        normalizedSourcePath.split("/").filter(Boolean).pop() || "";
+      if (!sourceName) {
+        return;
+      }
+      const targetPath = normalizedTargetDir
+        ? `${normalizedTargetDir}/${sourceName}`
+        : sourceName;
+      if (targetPath === normalizedSourcePath) {
+        return;
+      }
+      const targetExists = Boolean(knownProjectFilesByPath[targetPath]);
+
+      const executeMove = async (strategy: "fail_if_exists" | "overwrite") => {
+        await performRenameProjectTreePath(
+          normalizedSourcePath,
+          sourceIsDirectory,
+          sourceName,
+          targetPath,
+          strategy,
+        );
+      };
+
+      const openMoveConfirm = () => {
+        Modal.confirm({
+          title: sourceIsDirectory
+            ? t("projects.moveDirectoryTitle")
+            : t("projects.moveFileTitle"),
+          content: t("projects.moveConfirmDescription", {
+            source: normalizedSourcePath,
+            target: targetPath,
+          }),
+          okText: t("common.confirm"),
+          cancelText: t("common.cancel"),
+          onOk: async () => {
+            await executeMove("fail_if_exists");
+          },
+        });
+      };
+
+      if (targetExists) {
+        Modal.confirm({
+          title: t("projects.moveConflictTitle"),
+          content: t("projects.moveConflictDescription", {
+            target: targetPath,
+          }),
+          okText: t("common.overwrite"),
+          cancelText: t("common.cancel"),
+          okButtonProps: { danger: true },
+          onOk: async () => {
+            await executeMove("overwrite");
+          },
+        });
+        return;
+      }
+
+      openMoveConfirm();
+    },
+    [
+      knownProjectFilesByPath,
+      normalizeProjectArtifactPath,
+      performRenameProjectTreePath,
+      t,
+    ],
+  );
+
+  const handleRequestCreateProjectTreeDirectory = useCallback(
+    (parentPath: string) => {
+      const normalizedParent = normalizeProjectArtifactPath(parentPath);
+      let nextName = "new-folder";
+
       Modal.confirm({
-        title: sourceIsDirectory
-          ? t("projects.moveDirectoryTitle")
-          : t("projects.moveFileTitle"),
-        content: t(
-          "projects.moveConfirmDescription",
-          { source: normalizedSourcePath, target: targetPath },
+        title: t("projects.createDirectoryTitle"),
+        content: (
+          <Input
+            autoFocus
+            defaultValue={nextName}
+            placeholder={t("projects.createDirectoryPlaceholder")}
+            onChange={(event) => {
+              nextName = event.target.value;
+            }}
+          />
         ),
-        okText: t("common.confirm"),
+        okText: t("common.create"),
         cancelText: t("common.cancel"),
         onOk: async () => {
-          await executeMove("fail_if_exists");
+          const normalizedName = normalizeTreeNodeName(nextName);
+          if (!normalizedName) {
+            message.warning(t("projects.invalidDirectoryName"));
+            return Promise.reject(new Error("invalid directory name"));
+          }
+          await performCreateProjectTreeDirectory(
+            normalizedParent,
+            normalizedName,
+          );
+          return undefined;
         },
       });
-    };
+    },
+    [
+      normalizeProjectArtifactPath,
+      normalizeTreeNodeName,
+      performCreateProjectTreeDirectory,
+      t,
+    ],
+  );
 
-    if (targetExists) {
+  const handleRequestRenameProjectTreePath = useCallback(
+    (path: string, isDirectory: boolean) => {
+      const normalizedPath = normalizeProjectArtifactPath(path);
+      if (!normalizedPath) {
+        return;
+      }
+      const defaultName = normalizedPath.split("/").filter(Boolean).pop() || "";
+      let nextName = defaultName;
+
       Modal.confirm({
-        title: t("projects.moveConflictTitle"),
-        content: t(
-          "projects.moveConflictDescription",
-          { target: targetPath },
+        title: isDirectory
+          ? t("projects.renameDirectoryTitle")
+          : t("projects.renameFileTitle"),
+        content: (
+          <Input
+            autoFocus
+            defaultValue={defaultName}
+            placeholder={t("projects.renamePlaceholder")}
+            onChange={(event) => {
+              nextName = event.target.value;
+            }}
+          />
         ),
-        okText: t("common.overwrite"),
+        okText: t("common.rename"),
+        cancelText: t("common.cancel"),
+        onOk: async () => {
+          const normalizedName = normalizeTreeNodeName(nextName);
+          if (!normalizedName) {
+            message.warning(t("projects.invalidName"));
+            return Promise.reject(new Error("invalid path name"));
+          }
+          const slashIndex = normalizedPath.lastIndexOf("/");
+          const parentPath =
+            slashIndex >= 0 ? normalizedPath.slice(0, slashIndex) : "";
+          const targetPath = parentPath
+            ? `${parentPath}/${normalizedName}`
+            : normalizedName;
+          if (targetPath === normalizedPath) {
+            return undefined;
+          }
+
+          const targetExists = Boolean(knownProjectFilesByPath[targetPath]);
+          if (!targetExists) {
+            await performRenameProjectTreePath(
+              normalizedPath,
+              isDirectory,
+              normalizedName,
+            );
+            return undefined;
+          }
+
+          return new Promise<void>((resolve, reject) => {
+            Modal.confirm({
+              title: t("projects.renameConflictTitle"),
+              content: t("projects.renameConflictDescription", {
+                target: targetPath,
+              }),
+              okText: t("common.overwrite"),
+              cancelText: t("common.cancel"),
+              okButtonProps: { danger: true },
+              onOk: async () => {
+                await performRenameProjectTreePath(
+                  normalizedPath,
+                  isDirectory,
+                  normalizedName,
+                  targetPath,
+                  "overwrite",
+                );
+                resolve();
+              },
+              onCancel: () => {
+                reject(new Error("rename overwrite cancelled"));
+              },
+            });
+          });
+        },
+      });
+    },
+    [
+      knownProjectFilesByPath,
+      normalizeProjectArtifactPath,
+      normalizeTreeNodeName,
+      performRenameProjectTreePath,
+      t,
+    ],
+  );
+
+  const performDeleteProjectTreePath = useCallback(
+    async (
+      normalizedPath: string,
+      isDirectory: boolean,
+      options?: { refresh?: boolean; showMessage?: boolean },
+    ) => {
+      if (!currentAgent || !selectedProject || !normalizedPath) {
+        return;
+      }
+
+      setDeletingProjectPaths((prev) =>
+        prev.includes(normalizedPath) ? prev : [...prev, normalizedPath],
+      );
+
+      let preferredProjectRequestId = resolvedProjectRequestId;
+
+      const shouldRefresh = options?.refresh !== false;
+      const shouldShowMessage = options?.showMessage !== false;
+
+      try {
+        const resolved = await resolveProjectRequestCandidate({
+          projectRequestIds: buildProjectRequestCandidates(selectedProject, {
+            preferredProjectRequestId,
+            routeProjectId,
+          }),
+          loader: async (projectRequestId) => {
+            const projectAdapter =
+              projectWorkspaceFacade.getProjectAdapter(projectRequestId);
+            if (!projectAdapter) {
+              throw new Error("Project adapter unavailable");
+            }
+            await projectAdapter.remove(normalizedPath, isDirectory);
+            return undefined;
+          },
+        });
+        preferredProjectRequestId = resolved.projectRequestId;
+        setResolvedProjectRequestId(resolved.projectRequestId);
+
+        const removedPrefix = `${normalizedPath}/`;
+        setSelectedAttachPaths((prev) =>
+          prev.filter(
+            (path) =>
+              path !== normalizedPath && !path.startsWith(removedPrefix),
+          ),
+        );
+
+        setKnownProjectFilesByPath((prev) => {
+          const next: Record<string, AgentProjectFileInfo> = {};
+          for (const [path, info] of Object.entries(prev)) {
+            if (path === normalizedPath || path.startsWith(removedPrefix)) {
+              continue;
+            }
+            next[path] = info;
+          }
+          return next;
+        });
+
+        if (
+          selectedFilePath === normalizedPath ||
+          selectedFilePath.startsWith(removedPrefix)
+        ) {
+          setSelectedFilePath("");
+          setFileContent("");
+          setCharStatsContent("");
+          setNerStructuredContent("");
+        }
+
+        if (
+          latestUpdatedFilePath === normalizedPath ||
+          latestUpdatedFilePath.startsWith(removedPrefix)
+        ) {
+          setLatestUpdatedFilePath("");
+        }
+
+        if (shouldRefresh) {
+          await handleRefreshProjectFiles();
+        }
+        if (shouldShowMessage) {
+          message.success(
+            isDirectory
+              ? t("projects.deleteDirectorySuccess", { path: normalizedPath })
+              : t("projects.deleteFileSuccess", { path: normalizedPath }),
+          );
+        }
+      } catch (err) {
+        console.error("failed to delete project path", err);
+        message.error(
+          isDirectory
+            ? t("projects.deleteDirectoryFailed")
+            : t("projects.deleteFileFailed"),
+        );
+      } finally {
+        setDeletingProjectPaths((prev) =>
+          prev.filter((path) => path !== normalizedPath),
+        );
+      }
+    },
+    [
+      currentAgent,
+      handleRefreshProjectFiles,
+      latestUpdatedFilePath,
+      resolvedProjectRequestId,
+      routeProjectId,
+      selectedFilePath,
+      selectedProject,
+      setResolvedProjectRequestId,
+      projectWorkspaceFacade,
+      t,
+    ],
+  );
+
+  const handleRequestDeleteProjectTreePath = useCallback(
+    (path: string, isDirectory: boolean) => {
+      const normalizedPath = normalizeProjectArtifactPath(path);
+      if (!normalizedPath) {
+        return;
+      }
+
+      Modal.confirm({
+        title: isDirectory
+          ? t("projects.deleteFileTreeDirectoryConfirmTitle")
+          : t("projects.deleteFileTreeFileConfirmTitle"),
+        content: t("projects.deleteFileTreeConfirmDescription", {
+          path: normalizedPath,
+        }),
+        okText: t("common.delete"),
         cancelText: t("common.cancel"),
         okButtonProps: { danger: true },
         onOk: async () => {
-          await executeMove("overwrite");
+          await performDeleteProjectTreePath(normalizedPath, isDirectory);
         },
       });
-      return;
-    }
+    },
+    [normalizeProjectArtifactPath, performDeleteProjectTreePath, t],
+  );
 
-    openMoveConfirm();
-  }, [knownProjectFilesByPath, normalizeProjectArtifactPath, performRenameProjectTreePath, t]);
+  const handleRequestDeleteSelectedProjectFiles = useCallback(
+    (paths: string[]) => {
+      const normalizedPaths = Array.from(
+        new Set(
+          (paths || [])
+            .map((item) => normalizeProjectArtifactPath(item))
+            .filter((item) => Boolean(item)),
+        ),
+      );
+      if (normalizedPaths.length === 0) {
+        return;
+      }
 
-  const handleRequestCreateProjectTreeDirectory = useCallback((parentPath: string) => {
-    const normalizedParent = normalizeProjectArtifactPath(parentPath);
-    let nextName = "new-folder";
-
-    Modal.confirm({
-      title: t("projects.createDirectoryTitle"),
-      content: (
-        <Input
-          autoFocus
-          defaultValue={nextName}
-          placeholder={t("projects.createDirectoryPlaceholder")}
-          onChange={(event) => {
-            nextName = event.target.value;
-          }}
-        />
-      ),
-      okText: t("common.create"),
-      cancelText: t("common.cancel"),
-      onOk: async () => {
-        const normalizedName = normalizeTreeNodeName(nextName);
-        if (!normalizedName) {
-          message.warning(t("projects.invalidDirectoryName"));
-          return Promise.reject(new Error("invalid directory name"));
-        }
-        await performCreateProjectTreeDirectory(normalizedParent, normalizedName);
-        return undefined;
-      },
-    });
-  }, [normalizeProjectArtifactPath, normalizeTreeNodeName, performCreateProjectTreeDirectory, t]);
-
-  const handleRequestRenameProjectTreePath = useCallback((path: string, isDirectory: boolean) => {
-    const normalizedPath = normalizeProjectArtifactPath(path);
-    if (!normalizedPath) {
-      return;
-    }
-    const defaultName = normalizedPath.split("/").filter(Boolean).pop() || "";
-    let nextName = defaultName;
-
-    Modal.confirm({
-      title: isDirectory
-        ? t("projects.renameDirectoryTitle")
-        : t("projects.renameFileTitle"),
-      content: (
-        <Input
-          autoFocus
-          defaultValue={defaultName}
-          placeholder={t("projects.renamePlaceholder")}
-          onChange={(event) => {
-            nextName = event.target.value;
-          }}
-        />
-      ),
-      okText: t("common.rename"),
-      cancelText: t("common.cancel"),
-      onOk: async () => {
-        const normalizedName = normalizeTreeNodeName(nextName);
-        if (!normalizedName) {
-          message.warning(t("projects.invalidName"));
-          return Promise.reject(new Error("invalid path name"));
-        }
-        const slashIndex = normalizedPath.lastIndexOf("/");
-        const parentPath = slashIndex >= 0 ? normalizedPath.slice(0, slashIndex) : "";
-        const targetPath = parentPath ? `${parentPath}/${normalizedName}` : normalizedName;
-        if (targetPath === normalizedPath) {
-          return undefined;
-        }
-
-        const targetExists = Boolean(knownProjectFilesByPath[targetPath]);
-        if (!targetExists) {
-          await performRenameProjectTreePath(normalizedPath, isDirectory, normalizedName);
-          return undefined;
-        }
-
-        return new Promise<void>((resolve, reject) => {
-          Modal.confirm({
-            title: t("projects.renameConflictTitle"),
-            content: t(
-              "projects.renameConflictDescription",
-              { target: targetPath },
-            ),
-            okText: t("common.overwrite"),
-            cancelText: t("common.cancel"),
-            okButtonProps: { danger: true },
-            onOk: async () => {
-              await performRenameProjectTreePath(
-                normalizedPath,
-                isDirectory,
-                normalizedName,
-                targetPath,
-                "overwrite",
-              );
-              resolve();
-            },
-            onCancel: () => {
-              reject(new Error("rename overwrite cancelled"));
-            },
-          });
-        });
-      },
-    });
-  }, [
-    knownProjectFilesByPath,
-    normalizeProjectArtifactPath,
-    normalizeTreeNodeName,
-    performRenameProjectTreePath,
-    t,
-  ]);
-
-  const performDeleteProjectTreePath = useCallback(async (
-    normalizedPath: string,
-    isDirectory: boolean,
-    options?: { refresh?: boolean; showMessage?: boolean },
-  ) => {
-    if (!currentAgent || !selectedProject || !normalizedPath) {
-      return;
-    }
-
-    setDeletingProjectPaths((prev) => (
-      prev.includes(normalizedPath) ? prev : [...prev, normalizedPath]
-    ));
-
-    let preferredProjectRequestId = resolvedProjectRequestId;
-
-    const shouldRefresh = options?.refresh !== false;
-    const shouldShowMessage = options?.showMessage !== false;
-
-    try {
-      const resolved = await resolveProjectRequestCandidate({
-        projectRequestIds: buildProjectRequestCandidates(selectedProject, {
-          preferredProjectRequestId,
-          routeProjectId,
+      Modal.confirm({
+        title: t("projects.deleteSelectedFilesConfirmTitle"),
+        content: t("projects.deleteSelectedFilesConfirmDescription", {
+          count: normalizedPaths.length,
         }),
-        loader: async (projectRequestId) => {
-          const projectAdapter = projectWorkspaceFacade.getProjectAdapter(projectRequestId);
-          if (!projectAdapter) {
-            throw new Error("Project adapter unavailable");
+        okText: t("common.delete"),
+        cancelText: t("common.cancel"),
+        okButtonProps: { danger: true },
+        onOk: async () => {
+          let deletedCount = 0;
+          for (const path of normalizedPaths) {
+            await performDeleteProjectTreePath(path, false, {
+              refresh: false,
+              showMessage: false,
+            });
+            deletedCount += 1;
           }
-          await projectAdapter.remove(normalizedPath, isDirectory);
-          return undefined;
+          await handleRefreshProjectFiles();
+          message.success(
+            t("projects.deleteSelectedFilesSuccess", {
+              count: deletedCount,
+            }),
+          );
         },
       });
-      preferredProjectRequestId = resolved.projectRequestId;
-      setResolvedProjectRequestId(resolved.projectRequestId);
+    },
+    [
+      handleRefreshProjectFiles,
+      normalizeProjectArtifactPath,
+      performDeleteProjectTreePath,
+      t,
+    ],
+  );
 
-      const removedPrefix = `${normalizedPath}/`;
-      setSelectedAttachPaths((prev) =>
-        prev.filter((path) => path !== normalizedPath && !path.startsWith(removedPrefix)),
+  const handleRequestMoveSelectedProjectFiles = useCallback(
+    (paths: string[]) => {
+      const normalizedPaths = Array.from(
+        new Set(
+          (paths || [])
+            .map((item) => normalizeProjectArtifactPath(item))
+            .filter((item) => Boolean(item)),
+        ),
       );
-
-      setKnownProjectFilesByPath((prev) => {
-        const next: Record<string, AgentProjectFileInfo> = {};
-        for (const [path, info] of Object.entries(prev)) {
-          if (path === normalizedPath || path.startsWith(removedPrefix)) {
-            continue;
-          }
-          next[path] = info;
-        }
-        return next;
-      });
-
-      if (
-        selectedFilePath === normalizedPath
-        || selectedFilePath.startsWith(removedPrefix)
-      ) {
-        setSelectedFilePath("");
-        setFileContent("");
-        setCharStatsContent("");
-        setNerStructuredContent("");
-      }
-
-      if (
-        latestUpdatedFilePath === normalizedPath
-        || latestUpdatedFilePath.startsWith(removedPrefix)
-      ) {
-        setLatestUpdatedFilePath("");
-      }
-
-      if (shouldRefresh) {
-        await handleRefreshProjectFiles();
-      }
-      if (shouldShowMessage) {
-        message.success(
-          isDirectory
-            ? t("projects.deleteDirectorySuccess", { path: normalizedPath })
-            : t("projects.deleteFileSuccess", { path: normalizedPath }),
-        );
-      }
-    } catch (err) {
-      console.error("failed to delete project path", err);
-      message.error(
-        isDirectory
-          ? t("projects.deleteDirectoryFailed")
-          : t("projects.deleteFileFailed"),
-      );
-    } finally {
-      setDeletingProjectPaths((prev) => prev.filter((path) => path !== normalizedPath));
-    }
-  }, [
-    currentAgent,
-    handleRefreshProjectFiles,
-    latestUpdatedFilePath,
-    resolvedProjectRequestId,
-    routeProjectId,
-    selectedFilePath,
-    selectedProject,
-    setResolvedProjectRequestId,
-    projectWorkspaceFacade,
-    t,
-  ]);
-
-  const handleRequestDeleteProjectTreePath = useCallback((path: string, isDirectory: boolean) => {
-    const normalizedPath = normalizeProjectArtifactPath(path);
-    if (!normalizedPath) {
-      return;
-    }
-
-    Modal.confirm({
-      title: isDirectory
-        ? t("projects.deleteFileTreeDirectoryConfirmTitle")
-        : t("projects.deleteFileTreeFileConfirmTitle"),
-      content: t(
-        "projects.deleteFileTreeConfirmDescription",
-        { path: normalizedPath },
-      ),
-      okText: t("common.delete"),
-      cancelText: t("common.cancel"),
-      okButtonProps: { danger: true },
-      onOk: async () => {
-        await performDeleteProjectTreePath(normalizedPath, isDirectory);
-      },
-    });
-  }, [normalizeProjectArtifactPath, performDeleteProjectTreePath, t]);
-
-  const handleRequestDeleteSelectedProjectFiles = useCallback((paths: string[]) => {
-    const normalizedPaths = Array.from(new Set(
-      (paths || [])
-        .map((item) => normalizeProjectArtifactPath(item))
-        .filter((item) => Boolean(item)),
-    ));
-    if (normalizedPaths.length === 0) {
-      return;
-    }
-
-    Modal.confirm({
-      title: t("projects.deleteSelectedFilesConfirmTitle"),
-      content: t(
-        "projects.deleteSelectedFilesConfirmDescription",
-        { count: normalizedPaths.length },
-      ),
-      okText: t("common.delete"),
-      cancelText: t("common.cancel"),
-      okButtonProps: { danger: true },
-      onOk: async () => {
-        let deletedCount = 0;
-        for (const path of normalizedPaths) {
-          await performDeleteProjectTreePath(path, false, { refresh: false, showMessage: false });
-          deletedCount += 1;
-        }
-        await handleRefreshProjectFiles();
-        message.success(
-          t("projects.deleteSelectedFilesSuccess", {
-            count: deletedCount,
-          }),
-        );
-      },
-    });
-  }, [handleRefreshProjectFiles, normalizeProjectArtifactPath, performDeleteProjectTreePath, t]);
-
-  const handleRequestMoveSelectedProjectFiles = useCallback((paths: string[]) => {
-    const normalizedPaths = Array.from(new Set(
-      (paths || [])
-        .map((item) => normalizeProjectArtifactPath(item))
-        .filter((item) => Boolean(item)),
-    ));
-    if (normalizedPaths.length === 0) {
-      return;
-    }
-
-    let nextTargetDirectory = "";
-
-    const executeBatchMove = async (targetDir: string, strategy: "fail_if_exists" | "overwrite") => {
-      const plans = normalizedPaths
-        .map((sourcePath) => {
-          const sourceName = sourcePath.split("/").filter(Boolean).pop() || "";
-          if (!sourceName) {
-            return null;
-          }
-          const targetPath = targetDir ? `${targetDir}/${sourceName}` : sourceName;
-          if (targetPath === sourcePath) {
-            return null;
-          }
-          return { sourcePath, sourceName, targetPath };
-        })
-        .filter((item): item is { sourcePath: string; sourceName: string; targetPath: string } => Boolean(item));
-
-      if (plans.length === 0) {
-        message.warning(t("projects.moveSelectedNoop"));
+      if (normalizedPaths.length === 0) {
         return;
       }
 
-      const targetPathCount = new Map<string, number>();
-      for (const plan of plans) {
-        targetPathCount.set(plan.targetPath, (targetPathCount.get(plan.targetPath) || 0) + 1);
-      }
-      const duplicateTargets = Array.from(targetPathCount.entries())
-        .filter(([, count]) => count > 1)
-        .map(([targetPath]) => targetPath);
-      if (duplicateTargets.length > 0) {
-        message.warning(
-          t("projects.moveSelectedDuplicateTargets"),
-        );
-        return;
-      }
+      let nextTargetDirectory = "";
 
-      let successCount = 0;
-      const failedItems: Array<{
-        path: string;
-        reason: "conflict" | "unsafe" | "permission" | "notFound" | "other";
-        detail: string;
-      }> = [];
-
-      for (const plan of plans) {
-        const moved = await performRenameProjectTreePath(
-          plan.sourcePath,
-          false,
-          plan.sourceName,
-          plan.targetPath,
-          strategy,
-          { refresh: false, showMessage: false, showErrorMessage: false },
-        );
-        if (moved?.ok) {
-          successCount += 1;
-        } else {
-          failedItems.push({
-            path: plan.sourcePath,
-            reason: moved?.reason || "other",
-            detail: moved?.detail || "",
-          });
-        }
-      }
-
-      await handleRefreshProjectFiles();
-
-      if (successCount > 0) {
-        message.success(
-          t("projects.moveSelectedFilesSuccess", {
-            count: successCount,
-          }),
-        );
-      }
-      if (failedItems.length > 0) {
-        message.error(
-          t("projects.moveSelectedFilesFailedSummary", {
-            count: failedItems.length,
-          }),
-        );
-
-        const groupedFailures = failedItems.reduce<Record<string, { paths: string[]; details: string[] }>>((acc, item) => {
-          const key = item.reason;
-          if (!acc[key]) {
-            acc[key] = { paths: [], details: [] };
-          }
-          acc[key].paths.push(item.path);
-          if (item.detail) {
-            acc[key].details.push(item.detail);
-          }
-          return acc;
-        }, {});
-
-        const reasonLabel = (reason: string): string => {
-          switch (reason) {
-            case "conflict":
-              return t("projects.moveFailureReasonConflict");
-            case "unsafe":
-              return t("projects.moveFailureReasonUnsafe");
-            case "permission":
-              return t("projects.moveFailureReasonPermission");
-            case "notFound":
-              return t("projects.moveFailureReasonNotFound");
-            default:
-              return t("projects.moveFailureReasonOther");
-          }
-        };
-
-        const reasonSuggestion = (reason: string): string => {
-          switch (reason) {
-            case "conflict":
-              return t("projects.moveFailureSuggestionConflict");
-            case "unsafe":
-              return t("projects.moveFailureSuggestionUnsafe");
-            case "permission":
-              return t("projects.moveFailureSuggestionPermission");
-            case "notFound":
-              return t("projects.moveFailureSuggestionNotFound");
-            default:
-              return t("projects.moveFailureSuggestionOther");
-          }
-        };
-
-        const failureReportText = Object.entries(groupedFailures)
-          .map(([reason, group]) => {
-            const header = `${reasonLabel(reason)} (${group.paths.length})`;
-            const suggestion = reasonSuggestion(reason);
-            const pathLines = group.paths.map((path) => `- ${path}`).join("\n");
-            const sampleDetail = group.details[0]
-              ? t("projects.moveFailureSampleError", {
-                detail: group.details[0],
-              })
-              : "";
-            return [header, suggestion, pathLines, sampleDetail].filter(Boolean).join("\n");
+      const executeBatchMove = async (
+        targetDir: string,
+        strategy: "fail_if_exists" | "overwrite",
+      ) => {
+        const plans = normalizedPaths
+          .map((sourcePath) => {
+            const sourceName =
+              sourcePath.split("/").filter(Boolean).pop() || "";
+            if (!sourceName) {
+              return null;
+            }
+            const targetPath = targetDir
+              ? `${targetDir}/${sourceName}`
+              : sourceName;
+            if (targetPath === sourcePath) {
+              return null;
+            }
+            return { sourcePath, sourceName, targetPath };
           })
-          .join("\n\n");
+          .filter(
+            (
+              item,
+            ): item is {
+              sourcePath: string;
+              sourceName: string;
+              targetPath: string;
+            } => Boolean(item),
+          );
 
-        Modal.warning({
-          title: t("projects.moveSelectedFilesFailedDetailTitle"),
-          content: (
-            <div style={{ maxHeight: 260, overflow: "auto" }}>
-              <div style={{ marginBottom: 8 }}>
-                <Button
-                  size="small"
-                  onClick={async () => {
-                    try {
-                      await navigator.clipboard.writeText(failureReportText);
-                      message.success(t("projects.moveFailureReportCopied"));
-                    } catch {
-                      message.error(t("projects.moveFailureReportCopyFailed"));
-                    }
-                  }}
-                >
-                  {t("projects.copyFailureReport")}
-                </Button>
-              </div>
-              {Object.entries(groupedFailures).map(([reason, group]) => (
-                <div key={reason} style={{ marginBottom: 8 }}>
-                  <Text strong>{`${reasonLabel(reason)} (${group.paths.length})`}</Text>
-                  <div>
-                    <Text type="secondary">{reasonSuggestion(reason)}</Text>
-                  </div>
-                  {group.paths.slice(0, 8).map((path) => (
-                    <div key={`${reason}:${path}`}>{path}</div>
-                  ))}
-                  {group.paths.length > 8 ? (
-                    <Text type="secondary">
-                      {t("projects.moveSelectedFilesFailedDetailMore", {
-                        count: group.paths.length - 8,
-                      })}
-                    </Text>
-                  ) : null}
-                  {group.details.length > 0 ? (
-                    <div>
-                      <Text type="secondary">
-                        {t("projects.moveFailureSampleError", {
-                          detail: group.details[0],
-                        })}
-                      </Text>
-                    </div>
-                  ) : null}
-                </div>
-              ))}
-            </div>
-          ),
-          okText: t("common.confirm"),
-        });
-      }
-    };
-
-    Modal.confirm({
-      title: t("projects.moveSelectedFilesTitle"),
-      content: (
-        <Input
-          autoFocus
-          defaultValue={nextTargetDirectory}
-          placeholder={t("projects.moveSelectedTargetPlaceholder")}
-          onChange={(event) => {
-            nextTargetDirectory = event.target.value;
-          }}
-        />
-      ),
-      okText: t("common.move"),
-      cancelText: t("common.cancel"),
-      onOk: async () => {
-        const normalizedTargetDir = normalizeProjectArtifactPath(nextTargetDirectory || "");
-        const conflicts = normalizedPaths.filter((sourcePath) => {
-          const sourceName = sourcePath.split("/").filter(Boolean).pop() || "";
-          if (!sourceName) {
-            return false;
-          }
-          const targetPath = normalizedTargetDir ? `${normalizedTargetDir}/${sourceName}` : sourceName;
-          return targetPath !== sourcePath && Boolean(knownProjectFilesByPath[targetPath]);
-        });
-
-        if (conflicts.length === 0) {
-          await executeBatchMove(normalizedTargetDir, "fail_if_exists");
+        if (plans.length === 0) {
+          message.warning(t("projects.moveSelectedNoop"));
           return;
         }
 
-        return new Promise<void>((resolve, reject) => {
-          Modal.confirm({
-            title: t("projects.moveConflictTitle"),
-            content: t(
-              "projects.moveSelectedConflictDescription",
-              { count: conflicts.length },
-            ),
-            okText: t("common.overwrite"),
-            cancelText: t("common.cancel"),
-            okButtonProps: { danger: true },
-            onOk: async () => {
-              await executeBatchMove(normalizedTargetDir, "overwrite");
-              resolve();
-            },
-            onCancel: () => {
-              reject(new Error("batch move overwrite cancelled"));
-            },
-          });
-        });
-      },
-    });
-  }, [
-    handleRefreshProjectFiles,
-    knownProjectFilesByPath,
-    normalizeProjectArtifactPath,
-    performRenameProjectTreePath,
-    t,
-  ]);
+        const targetPathCount = new Map<string, number>();
+        for (const plan of plans) {
+          targetPathCount.set(
+            plan.targetPath,
+            (targetPathCount.get(plan.targetPath) || 0) + 1,
+          );
+        }
+        const duplicateTargets = Array.from(targetPathCount.entries())
+          .filter(([, count]) => count > 1)
+          .map(([targetPath]) => targetPath);
+        if (duplicateTargets.length > 0) {
+          message.warning(t("projects.moveSelectedDuplicateTargets"));
+          return;
+        }
 
-  const handleProjectAutoKnowledgeSinkChange = useCallback((enabled: boolean) => {
-    if (!selectedProject) {
-      return;
-    }
-    setProjects((prev) => prev.map((project) => (
-      project.id === selectedProject.id
-        ? { ...project, project_auto_knowledge_sink: enabled }
-        : project
-    )));
-  }, [selectedProject]);
+        let successCount = 0;
+        const failedItems: Array<{
+          path: string;
+          reason: "conflict" | "unsafe" | "permission" | "notFound" | "other";
+          detail: string;
+        }> = [];
+
+        for (const plan of plans) {
+          const moved = await performRenameProjectTreePath(
+            plan.sourcePath,
+            false,
+            plan.sourceName,
+            plan.targetPath,
+            strategy,
+            { refresh: false, showMessage: false, showErrorMessage: false },
+          );
+          if (moved?.ok) {
+            successCount += 1;
+          } else {
+            failedItems.push({
+              path: plan.sourcePath,
+              reason: moved?.reason || "other",
+              detail: moved?.detail || "",
+            });
+          }
+        }
+
+        await handleRefreshProjectFiles();
+
+        if (successCount > 0) {
+          message.success(
+            t("projects.moveSelectedFilesSuccess", {
+              count: successCount,
+            }),
+          );
+        }
+        if (failedItems.length > 0) {
+          message.error(
+            t("projects.moveSelectedFilesFailedSummary", {
+              count: failedItems.length,
+            }),
+          );
+
+          const groupedFailures = failedItems.reduce<
+            Record<string, { paths: string[]; details: string[] }>
+          >((acc, item) => {
+            const key = item.reason;
+            if (!acc[key]) {
+              acc[key] = { paths: [], details: [] };
+            }
+            acc[key].paths.push(item.path);
+            if (item.detail) {
+              acc[key].details.push(item.detail);
+            }
+            return acc;
+          }, {});
+
+          const reasonLabel = (reason: string): string => {
+            switch (reason) {
+              case "conflict":
+                return t("projects.moveFailureReasonConflict");
+              case "unsafe":
+                return t("projects.moveFailureReasonUnsafe");
+              case "permission":
+                return t("projects.moveFailureReasonPermission");
+              case "notFound":
+                return t("projects.moveFailureReasonNotFound");
+              default:
+                return t("projects.moveFailureReasonOther");
+            }
+          };
+
+          const reasonSuggestion = (reason: string): string => {
+            switch (reason) {
+              case "conflict":
+                return t("projects.moveFailureSuggestionConflict");
+              case "unsafe":
+                return t("projects.moveFailureSuggestionUnsafe");
+              case "permission":
+                return t("projects.moveFailureSuggestionPermission");
+              case "notFound":
+                return t("projects.moveFailureSuggestionNotFound");
+              default:
+                return t("projects.moveFailureSuggestionOther");
+            }
+          };
+
+          const failureReportText = Object.entries(groupedFailures)
+            .map(([reason, group]) => {
+              const header = `${reasonLabel(reason)} (${group.paths.length})`;
+              const suggestion = reasonSuggestion(reason);
+              const pathLines = group.paths
+                .map((path) => `- ${path}`)
+                .join("\n");
+              const sampleDetail = group.details[0]
+                ? t("projects.moveFailureSampleError", {
+                    detail: group.details[0],
+                  })
+                : "";
+              return [header, suggestion, pathLines, sampleDetail]
+                .filter(Boolean)
+                .join("\n");
+            })
+            .join("\n\n");
+
+          Modal.warning({
+            title: t("projects.moveSelectedFilesFailedDetailTitle"),
+            content: (
+              <div style={{ maxHeight: 260, overflow: "auto" }}>
+                <div style={{ marginBottom: 8 }}>
+                  <Button
+                    size="small"
+                    onClick={async () => {
+                      try {
+                        await navigator.clipboard.writeText(failureReportText);
+                        message.success(t("projects.moveFailureReportCopied"));
+                      } catch {
+                        message.error(
+                          t("projects.moveFailureReportCopyFailed"),
+                        );
+                      }
+                    }}
+                  >
+                    {t("projects.copyFailureReport")}
+                  </Button>
+                </div>
+                {Object.entries(groupedFailures).map(([reason, group]) => (
+                  <div key={reason} style={{ marginBottom: 8 }}>
+                    <Text strong>{`${reasonLabel(reason)} (${
+                      group.paths.length
+                    })`}</Text>
+                    <div>
+                      <Text type="secondary">{reasonSuggestion(reason)}</Text>
+                    </div>
+                    {group.paths.slice(0, 8).map((path) => (
+                      <div key={`${reason}:${path}`}>{path}</div>
+                    ))}
+                    {group.paths.length > 8 ? (
+                      <Text type="secondary">
+                        {t("projects.moveSelectedFilesFailedDetailMore", {
+                          count: group.paths.length - 8,
+                        })}
+                      </Text>
+                    ) : null}
+                    {group.details.length > 0 ? (
+                      <div>
+                        <Text type="secondary">
+                          {t("projects.moveFailureSampleError", {
+                            detail: group.details[0],
+                          })}
+                        </Text>
+                      </div>
+                    ) : null}
+                  </div>
+                ))}
+              </div>
+            ),
+            okText: t("common.confirm"),
+          });
+        }
+      };
+
+      Modal.confirm({
+        title: t("projects.moveSelectedFilesTitle"),
+        content: (
+          <Input
+            autoFocus
+            defaultValue={nextTargetDirectory}
+            placeholder={t("projects.moveSelectedTargetPlaceholder")}
+            onChange={(event) => {
+              nextTargetDirectory = event.target.value;
+            }}
+          />
+        ),
+        okText: t("common.move"),
+        cancelText: t("common.cancel"),
+        onOk: async () => {
+          const normalizedTargetDir = normalizeProjectArtifactPath(
+            nextTargetDirectory || "",
+          );
+          const conflicts = normalizedPaths.filter((sourcePath) => {
+            const sourceName =
+              sourcePath.split("/").filter(Boolean).pop() || "";
+            if (!sourceName) {
+              return false;
+            }
+            const targetPath = normalizedTargetDir
+              ? `${normalizedTargetDir}/${sourceName}`
+              : sourceName;
+            return (
+              targetPath !== sourcePath &&
+              Boolean(knownProjectFilesByPath[targetPath])
+            );
+          });
+
+          if (conflicts.length === 0) {
+            await executeBatchMove(normalizedTargetDir, "fail_if_exists");
+            return;
+          }
+
+          return new Promise<void>((resolve, reject) => {
+            Modal.confirm({
+              title: t("projects.moveConflictTitle"),
+              content: t("projects.moveSelectedConflictDescription", {
+                count: conflicts.length,
+              }),
+              okText: t("common.overwrite"),
+              cancelText: t("common.cancel"),
+              okButtonProps: { danger: true },
+              onOk: async () => {
+                await executeBatchMove(normalizedTargetDir, "overwrite");
+                resolve();
+              },
+              onCancel: () => {
+                reject(new Error("batch move overwrite cancelled"));
+              },
+            });
+          });
+        },
+      });
+    },
+    [
+      handleRefreshProjectFiles,
+      knownProjectFilesByPath,
+      normalizeProjectArtifactPath,
+      performRenameProjectTreePath,
+      t,
+    ],
+  );
+
+  const handleProjectAutoKnowledgeSinkChange = useCallback(
+    (enabled: boolean) => {
+      if (!selectedProject) {
+        return;
+      }
+      setProjects((prev) =>
+        prev.map((project) =>
+          project.id === selectedProject.id
+            ? { ...project, project_auto_knowledge_sink: enabled }
+            : project,
+        ),
+      );
+    },
+    [selectedProject],
+  );
 
   const handleSendSelectedFilesToChat = useCallback(async () => {
     if (!currentAgent || !selectedProject || selectedAttachPaths.length === 0) {
@@ -3717,8 +4296,9 @@ export default function ProjectDetailPage() {
       }
 
       const selectedFiles = selectedAttachPaths.map((path) => {
-        const fileInfo = knownProjectFilesByPath[path]
-          || effectiveProjectFiles.find((file) => file.path === path);
+        const fileInfo =
+          knownProjectFilesByPath[path] ||
+          effectiveProjectFiles.find((file) => file.path === path);
         return {
           path,
           size: fileInfo?.size || 0,
@@ -3740,7 +4320,8 @@ export default function ProjectDetailPage() {
               } catch {
                 return {
                   path: item.path,
-                  excerpt: "[文件内容暂不可读取，请先基于文件名和现有上下文分析]",
+                  excerpt:
+                    "[文件内容暂不可读取，请先基于文件名和现有上下文分析]",
                 };
               }
             }),
@@ -3756,7 +4337,9 @@ export default function ProjectDetailPage() {
             ? buildAutoAttachAnalysisPrompt({
                 projectName: selectedProject.name,
                 workspaceDir:
-                  selectedProject.workspace_dir || currentAgent.workspace_dir || "",
+                  selectedProject.workspace_dir ||
+                  currentAgent.workspace_dir ||
+                  "",
                 fileNames: selectedFiles.map((item) => item.path),
                 selectedRunId,
                 fileContexts,
@@ -3764,7 +4347,9 @@ export default function ProjectDetailPage() {
             : buildAttachDraftPrompt({
                 projectName: selectedProject.name,
                 workspaceDir:
-                  selectedProject.workspace_dir || currentAgent.workspace_dir || "",
+                  selectedProject.workspace_dir ||
+                  currentAgent.workspace_dir ||
+                  "",
                 selectedRunId,
                 selectedFiles,
               }),
@@ -3774,9 +4359,7 @@ export default function ProjectDetailPage() {
       setSelectedAttachPaths([]);
     } catch (err) {
       console.error("failed to send selected files to chat", err);
-      message.error(
-        t("projects.chat.autoAttachFailed"),
-      );
+      message.error(t("projects.chat.autoAttachFailed"));
     } finally {
       setSendingSelectedFiles(false);
     }
@@ -3832,9 +4415,7 @@ export default function ProjectDetailPage() {
       return;
     }
     if (!selectedRunId) {
-      message.warning(
-        t("projects.pipeline.validationNeedRun"),
-      );
+      message.warning(t("projects.pipeline.validationNeedRun"));
       return;
     }
 
@@ -3892,106 +4473,116 @@ export default function ProjectDetailPage() {
     t,
   ]);
 
-  const handleApplyNextAction = useCallback(async (action: ProjectPipelineNextAction) => {
-    if (!selectedProject) {
-      return;
-    }
-
-    if (action.target_step_id) {
-      setSelectedStepId(action.target_step_id);
-    }
-
-    const prompt = (action.suggested_prompt || "").trim() || [
-      `项目：${selectedProject.name}`,
-      `动作：${action.title}`,
-      action.description,
-      action.target_step_id ? `目标步骤：${action.target_step_id}` : "",
-      "请直接给出最小闭环动作，并说明是否需要重跑。",
-    ].filter(Boolean).join("\n");
-
-    void prepareDraftInChat({
-      ensureChat: () => (
-        selectedRunId
-          ? handleEnsureRunChat(false)
-          : handleEnsureDesignChat(false, true)
-      ),
-      request: {
-        id: `next-action-${action.id}-${Date.now()}`,
-        mode: "draft",
-        note: prompt,
-      },
-      successText: t("projects.pipeline.nextActionReady"),
-    });
-  }, [
-    handleEnsureDesignChat,
-    handleEnsureRunChat,
-    prepareDraftInChat,
-    selectedProject,
-    selectedRunId,
-    t,
-  ]);
-
-  const handleExecuteNextAction = useCallback(async (action: ProjectPipelineNextAction) => {
-    if (!currentAgent || !selectedProject || !selectedRunId || !action.target_step_id) {
-      return;
-    }
-    const targetStepId = action.target_step_id;
-
-    try {
-      const resolved = await resolveProjectRequestCandidate({
-        projectRequestIds: buildProjectRequestCandidates(selectedProject, {
-          preferredProjectRequestId: resolvedProjectRequestId,
-          routeProjectId,
-        }),
-        loader: async (projectRequestId) => projectPipelineFacade.retryProjectPipelineRun(
-          currentAgent.id,
-          projectRequestId,
-          selectedRunId,
-          {
-            step_id: targetStepId,
-            note: action.title,
-          },
-        ),
-      });
-      const continuedRun = resolved.value;
-      const requestProjectId = resolved.projectRequestId;
-      setResolvedProjectRequestId(requestProjectId);
-
-      await loadPipelineContext(currentAgent.id, selectedProject);
-      setSelectedRunId(continuedRun.id);
-      setRunDetail(continuedRun);
-      setSelectedStepId(targetStepId);
-      handleSwitchToRunFocusChat({
-        runId: continuedRun.id,
-        projectRequestId: requestProjectId || selectedProject.id,
-      });
-      message.success(
-        t(
-          "projects.pipeline.executeActionSuccess",
-          { stepId: targetStepId },
-        ),
-      );
-
-      if (!requestProjectId) {
+  const handleApplyNextAction = useCallback(
+    async (action: ProjectPipelineNextAction) => {
+      if (!selectedProject) {
         return;
       }
-    } catch (err) {
-      console.error("failed to execute next action", err);
-      message.error(
-        t("projects.pipeline.executeActionFailed"),
-      );
-    }
-  }, [
-    currentAgent,
-    handleSwitchToRunFocusChat,
-    loadPipelineContext,
-    projectPipelineFacade,
-    resolvedProjectRequestId,
-    routeProjectId,
-    selectedProject,
-    selectedRunId,
-    t,
-  ]);
+
+      if (action.target_step_id) {
+        setSelectedStepId(action.target_step_id);
+      }
+
+      const prompt =
+        (action.suggested_prompt || "").trim() ||
+        [
+          `项目：${selectedProject.name}`,
+          `动作：${action.title}`,
+          action.description,
+          action.target_step_id ? `目标步骤：${action.target_step_id}` : "",
+          "请直接给出最小闭环动作，并说明是否需要重跑。",
+        ]
+          .filter(Boolean)
+          .join("\n");
+
+      void prepareDraftInChat({
+        ensureChat: () =>
+          selectedRunId
+            ? handleEnsureRunChat(false)
+            : handleEnsureDesignChat(false, true),
+        request: {
+          id: `next-action-${action.id}-${Date.now()}`,
+          mode: "draft",
+          note: prompt,
+        },
+        successText: t("projects.pipeline.nextActionReady"),
+      });
+    },
+    [
+      handleEnsureDesignChat,
+      handleEnsureRunChat,
+      prepareDraftInChat,
+      selectedProject,
+      selectedRunId,
+      t,
+    ],
+  );
+
+  const handleExecuteNextAction = useCallback(
+    async (action: ProjectPipelineNextAction) => {
+      if (
+        !currentAgent ||
+        !selectedProject ||
+        !selectedRunId ||
+        !action.target_step_id
+      ) {
+        return;
+      }
+      const targetStepId = action.target_step_id;
+
+      try {
+        const resolved = await resolveProjectRequestCandidate({
+          projectRequestIds: buildProjectRequestCandidates(selectedProject, {
+            preferredProjectRequestId: resolvedProjectRequestId,
+            routeProjectId,
+          }),
+          loader: async (projectRequestId) =>
+            projectPipelineFacade.retryProjectPipelineRun(
+              currentAgent.id,
+              projectRequestId,
+              selectedRunId,
+              {
+                step_id: targetStepId,
+                note: action.title,
+              },
+            ),
+        });
+        const continuedRun = resolved.value;
+        const requestProjectId = resolved.projectRequestId;
+        setResolvedProjectRequestId(requestProjectId);
+
+        await loadPipelineContext(currentAgent.id, selectedProject);
+        setSelectedRunId(continuedRun.id);
+        setRunDetail(continuedRun);
+        setSelectedStepId(targetStepId);
+        handleSwitchToRunFocusChat({
+          runId: continuedRun.id,
+          projectRequestId: requestProjectId || selectedProject.id,
+        });
+        message.success(
+          t("projects.pipeline.executeActionSuccess", { stepId: targetStepId }),
+        );
+
+        if (!requestProjectId) {
+          return;
+        }
+      } catch (err) {
+        console.error("failed to execute next action", err);
+        message.error(t("projects.pipeline.executeActionFailed"));
+      }
+    },
+    [
+      currentAgent,
+      handleSwitchToRunFocusChat,
+      loadPipelineContext,
+      projectPipelineFacade,
+      resolvedProjectRequestId,
+      routeProjectId,
+      selectedProject,
+      selectedRunId,
+      t,
+    ],
+  );
 
   const handleChatAutoAttachHandled = useCallback((payload: { id: string }) => {
     window.requestAnimationFrame(() => {
@@ -4025,55 +4616,65 @@ export default function ProjectDetailPage() {
     }
   }, [knowledgeDockTab]);
 
-  const handleKnowledgeOpenProcessing = useCallback((
-    mode?: ProjectKnowledgeProcessingMode,
-    stage?: "tokenize" | "ner" | "syntax" | "cor",
-    sourceId?: string,
-    scope?: "global" | "source",
-  ) => {
-    setKnowledgeDockTab("processing");
-    if (sourceId) {
-      projectKnowledgeState.setSelectedSourceId(sourceId);
-    }
-    setKnowledgeProcessingFocusScope(scope || (sourceId ? "source" : "global"));
-    setKnowledgeProcessingFocusMode(mode || "nlp");
-    setKnowledgeProcessingFocusStage(stage || "");
-    setKnowledgeProcessingFocusToken((prev) => prev + 1);
-  }, [projectKnowledgeState]);
+  const handleKnowledgeOpenProcessing = useCallback(
+    (
+      mode?: ProjectKnowledgeProcessingMode,
+      stage?: "tokenize" | "ner" | "syntax" | "cor",
+      sourceId?: string,
+      scope?: "global" | "source",
+    ) => {
+      setKnowledgeDockTab("processing");
+      if (sourceId) {
+        projectKnowledgeState.setSelectedSourceId(sourceId);
+      }
+      setKnowledgeProcessingFocusScope(
+        scope || (sourceId ? "source" : "global"),
+      );
+      setKnowledgeProcessingFocusMode(mode || "nlp");
+      setKnowledgeProcessingFocusStage(stage || "");
+      setKnowledgeProcessingFocusToken((prev) => prev + 1);
+    },
+    [projectKnowledgeState],
+  );
 
   const handleKnowledgeRunSuggestedQuery = useCallback((query: string) => {
     setPendingKnowledgeQuery(query);
     setKnowledgeDockTab("explore");
   }, []);
 
-  const handleRuntimeSignalTooltipOpenChange = useCallback((open: boolean) => {
-    setRuntimeSignalTooltipOpen(open);
-    if (open) {
-      void fetchRuntimeSignalDetails();
-    }
-  }, [fetchRuntimeSignalDetails]);
+  const handleRuntimeSignalTooltipOpenChange = useCallback(
+    (open: boolean) => {
+      setRuntimeSignalTooltipOpen(open);
+      if (open) {
+        void fetchRuntimeSignalDetails();
+      }
+    },
+    [fetchRuntimeSignalDetails],
+  );
 
-  const projectChatPanelNode = useMemo(() => (
-    <ProjectChatPanel
-      projectFileCount={projectFileCount}
-      chatMode={projectChatMode}
-      selectedRunId={selectedRunId}
-      chatStarting={chatStarting}
-      activeWorkspaceChatId={activeWorkspaceChatId}
-      activeDesignChatId={activeDesignChatId}
-      activeRunChatId={activeRunChatId}
-      autoAttachRequest={autoAttachRequest}
-      onAutoAttachHandled={handleChatAutoAttachHandled}
-      onStartWorkspaceChat={handleStartWorkspaceChat}
-      onStartDesignChat={handleStartDesignChat}
-      onStartRunChat={handleStartRunChat}
-      onSelectWorkspaceHistoryChat={selectWorkspaceChatSession}
-      onSelectDesignHistoryChat={selectDesignChatSession}
-      onSelectRunHistoryChat={selectRunChatSession}
-      onOpenManualRecoverDialog={handleOpenManualRecoverDialogFromChat}
-      onAssistantTurnCompleted={handleAssistantTurnCompletedFromChat}
+  const projectChatPanelNode = useMemo(
+    () => (
+      <ProjectChatPanel
+        projectFileCount={projectFileCount}
+        chatMode={projectChatMode}
+        selectedRunId={selectedRunId}
+        chatStarting={chatStarting}
+        activeWorkspaceChatId={activeWorkspaceChatId}
+        activeDesignChatId={activeDesignChatId}
+        activeRunChatId={activeRunChatId}
+        autoAttachRequest={autoAttachRequest}
+        onAutoAttachHandled={handleChatAutoAttachHandled}
+        onStartWorkspaceChat={handleStartWorkspaceChat}
+        onStartDesignChat={handleStartDesignChat}
+        onStartRunChat={handleStartRunChat}
+        onSelectWorkspaceHistoryChat={selectWorkspaceChatSession}
+        onSelectDesignHistoryChat={selectDesignChatSession}
+        onSelectRunHistoryChat={selectRunChatSession}
+        onOpenManualRecoverDialog={handleOpenManualRecoverDialogFromChat}
+        onAssistantTurnCompleted={handleAssistantTurnCompletedFromChat}
       />
-    ), [
+    ),
+    [
       activeDesignChatId,
       activeRunChatId,
       activeWorkspaceChatId,
@@ -4091,7 +4692,8 @@ export default function ProjectDetailPage() {
       selectDesignChatSession,
       selectRunChatSession,
       selectedRunId,
-    ]);
+    ],
+  );
 
   const knowledgeDockTabItems = useMemo(() => {
     if (!selectedProject) {
@@ -4122,7 +4724,12 @@ export default function ProjectDetailPage() {
             knowledgeState={projectKnowledgeState}
             projectFiles={effectiveProjectFiles}
             onOpenProcessingForSource={(sourceId) => {
-              handleKnowledgeOpenProcessing("nlp", "tokenize", sourceId, "source");
+              handleKnowledgeOpenProcessing(
+                "nlp",
+                "tokenize",
+                sourceId,
+                "source",
+              );
             }}
           />
         ),
@@ -4168,7 +4775,9 @@ export default function ProjectDetailPage() {
             runtimeSignalValue={runtimeSignalValue}
             runtimeSignalTooltipContent={runtimeSignalTooltipContent}
             runtimeSignalTooltipOpen={runtimeSignalTooltipOpen}
-            onRuntimeSignalTooltipOpenChange={handleRuntimeSignalTooltipOpenChange}
+            onRuntimeSignalTooltipOpenChange={
+              handleRuntimeSignalTooltipOpenChange
+            }
             onRunSuggestedQuery={handleKnowledgeRunSuggestedQuery}
           />
         ),
@@ -4180,9 +4789,13 @@ export default function ProjectDetailPage() {
           <ProjectKnowledgeSettingsPanel
             agentId={currentAgent?.id}
             projectId={selectedProject.id}
-            projectAutoKnowledgeSink={selectedProject.project_auto_knowledge_sink !== false}
+            projectAutoKnowledgeSink={
+              selectedProject.project_auto_knowledge_sink !== false
+            }
             syncState={projectKnowledgeState.syncState}
-            onProjectAutoKnowledgeSinkChange={handleProjectAutoKnowledgeSinkChange}
+            onProjectAutoKnowledgeSinkChange={
+              handleProjectAutoKnowledgeSinkChange
+            }
           />
         ),
       },
@@ -4222,7 +4835,9 @@ export default function ProjectDetailPage() {
         <div>
           <div className={styles.pathTitleRow}>
             <div className={styles.pathBreadcrumb}>
-              <span className={styles.pathParent}>{t("projects.path.workspace")}</span>
+              <span className={styles.pathParent}>
+                {t("projects.path.workspace")}
+              </span>
               <span className={styles.pathSeparator}>/</span>
               <Button
                 type="link"
@@ -4241,7 +4856,7 @@ export default function ProjectDetailPage() {
           <Text type="secondary" className={styles.description}>
             {t("projects.detailDescription")}
             <span className={styles.descriptionDivider}> | </span>
-            {t("projects.workspacePath")}: {" "}
+            {t("projects.workspacePath")}:{" "}
             {selectedProject?.workspace_dir ||
               currentAgent?.workspace_dir ||
               t("projects.noAgent")}
@@ -4254,14 +4869,12 @@ export default function ProjectDetailPage() {
                 {t("projects.upload.button")}
               </Button>
               <Popconfirm
-                title={t(
-                  "projects.deleteConfirmTitleWithName",
-                  { name: selectedProject.name || selectedProject.id },
-                )}
-                description={t(
-                  "projects.deleteConfirmDescription",
-                  { name: selectedProject.name || selectedProject.id },
-                )}
+                title={t("projects.deleteConfirmTitleWithName", {
+                  name: selectedProject.name || selectedProject.id,
+                })}
+                description={t("projects.deleteConfirmDescription", {
+                  name: selectedProject.name || selectedProject.id,
+                })}
                 okText={t("common.delete")}
                 cancelText={t("common.cancel")}
                 okButtonProps={{ danger: true, loading: deletingProject }}
@@ -4273,7 +4886,11 @@ export default function ProjectDetailPage() {
               </Popconfirm>
             </>
           ) : null}
-          <Button size="small" onClick={() => void loadAgents()} loading={loading}>
+          <Button
+            size="small"
+            onClick={() => void loadAgents()}
+            loading={loading}
+          >
             {t("common.refresh")}
           </Button>
         </div>
@@ -4325,7 +4942,7 @@ export default function ProjectDetailPage() {
                     defaultSize={LEFT_PANE_EXPANDED_SIZE}
                   >
                     <div className={styles.splitterPanel}>
-                        <div className={styles.columnLeft}>
+                      <div className={styles.columnLeft}>
                         <div className={styles.columnStack}>
                           <ProjectFileTree
                             selectedProject={selectedProject}
@@ -4344,23 +4961,36 @@ export default function ProjectDetailPage() {
                             activeStage={activeStage}
                             treeDisplayMode={treeDisplayMode}
                             deletingTreePaths={deletingProjectPaths}
-                            projectFilesRefreshing={filesLoading || projectTreeLoading}
+                            projectFilesRefreshing={
+                              filesLoading || projectTreeLoading
+                            }
                             latestUpdatedFilePath={latestUpdatedFilePath}
                             onTreeFilterQueryChange={setProjectFileSearchQuery}
                             onExpandedKeysChange={setTreeExpandedKeys}
                             onConsumeStaleDirectoryPaths={(paths) => {
                               if (paths.length === 0) return;
                               setStaleProjectTreeDirectoryPaths((prev) =>
-                                prev.filter((item) => !paths.includes(item)));
+                                prev.filter((item) => !paths.includes(item)),
+                              );
                             }}
                             onRefreshProjectFiles={handleRefreshProjectFiles}
                             onRefreshProjectTreeDirectory={(path) => {
-                              if (!currentAgent || !selectedProject) return Promise.resolve([]);
-                              return loadProjectTreeDirectory(currentAgent.id, selectedProject, path);
+                              if (!currentAgent || !selectedProject)
+                                return Promise.resolve([]);
+                              return loadProjectTreeDirectory(
+                                currentAgent.id,
+                                selectedProject,
+                                path,
+                              );
                             }}
                             onLoadProjectTreeChildren={(path) => {
-                              if (!currentAgent || !selectedProject) return Promise.resolve([]);
-                              return loadProjectTreeDirectory(currentAgent.id, selectedProject, path);
+                              if (!currentAgent || !selectedProject)
+                                return Promise.resolve([]);
+                              return loadProjectTreeDirectory(
+                                currentAgent.id,
+                                selectedProject,
+                                path,
+                              );
                             }}
                             onSelectFileFromTree={(path) => {
                               void handleSelectArtifactFile(path);
@@ -4371,18 +5001,34 @@ export default function ProjectDetailPage() {
                             onAttachArtifactToChat={(path) => {
                               void handleAttachArtifactToChat(path);
                             }}
-                            onRequestMoveTreePath={handleRequestMoveProjectTreePath}
-                            onRequestCreateChildDirectory={handleRequestCreateProjectTreeDirectory}
-                            onRequestRenameTreePath={handleRequestRenameProjectTreePath}
-                            onRequestDeleteTreePath={handleRequestDeleteProjectTreePath}
-                            onRequestDeleteSelectedFilePaths={handleRequestDeleteSelectedProjectFiles}
-                            onRequestMoveSelectedFilePaths={handleRequestMoveSelectedProjectFiles}
+                            onRequestMoveTreePath={
+                              handleRequestMoveProjectTreePath
+                            }
+                            onRequestCreateChildDirectory={
+                              handleRequestCreateProjectTreeDirectory
+                            }
+                            onRequestRenameTreePath={
+                              handleRequestRenameProjectTreePath
+                            }
+                            onRequestDeleteTreePath={
+                              handleRequestDeleteProjectTreePath
+                            }
+                            onRequestDeleteSelectedFilePaths={
+                              handleRequestDeleteSelectedProjectFiles
+                            }
+                            onRequestMoveSelectedFilePaths={
+                              handleRequestMoveSelectedProjectFiles
+                            }
                             onRequestSetSelectedFilePaths={(paths) => {
-                              const normalizedPaths = Array.from(new Set(
-                                (paths || [])
-                                  .map((item) => normalizeProjectArtifactPath(item))
-                                  .filter((item) => Boolean(item)),
-                              ));
+                              const normalizedPaths = Array.from(
+                                new Set(
+                                  (paths || [])
+                                    .map((item) =>
+                                      normalizeProjectArtifactPath(item),
+                                    )
+                                    .filter((item) => Boolean(item)),
+                                ),
+                              );
                               setSelectedAttachPaths(normalizedPaths);
                             }}
                             onUploadFiles={openProjectUploadModal}
@@ -4417,7 +5063,9 @@ export default function ProjectDetailPage() {
                             }}
                             loadFileContent={(path) => {
                               // Delegate to the existing file content state
-                              return path === selectedFilePath ? fileContent : undefined;
+                              return path === selectedFilePath
+                                ? fileContent
+                                : undefined;
                             }}
                           />
                         </div>
@@ -4438,17 +5086,31 @@ export default function ProjectDetailPage() {
               </Splitter.Panel>
 
               <Splitter.Panel
-                size={knowledgeModuleCollapsed ? KNOWLEDGE_DOCK_COLLAPSED_SIZE : knowledgeDockSize}
-                min={knowledgeModuleCollapsed ? KNOWLEDGE_DOCK_COLLAPSED_SIZE : KNOWLEDGE_DOCK_MIN_SIZE}
+                size={
+                  knowledgeModuleCollapsed
+                    ? KNOWLEDGE_DOCK_COLLAPSED_SIZE
+                    : knowledgeDockSize
+                }
+                min={
+                  knowledgeModuleCollapsed
+                    ? KNOWLEDGE_DOCK_COLLAPSED_SIZE
+                    : KNOWLEDGE_DOCK_MIN_SIZE
+                }
                 max="52%"
                 defaultSize={KNOWLEDGE_DOCK_DEFAULT_SIZE}
               >
-                <div className={`${styles.splitterPanel} ${styles.knowledgeDockSplitterPanel}`}>
+                <div
+                  className={`${styles.splitterPanel} ${styles.knowledgeDockSplitterPanel}`}
+                >
                   <div className={styles.knowledgeModuleShell}>
                     <Collapse
                       destroyOnHidden
                       className={styles.knowledgeModuleCollapse}
-                      activeKey={knowledgeModuleCollapsed ? [] : [KNOWLEDGE_DOCK_COLLAPSE_KEY]}
+                      activeKey={
+                        knowledgeModuleCollapsed
+                          ? []
+                          : [KNOWLEDGE_DOCK_COLLAPSE_KEY]
+                      }
                       onChange={handleKnowledgeDockCollapseChange}
                       items={[
                         {
@@ -4463,7 +5125,11 @@ export default function ProjectDetailPage() {
                                 activeKey={effectiveKnowledgeDockTab}
                                 tabPosition="left"
                                 destroyOnHidden
-                                onChange={(key) => setKnowledgeDockTab(key as KnowledgeDockTabKey)}
+                                onChange={(key) =>
+                                  setKnowledgeDockTab(
+                                    key as KnowledgeDockTabKey,
+                                  )
+                                }
                                 items={knowledgeDockTabItems}
                               />
                             </div>
@@ -4487,114 +5153,118 @@ export default function ProjectDetailPage() {
           >
             {automationDrawerOpen ? (
               <div className={styles.automationDrawerBody}>
-              <ProjectAutomationPanel
-                selectedRunStatus={selectedRunSummary?.status}
-                selectedTemplateId={selectedTemplateId}
-                selectedRunId={selectedRunId}
-                selectedProjectExists={Boolean(selectedProject)}
-                pipelineTemplates={pipelineTemplates}
-                pipelineLoading={pipelineLoading}
-                pipelineRuns={pipelineRuns}
-                runsForSelectedTemplate={runsForSelectedTemplate}
-                activeRunTemplate={activeRunTemplate}
-                runDetail={runDetail}
-                runProgress={runProgress}
-                stepContractById={stepContractById}
-                selectedStepId={selectedStepId}
-                highlightedStepIds={highlightedStepIds}
-                createRunLoading={createRunLoading}
-                importLoading={importLoading}
-                importModalOpen={importModalOpen}
-                selectedPlatformTemplateId={selectedPlatformTemplateId}
-                platformTemplates={platformTemplates}
-                verificationGateSummary={verificationGateSummary}
-                canPromoteToTemplateDraft={canPromoteToTemplateDraft}
-                onUploadFiles={openRunBatchUploadModal}
-                onOpenImportModal={() => {
-                  void handleOpenImportModal();
-                }}
-                onCreateRun={() => {
-                  void handleCreateRun();
-                }}
-                onStartAutomation={handleStartDesignChat}
-                onPrepareImplementationDraft={() => {
-                  void handlePrepareImplementationDraft();
-                }}
-                onPrepareValidationDraft={() => {
-                  void handlePrepareValidationDraft();
-                }}
-                onPreparePromotionDraft={() => {
-                  void handlePreparePromotionDraft();
-                }}
-                onFocusNextActionStep={(stepId) => {
-                  setSelectedStepId(stepId);
-                }}
-                onApplyNextAction={(action) => {
-                  void handleApplyNextAction(action);
-                }}
-                onExecuteNextAction={(action) => {
-                  void handleExecuteNextAction(action);
-                }}
-                onSelectTemplateId={setSelectedTemplateId}
-                onSelectRunId={setSelectedRunId}
-                onSelectStep={handleSelectStep}
-                onCloseImportModal={() => setImportModalOpen(false)}
-                onImportPlatformTemplate={() => {
-                  void handleImportPlatformTemplate();
-                }}
-                onSelectPlatformTemplateId={setSelectedPlatformTemplateId}
-                formatRunTimeLabel={formatRunTimeLabel}
-                statusTagColor={statusTagColor}
-              />
+                <ProjectAutomationPanel
+                  selectedRunStatus={selectedRunSummary?.status}
+                  selectedTemplateId={selectedTemplateId}
+                  selectedRunId={selectedRunId}
+                  selectedProjectExists={Boolean(selectedProject)}
+                  pipelineTemplates={pipelineTemplates}
+                  pipelineLoading={pipelineLoading}
+                  pipelineRuns={pipelineRuns}
+                  runsForSelectedTemplate={runsForSelectedTemplate}
+                  activeRunTemplate={activeRunTemplate}
+                  runDetail={runDetail}
+                  runProgress={runProgress}
+                  stepContractById={stepContractById}
+                  selectedStepId={selectedStepId}
+                  highlightedStepIds={highlightedStepIds}
+                  createRunLoading={createRunLoading}
+                  importLoading={importLoading}
+                  importModalOpen={importModalOpen}
+                  selectedPlatformTemplateId={selectedPlatformTemplateId}
+                  platformTemplates={platformTemplates}
+                  verificationGateSummary={verificationGateSummary}
+                  canPromoteToTemplateDraft={canPromoteToTemplateDraft}
+                  onUploadFiles={openRunBatchUploadModal}
+                  onOpenImportModal={() => {
+                    void handleOpenImportModal();
+                  }}
+                  onCreateRun={() => {
+                    void handleCreateRun();
+                  }}
+                  onStartAutomation={handleStartDesignChat}
+                  onPrepareImplementationDraft={() => {
+                    void handlePrepareImplementationDraft();
+                  }}
+                  onPrepareValidationDraft={() => {
+                    void handlePrepareValidationDraft();
+                  }}
+                  onPreparePromotionDraft={() => {
+                    void handlePreparePromotionDraft();
+                  }}
+                  onFocusNextActionStep={(stepId) => {
+                    setSelectedStepId(stepId);
+                  }}
+                  onApplyNextAction={(action) => {
+                    void handleApplyNextAction(action);
+                  }}
+                  onExecuteNextAction={(action) => {
+                    void handleExecuteNextAction(action);
+                  }}
+                  onSelectTemplateId={setSelectedTemplateId}
+                  onSelectRunId={setSelectedRunId}
+                  onSelectStep={handleSelectStep}
+                  onCloseImportModal={() => setImportModalOpen(false)}
+                  onImportPlatformTemplate={() => {
+                    void handleImportPlatformTemplate();
+                  }}
+                  onSelectPlatformTemplateId={setSelectedPlatformTemplateId}
+                  formatRunTimeLabel={formatRunTimeLabel}
+                  statusTagColor={statusTagColor}
+                />
 
-              <Tabs
-                className={styles.automationDrawerTabs}
-                destroyOnHidden
-                items={[
-                  {
-                    key: "metrics",
-                    label: t("projects.metrics"),
-                    children: (
-                      <ProjectMetricsPanel
-                        currentAgentId={currentAgent?.id}
-                        selectedProjectRequestId={resolvedProjectRequestId || selectedProject?.id || ""}
-                        runDetail={runDetail}
-                        selectedRunId={selectedRunId}
-                        pipelineRuns={pipelineRuns}
-                        runProgress={runProgress}
-                        statusTagColor={statusTagColor}
-                        formatRunTimeLabel={formatRunTimeLabel}
-                        onSelectArtifactPath={(path) => {
-                          handleLocateArtifactFile(path);
-                          setAutomationDrawerOpen(false);
-                        }}
-                      />
-                    ),
-                  },
-                  {
-                    key: "timeline",
+                <Tabs
+                  className={styles.automationDrawerTabs}
+                  destroyOnHidden
+                  items={[
+                    {
+                      key: "metrics",
+                      label: t("projects.metrics"),
+                      children: (
+                        <ProjectMetricsPanel
+                          currentAgentId={currentAgent?.id}
+                          selectedProjectRequestId={
+                            resolvedProjectRequestId ||
+                            selectedProject?.id ||
+                            ""
+                          }
+                          runDetail={runDetail}
+                          selectedRunId={selectedRunId}
+                          pipelineRuns={pipelineRuns}
+                          runProgress={runProgress}
+                          statusTagColor={statusTagColor}
+                          formatRunTimeLabel={formatRunTimeLabel}
+                          onSelectArtifactPath={(path) => {
+                            handleLocateArtifactFile(path);
+                            setAutomationDrawerOpen(false);
+                          }}
+                        />
+                      ),
+                    },
+                    {
+                      key: "timeline",
                       label: t("projects.pipeline.timeline"),
-                    children: (
-                      <ProjectEvidencePanel
-                        runDetail={runDetail}
-                        showTimeline={true}
-                        showEvidence={false}
-                      />
-                    ),
-                  },
-                  {
-                    key: "evidence",
-                    label: t("projects.evidence"),
-                    children: (
-                      <ProjectEvidencePanel
-                        runDetail={runDetail}
-                        showTimeline={false}
-                        showEvidence={true}
-                      />
-                    ),
-                  },
-                ]}
-              />
+                      children: (
+                        <ProjectEvidencePanel
+                          runDetail={runDetail}
+                          showTimeline={true}
+                          showEvidence={false}
+                        />
+                      ),
+                    },
+                    {
+                      key: "evidence",
+                      label: t("projects.evidence"),
+                      children: (
+                        <ProjectEvidencePanel
+                          runDetail={runDetail}
+                          showTimeline={false}
+                          showEvidence={true}
+                        />
+                      ),
+                    },
+                  ]}
+                />
               </div>
             ) : null}
           </Drawer>
@@ -4630,9 +5300,7 @@ export default function ProjectDetailPage() {
             okText={t("projects.chat.manualRecoverConfirm")}
             cancelText={t("common.cancel")}
           >
-            <Text type="secondary">
-              {t("projects.chat.manualRecoverHint")}
-            </Text>
+            <Text type="secondary">{t("projects.chat.manualRecoverHint")}</Text>
             <div style={{ marginTop: 12 }}>
               <Select
                 style={{ width: "100%" }}
@@ -4645,8 +5313,13 @@ export default function ProjectDetailPage() {
                 options={manualRecoverCandidates.map((chat) => ({
                   value: chat.id,
                   label:
-                    `${chat.name || t("chat.newChat")} · ${chat.id.slice(0, 8)} · ` +
-                    `${formatRunTimeLabel(chat.updated_at || chat.created_at || "")}`,
+                    `${chat.name || t("chat.newChat")} · ${chat.id.slice(
+                      0,
+                      8,
+                    )} · ` +
+                    `${formatRunTimeLabel(
+                      chat.updated_at || chat.created_at || "",
+                    )}`,
                 }))}
               />
             </div>
@@ -4671,7 +5344,7 @@ export default function ProjectDetailPage() {
                   onClick={() => setManualRecoverChatId(chat.id)}
                   style={{ textAlign: "left", justifyContent: "flex-start" }}
                 >
-                  {(chat.name || t("chat.newChat"))}
+                  {chat.name || t("chat.newChat")}
                   {" · "}
                   {chat.id.slice(0, 8)}
                 </Button>

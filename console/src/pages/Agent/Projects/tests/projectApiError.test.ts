@@ -36,7 +36,7 @@ describe("normalizeProjectApiError", () => {
   it("parses structured detail from request.ts formatted error message", () => {
     const normalized = normalizeProjectApiError(
       new Error(
-        "Request failed: 409 Conflict - {\"detail\":{\"code\":\"project_path_conflict\",\"message\":\"target path already exists\"}}",
+        'Request failed: 409 Conflict - {"detail":{"code":"project_path_conflict","message":"target path already exists"}}',
       ),
     );
 
@@ -47,7 +47,9 @@ describe("normalizeProjectApiError", () => {
 
   it("falls back to inferred code when parsed detail has no code", () => {
     const normalized = normalizeProjectApiError(
-      new Error("Request failed: 404 Not Found - {\"detail\":\"project not found\"}"),
+      new Error(
+        'Request failed: 404 Not Found - {"detail":"project not found"}',
+      ),
     );
 
     expect(normalized.status).toBe(404);

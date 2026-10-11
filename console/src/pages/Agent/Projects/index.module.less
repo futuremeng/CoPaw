@@ -150,7 +150,9 @@
   min-height: 0;
   overflow: auto;
   box-sizing: border-box;
-  transition: width 0.2s ease, padding 0.2s ease;
+  transition:
+    width 0.2s ease,
+    padding 0.2s ease;
 
   &::-webkit-scrollbar {
     display: none;
@@ -181,7 +183,9 @@
   background: #f9f8f4 !important;
   box-shadow: none !important;
   color: rgba(26, 23, 22, 0.45) !important;
-  transition: background 0.2s ease, color 0.2s ease;
+  transition:
+    background 0.2s ease,
+    color 0.2s ease;
 
   &:hover,
   &:focus {
@@ -334,7 +338,10 @@
     padding-inline-end: 8px !important;
   }
 
-  :global(.qwenpaw-menu.qwenpaw-menu-root.qwenpaw-menu-inline.qwenpaw-menu-dark .qwenpaw-menu-submenu-title) {
+  :global(
+      .qwenpaw-menu.qwenpaw-menu-root.qwenpaw-menu-inline.qwenpaw-menu-dark
+        .qwenpaw-menu-submenu-title
+    ) {
     color: rgba(255, 255, 255, 0.45) !important;
     background: transparent !important;
     padding-inline: 8px !important;
@@ -351,13 +358,25 @@
     }
   }
 
-  :global(.qwenpaw-menu.qwenpaw-menu-root.qwenpaw-menu-inline.qwenpaw-menu-dark .qwenpaw-menu-submenu-title .qwenpaw-menu-item-icon),
-  :global(.qwenpaw-menu.qwenpaw-menu-root.qwenpaw-menu-inline.qwenpaw-menu-dark .qwenpaw-menu-submenu-title .anticon) {
+  :global(
+      .qwenpaw-menu.qwenpaw-menu-root.qwenpaw-menu-inline.qwenpaw-menu-dark
+        .qwenpaw-menu-submenu-title
+        .qwenpaw-menu-item-icon
+    ),
+  :global(
+      .qwenpaw-menu.qwenpaw-menu-root.qwenpaw-menu-inline.qwenpaw-menu-dark
+        .qwenpaw-menu-submenu-title
+        .anticon
+    ) {
     color: rgba(255, 255, 255, 0.62) !important;
     flex-shrink: 0;
   }
 
-  :global(.qwenpaw-menu.qwenpaw-menu-root.qwenpaw-menu-inline.qwenpaw-menu-dark .qwenpaw-menu-submenu-title .qwenpaw-menu-submenu-arrow) {
+  :global(
+      .qwenpaw-menu.qwenpaw-menu-root.qwenpaw-menu-inline.qwenpaw-menu-dark
+        .qwenpaw-menu-submenu-title
+        .qwenpaw-menu-submenu-arrow
+    ) {
     display: none !important;
   }
 
@@ -391,7 +410,9 @@
     color: inherit;
   }
 
-  :global(.qwenpaw-menu-dark .qwenpaw-menu-item-selected .qwenpaw-menu-item-icon),
+  :global(
+      .qwenpaw-menu-dark .qwenpaw-menu-item-selected .qwenpaw-menu-item-icon
+    ),
   :global(.qwenpaw-menu-dark .qwenpaw-menu-item-selected .anticon),
   :global(.ant-menu-dark .ant-menu-item-selected .ant-menu-item-icon),
   :global(.ant-menu-dark .ant-menu-item-selected .anticon),
@@ -400,7 +421,10 @@
     color: #ff7f16 !important;
   }
 
-  :global(.qwenpaw-menu.qwenpaw-menu-root.qwenpaw-menu-inline.qwenpaw-menu-light .qwenpaw-menu-submenu-title) {
+  :global(
+      .qwenpaw-menu.qwenpaw-menu-root.qwenpaw-menu-inline.qwenpaw-menu-light
+        .qwenpaw-menu-submenu-title
+    ) {
     padding-inline: 8px !important;
     padding-inline-start: 8px !important;
     padding-left: 8px !important;
@@ -410,12 +434,20 @@
     gap: 8px;
   }
 
-  :global(.qwenpaw-menu.qwenpaw-menu-root.qwenpaw-menu-inline.qwenpaw-menu-light .qwenpaw-menu-submenu-title .qwenpaw-menu-item-icon) {
+  :global(
+      .qwenpaw-menu.qwenpaw-menu-root.qwenpaw-menu-inline.qwenpaw-menu-light
+        .qwenpaw-menu-submenu-title
+        .qwenpaw-menu-item-icon
+    ) {
     color: inherit;
     flex-shrink: 0;
   }
 
-  :global(.qwenpaw-menu.qwenpaw-menu-root.qwenpaw-menu-inline.qwenpaw-menu-light .qwenpaw-menu-submenu-title .qwenpaw-menu-submenu-arrow) {
+  :global(
+      .qwenpaw-menu.qwenpaw-menu-root.qwenpaw-menu-inline.qwenpaw-menu-light
+        .qwenpaw-menu-submenu-title
+        .qwenpaw-menu-submenu-arrow
+    ) {
     display: none !important;
   }
 
@@ -462,8 +494,14 @@
   }
 
   :global(.ant-menu-inline-collapsed .ant-menu-item .ant-menu-title-content),
-  :global(.qwenpaw-menu-inline-collapsed .qwenpaw-menu-item .qwenpaw-menu-title-content),
-  :global(.copaw-menu-inline-collapsed .copaw-menu-item .copaw-menu-title-content) {
+  :global(
+      .qwenpaw-menu-inline-collapsed
+        .qwenpaw-menu-item
+        .qwenpaw-menu-title-content
+    ),
+  :global(
+      .copaw-menu-inline-collapsed .copaw-menu-item .copaw-menu-title-content
+    ) {
     margin-inline-start: 0 !important;
     width: 100%;
     display: inline-flex;
@@ -618,7 +656,10 @@
   gap: 4px;
   padding: 8px 6px;
   cursor: pointer;
-  transition: border-color 0.18s ease, color 0.18s ease, background-color 0.18s ease,
+  transition:
+    border-color 0.18s ease,
+    color 0.18s ease,
+    background-color 0.18s ease,
     box-shadow 0.18s ease;
 
   &:hover {
@@ -665,7 +706,10 @@
   gap: 6px;
   padding: 5px 6px;
   cursor: pointer;
-  transition: border-color 0.16s ease, background-color 0.16s ease, color 0.16s ease;
+  transition:
+    border-color 0.16s ease,
+    background-color 0.16s ease,
+    color 0.16s ease;
 
   &:hover {
     border-color: #d6e4ff;
@@ -696,7 +740,9 @@
 }
 
 .treeTransitionShell {
-  transition: opacity 0.2s ease, transform 0.2s ease;
+  transition:
+    opacity 0.2s ease,
+    transform 0.2s ease;
   transform-origin: top;
   opacity: 1;
   transform: translateY(0);
@@ -790,11 +836,24 @@
   --project-knowledge-soft-surface: #ffffff;
   --project-knowledge-soft-surface-muted: #fbfdff;
   --project-knowledge-soft-surface-raised: rgba(255, 255, 255, 0.92);
-  --project-knowledge-hero-surface: linear-gradient(135deg, #fffdf8 0%, #f6fbff 100%);
-  --project-knowledge-sticky-surface: linear-gradient(180deg, rgba(250, 252, 255, 0.98) 0%, rgba(250, 252, 255, 0.9) 76%, rgba(250, 252, 255, 0) 100%);
+  --project-knowledge-hero-surface: linear-gradient(
+    135deg,
+    #fffdf8 0%,
+    #f6fbff 100%
+  );
+  --project-knowledge-sticky-surface: linear-gradient(
+    180deg,
+    rgba(250, 252, 255, 0.98) 0%,
+    rgba(250, 252, 255, 0.9) 76%,
+    rgba(250, 252, 255, 0) 100%
+  );
   --project-knowledge-stage-surface: rgba(255, 255, 255, 0.82);
   --project-knowledge-flow-connector: #c9d6ee;
-  --project-knowledge-lane-gradient: linear-gradient(180deg, #ffc069 0%, #1677ff 100%);
+  --project-knowledge-lane-gradient: linear-gradient(
+    180deg,
+    #ffc069 0%,
+    #1677ff 100%
+  );
   --project-knowledge-hint-color: rgba(26, 23, 22, 0.45);
   display: flex;
   flex-direction: column;
@@ -1038,7 +1097,10 @@
   gap: 6px;
   text-align: left;
   cursor: pointer;
-  transition: border-color 120ms ease, background 120ms ease, box-shadow 120ms ease;
+  transition:
+    border-color 120ms ease,
+    background 120ms ease,
+    box-shadow 120ms ease;
 }
 
 .projectKnowledgeSelectableItem:hover {
@@ -2113,7 +2175,11 @@
   padding: 4px 10px;
   border: 1px solid #dfe8fb;
   border-radius: 999px;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.96) 0%, rgba(246, 250, 255, 0.94) 100%);
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.96) 0%,
+    rgba(246, 250, 255, 0.94) 100%
+  );
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.85),
     0 1px 3px rgba(31, 42, 68, 0.05);
@@ -2165,7 +2231,11 @@
 
 .knowledgeModuleHeaderSignalActive {
   border-color: rgba(95, 191, 159, 0.35);
-  background: linear-gradient(180deg, rgba(246, 255, 251, 0.98) 0%, rgba(236, 252, 245, 0.96) 100%);
+  background: linear-gradient(
+    180deg,
+    rgba(246, 255, 251, 0.98) 0%,
+    rgba(236, 252, 245, 0.96) 100%
+  );
 }
 
 .knowledgeRuntimeTooltipOverlay :global(.ant-tooltip-inner) {
@@ -2187,31 +2257,59 @@
   padding: 10px 12px;
   border-radius: 12px;
   border: 1px solid rgba(123, 145, 189, 0.2);
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.98) 0%, rgba(246, 249, 255, 0.96) 100%),
-    radial-gradient(circle at top right, rgba(122, 162, 255, 0.12), transparent 42%);
+  background: linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.98) 0%,
+      rgba(246, 249, 255, 0.96) 100%
+    ),
+    radial-gradient(
+      circle at top right,
+      rgba(122, 162, 255, 0.12),
+      transparent 42%
+    );
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.82);
 }
 
 .knowledgeLoopSummaryWarning {
   border-color: rgba(245, 166, 35, 0.35);
-  background:
-    linear-gradient(180deg, rgba(255, 251, 243, 0.99) 0%, rgba(255, 247, 230, 0.96) 100%),
-    radial-gradient(circle at top right, rgba(245, 166, 35, 0.14), transparent 42%);
+  background: linear-gradient(
+      180deg,
+      rgba(255, 251, 243, 0.99) 0%,
+      rgba(255, 247, 230, 0.96) 100%
+    ),
+    radial-gradient(
+      circle at top right,
+      rgba(245, 166, 35, 0.14),
+      transparent 42%
+    );
 }
 
 .knowledgeLoopSummarySuccess {
   border-color: rgba(95, 191, 159, 0.32);
-  background:
-    linear-gradient(180deg, rgba(248, 255, 251, 0.99) 0%, rgba(238, 251, 245, 0.96) 100%),
-    radial-gradient(circle at top right, rgba(95, 191, 159, 0.14), transparent 42%);
+  background: linear-gradient(
+      180deg,
+      rgba(248, 255, 251, 0.99) 0%,
+      rgba(238, 251, 245, 0.96) 100%
+    ),
+    radial-gradient(
+      circle at top right,
+      rgba(95, 191, 159, 0.14),
+      transparent 42%
+    );
 }
 
 .knowledgeLoopSummaryError {
   border-color: rgba(255, 123, 114, 0.32);
-  background:
-    linear-gradient(180deg, rgba(255, 249, 248, 0.99) 0%, rgba(255, 240, 239, 0.96) 100%),
-    radial-gradient(circle at top right, rgba(255, 123, 114, 0.14), transparent 42%);
+  background: linear-gradient(
+      180deg,
+      rgba(255, 249, 248, 0.99) 0%,
+      rgba(255, 240, 239, 0.96) 100%
+    ),
+    radial-gradient(
+      circle at top right,
+      rgba(255, 123, 114, 0.14),
+      transparent 42%
+    );
 }
 
 .knowledgeLoopSummaryHeaderRow {
@@ -2254,7 +2352,11 @@
   padding: 10px 12px;
   border-radius: 12px;
   border: 1px solid rgba(167, 189, 255, 0.22);
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98) 0%, rgba(244, 248, 255, 0.95) 100%);
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.98) 0%,
+    rgba(244, 248, 255, 0.95) 100%
+  );
 }
 
 .knowledgeRuntimeTooltipTitle {
@@ -2339,7 +2441,9 @@
     padding: 8px 10px !important;
     border-radius: 8px;
     color: var(--knowledge-dock-tabs-tab-fg) !important;
-    transition: background-color 0.18s ease, color 0.18s ease;
+    transition:
+      background-color 0.18s ease,
+      color 0.18s ease;
 
     &:hover {
       background: var(--knowledge-dock-tabs-tab-hover-bg) !important;
@@ -2362,8 +2466,10 @@
   }
 
   > :global(.ant-tabs-nav) :global(.ant-tabs-tab-active .ant-tabs-tab-btn),
-  > :global(.qwenpaw-tabs-nav) :global(.qwenpaw-tabs-tab-active .qwenpaw-tabs-tab-btn),
-  > :global(.copaw-tabs-nav) :global(.copaw-tabs-tab-active .copaw-tabs-tab-btn) {
+  > :global(.qwenpaw-tabs-nav)
+    :global(.qwenpaw-tabs-tab-active .qwenpaw-tabs-tab-btn),
+  > :global(.copaw-tabs-nav)
+    :global(.copaw-tabs-tab-active .copaw-tabs-tab-btn) {
     color: var(--knowledge-dock-tabs-tab-active-fg) !important;
     font-weight: 600;
   }
@@ -2766,16 +2872,29 @@
     opacity: 1;
     visibility: visible;
     pointer-events: auto;
-    background: linear-gradient(90deg, rgba(250, 250, 250, 0), #fafafa 18px, #fafafa 100%);
+    background: linear-gradient(
+      90deg,
+      rgba(250, 250, 250, 0),
+      #fafafa 18px,
+      #fafafa 100%
+    );
   }
 
-  :global(.ant-tree-node-content-wrapper.ant-tree-node-selected) .treeNodeActions,
-  :global(.qwenpaw-tree-node-content-wrapper.qwenpaw-tree-node-selected) .treeNodeActions,
-  :global(.copaw-tree-node-content-wrapper.copaw-tree-node-selected) .treeNodeActions {
+  :global(.ant-tree-node-content-wrapper.ant-tree-node-selected)
+    .treeNodeActions,
+  :global(.qwenpaw-tree-node-content-wrapper.qwenpaw-tree-node-selected)
+    .treeNodeActions,
+  :global(.copaw-tree-node-content-wrapper.copaw-tree-node-selected)
+    .treeNodeActions {
     opacity: 1;
     visibility: visible;
     pointer-events: auto;
-    background: linear-gradient(90deg, rgba(230, 244, 255, 0), #e6f4ff 18px, #e6f4ff 100%);
+    background: linear-gradient(
+      90deg,
+      rgba(230, 244, 255, 0),
+      #e6f4ff 18px,
+      #e6f4ff 100%
+    );
   }
 }
 
@@ -2859,13 +2978,20 @@
   justify-content: flex-end;
   min-width: 40px;
   padding-left: 12px;
-  background: linear-gradient(90deg, rgba(255, 255, 255, 0), #fff 18px, #fff 100%);
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0),
+    #fff 18px,
+    #fff 100%
+  );
   flex: 0 0 auto;
   z-index: 1;
   opacity: 0;
   visibility: hidden;
   pointer-events: none;
-  transition: opacity 0.18s ease, visibility 0.18s ease;
+  transition:
+    opacity 0.18s ease,
+    visibility 0.18s ease;
 }
 
 .treeNodeIconFolder {
@@ -3195,7 +3321,10 @@
   text-align: left;
   background: #fff;
   cursor: pointer;
-  transition: border-color 0.2s, box-shadow 0.2s, background-color 0.2s;
+  transition:
+    border-color 0.2s,
+    box-shadow 0.2s,
+    background-color 0.2s;
 
   &:hover {
     border-color: #d6e4ff;
@@ -3216,7 +3345,10 @@
   gap: 4px;
   min-height: 124px;
   margin-bottom: 8px;
-  transition: border-color 0.2s, background-color 0.2s, box-shadow 0.2s;
+  transition:
+    border-color 0.2s,
+    background-color 0.2s,
+    box-shadow 0.2s;
 
   &:hover {
     border-color: #d9d9d9;
@@ -3390,8 +3522,11 @@
   margin-top: 10px;
   border: 1px solid #d6e4ff;
   border-radius: 10px;
-  background:
-    linear-gradient(180deg, rgba(246, 250, 255, 0.95) 0%, rgba(255, 255, 255, 1) 100%);
+  background: linear-gradient(
+    180deg,
+    rgba(246, 250, 255, 0.95) 0%,
+    rgba(255, 255, 255, 1) 100%
+  );
   overflow: hidden;
 }
 
@@ -3467,8 +3602,11 @@
   flex-shrink: 0;
   padding: 12px 8px;
   border-right: 1px solid #edf2ff;
-  background:
-    linear-gradient(180deg, rgba(250, 250, 250, 0.98) 0%, rgba(245, 247, 250, 0.98) 100%);
+  background: linear-gradient(
+    180deg,
+    rgba(250, 250, 250, 0.98) 0%,
+    rgba(245, 247, 250, 0.98) 100%
+  );
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -4093,21 +4231,21 @@
     width: 100%;
   }
 
-  :global([class*='copaw-markdown']) {
+  :global([class*="copaw-markdown"]) {
     width: auto !important;
     max-width: 100% !important;
   }
 
-  :global([class$='-welcome-prompts-prompts']) {
+  :global([class$="-welcome-prompts-prompts"]) {
     width: min(560px, 100%);
   }
 
-  :global([class$='-welcome-prompts-prompt']) {
+  :global([class$="-welcome-prompts-prompt"]) {
     height: auto;
     align-items: flex-start;
   }
 
-  :global([class$='-welcome-prompts-prompt-label']) {
+  :global([class$="-welcome-prompts-prompt-label"]) {
     white-space: normal;
     overflow: visible;
     text-overflow: initial;
@@ -4265,7 +4403,10 @@
   width: 100%;
   text-align: left;
   cursor: pointer;
-  transition: border-color 0.2s ease, background 0.2s ease, box-shadow 0.2s ease;
+  transition:
+    border-color 0.2s ease,
+    background 0.2s ease,
+    box-shadow 0.2s ease;
 }
 
 .metricFilterCard:hover {
@@ -4565,11 +4706,24 @@
     --project-knowledge-soft-surface: rgba(255, 255, 255, 0.04);
     --project-knowledge-soft-surface-muted: rgba(255, 255, 255, 0.03);
     --project-knowledge-soft-surface-raised: rgba(255, 255, 255, 0.045);
-    --project-knowledge-hero-surface: linear-gradient(145deg, rgba(255, 176, 87, 0.12) 0%, rgba(76, 121, 219, 0.14) 100%);
-    --project-knowledge-sticky-surface: linear-gradient(180deg, rgba(22, 22, 22, 0.96) 0%, rgba(22, 22, 22, 0.86) 76%, rgba(22, 22, 22, 0) 100%);
+    --project-knowledge-hero-surface: linear-gradient(
+      145deg,
+      rgba(255, 176, 87, 0.12) 0%,
+      rgba(76, 121, 219, 0.14) 100%
+    );
+    --project-knowledge-sticky-surface: linear-gradient(
+      180deg,
+      rgba(22, 22, 22, 0.96) 0%,
+      rgba(22, 22, 22, 0.86) 76%,
+      rgba(22, 22, 22, 0) 100%
+    );
     --project-knowledge-stage-surface: rgba(255, 255, 255, 0.05);
     --project-knowledge-flow-connector: rgba(255, 255, 255, 0.24);
-    --project-knowledge-lane-gradient: linear-gradient(180deg, #ffbe82 0%, #78b1ff 100%);
+    --project-knowledge-lane-gradient: linear-gradient(
+      180deg,
+      #ffbe82 0%,
+      #78b1ff 100%
+    );
     --project-knowledge-hint-color: rgba(255, 248, 240, 0.58);
   }
 
@@ -4669,7 +4823,10 @@
       color: #ff7f16 !important;
     }
 
-    :global(.qwenpaw-menu.qwenpaw-menu-root.qwenpaw-menu-inline.qwenpaw-menu-light .qwenpaw-menu-submenu-title) {
+    :global(
+        .qwenpaw-menu.qwenpaw-menu-root.qwenpaw-menu-inline.qwenpaw-menu-light
+          .qwenpaw-menu-submenu-title
+      ) {
       color: rgba(255, 255, 255, 0.45) !important;
       background: transparent !important;
 
@@ -4679,7 +4836,10 @@
       }
     }
 
-    :global(.qwenpaw-menu.qwenpaw-menu-root.qwenpaw-menu-inline.qwenpaw-menu-light .qwenpaw-menu-item-group-title) {
+    :global(
+        .qwenpaw-menu.qwenpaw-menu-root.qwenpaw-menu-inline.qwenpaw-menu-light
+          .qwenpaw-menu-item-group-title
+      ) {
       color: rgba(255, 255, 255, 0.45) !important;
       background: transparent !important;
       padding-inline-start: 8px !important;
@@ -4695,12 +4855,24 @@
       }
     }
 
-    :global(.qwenpaw-menu.qwenpaw-menu-root.qwenpaw-menu-inline.qwenpaw-menu-light .qwenpaw-menu-submenu-title .qwenpaw-menu-item-icon),
-    :global(.qwenpaw-menu.qwenpaw-menu-root.qwenpaw-menu-inline.qwenpaw-menu-light .qwenpaw-menu-submenu-title .anticon) {
+    :global(
+        .qwenpaw-menu.qwenpaw-menu-root.qwenpaw-menu-inline.qwenpaw-menu-light
+          .qwenpaw-menu-submenu-title
+          .qwenpaw-menu-item-icon
+      ),
+    :global(
+        .qwenpaw-menu.qwenpaw-menu-root.qwenpaw-menu-inline.qwenpaw-menu-light
+          .qwenpaw-menu-submenu-title
+          .anticon
+      ) {
       color: rgba(255, 255, 255, 0.62) !important;
     }
 
-    :global(.qwenpaw-menu.qwenpaw-menu-root.qwenpaw-menu-inline.qwenpaw-menu-light .qwenpaw-menu-submenu-title .qwenpaw-menu-submenu-arrow) {
+    :global(
+        .qwenpaw-menu.qwenpaw-menu-root.qwenpaw-menu-inline.qwenpaw-menu-light
+          .qwenpaw-menu-submenu-title
+          .qwenpaw-menu-submenu-arrow
+      ) {
       display: none !important;
     }
   }
@@ -4794,7 +4966,11 @@
   }
   .knowledgeModuleHeaderSignal {
     border-color: rgba(255, 255, 255, 0.08);
-    background: linear-gradient(180deg, rgba(255, 255, 255, 0.045) 0%, rgba(255, 255, 255, 0.025) 100%);
+    background: linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.045) 0%,
+      rgba(255, 255, 255, 0.025) 100%
+    );
     box-shadow: none;
 
     &::before {
@@ -4824,12 +5000,20 @@
 
   .knowledgeModuleHeaderSignalActive {
     border-color: rgba(95, 191, 159, 0.34);
-    background: linear-gradient(180deg, rgba(95, 191, 159, 0.16) 0%, rgba(95, 191, 159, 0.1) 100%);
+    background: linear-gradient(
+      180deg,
+      rgba(95, 191, 159, 0.16) 0%,
+      rgba(95, 191, 159, 0.1) 100%
+    );
   }
 
   .knowledgeDockTabs {
     --knowledge-dock-tabs-nav-border: rgba(255, 255, 255, 0.08);
-    --knowledge-dock-tabs-nav-bg: linear-gradient(180deg, rgba(255, 255, 255, 0.035) 0%, rgba(255, 255, 255, 0.02) 100%);
+    --knowledge-dock-tabs-nav-bg: linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.035) 0%,
+      rgba(255, 255, 255, 0.02) 100%
+    );
     --knowledge-dock-tabs-tab-fg: rgba(255, 255, 255, 0.68);
     --knowledge-dock-tabs-tab-hover-fg: rgba(255, 255, 255, 0.92);
     --knowledge-dock-tabs-tab-hover-bg: rgba(255, 255, 255, 0.08);
@@ -4872,14 +5056,17 @@
     }
 
     > :global(.ant-tabs-nav) :global(.ant-tabs-tab .ant-tabs-tab-btn),
-    > :global(.qwenpaw-tabs-nav) :global(.qwenpaw-tabs-tab .qwenpaw-tabs-tab-btn),
+    > :global(.qwenpaw-tabs-nav)
+      :global(.qwenpaw-tabs-tab .qwenpaw-tabs-tab-btn),
     > :global(.copaw-tabs-nav) :global(.copaw-tabs-tab .copaw-tabs-tab-btn) {
       color: inherit !important;
     }
 
     > :global(.ant-tabs-nav) :global(.ant-tabs-tab-active .ant-tabs-tab-btn),
-    > :global(.qwenpaw-tabs-nav) :global(.qwenpaw-tabs-tab-active .qwenpaw-tabs-tab-btn),
-    > :global(.copaw-tabs-nav) :global(.copaw-tabs-tab-active .copaw-tabs-tab-btn) {
+    > :global(.qwenpaw-tabs-nav)
+      :global(.qwenpaw-tabs-tab-active .qwenpaw-tabs-tab-btn),
+    > :global(.copaw-tabs-nav)
+      :global(.copaw-tabs-tab-active .copaw-tabs-tab-btn) {
       color: #ff7f16 !important;
       font-weight: 600;
     }
@@ -4921,29 +5108,54 @@
   .knowledgeLoopSummary,
   .knowledgeRuntimeTooltipItem {
     border-color: rgba(255, 255, 255, 0.08);
-    background: linear-gradient(180deg, rgba(34, 34, 34, 0.98) 0%, rgba(26, 26, 26, 0.96) 100%);
+    background: linear-gradient(
+      180deg,
+      rgba(34, 34, 34, 0.98) 0%,
+      rgba(26, 26, 26, 0.96) 100%
+    );
     box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
   }
 
   .knowledgeLoopSummaryWarning {
     border-color: rgba(245, 166, 35, 0.32);
-    background:
-      linear-gradient(180deg, rgba(61, 42, 21, 0.98) 0%, rgba(48, 35, 21, 0.96) 100%),
-      radial-gradient(circle at top right, rgba(245, 166, 35, 0.12), transparent 42%);
+    background: linear-gradient(
+        180deg,
+        rgba(61, 42, 21, 0.98) 0%,
+        rgba(48, 35, 21, 0.96) 100%
+      ),
+      radial-gradient(
+        circle at top right,
+        rgba(245, 166, 35, 0.12),
+        transparent 42%
+      );
   }
 
   .knowledgeLoopSummarySuccess {
     border-color: rgba(95, 191, 159, 0.28);
-    background:
-      linear-gradient(180deg, rgba(27, 47, 38, 0.98) 0%, rgba(22, 39, 33, 0.96) 100%),
-      radial-gradient(circle at top right, rgba(95, 191, 159, 0.12), transparent 42%);
+    background: linear-gradient(
+        180deg,
+        rgba(27, 47, 38, 0.98) 0%,
+        rgba(22, 39, 33, 0.96) 100%
+      ),
+      radial-gradient(
+        circle at top right,
+        rgba(95, 191, 159, 0.12),
+        transparent 42%
+      );
   }
 
   .knowledgeLoopSummaryError {
     border-color: rgba(255, 123, 114, 0.28);
-    background:
-      linear-gradient(180deg, rgba(60, 30, 31, 0.98) 0%, rgba(47, 24, 25, 0.96) 100%),
-      radial-gradient(circle at top right, rgba(255, 123, 114, 0.12), transparent 42%);
+    background: linear-gradient(
+        180deg,
+        rgba(60, 30, 31, 0.98) 0%,
+        rgba(47, 24, 25, 0.96) 100%
+      ),
+      radial-gradient(
+        circle at top right,
+        rgba(255, 123, 114, 0.12),
+        transparent 42%
+      );
   }
 
   .knowledgeRuntimeTooltipStage,
@@ -5182,7 +5394,11 @@
   .projectKnowledgePrimaryPanel,
   .projectKnowledgeSecondaryPanel {
     border-color: rgba(255, 255, 255, 0.08);
-    background: linear-gradient(180deg, rgba(255, 255, 255, 0.035) 0%, rgba(255, 255, 255, 0.02) 100%);
+    background: linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.035) 0%,
+      rgba(255, 255, 255, 0.02) 100%
+    );
     box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
   }
 
@@ -5191,7 +5407,11 @@
     :global(.qwenpaw-card),
     :global(.copaw-card) {
       border-color: rgba(255, 255, 255, 0.08);
-      background: linear-gradient(180deg, rgba(34, 34, 34, 0.98) 0%, rgba(24, 24, 24, 0.96) 100%);
+      background: linear-gradient(
+        180deg,
+        rgba(34, 34, 34, 0.98) 0%,
+        rgba(24, 24, 24, 0.96) 100%
+      );
       box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
     }
 
@@ -5265,18 +5485,31 @@
   }
 
   .projectKnowledgeProcessingStickySummary {
-    background: linear-gradient(180deg, rgba(22, 22, 22, 0.96) 0%, rgba(22, 22, 22, 0.86) 76%, rgba(22, 22, 22, 0) 100%);
+    background: linear-gradient(
+      180deg,
+      rgba(22, 22, 22, 0.96) 0%,
+      rgba(22, 22, 22, 0.86) 76%,
+      rgba(22, 22, 22, 0) 100%
+    );
   }
 
   .projectKnowledgeLayerSection {
     border-color: rgba(255, 255, 255, 0.1);
-    background: linear-gradient(180deg, rgba(255, 255, 255, 0.045) 0%, rgba(255, 255, 255, 0.025) 100%);
+    background: linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.045) 0%,
+      rgba(255, 255, 255, 0.025) 100%
+    );
     box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
   }
 
   .projectKnowledgeExploreSourcePanel {
     border-color: rgba(255, 255, 255, 0.12);
-    background: linear-gradient(180deg, rgba(255, 255, 255, 0.045) 0%, rgba(255, 255, 255, 0.02) 100%);
+    background: linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.045) 0%,
+      rgba(255, 255, 255, 0.02) 100%
+    );
     box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
   }
 
@@ -5378,7 +5611,11 @@
   }
 
   .projectKnowledgeTrendChart {
-    background: linear-gradient(180deg, rgba(255, 255, 255, 0.04) 0%, rgba(255, 255, 255, 0.02) 100%);
+    background: linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.04) 0%,
+      rgba(255, 255, 255, 0.02) 100%
+    );
   }
 
   .projectKnowledgeTrendDeltaRow {
@@ -5426,7 +5663,11 @@
     :global(.qwenpaw-alert),
     :global(.copaw-alert) {
       border-color: rgba(255, 255, 255, 0.1);
-      background: linear-gradient(180deg, rgba(255, 255, 255, 0.045) 0%, rgba(255, 255, 255, 0.025) 100%);
+      background: linear-gradient(
+        180deg,
+        rgba(255, 255, 255, 0.045) 0%,
+        rgba(255, 255, 255, 0.025) 100%
+      );
       box-shadow: none;
     }
 
@@ -5434,28 +5675,44 @@
     :global(.qwenpaw-alert-info),
     :global(.copaw-alert-info) {
       border-color: rgba(122, 162, 255, 0.24);
-      background: linear-gradient(180deg, rgba(46, 107, 213, 0.2) 0%, rgba(33, 76, 150, 0.14) 100%);
+      background: linear-gradient(
+        180deg,
+        rgba(46, 107, 213, 0.2) 0%,
+        rgba(33, 76, 150, 0.14) 100%
+      );
     }
 
     :global(.ant-alert-warning),
     :global(.qwenpaw-alert-warning),
     :global(.copaw-alert-warning) {
       border-color: rgba(245, 166, 35, 0.24);
-      background: linear-gradient(180deg, rgba(92, 62, 18, 0.34) 0%, rgba(73, 49, 18, 0.24) 100%);
+      background: linear-gradient(
+        180deg,
+        rgba(92, 62, 18, 0.34) 0%,
+        rgba(73, 49, 18, 0.24) 100%
+      );
     }
 
     :global(.ant-alert-error),
     :global(.qwenpaw-alert-error),
     :global(.copaw-alert-error) {
       border-color: rgba(255, 123, 114, 0.24);
-      background: linear-gradient(180deg, rgba(101, 43, 39, 0.34) 0%, rgba(78, 34, 31, 0.24) 100%);
+      background: linear-gradient(
+        180deg,
+        rgba(101, 43, 39, 0.34) 0%,
+        rgba(78, 34, 31, 0.24) 100%
+      );
     }
 
     :global(.ant-alert-success),
     :global(.qwenpaw-alert-success),
     :global(.copaw-alert-success) {
       border-color: rgba(95, 191, 159, 0.24);
-      background: linear-gradient(180deg, rgba(35, 93, 41, 0.32) 0%, rgba(27, 72, 32, 0.22) 100%);
+      background: linear-gradient(
+        180deg,
+        rgba(35, 93, 41, 0.32) 0%,
+        rgba(27, 72, 32, 0.22) 100%
+      );
     }
 
     :global(.ant-alert-message),
@@ -5612,15 +5869,33 @@
       color: rgba(255, 248, 240, 0.86);
     }
 
-    :global(.ant-select-item-option-active:not(.ant-select-item-option-disabled)),
-    :global(.qwenpaw-select-item-option-active:not(.qwenpaw-select-item-option-disabled)),
-    :global(.copaw-select-item-option-active:not(.copaw-select-item-option-disabled)) {
+    :global(
+        .ant-select-item-option-active:not(.ant-select-item-option-disabled)
+      ),
+    :global(
+        .qwenpaw-select-item-option-active:not(
+            .qwenpaw-select-item-option-disabled
+          )
+      ),
+    :global(
+        .copaw-select-item-option-active:not(.copaw-select-item-option-disabled)
+      ) {
       background: rgba(255, 255, 255, 0.08);
     }
 
-    :global(.ant-select-item-option-selected:not(.ant-select-item-option-disabled)),
-    :global(.qwenpaw-select-item-option-selected:not(.qwenpaw-select-item-option-disabled)),
-    :global(.copaw-select-item-option-selected:not(.copaw-select-item-option-disabled)) {
+    :global(
+        .ant-select-item-option-selected:not(.ant-select-item-option-disabled)
+      ),
+    :global(
+        .qwenpaw-select-item-option-selected:not(
+            .qwenpaw-select-item-option-disabled
+          )
+      ),
+    :global(
+        .copaw-select-item-option-selected:not(
+            .copaw-select-item-option-disabled
+          )
+      ) {
       background: rgba(255, 127, 22, 0.18);
 
       :global(.ant-select-item-option-content),
@@ -5685,7 +5960,9 @@
     :global(.ant-input-affix-wrapper),
     :global(.ant-input-group-addon),
     :global(.ant-input-search-button),
-    :global(.ant-input-search > .ant-input-group > .ant-input-group-addon:last-child) {
+    :global(
+        .ant-input-search > .ant-input-group > .ant-input-group-addon:last-child
+      ) {
       background: rgba(255, 255, 255, 0.05) !important;
       border-color: rgba(255, 255, 255, 0.12) !important;
       color: rgba(255, 255, 255, 0.84) !important;
@@ -5847,16 +6124,29 @@
       opacity: 1;
       visibility: visible;
       pointer-events: auto;
-      background: linear-gradient(90deg, rgba(255, 255, 255, 0), rgba(28, 28, 28, 0.96) 18px, rgba(28, 28, 28, 0.96) 100%);
+      background: linear-gradient(
+        90deg,
+        rgba(255, 255, 255, 0),
+        rgba(28, 28, 28, 0.96) 18px,
+        rgba(28, 28, 28, 0.96) 100%
+      );
     }
 
-    :global(.ant-tree-node-content-wrapper.ant-tree-node-selected) .treeNodeActions,
-    :global(.qwenpaw-tree-node-content-wrapper.qwenpaw-tree-node-selected) .treeNodeActions,
-    :global(.copaw-tree-node-content-wrapper.copaw-tree-node-selected) .treeNodeActions {
+    :global(.ant-tree-node-content-wrapper.ant-tree-node-selected)
+      .treeNodeActions,
+    :global(.qwenpaw-tree-node-content-wrapper.qwenpaw-tree-node-selected)
+      .treeNodeActions,
+    :global(.copaw-tree-node-content-wrapper.copaw-tree-node-selected)
+      .treeNodeActions {
       opacity: 1;
       visibility: visible;
       pointer-events: auto;
-      background: linear-gradient(90deg, rgba(255, 127, 22, 0), rgba(64, 38, 18, 0.96) 18px, rgba(64, 38, 18, 0.96) 100%);
+      background: linear-gradient(
+        90deg,
+        rgba(255, 127, 22, 0),
+        rgba(64, 38, 18, 0.96) 18px,
+        rgba(64, 38, 18, 0.96) 100%
+      );
     }
   }
 
@@ -5866,7 +6156,12 @@
   }
 
   .treeNodeActions {
-    background: linear-gradient(90deg, rgba(255, 255, 255, 0), rgba(20, 20, 20, 0.96) 18px, rgba(20, 20, 20, 0.96) 100%);
+    background: linear-gradient(
+      90deg,
+      rgba(255, 255, 255, 0),
+      rgba(20, 20, 20, 0.96) 18px,
+      rgba(20, 20, 20, 0.96) 100%
+    );
   }
 
   .treeNodeIconFolder {
@@ -5920,7 +6215,7 @@
     :global(.mdxeditor-root-contenteditable h4),
     :global(.mdxeditor-root-contenteditable h5),
     :global(.mdxeditor-root-contenteditable h6),
-    :global(.mdxeditor-root-contenteditable span[data-lexical-text='true']) {
+    :global(.mdxeditor-root-contenteditable span[data-lexical-text="true"]) {
       color: rgba(255, 255, 255, 0.84);
     }
 
@@ -6037,5 +6332,4 @@
       padding: 4px 0;
     }
   }
-
 }

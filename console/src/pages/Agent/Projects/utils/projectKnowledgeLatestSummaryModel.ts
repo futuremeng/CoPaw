@@ -59,13 +59,15 @@ export function buildProjectKnowledgeLatestSummaryModelFromState(
   selectedOutputMode?: ProjectKnowledgeProcessingMode,
 ): ProjectKnowledgeLatestSummaryModel {
   return buildProjectKnowledgeLatestSummaryModel(t, {
-    selectedOutputMode: selectedOutputMode || state.outputResolution?.activeMode,
+    selectedOutputMode:
+      selectedOutputMode || state.outputResolution?.activeMode,
     snapshotRaw: state.sourceScanStats?.latest,
     buildChunks: state.fileAnalysisStats?.latest,
     buildInterlinear: state.projectStepStats?.build_interlinear?.latest,
     tokenize: state.projectStepStats?.tokenize?.latest,
     posTagging: state.projectStepStats?.pos_tagging?.latest,
     syntaxParse: state.projectStepStats?.syntax_parse?.latest,
-    semanticRoleLabeling: state.projectStepStats?.semantic_role_labeling?.latest,
+    semanticRoleLabeling:
+      state.projectStepStats?.semantic_role_labeling?.latest,
   });
 }

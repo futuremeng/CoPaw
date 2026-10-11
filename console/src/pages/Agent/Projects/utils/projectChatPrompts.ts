@@ -24,7 +24,10 @@ export function buildAutoAttachAnalysisPrompt(params: {
     ? fileRefs
         .map(
           (item) =>
-            `${item.id}. ${workspaceDir.replace(/\/$/, "")}/${item.path.replace(/^\//, "")}`,
+            `${item.id}. ${workspaceDir.replace(/\/$/, "")}/${item.path.replace(
+              /^\//,
+              "",
+            )}`,
         )
         .join("\n")
     : "";
@@ -45,19 +48,16 @@ export function buildAutoAttachAnalysisPrompt(params: {
       : []),
     "文件引用：",
     fileList,
-    ...(absoluteFileList
-      ? [
-          "可读绝对路径：",
-          absoluteFileList,
-        ]
-      : []),
+    ...(absoluteFileList ? ["可读绝对路径：", absoluteFileList] : []),
     ...(contextItems.length > 0
       ? [
           "以下是可直接使用的文件内容片段（已截断）：",
           contextItems
             .map(
               (item, index) =>
-                `${fileRefs[index]?.id || `F${index + 1}`}\n---\n${item.excerpt}`,
+                `${fileRefs[index]?.id || `F${index + 1}`}\n---\n${
+                  item.excerpt
+                }`,
             )
             .join("\n\n"),
         ]
@@ -89,7 +89,9 @@ export function buildAttachDraftPrompt(params: {
   });
 
   const fileList = fileRefs
-    .map((item) => `${item.id}. ${item.name} (${item.path}, ${item.size} bytes)`)
+    .map(
+      (item) => `${item.id}. ${item.name} (${item.path}, ${item.size} bytes)`,
+    )
     .join("\n");
 
   const workspaceDir = (params.workspaceDir || "").trim();
@@ -97,7 +99,10 @@ export function buildAttachDraftPrompt(params: {
     ? fileRefs
         .map(
           (item) =>
-            `${item.id}. ${workspaceDir.replace(/\/$/, "")}/${item.path.replace(/^\//, "")}`,
+            `${item.id}. ${workspaceDir.replace(/\/$/, "")}/${item.path.replace(
+              /^\//,
+              "",
+            )}`,
         )
         .join("\n")
     : "";
@@ -114,12 +119,7 @@ export function buildAttachDraftPrompt(params: {
       : []),
     "文件引用：",
     fileList,
-    ...(absoluteFileList
-      ? [
-          "可读绝对路径：",
-          absoluteFileList,
-        ]
-      : []),
+    ...(absoluteFileList ? ["可读绝对路径：", absoluteFileList] : []),
     "请直接继续分析当前任务，并给出下一步建议。",
   ].join("\n");
 }
@@ -135,7 +135,9 @@ export function buildImplementationAdvancePrompt(params: {
   return [
     `我们继续以“对话驱动”方式推进项目流程构建。项目：${params.projectName}`,
     `当前流程：${params.templateName} (${params.templateId})`,
-    `当前运行数：${params.runCount}，最近一次运行状态：${params.latestRunStatus || "none"}`,
+    `当前运行数：${params.runCount}，最近一次运行状态：${
+      params.latestRunStatus || "none"
+    }`,
     `验证门槛现状：${params.gateSummary}`,
     "请你输出下一轮实施计划（不是最终模板），要求：",
     "1) 仅调整最小必要步骤；",

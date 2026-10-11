@@ -86,16 +86,18 @@ describe("projectKnowledgeLatestSummaryModel", () => {
       },
     };
 
-    expect(buildProjectKnowledgeLatestSummaryModel(t, {
-      selectedOutputMode: "agentic",
-      snapshotRaw,
-      buildChunks,
-      buildInterlinear,
-      tokenize,
-      posTagging,
-      syntaxParse,
-      semanticRoleLabeling,
-    })).toEqual({
+    expect(
+      buildProjectKnowledgeLatestSummaryModel(t, {
+        selectedOutputMode: "agentic",
+        snapshotRaw,
+        buildChunks,
+        buildInterlinear,
+        tokenize,
+        posTagging,
+        syntaxParse,
+        semanticRoleLabeling,
+      }),
+    ).toEqual({
       l1Parts: [
         expect.stringContaining("scan"),
         expect.stringContaining("analysis"),
@@ -203,18 +205,20 @@ describe("projectKnowledgeLatestSummaryModel", () => {
       },
     };
 
-    expect(buildProjectKnowledgeLatestSummaryModelFromState(t, {
-      sourceScanStats: { latest: snapshotRaw },
-      fileAnalysisStats: { latest: buildChunks },
-      projectStepStats: {
-        build_interlinear: { latest: buildInterlinear },
-        tokenize: { latest: tokenize },
-        pos_tagging: { latest: posTagging },
-        syntax_parse: { latest: syntaxParse },
-        semantic_role_labeling: { latest: semanticRoleLabeling },
-      },
-      outputResolution: { activeMode: "agentic" },
-    })).toEqual({
+    expect(
+      buildProjectKnowledgeLatestSummaryModelFromState(t, {
+        sourceScanStats: { latest: snapshotRaw },
+        fileAnalysisStats: { latest: buildChunks },
+        projectStepStats: {
+          build_interlinear: { latest: buildInterlinear },
+          tokenize: { latest: tokenize },
+          pos_tagging: { latest: posTagging },
+          syntax_parse: { latest: syntaxParse },
+          semantic_role_labeling: { latest: semanticRoleLabeling },
+        },
+        outputResolution: { activeMode: "agentic" },
+      }),
+    ).toEqual({
       l1Parts: [
         expect.stringContaining("scan"),
         expect.stringContaining("analysis"),
@@ -243,33 +247,37 @@ describe("projectKnowledgeLatestSummaryModel", () => {
   });
 
   it("skips empty latest records", () => {
-    expect(buildProjectKnowledgeLatestSummaryModel(t, {
-      selectedOutputMode: "fast",
-      snapshotRaw: {},
-      buildChunks: null,
-      buildInterlinear: null,
-      tokenize: null,
-      posTagging: null,
-      syntaxParse: null,
-      semanticRoleLabeling: null,
-    })).toEqual({
+    expect(
+      buildProjectKnowledgeLatestSummaryModel(t, {
+        selectedOutputMode: "fast",
+        snapshotRaw: {},
+        buildChunks: null,
+        buildInterlinear: null,
+        tokenize: null,
+        posTagging: null,
+        syntaxParse: null,
+        semanticRoleLabeling: null,
+      }),
+    ).toEqual({
       l1Parts: [],
       l23Parts: [],
       workflowParts: [],
       outputParts: [],
     });
-    expect(buildProjectKnowledgeLatestSummaryModelFromState(t, {
-      sourceScanStats: { latest: {} },
-      fileAnalysisStats: null,
-      projectStepStats: {
-        build_interlinear: { latest: {} },
-        tokenize: { latest: null },
-        pos_tagging: { latest: null },
-        syntax_parse: { latest: null },
-        semantic_role_labeling: null,
-      },
-      outputResolution: { activeMode: "fast" },
-    })).toEqual({
+    expect(
+      buildProjectKnowledgeLatestSummaryModelFromState(t, {
+        sourceScanStats: { latest: {} },
+        fileAnalysisStats: null,
+        projectStepStats: {
+          build_interlinear: { latest: {} },
+          tokenize: { latest: null },
+          pos_tagging: { latest: null },
+          syntax_parse: { latest: null },
+          semantic_role_labeling: null,
+        },
+        outputResolution: { activeMode: "fast" },
+      }),
+    ).toEqual({
       l1Parts: [],
       l23Parts: [],
       workflowParts: [],

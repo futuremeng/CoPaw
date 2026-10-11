@@ -4,7 +4,9 @@ export interface SearchAnchorRetryDecision {
   maxAttempts: number;
 }
 
-export function shouldStopSearchAnchorRetry(decision: SearchAnchorRetryDecision): boolean {
+export function shouldStopSearchAnchorRetry(
+  decision: SearchAnchorRetryDecision,
+): boolean {
   if (decision.done) {
     return true;
   }

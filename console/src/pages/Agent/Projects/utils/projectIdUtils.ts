@@ -19,11 +19,16 @@ export function projectDirNameFromMetadata(metadataFile: string): string {
   return segments.length >= 3 ? segments[segments.length - 3] : "";
 }
 
-export function buildProjectIdCandidates(project?: AgentProjectSummary): string[] {
+export function buildProjectIdCandidates(
+  project?: AgentProjectSummary,
+): string[] {
   if (!project) {
     return [];
   }
-  const candidates = [project.id, projectDirNameFromMetadata(project.metadata_file)]
+  const candidates = [
+    project.id,
+    projectDirNameFromMetadata(project.metadata_file),
+  ]
     .map((item) => item.trim())
     .filter(Boolean);
   return Array.from(new Set(candidates));

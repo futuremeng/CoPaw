@@ -88,15 +88,17 @@ describe("projectKnowledgeRecentHistoryModel", () => {
       },
     };
 
-    expect(buildProjectKnowledgeProcessingRecentHistorySections(t, {
-      snapshotRawHistory: [snapshotRaw],
-      buildChunksHistory: [buildChunks],
-      buildInterlinearHistory: [buildInterlinear],
-      tokenizeHistory: [tokenize],
-      posTaggingHistory: [posTagging],
-      syntaxParseHistory: [syntaxParse],
-      semanticRoleLabelingHistory: [semanticRoleLabeling],
-    })).toEqual([
+    expect(
+      buildProjectKnowledgeProcessingRecentHistorySections(t, {
+        snapshotRawHistory: [snapshotRaw],
+        buildChunksHistory: [buildChunks],
+        buildInterlinearHistory: [buildInterlinear],
+        tokenizeHistory: [tokenize],
+        posTaggingHistory: [posTagging],
+        syntaxParseHistory: [syntaxParse],
+        semanticRoleLabelingHistory: [semanticRoleLabeling],
+      }),
+    ).toEqual([
       {
         key: "snapshot_raw",
         title: "最近原始快照",
@@ -183,17 +185,19 @@ describe("projectKnowledgeRecentHistoryModel", () => {
       },
     ]);
 
-    expect(buildProjectKnowledgeProcessingRecentHistorySectionsFromState(t, {
-      sourceScanStats: { history: [snapshotRaw] },
-      fileAnalysisStats: { history: [buildChunks] },
-      projectStepStats: {
-        build_interlinear: { history: [buildInterlinear] },
-        tokenize: { history: [tokenize] },
-        pos_tagging: { history: [posTagging] },
-        syntax_parse: { history: [syntaxParse] },
-        semantic_role_labeling: { history: [semanticRoleLabeling] },
-      },
-    })).toHaveLength(7);
+    expect(
+      buildProjectKnowledgeProcessingRecentHistorySectionsFromState(t, {
+        sourceScanStats: { history: [snapshotRaw] },
+        fileAnalysisStats: { history: [buildChunks] },
+        projectStepStats: {
+          build_interlinear: { history: [buildInterlinear] },
+          tokenize: { history: [tokenize] },
+          pos_tagging: { history: [posTagging] },
+          syntax_parse: { history: [syntaxParse] },
+          semantic_role_labeling: { history: [semanticRoleLabeling] },
+        },
+      }),
+    ).toHaveLength(7);
   });
 
   it("builds sources recent history sections", () => {
@@ -220,10 +224,12 @@ describe("projectKnowledgeRecentHistoryModel", () => {
       },
     };
 
-    expect(buildProjectKnowledgeSourcesRecentHistorySections(t, {
-      sourceScanHistory: [snapshotRaw],
-      fileAnalysisHistory: [buildChunks],
-    })).toEqual([
+    expect(
+      buildProjectKnowledgeSourcesRecentHistorySections(t, {
+        sourceScanHistory: [snapshotRaw],
+        fileAnalysisHistory: [buildChunks],
+      }),
+    ).toEqual([
       {
         key: "snapshot_raw",
         title: "最近原始快照",
@@ -250,9 +256,11 @@ describe("projectKnowledgeRecentHistoryModel", () => {
       },
     ]);
 
-    expect(buildProjectKnowledgeSourcesRecentHistorySectionsFromState(t, {
-      sourceScanStats: { history: [snapshotRaw] },
-      fileAnalysisStats: { history: [buildChunks] },
-    })).toHaveLength(2);
+    expect(
+      buildProjectKnowledgeSourcesRecentHistorySectionsFromState(t, {
+        sourceScanStats: { history: [snapshotRaw] },
+        fileAnalysisStats: { history: [buildChunks] },
+      }),
+    ).toHaveLength(2);
   });
 });

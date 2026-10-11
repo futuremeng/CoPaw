@@ -13,7 +13,11 @@ describe("resolveApprovalVisibility", () => {
       true,
     );
 
-    expect(result.sorted.map((item) => item.requestId)).toEqual(["b", "c", "a"]);
+    expect(result.sorted.map((item) => item.requestId)).toEqual([
+      "b",
+      "c",
+      "a",
+    ]);
   });
 
   it("limits visible approvals when showAll=false", () => {

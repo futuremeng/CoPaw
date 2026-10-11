@@ -13,11 +13,19 @@ const {
 } = vi.hoisted(() => ({
   mockedListProjectPipelineTemplates: vi.fn().mockResolvedValue([]),
   mockedListPlatformFlowTemplates: vi.fn().mockResolvedValue([]),
-  mockedImportPlatformTemplateIntoProject: vi.fn().mockResolvedValue({ id: "tpl-1" }),
+  mockedImportPlatformTemplateIntoProject: vi
+    .fn()
+    .mockResolvedValue({ id: "tpl-1" }),
   mockedListProjectPipelineRuns: vi.fn().mockResolvedValue([]),
-  mockedGetProjectPipelineRun: vi.fn().mockResolvedValue({ id: "run-1", artifacts: [] }),
-  mockedCreateProjectPipelineRun: vi.fn().mockResolvedValue({ id: "run-2", artifacts: [] }),
-  mockedRetryProjectPipelineRun: vi.fn().mockResolvedValue({ id: "run-3", artifacts: [] }),
+  mockedGetProjectPipelineRun: vi
+    .fn()
+    .mockResolvedValue({ id: "run-1", artifacts: [] }),
+  mockedCreateProjectPipelineRun: vi
+    .fn()
+    .mockResolvedValue({ id: "run-2", artifacts: [] }),
+  mockedRetryProjectPipelineRun: vi
+    .fn()
+    .mockResolvedValue({ id: "run-3", artifacts: [] }),
 }));
 
 vi.mock("../../../../api/modules/agents", () => ({
@@ -40,13 +48,27 @@ describe("useProjectPipelineFacade", () => {
     rerender();
 
     expect(result.current).toBe(first);
-    expect(result.current.listProjectPipelineTemplates).toBe(first.listProjectPipelineTemplates);
-    expect(result.current.listPlatformFlowTemplates).toBe(first.listPlatformFlowTemplates);
-    expect(result.current.importPlatformTemplateIntoProject).toBe(first.importPlatformTemplateIntoProject);
-    expect(result.current.listProjectPipelineRuns).toBe(first.listProjectPipelineRuns);
-    expect(result.current.getProjectPipelineRun).toBe(first.getProjectPipelineRun);
-    expect(result.current.createProjectPipelineRun).toBe(first.createProjectPipelineRun);
-    expect(result.current.retryProjectPipelineRun).toBe(first.retryProjectPipelineRun);
+    expect(result.current.listProjectPipelineTemplates).toBe(
+      first.listProjectPipelineTemplates,
+    );
+    expect(result.current.listPlatformFlowTemplates).toBe(
+      first.listPlatformFlowTemplates,
+    );
+    expect(result.current.importPlatformTemplateIntoProject).toBe(
+      first.importPlatformTemplateIntoProject,
+    );
+    expect(result.current.listProjectPipelineRuns).toBe(
+      first.listProjectPipelineRuns,
+    );
+    expect(result.current.getProjectPipelineRun).toBe(
+      first.getProjectPipelineRun,
+    );
+    expect(result.current.createProjectPipelineRun).toBe(
+      first.createProjectPipelineRun,
+    );
+    expect(result.current.retryProjectPipelineRun).toBe(
+      first.retryProjectPipelineRun,
+    );
     expect(result.current.normalizeError).toBe(first.normalizeError);
   });
 
@@ -55,7 +77,11 @@ describe("useProjectPipelineFacade", () => {
 
     await result.current.listProjectPipelineTemplates("agent-1", "proj-1");
     await result.current.listPlatformFlowTemplates("agent-1");
-    await result.current.importPlatformTemplateIntoProject("agent-1", "proj-1", { platform_template_id: "tpl-1" });
+    await result.current.importPlatformTemplateIntoProject(
+      "agent-1",
+      "proj-1",
+      { platform_template_id: "tpl-1" },
+    );
     await result.current.listProjectPipelineRuns("agent-1", "proj-1");
     await result.current.getProjectPipelineRun("agent-1", "proj-1", "run-1");
     await result.current.createProjectPipelineRun("agent-1", "proj-1", {
@@ -67,15 +93,25 @@ describe("useProjectPipelineFacade", () => {
       note: "retry",
     });
 
-    expect(mockedListProjectPipelineTemplates).toHaveBeenCalledWith("agent-1", "proj-1");
+    expect(mockedListProjectPipelineTemplates).toHaveBeenCalledWith(
+      "agent-1",
+      "proj-1",
+    );
     expect(mockedListPlatformFlowTemplates).toHaveBeenCalledWith("agent-1");
     expect(mockedImportPlatformTemplateIntoProject).toHaveBeenCalledWith(
       "agent-1",
       "proj-1",
       { platform_template_id: "tpl-1" },
     );
-    expect(mockedListProjectPipelineRuns).toHaveBeenCalledWith("agent-1", "proj-1");
-    expect(mockedGetProjectPipelineRun).toHaveBeenCalledWith("agent-1", "proj-1", "run-1");
+    expect(mockedListProjectPipelineRuns).toHaveBeenCalledWith(
+      "agent-1",
+      "proj-1",
+    );
+    expect(mockedGetProjectPipelineRun).toHaveBeenCalledWith(
+      "agent-1",
+      "proj-1",
+      "run-1",
+    );
     expect(mockedCreateProjectPipelineRun).toHaveBeenCalled();
     expect(mockedRetryProjectPipelineRun).toHaveBeenCalled();
   });

@@ -15,9 +15,9 @@ export function messageRequestsHistoryClear(message: unknown): boolean {
 
   const nested = meta.metadata;
   return (
-    !!nested
-    && typeof nested === "object"
-    && (nested as Record<string, unknown>).clear_history === true
+    !!nested &&
+    typeof nested === "object" &&
+    (nested as Record<string, unknown>).clear_history === true
   );
 }
 

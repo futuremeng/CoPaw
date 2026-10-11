@@ -32,10 +32,7 @@ vi.mock("../../../../api/authHeaders", () => ({
   buildAuthHeaders: () => ({}),
 }));
 
-import {
-  createProjectWorkspaceAdapter,
-  isPathReadonly,
-} from "../adapters";
+import { createProjectWorkspaceAdapter, isPathReadonly } from "../adapters";
 
 describe("projectWorkspaceAdapter path behavior", () => {
   it("passes dot paths through project read api", async () => {
@@ -78,7 +75,9 @@ describe("projectWorkspaceAdapter path behavior", () => {
     const adapter = createProjectWorkspaceAdapter({ scope: "workspace" });
     const output = await adapter.queryFiles({});
 
-    const intermediate = output.items.find((item) => item.path === "intermediate/a.ts");
+    const intermediate = output.items.find(
+      (item) => item.path === "intermediate/a.ts",
+    );
     const original = output.items.find((item) => item.path === "original/b.md");
     expect(intermediate?.readonly).toBe(true);
     expect(original?.readonly).toBe(false);

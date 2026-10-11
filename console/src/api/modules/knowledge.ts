@@ -42,11 +42,10 @@ const withProjectId = (path: string, projectId?: string) => {
   return `${path}${sep}project_id=${encodeURIComponent(normalized)}`;
 };
 
-const withLimit = (path: string, limit?: number) => (
+const withLimit = (path: string, limit?: number) =>
   typeof limit === "number"
     ? `${path}?limit=${encodeURIComponent(String(limit))}`
-    : path
-);
+    : path;
 
 export const knowledgeApi = {
   getKnowledgeConfig: () => request<KnowledgeConfig>("/knowledge/config"),
@@ -57,7 +56,10 @@ export const knowledgeApi = {
       body: JSON.stringify(payload),
     }),
 
-  listKnowledgeSources: (options?: { projectId?: string; includeSemantic?: boolean }) =>
+  listKnowledgeSources: (options?: {
+    projectId?: string;
+    includeSemantic?: boolean;
+  }) =>
     request<KnowledgeSourcesResponse>(
       withProjectId(
         options?.includeSemantic
@@ -74,16 +76,33 @@ export const knowledgeApi = {
   ) =>
     request<ProjectKnowledgeStepStatsResponse<TStepId>>(
       withProjectId(
-        withLimit(`/knowledge/project-stats/${encodeURIComponent(stepId)}`, options?.limit),
+        withLimit(
+          `/knowledge/project-stats/${encodeURIComponent(stepId)}`,
+          options?.limit,
+        ),
         projectId,
       ),
     ),
 
-  getProjectFileAnalysisStats: (projectId: string, options?: { limit?: number }) =>
-    knowledgeApi.getProjectStepStats("build_chunks", projectId, options) as Promise<ProjectKnowledgeFileAnalysisStatsResponse>,
+  getProjectFileAnalysisStats: (
+    projectId: string,
+    options?: { limit?: number },
+  ) =>
+    knowledgeApi.getProjectStepStats(
+      "build_chunks",
+      projectId,
+      options,
+    ) as Promise<ProjectKnowledgeFileAnalysisStatsResponse>,
 
-  getProjectSourceScanStats: (projectId: string, options?: { limit?: number }) =>
-    knowledgeApi.getProjectStepStats("snapshot_raw", projectId, options) as Promise<ProjectKnowledgeSourceScanStatsResponse>,
+  getProjectSourceScanStats: (
+    projectId: string,
+    options?: { limit?: number },
+  ) =>
+    knowledgeApi.getProjectStepStats(
+      "snapshot_raw",
+      projectId,
+      options,
+    ) as Promise<ProjectKnowledgeSourceScanStatsResponse>,
 
   upsertKnowledgeSource: (
     payload: KnowledgeSourceSpec,
@@ -92,8 +111,8 @@ export const knowledgeApi = {
     request<KnowledgeSourceSpec>(
       withProjectId("/knowledge/sources", options?.projectId),
       {
-      method: "PUT",
-      body: JSON.stringify(payload),
+        method: "PUT",
+        body: JSON.stringify(payload),
       },
     ),
 
@@ -179,12 +198,17 @@ export const knowledgeApi = {
     ),
 
   indexAllKnowledgeSources: (options?: { projectId?: string }) =>
-    request<KnowledgeBulkIndexResult>(withProjectId("/knowledge/index", options?.projectId), {
-      method: "POST",
-    }),
+    request<KnowledgeBulkIndexResult>(
+      withProjectId("/knowledge/index", options?.projectId),
+      {
+        method: "POST",
+      },
+    ),
 
   getKnowledgeHistoryBackfillStatus: () =>
-    request<KnowledgeHistoryBackfillStatus>("/knowledge/history-backfill/status"),
+    request<KnowledgeHistoryBackfillStatus>(
+      "/knowledge/history-backfill/status",
+    ),
 
   getKnowledgeTasksSnapshot: (options?: { projectId?: string }) =>
     request<KnowledgeTasksSnapshot>(
@@ -252,7 +276,8 @@ export const knowledgeApi = {
       timeoutMs?: number;
     },
   ) => {
-    const normalizedProvider = provider === "siamese_uninlu" ? "siamese" : "hanlp";
+    const normalizedProvider =
+      provider === "siamese_uninlu" ? "siamese" : "hanlp";
     return request<{
       task_key: string;
       request_id: string;
@@ -286,11 +311,17 @@ export const knowledgeApi = {
   },
 
   runKnowledgeHistoryBackfillNow: () =>
-    request<KnowledgeHistoryBackfillRunResponse>("/knowledge/history-backfill/run", {
-      method: "POST",
-    }),
+    request<KnowledgeHistoryBackfillRunResponse>(
+      "/knowledge/history-backfill/run",
+      {
+        method: "POST",
+      },
+    ),
 
-  getKnowledgeSourceContent: (sourceId: string, options?: { projectId?: string }) =>
+  getKnowledgeSourceContent: (
+    sourceId: string,
+    options?: { projectId?: string },
+  ) =>
     request<KnowledgeSourceContent>(
       withProjectId(
         `/knowledge/sources/${encodeURIComponent(sourceId)}/content`,
@@ -332,7 +363,10 @@ export const knowledgeApi = {
       searchParams.set("include_global", String(params.includeGlobal));
     }
     return request<KnowledgeSearchResponse>(
-      withProjectId(`/knowledge/search?${searchParams.toString()}`, params.projectId),
+      withProjectId(
+        `/knowledge/search?${searchParams.toString()}`,
+        params.projectId,
+      ),
     );
   },
 
@@ -374,7 +408,10 @@ export const knowledgeApi = {
       searchParams.set("include_global", String(params.includeGlobal));
     }
     return request<GraphQueryResponse>(
-      withProjectId(`/knowledge/graph-query?${searchParams.toString()}`, params.projectId),
+      withProjectId(
+        `/knowledge/graph-query?${searchParams.toString()}`,
+        params.projectId,
+      ),
     );
   },
 
@@ -382,14 +419,14 @@ export const knowledgeApi = {
     request<MemifyStartResponse>(
       withProjectId("/knowledge/memify/jobs", payload?.project_id),
       {
-      method: "POST",
-      body: JSON.stringify({
-        pipeline_type: payload?.pipeline_type ?? "full",
-        dataset_scope: payload?.dataset_scope ?? [],
-        idempotency_key: payload?.idempotency_key ?? "",
-        dry_run: payload?.dry_run ?? false,
-        project_id: payload?.project_id ?? "",
-      }),
+        method: "POST",
+        body: JSON.stringify({
+          pipeline_type: payload?.pipeline_type ?? "full",
+          dataset_scope: payload?.dataset_scope ?? [],
+          idempotency_key: payload?.idempotency_key ?? "",
+          dry_run: payload?.dry_run ?? false,
+          project_id: payload?.project_id ?? "",
+        }),
       },
     ),
 
@@ -429,7 +466,9 @@ export const knowledgeApi = {
   }) =>
     request<QualityLoopJobsListResponse>(
       withProjectId(
-        `/knowledge/quality-loop/jobs?active_only=${options?.activeOnly ? "true" : "false"}&limit=${Math.max(1, Math.min(50, Number(options?.limit) || 10))}`,
+        `/knowledge/quality-loop/jobs?active_only=${
+          options?.activeOnly ? "true" : "false"
+        }&limit=${Math.max(1, Math.min(50, Number(options?.limit) || 10))}`,
         options?.projectId,
       ),
     ),
@@ -458,9 +497,14 @@ export const knowledgeApi = {
       },
     ),
 
-  getProjectKnowledgePipelineSourceCandidates: (options: { projectId: string }) =>
+  getProjectKnowledgePipelineSourceCandidates: (options: {
+    projectId: string;
+  }) =>
     request<ProjectKnowledgePipelineSourceCandidatesPayload>(
-      withProjectId("/knowledge/project-pipeline/source-candidates", options.projectId),
+      withProjectId(
+        "/knowledge/project-pipeline/source-candidates",
+        options.projectId,
+      ),
     ),
 
   runProjectKnowledgePipeline: (payload: ProjectKnowledgePipelineRunRequest) =>
@@ -499,10 +543,15 @@ export const knowledgeApi = {
       },
     ),
 
-  downloadKnowledgeBackup: async (options?: { projectId?: string }): Promise<Blob> => {
-    const response = await fetch(getApiUrl(withProjectId("/knowledge/backup", options?.projectId)), {
-      method: "GET",
-    });
+  downloadKnowledgeBackup: async (options?: {
+    projectId?: string;
+  }): Promise<Blob> => {
+    const response = await fetch(
+      getApiUrl(withProjectId("/knowledge/backup", options?.projectId)),
+      {
+        method: "GET",
+      },
+    );
     if (!response.ok) {
       throw new Error(
         `Knowledge backup failed: ${response.status} ${response.statusText}`,
@@ -545,7 +594,9 @@ export const knowledgeApi = {
     const response = await fetch(
       getApiUrl(
         withProjectId(
-          `/knowledge/restore?replace_existing=${replaceExisting ? "true" : "false"}`,
+          `/knowledge/restore?replace_existing=${
+            replaceExisting ? "true" : "false"
+          }`,
           options?.projectId,
         ),
       ),

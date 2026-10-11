@@ -14,7 +14,9 @@ export function resolveApprovalVisibility<T extends ApprovalVisibilityItem>(
   limit: number,
   showAll: boolean,
 ): ApprovalVisibilityResult<T> {
-  const sorted = [...approvals].sort((left, right) => right.createdAt - left.createdAt);
+  const sorted = [...approvals].sort(
+    (left, right) => right.createdAt - left.createdAt,
+  );
   const safeLimit = Math.max(0, limit);
   const visible = showAll ? sorted : sorted.slice(0, safeLimit);
   const hiddenCount = Math.max(0, sorted.length - visible.length);

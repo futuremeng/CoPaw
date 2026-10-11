@@ -7,7 +7,9 @@ import {
 
 describe("pathContext helpers", () => {
   it("builds path context line with shared prefix", () => {
-    expect(buildPathContextLine("a -> b")).toBe(`${PATH_CONTEXT_PREFIX} a -> b`);
+    expect(buildPathContextLine("a -> b")).toBe(
+      `${PATH_CONTEXT_PREFIX} a -> b`,
+    );
   });
 
   it("appends context line to empty query", () => {

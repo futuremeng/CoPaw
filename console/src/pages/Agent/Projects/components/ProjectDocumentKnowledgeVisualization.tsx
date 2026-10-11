@@ -80,7 +80,9 @@ function safeJsonParse(value: unknown): Record<string, unknown> | null {
   }
   try {
     const parsed = JSON.parse(text);
-    return parsed && typeof parsed === "object" ? (parsed as Record<string, unknown>) : null;
+    return parsed && typeof parsed === "object"
+      ? (parsed as Record<string, unknown>)
+      : null;
   } catch {
     return null;
   }
@@ -94,7 +96,9 @@ function normalizeSentenceIndex(value: unknown): number {
   return Math.floor(parsed);
 }
 
-function parseSentenceCharStats(charStatsContent: string): Array<{ sentence: string; chars: number }> {
+function parseSentenceCharStats(
+  charStatsContent: string,
+): Array<{ sentence: string; chars: number }> {
   let parsed: unknown = null;
   try {
     parsed = JSON.parse(String(charStatsContent || ""));
@@ -109,8 +113,12 @@ function parseSentenceCharStats(charStatsContent: string): Array<{ sentence: str
   return parsed
     .map((item) => {
       const row = item as Record<string, unknown>;
-      const lineNo = normalizeSentenceIndex(row.line_no ?? row.sentence_index ?? row.line_index);
-      const charCount = Number(row.char_count ?? row.chars ?? row.charCount ?? 0);
+      const lineNo = normalizeSentenceIndex(
+        row.line_no ?? row.sentence_index ?? row.line_index,
+      );
+      const charCount = Number(
+        row.char_count ?? row.chars ?? row.charCount ?? 0,
+      );
       if (!lineNo || !Number.isFinite(charCount)) {
         return null;
       }
@@ -119,7 +127,9 @@ function parseSentenceCharStats(charStatsContent: string): Array<{ sentence: str
         chars: Math.max(0, Math.floor(charCount)),
       };
     })
-    .filter((item): item is { sentence: string; chars: number } => Boolean(item));
+    .filter((item): item is { sentence: string; chars: number } =>
+      Boolean(item),
+    );
 }
 
 function resolveCurrentDocument(
@@ -202,7 +212,10 @@ function resolveCurrentDocument(
   return null;
 }
 
-function buildSentenceRanges(fileContent: string, syntaxPayload: Record<string, unknown> | null): SentenceRange[] {
+function buildSentenceRanges(
+  fileContent: string,
+  syntaxPayload: Record<string, unknown> | null,
+): SentenceRange[] {
   const rawSentences = Array.isArray(syntaxPayload?.sentences)
     ? (syntaxPayload?.sentences as Array<Record<string, unknown>>)
     : [];
@@ -228,7 +241,8 @@ function buildSentenceRanges(fileContent: string, syntaxPayload: Record<string, 
   let cursor = 0;
 
   for (const [index, sentence] of rawSentences.entries()) {
-    const sentenceIndex = normalizeSentenceIndex(sentence.sentence_index) || index + 1;
+    const sentenceIndex =
+      normalizeSentenceIndex(sentence.sentence_index) || index + 1;
     const sentenceText = String(sentence.sentence_text || sentence.text || "");
     if (!sentenceText) {
       ranges.push({
@@ -261,12 +275,17 @@ function mapMentionsToSentences(
   mentions: Array<Record<string, unknown>>,
   sentenceRanges: SentenceRange[],
 ): MentionDatum[] {
-  const sentenceByIndex = new Map(sentenceRanges.map((item) => [item.sentenceIndex, item]));
+  const sentenceByIndex = new Map(
+    sentenceRanges.map((item) => [item.sentenceIndex, item]),
+  );
 
   return mentions
     .map((mention) => {
-      const label = String(mention.label || mention.type || "entity").trim() || "entity";
-      const surface = String(mention.surface || mention.text || mention.entity || "").trim();
+      const label =
+        String(mention.label || mention.type || "entity").trim() || "entity";
+      const surface = String(
+        mention.surface || mention.text || mention.entity || "",
+      ).trim();
       let sentenceIndex = normalizeSentenceIndex(
         mention.sentence_index ?? mention.line_no ?? mention.line_index,
       );
@@ -274,13 +293,17 @@ function mapMentionsToSentences(
       if (!sentenceIndex) {
         const start = Number(mention.start);
         if (Number.isFinite(start)) {
-          const found = sentenceRanges.find((item) => start >= item.start && start <= item.end);
+          const found = sentenceRanges.find(
+            (item) => start >= item.start && start <= item.end,
+          );
           sentenceIndex = found?.sentenceIndex || 0;
         }
       }
 
       if (!sentenceIndex && surface) {
-        const found = sentenceRanges.find((item) => item.sentenceText.includes(surface));
+        const found = sentenceRanges.find((item) =>
+          item.sentenceText.includes(surface),
+        );
         sentenceIndex = found?.sentenceIndex || 0;
       }
 
@@ -335,9 +358,14 @@ function buildRelationEdges(
       : [];
     const tokenTextByIndex = new Map<number, string>();
     for (const token of tokens) {
-      const tokenIndex = normalizeSentenceIndex(token.token_index ?? token.index ?? token.id);
+      const tokenIndex = normalizeSentenceIndex(
+        token.token_index ?? token.index ?? token.id,
+      );
       if (tokenIndex > 0) {
-        tokenTextByIndex.set(tokenIndex, String(token.text || token.surface || "").trim());
+        tokenTextByIndex.set(
+          tokenIndex,
+          String(token.text || token.surface || "").trim(),
+        );
       }
     }
 
@@ -350,11 +378,21 @@ function buildRelationEdges(
     }
 
     for (const dep of dependencies) {
-      const relation = String(dep.relation || dep.predicate || dep.task_key || "dep");
-      const dependentIndex = normalizeSentenceIndex(dep.dependent_index ?? dep.dep_index ?? dep.source_index);
-      const headIndex = normalizeSentenceIndex(dep.head_index ?? dep.target_index ?? dep.object_index);
-      const source = String(dep.dependent || tokenTextByIndex.get(dependentIndex) || "");
-      const target = String(dep.head || dep.object || tokenTextByIndex.get(headIndex) || "");
+      const relation = String(
+        dep.relation || dep.predicate || dep.task_key || "dep",
+      );
+      const dependentIndex = normalizeSentenceIndex(
+        dep.dependent_index ?? dep.dep_index ?? dep.source_index,
+      );
+      const headIndex = normalizeSentenceIndex(
+        dep.head_index ?? dep.target_index ?? dep.object_index,
+      );
+      const source = String(
+        dep.dependent || tokenTextByIndex.get(dependentIndex) || "",
+      );
+      const target = String(
+        dep.head || dep.object || tokenTextByIndex.get(headIndex) || "",
+      );
       insertEdge(source, relation, target);
     }
   }
@@ -362,8 +400,10 @@ function buildRelationEdges(
   if (!hasDependency) {
     const mentionBySentence = new Map<number, Set<string>>();
     for (const mention of mappedMentions) {
-      const bucket = mentionBySentence.get(mention.sentenceIndex) || new Set<string>();
-      const token = mention.surface || `${mention.label}:${mention.sentenceIndex}`;
+      const bucket =
+        mentionBySentence.get(mention.sentenceIndex) || new Set<string>();
+      const token =
+        mention.surface || `${mention.label}:${mention.sentenceIndex}`;
       if (token) {
         bucket.add(token);
       }
@@ -409,14 +449,18 @@ function colorFromLabel(label: string): string {
   return palette[hash % palette.length];
 }
 
-function buildTemporalSpiralGraph(
-  mappedMentions: MentionDatum[],
-): {
+function buildTemporalSpiralGraph(mappedMentions: MentionDatum[]): {
   nodes: TemporalNodeDatum[];
   edges: TemporalEdgeDatum[];
 } {
-  const mentionBySentence = new Map<number, Array<{ surface: string; label: string }>>();
-  const nodeCounter = new Map<string, { label: string; type: string; count: number; firstSentence: number }>();
+  const mentionBySentence = new Map<
+    number,
+    Array<{ surface: string; label: string }>
+  >();
+  const nodeCounter = new Map<
+    string,
+    { label: string; type: string; count: number; firstSentence: number }
+  >();
   const edgeCounter = new Map<string, TemporalEdgeDatum>();
 
   for (const mention of mappedMentions) {
@@ -546,7 +590,9 @@ export default function ProjectDocumentKnowledgeVisualization(
     if (!normalized) {
       return "";
     }
-    return projectSources.some((item) => String(item.id || "").trim() === normalized)
+    return projectSources.some(
+      (item) => String(item.id || "").trim() === normalized,
+    )
       ? normalized
       : "";
   }, [projectSourceId, projectSources]);
@@ -599,15 +645,21 @@ export default function ProjectDocumentKnowledgeVisualization(
   }, [sourceContentById]);
 
   const currentDocument = useMemo(
-    () => resolveCurrentDocument(sourceContentById[selectedSourceId]?.documents || mergedDocuments, selectedFilePath),
+    () =>
+      resolveCurrentDocument(
+        sourceContentById[selectedSourceId]?.documents || mergedDocuments,
+        selectedFilePath,
+      ),
     [mergedDocuments, selectedFilePath, selectedSourceId, sourceContentById],
   );
 
   const chartData = useMemo(() => {
     const nerPayload =
-      safeJsonParse(currentDocument?.ner_structured_text)
-      || safeJsonParse(nerStructuredContent);
-    const syntaxPayload = safeJsonParse(currentDocument?.syntax_structured_text);
+      safeJsonParse(currentDocument?.ner_structured_text) ||
+      safeJsonParse(nerStructuredContent);
+    const syntaxPayload = safeJsonParse(
+      currentDocument?.syntax_structured_text,
+    );
     const sentenceRanges = buildSentenceRanges(fileContent, syntaxPayload);
     const sentenceWordData = parseSentenceCharStats(charStatsContent);
     const mentions = Array.isArray(nerPayload?.entity_mentions)
@@ -624,9 +676,15 @@ export default function ProjectDocumentKnowledgeVisualization(
         mention.sentenceIndex,
         (entitiesBySentence.get(mention.sentenceIndex) || 0) + 1,
       );
-      labelCounter.set(mention.label, (labelCounter.get(mention.label) || 0) + 1);
+      labelCounter.set(
+        mention.label,
+        (labelCounter.get(mention.label) || 0) + 1,
+      );
       if (mention.surface) {
-        topEntityCounter.set(mention.surface, (topEntityCounter.get(mention.surface) || 0) + 1);
+        topEntityCounter.set(
+          mention.surface,
+          (topEntityCounter.get(mention.surface) || 0) + 1,
+        );
       }
     }
 
@@ -639,11 +697,18 @@ export default function ProjectDocumentKnowledgeVisualization(
       for (const item of catalog) {
         const label = String(item.label || "entity").trim() || "entity";
         const count = Number(item.mention_count || 0);
-        const mentionCount = Number.isFinite(count) ? Math.max(0, Math.floor(count)) : 0;
+        const mentionCount = Number.isFinite(count)
+          ? Math.max(0, Math.floor(count))
+          : 0;
         labelCounter.set(label, (labelCounter.get(label) || 0) + mentionCount);
-        const entity = String(item.normalized || item.surface || item.text || "").trim();
+        const entity = String(
+          item.normalized || item.surface || item.text || "",
+        ).trim();
         if (entity) {
-          topEntityCounter.set(entity, (topEntityCounter.get(entity) || 0) + mentionCount);
+          topEntityCounter.set(
+            entity,
+            (topEntityCounter.get(entity) || 0) + mentionCount,
+          );
         }
         mentionTotal += mentionCount;
       }
@@ -658,7 +723,9 @@ export default function ProjectDocumentKnowledgeVisualization(
       .map(([type, value]) => ({ type, value }))
       .sort((left, right) => right.value - left.value);
 
-    const topEntityData: NerTopEntityDatum[] = Array.from(topEntityCounter.entries())
+    const topEntityData: NerTopEntityDatum[] = Array.from(
+      topEntityCounter.entries(),
+    )
       .map(([entity, count]) => ({ entity, count }))
       .filter((item) => item.count > 0)
       .sort((left, right) => {
@@ -674,7 +741,8 @@ export default function ProjectDocumentKnowledgeVisualization(
 
     const sentenceTotal = sentenceWordData.length || sentenceRanges.length || 0;
     const entityTotal = topEntityCounter.size;
-    const avgMentionsPerSentence = sentenceTotal > 0 ? mentionTotal / sentenceTotal : 0;
+    const avgMentionsPerSentence =
+      sentenceTotal > 0 ? mentionTotal / sentenceTotal : 0;
 
     return {
       sentenceWordData,
@@ -700,7 +768,9 @@ export default function ProjectDocumentKnowledgeVisualization(
     }
     return parseMarkdownOutline(fileContent);
   }, [fileContent, isMarkdownDocument]);
-  const [collapsedOutlineIds, setCollapsedOutlineIds] = useState<Set<string>>(new Set());
+  const [collapsedOutlineIds, setCollapsedOutlineIds] = useState<Set<string>>(
+    new Set(),
+  );
 
   const outlineItemsWithChildren = useMemo(() => {
     return outlineItems.map((item, index) => {
@@ -718,8 +788,8 @@ export default function ProjectDocumentKnowledgeVisualization(
 
     for (const item of outlineItemsWithChildren) {
       while (
-        hiddenUnderLevelStack.length > 0
-        && item.level <= hiddenUnderLevelStack[hiddenUnderLevelStack.length - 1]
+        hiddenUnderLevelStack.length > 0 &&
+        item.level <= hiddenUnderLevelStack[hiddenUnderLevelStack.length - 1]
       ) {
         hiddenUnderLevelStack.pop();
       }
@@ -749,7 +819,10 @@ export default function ProjectDocumentKnowledgeVisualization(
   return (
     <div className={styles.documentKnowledgeVizWrap}>
       {!currentDocument && (
-        <Typography.Text type="secondary" className={styles.documentKnowledgeVizHint}>
+        <Typography.Text
+          type="secondary"
+          className={styles.documentKnowledgeVizHint}
+        >
           {t("projects.workbench.knowledgeCurrentDocMissing")}
         </Typography.Text>
       )}
@@ -762,21 +835,30 @@ export default function ProjectDocumentKnowledgeVisualization(
         {isMarkdownDocument ? (
           outlineItems.length > 0 ? (
             <div className={styles.documentOutlineList}>
-                {visibleOutlineItems.map((item) => {
-                  const isCollapsed = collapsedOutlineIds.has(item.id);
-                  return (
-                <div
-                  key={item.id}
-                    className={`${styles.documentOutlineItem} ${styles[`documentOutlineLevel${Math.max(1, Math.min(item.level, 6))}`]}`}
-                >
+              {visibleOutlineItems.map((item) => {
+                const isCollapsed = collapsedOutlineIds.has(item.id);
+                return (
+                  <div
+                    key={item.id}
+                    className={`${styles.documentOutlineItem} ${
+                      styles[
+                        `documentOutlineLevel${Math.max(
+                          1,
+                          Math.min(item.level, 6),
+                        )}`
+                      ]
+                    }`}
+                  >
                     {item.hasChildren ? (
                       <Button
                         type="text"
                         size="small"
                         className={styles.documentOutlineToggle}
-                        aria-label={isCollapsed
-                          ? t("projects.workbench.knowledgeOutlineExpand")
-                          : t("projects.workbench.knowledgeOutlineCollapse")}
+                        aria-label={
+                          isCollapsed
+                            ? t("projects.workbench.knowledgeOutlineExpand")
+                            : t("projects.workbench.knowledgeOutlineCollapse")
+                        }
                         onClick={() => {
                           setCollapsedOutlineIds((prev) => {
                             const next = new Set(prev);
@@ -792,49 +874,64 @@ export default function ProjectDocumentKnowledgeVisualization(
                         {isCollapsed ? "▸" : "▾"}
                       </Button>
                     ) : (
-                      <span className={styles.documentOutlineTogglePlaceholder} aria-hidden="true" />
+                      <span
+                        className={styles.documentOutlineTogglePlaceholder}
+                        aria-hidden="true"
+                      />
                     )}
                     <span
-                      className={`${styles.documentOutlinePrefix} ${styles[`documentOutlinePrefixLevel${Math.max(1, Math.min(item.level, 6))}`]}`}
+                      className={`${styles.documentOutlinePrefix} ${
+                        styles[
+                          `documentOutlinePrefixLevel${Math.max(
+                            1,
+                            Math.min(item.level, 6),
+                          )}`
+                        ]
+                      }`}
                       aria-hidden="true"
                     >
                       {item.level <= 2 ? "◆" : "•"}
                     </span>
-                  <Button
-                    type="link"
-                    className={styles.documentOutlineButton}
-                    onClick={() => {
-                      if (typeof window === "undefined") {
-                        return;
-                      }
-                      const detail: MarkdownOutlineJumpDetail = {
-                        filePath: selectedFilePath,
-                        headingId: item.id,
-                        headingText: item.text,
-                        line: item.line,
-                      };
-                      window.dispatchEvent(
-                        new CustomEvent<MarkdownOutlineJumpDetail>(
-                          PROJECT_MARKDOWN_OUTLINE_JUMP_EVENT,
-                          { detail },
-                        ),
-                      );
-                    }}
-                  >
-                    {item.text}
-                  </Button>
-                  <Typography.Text type="secondary" className={styles.documentOutlineLine}>
+                    <Button
+                      type="link"
+                      className={styles.documentOutlineButton}
+                      onClick={() => {
+                        if (typeof window === "undefined") {
+                          return;
+                        }
+                        const detail: MarkdownOutlineJumpDetail = {
+                          filePath: selectedFilePath,
+                          headingId: item.id,
+                          headingText: item.text,
+                          line: item.line,
+                        };
+                        window.dispatchEvent(
+                          new CustomEvent<MarkdownOutlineJumpDetail>(
+                            PROJECT_MARKDOWN_OUTLINE_JUMP_EVENT,
+                            { detail },
+                          ),
+                        );
+                      }}
+                    >
+                      {item.text}
+                    </Button>
+                    <Typography.Text
+                      type="secondary"
+                      className={styles.documentOutlineLine}
+                    >
                       {`H${item.level} · L${item.line}`}
-                  </Typography.Text>
-                </div>
-                  );
-                })}
+                    </Typography.Text>
+                  </div>
+                );
+              })}
             </div>
           ) : (
             <div className={styles.documentKnowledgeVizEmpty}>
               <Empty
                 image={Empty.PRESENTED_IMAGE_SIMPLE}
-                description={t("projects.workbench.knowledgeMarkdownOutlineEmpty")}
+                description={t(
+                  "projects.workbench.knowledgeMarkdownOutlineEmpty",
+                )}
               />
             </div>
           )
@@ -842,7 +939,9 @@ export default function ProjectDocumentKnowledgeVisualization(
           <div className={styles.documentKnowledgeVizEmpty}>
             <Empty
               image={Empty.PRESENTED_IMAGE_SIMPLE}
-              description={t("projects.workbench.knowledgeMarkdownOutlineNotMarkdown")}
+              description={t(
+                "projects.workbench.knowledgeMarkdownOutlineNotMarkdown",
+              )}
             />
           </div>
         )}
@@ -883,15 +982,15 @@ export default function ProjectDocumentKnowledgeVisualization(
         className={styles.documentKnowledgeVizCard}
         title={t("projects.workbench.knowledgeNerTopEntities")}
         extra={
-          <Typography.Text type="secondary" className={styles.documentKnowledgeVizHintInline}>
-            {t(
-              "projects.workbench.knowledgeNerSummary",
-              {
-                entityTotal: chartData.nerSummary.entityTotal,
-                mentionTotal: chartData.nerSummary.mentionTotal,
-                avg: chartData.nerSummary.avgMentionsPerSentence.toFixed(2),
-              },
-            )}
+          <Typography.Text
+            type="secondary"
+            className={styles.documentKnowledgeVizHintInline}
+          >
+            {t("projects.workbench.knowledgeNerSummary", {
+              entityTotal: chartData.nerSummary.entityTotal,
+              mentionTotal: chartData.nerSummary.mentionTotal,
+              avg: chartData.nerSummary.avgMentionsPerSentence.toFixed(2),
+            })}
           </Typography.Text>
         }
       >
@@ -963,23 +1062,42 @@ export default function ProjectDocumentKnowledgeVisualization(
         className={styles.documentKnowledgeVizCard}
         title={t("projects.workbench.knowledgeTemporalSpiral")}
         extra={
-          <Typography.Text type="secondary" className={styles.documentKnowledgeVizHintInline}>
+          <Typography.Text
+            type="secondary"
+            className={styles.documentKnowledgeVizHintInline}
+          >
             {t("projects.workbench.knowledgeTemporalSpiralHint")}
           </Typography.Text>
         }
       >
         {chartData.temporalSpiral.nodes.length > 0 ? (
           <div className={styles.documentKnowledgeVizChart}>
-            <svg viewBox="0 0 640 360" width="100%" height="100%" role="img" aria-label="Temporal spiral co-occurrence map">
+            <svg
+              viewBox="0 0 640 360"
+              width="100%"
+              height="100%"
+              role="img"
+              aria-label="Temporal spiral co-occurrence map"
+            >
               <g>
                 {chartData.temporalSpiral.edges.map((edge) => {
-                  const source = chartData.temporalSpiral.nodes.find((item) => item.id === edge.sourceId);
-                  const target = chartData.temporalSpiral.nodes.find((item) => item.id === edge.targetId);
+                  const source = chartData.temporalSpiral.nodes.find(
+                    (item) => item.id === edge.sourceId,
+                  );
+                  const target = chartData.temporalSpiral.nodes.find(
+                    (item) => item.id === edge.targetId,
+                  );
                   if (!source || !target) {
                     return null;
                   }
-                  const strokeWidth = Math.max(0.6, Math.min(4.4, edge.weight * 0.55));
-                  const opacity = Math.max(0.12, Math.min(0.55, 0.08 + edge.weight * 0.04));
+                  const strokeWidth = Math.max(
+                    0.6,
+                    Math.min(4.4, edge.weight * 0.55),
+                  );
+                  const opacity = Math.max(
+                    0.12,
+                    Math.min(0.55, 0.08 + edge.weight * 0.04),
+                  );
                   return (
                     <line
                       key={`${edge.sourceId}-${edge.targetId}`}
@@ -1030,7 +1148,10 @@ export default function ProjectDocumentKnowledgeVisualization(
         className={styles.documentKnowledgeVizCard}
         title={t("projects.workbench.knowledgeSyntaxRelation")}
         extra={
-          <Typography.Text type="secondary" className={styles.documentKnowledgeVizHintInline}>
+          <Typography.Text
+            type="secondary"
+            className={styles.documentKnowledgeVizHintInline}
+          >
             {chartData.hasSyntax
               ? t("projects.workbench.knowledgeSyntaxModeCooccur")
               : t("projects.workbench.knowledgeSyntaxEmptyHint")}

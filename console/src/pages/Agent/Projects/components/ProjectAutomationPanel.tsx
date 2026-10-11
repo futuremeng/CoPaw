@@ -1,6 +1,21 @@
 import { useState } from "react";
-import { CodeOutlined, FileTextOutlined, RobotOutlined } from "@ant-design/icons";
-import { Button, Card, Collapse, Empty, Modal, Select, Spin, Tag, Typography, message } from "antd";
+import {
+  CodeOutlined,
+  FileTextOutlined,
+  RobotOutlined,
+} from "@ant-design/icons";
+import {
+  Button,
+  Card,
+  Collapse,
+  Empty,
+  Modal,
+  Select,
+  Spin,
+  Tag,
+  Typography,
+  message,
+} from "antd";
 import { useTranslation } from "react-i18next";
 import type {
   PlatformFlowTemplateInfo,
@@ -19,7 +34,9 @@ function getArtifactPreviewLabel(params: {
   publishedPath?: string | null;
   name?: string | null;
 }): string {
-  return String(params.publishedPath || params.path || params.name || "").trim();
+  return String(
+    params.publishedPath || params.path || params.name || "",
+  ).trim();
 }
 
 interface RunProgressSummary {
@@ -79,7 +96,11 @@ function renderReadonlyCodeEditor(params: {
   lineCountLabel: string;
 }) {
   if (params.empty) {
-    return <pre className={`${styles.previewContent} ${styles.previewContentEmpty}`}>{params.emptyText}</pre>;
+    return (
+      <pre className={`${styles.previewContent} ${styles.previewContentEmpty}`}>
+        {params.emptyText}
+      </pre>
+    );
   }
 
   const lines = params.value.split("\n");
@@ -87,13 +108,23 @@ function renderReadonlyCodeEditor(params: {
   return (
     <div className={styles.readonlyCodeEditor}>
       <div className={styles.readonlyCodeEditorToolbar}>
-        <span className={styles.readonlyCodeEditorLang}>{params.languageLabel}</span>
-        <span className={styles.readonlyCodeEditorMeta}>{params.lineCountLabel}</span>
+        <span className={styles.readonlyCodeEditorLang}>
+          {params.languageLabel}
+        </span>
+        <span className={styles.readonlyCodeEditorMeta}>
+          {params.lineCountLabel}
+        </span>
       </div>
       <div className={styles.readonlyCodeEditorBody}>
-        <div className={styles.readonlyCodeEditorLineNumbers} aria-hidden="true">
+        <div
+          className={styles.readonlyCodeEditorLineNumbers}
+          aria-hidden="true"
+        >
           {lines.map((_, index) => (
-            <div key={`line-${index + 1}`} className={styles.readonlyCodeEditorLineNumber}>
+            <div
+              key={`line-${index + 1}`}
+              className={styles.readonlyCodeEditorLineNumber}
+            >
               {index + 1}
             </div>
           ))}
@@ -163,7 +194,9 @@ function renderStepContractSummary(params: {
       label: params.t("projects.pipeline.stepPreviewDescription"),
       mode: params.t("projects.pipeline.stepPreviewTextMode"),
       tone: "text",
-      value: descriptionText || params.t("projects.pipeline.stepPreviewNoDescription"),
+      value:
+        descriptionText ||
+        params.t("projects.pipeline.stepPreviewNoDescription"),
       empty: !descriptionText,
     },
     {
@@ -189,7 +222,9 @@ function renderStepContractSummary(params: {
       tone: "text",
       value:
         inputPreviewItems.length > 0
-          ? inputPreviewItems.map((item, index) => `${index + 1}. ${item}`).join("\n")
+          ? inputPreviewItems
+              .map((item, index) => `${index + 1}. ${item}`)
+              .join("\n")
           : params.t("projects.pipeline.stepPreviewNoInputs"),
       empty: inputPreviewItems.length === 0,
     },
@@ -200,12 +235,16 @@ function renderStepContractSummary(params: {
       tone: "text",
       value:
         outputPreviewItems.length > 0
-          ? outputPreviewItems.map((item, index) => `${index + 1}. ${item}`).join("\n")
+          ? outputPreviewItems
+              .map((item, index) => `${index + 1}. ${item}`)
+              .join("\n")
           : params.t("projects.pipeline.stepPreviewNoOutputs"),
       empty: outputPreviewItems.length === 0,
     },
   ];
-  const configuredPreviewCount = previewSections.filter((section) => !section.empty).length;
+  const configuredPreviewCount = previewSections.filter(
+    (section) => !section.empty,
+  ).length;
   const previewModeSummary = [
     hasPrompt ? params.t("projects.pipeline.stepPreviewPrompt") : null,
     hasScript ? params.t("projects.pipeline.stepPreviewScript") : null,
@@ -218,7 +257,9 @@ function renderStepContractSummary(params: {
       key={params.step.id}
       role="button"
       tabIndex={0}
-      className={`${styles.stepItem} ${params.selected ? styles.selected : ""} ${params.related ? styles.related : ""}`}
+      className={`${styles.stepItem} ${
+        params.selected ? styles.selected : ""
+      } ${params.related ? styles.related : ""}`}
       onClick={() => params.onSelectStep(params.step.id)}
       onKeyDown={(event) => {
         if (event.key === "Enter" || event.key === " ") {
@@ -231,7 +272,9 @@ function renderStepContractSummary(params: {
         <div className={styles.itemTitleMain}>
           <span className={styles.itemTitle}>
             {typeof params.stepOrder === "number" ? (
-              <span className={styles.stepOrderBadge}>{params.stepOrder + 1}</span>
+              <span className={styles.stepOrderBadge}>
+                {params.stepOrder + 1}
+              </span>
             ) : null}
             {params.step.name}
           </span>
@@ -293,19 +336,24 @@ function renderStepContractSummary(params: {
       <div className={styles.itemMeta}>{params.step.kind}</div>
       <div className={styles.itemMeta}>{params.step.id}</div>
       <div className={styles.itemMeta}>
-        {params.t("projects.pipeline.contract.dependsOn")}: {dependsOn.join(", ") || "-"}
+        {params.t("projects.pipeline.contract.dependsOn")}:{" "}
+        {dependsOn.join(", ") || "-"}
       </div>
       <div className={styles.itemMeta}>
-        {params.t("projects.pipeline.contract.inputs")}: {inputKeys.join(", ") || "-"}
+        {params.t("projects.pipeline.contract.inputs")}:{" "}
+        {inputKeys.join(", ") || "-"}
       </div>
       <div className={styles.itemMeta}>
-        {params.t("projects.pipeline.contract.outputs")}: {outputKeys.join(", ") || "-"}
+        {params.t("projects.pipeline.contract.outputs")}:{" "}
+        {outputKeys.join(", ") || "-"}
       </div>
       <div className={styles.itemMeta}>
-        {params.t("projects.pipeline.contract.bindings")}: {bindingKeys.join(", ") || "-"}
+        {params.t("projects.pipeline.contract.bindings")}:{" "}
+        {bindingKeys.join(", ") || "-"}
       </div>
       <div className={styles.itemMeta}>
-        {params.t("projects.pipeline.contract.execution")}: {hasPrompt ? "prompt" : "-"}
+        {params.t("projects.pipeline.contract.execution")}:{" "}
+        {hasPrompt ? "prompt" : "-"}
         {hasScript ? "+script" : ""}
       </div>
       <div className={styles.itemMeta}>
@@ -341,27 +389,43 @@ function renderStepContractSummary(params: {
                 section.tone === "code"
                   ? styles.stepPreviewCellCode
                   : section.tone === "text"
-                    ? styles.stepPreviewCellText
-                    : styles.stepPreviewCellMeta;
+                  ? styles.stepPreviewCellText
+                  : styles.stepPreviewCellMeta;
 
-              const sectionCollapsed = params.isSectionCollapsed(params.step.id, section.key);
-              const canCopy = (section.key === "prompt" || section.key === "script") && !section.empty;
+              const sectionCollapsed = params.isSectionCollapsed(
+                params.step.id,
+                section.key,
+              );
+              const canCopy =
+                (section.key === "prompt" || section.key === "script") &&
+                !section.empty;
 
               return (
-                <div key={section.key} className={`${styles.stepPreviewCell} ${toneClassName}`}>
+                <div
+                  key={section.key}
+                  className={`${styles.stepPreviewCell} ${toneClassName}`}
+                >
                   <div className={styles.stepPreviewGutter}>
-                    <div className={styles.stepPreviewExecutionCount}>[{index + 1}]</div>
-                    <div className={styles.stepPreviewExecutionType}>{section.mode}</div>
+                    <div className={styles.stepPreviewExecutionCount}>
+                      [{index + 1}]
+                    </div>
+                    <div className={styles.stepPreviewExecutionType}>
+                      {section.mode}
+                    </div>
                   </div>
                   <div className={styles.stepPreviewCellMain}>
                     <div className={styles.stepPreviewCellHeader}>
-                      <span className={styles.stepPreviewCellLabel}>{section.label}</span>
+                      <span className={styles.stepPreviewCellLabel}>
+                        {section.label}
+                      </span>
                       <div className={styles.stepPreviewCellActions}>
                         <Tag>{section.mode}</Tag>
                         {canCopy ? (
                           <Button
                             size="small"
-                            onClick={() => params.onCopySection(section.label, section.value)}
+                            onClick={() =>
+                              params.onCopySection(section.label, section.value)
+                            }
                           >
                             {params.t("projects.pipeline.stepPreviewCopy")}
                           </Button>
@@ -369,11 +433,17 @@ function renderStepContractSummary(params: {
                         <Button
                           size="small"
                           type={sectionCollapsed ? "default" : "text"}
-                          onClick={() => params.onToggleSection(params.step.id, section.key)}
+                          onClick={() =>
+                            params.onToggleSection(params.step.id, section.key)
+                          }
                         >
                           {sectionCollapsed
-                            ? params.t("projects.pipeline.stepPreviewExpandCell")
-                            : params.t("projects.pipeline.stepPreviewCollapseCell")}
+                            ? params.t(
+                                "projects.pipeline.stepPreviewExpandCell",
+                              )
+                            : params.t(
+                                "projects.pipeline.stepPreviewCollapseCell",
+                              )}
                         </Button>
                       </div>
                     </div>
@@ -387,13 +457,18 @@ function renderStepContractSummary(params: {
                         empty: section.empty,
                         emptyText: section.value,
                         languageLabel: section.label,
-                        lineCountLabel: params.t("projects.pipeline.stepPreviewLineCount", {
-                          count: section.value.split("\n").length,
-                        }),
+                        lineCountLabel: params.t(
+                          "projects.pipeline.stepPreviewLineCount",
+                          {
+                            count: section.value.split("\n").length,
+                          },
+                        ),
                       })
                     ) : (
                       <pre
-                        className={`${styles.previewContent} ${section.empty ? styles.previewContentEmpty : ""}`}
+                        className={`${styles.previewContent} ${
+                          section.empty ? styles.previewContentEmpty : ""
+                        }`}
                       >
                         {section.value}
                       </pre>
@@ -423,7 +498,10 @@ function actionSeverityColor(severity: string): string {
   return "default";
 }
 
-function actionSeverityLabel(t: ReturnType<typeof useTranslation>["t"], severity: string): string {
+function actionSeverityLabel(
+  t: ReturnType<typeof useTranslation>["t"],
+  severity: string,
+): string {
   const key = (severity || "info").toLowerCase();
   const keyMap: Record<string, string> = {
     high: "projects.pipeline.severity.high",
@@ -434,7 +512,10 @@ function actionSeverityLabel(t: ReturnType<typeof useTranslation>["t"], severity
   return t(keyMap[key] || keyMap.info);
 }
 
-function localizeConvergenceStage(t: ReturnType<typeof useTranslation>["t"], stage: string): string {
+function localizeConvergenceStage(
+  t: ReturnType<typeof useTranslation>["t"],
+  stage: string,
+): string {
   const key = (stage || "").toLowerCase();
   const keyMap: Record<string, string> = {
     bootstrapping: "projects.pipeline.stage.bootstrapping",
@@ -446,21 +527,32 @@ function localizeConvergenceStage(t: ReturnType<typeof useTranslation>["t"], sta
   return t(keyMap[key] || "projects.pipeline.stage.unknown");
 }
 
-function localizeConvergenceItem(t: ReturnType<typeof useTranslation>["t"], message: string): string {
+function localizeConvergenceItem(
+  t: ReturnType<typeof useTranslation>["t"],
+  message: string,
+): string {
   const text = (message || "").trim();
   if (!text) {
     return "";
   }
 
   const directMap: Record<string, string> = {
-    "Term extraction artifacts detected": "projects.pipeline.convergenceItem.termDetected",
-    "Cross-book alignment artifacts detected": "projects.pipeline.convergenceItem.alignmentDetected",
-    "Relation matrix artifacts detected": "projects.pipeline.convergenceItem.relationDetected",
-    "Review pack artifacts detected": "projects.pipeline.convergenceItem.reviewDetected",
-    "Term workbench outputs are incomplete": "projects.pipeline.convergenceItem.termIncomplete",
-    "Cross-book alignment outputs are incomplete": "projects.pipeline.convergenceItem.alignmentIncomplete",
-    "Relation matrix outputs are incomplete": "projects.pipeline.convergenceItem.relationIncomplete",
-    "Review pack outputs are incomplete": "projects.pipeline.convergenceItem.reviewIncomplete",
+    "Term extraction artifacts detected":
+      "projects.pipeline.convergenceItem.termDetected",
+    "Cross-book alignment artifacts detected":
+      "projects.pipeline.convergenceItem.alignmentDetected",
+    "Relation matrix artifacts detected":
+      "projects.pipeline.convergenceItem.relationDetected",
+    "Review pack artifacts detected":
+      "projects.pipeline.convergenceItem.reviewDetected",
+    "Term workbench outputs are incomplete":
+      "projects.pipeline.convergenceItem.termIncomplete",
+    "Cross-book alignment outputs are incomplete":
+      "projects.pipeline.convergenceItem.alignmentIncomplete",
+    "Relation matrix outputs are incomplete":
+      "projects.pipeline.convergenceItem.relationIncomplete",
+    "Review pack outputs are incomplete":
+      "projects.pipeline.convergenceItem.reviewIncomplete",
   };
   const mappedKey = directMap[text];
   if (mappedKey) {
@@ -488,35 +580,43 @@ function localizeNextAction(
   const keyMap: Record<string, { title: string; description: string }> = {
     wait_for_completion: {
       title: "projects.pipeline.nextActionText.waitForCompletion.title",
-      description: "projects.pipeline.nextActionText.waitForCompletion.description",
+      description:
+        "projects.pipeline.nextActionText.waitForCompletion.description",
     },
     handle_failed_steps: {
       title: "projects.pipeline.nextActionText.handleFailedSteps.title",
-      description: "projects.pipeline.nextActionText.handleFailedSteps.description",
+      description:
+        "projects.pipeline.nextActionText.handleFailedSteps.description",
     },
     validate_template_contract: {
       title: "projects.pipeline.nextActionText.validateTemplateContract.title",
-      description: "projects.pipeline.nextActionText.validateTemplateContract.description",
+      description:
+        "projects.pipeline.nextActionText.validateTemplateContract.description",
     },
     complete_term_extraction: {
       title: "projects.pipeline.nextActionText.completeTermExtraction.title",
-      description: "projects.pipeline.nextActionText.completeTermExtraction.description",
+      description:
+        "projects.pipeline.nextActionText.completeTermExtraction.description",
     },
     complete_alignment: {
       title: "projects.pipeline.nextActionText.completeAlignment.title",
-      description: "projects.pipeline.nextActionText.completeAlignment.description",
+      description:
+        "projects.pipeline.nextActionText.completeAlignment.description",
     },
     build_relation_matrix: {
       title: "projects.pipeline.nextActionText.buildRelationMatrix.title",
-      description: "projects.pipeline.nextActionText.buildRelationMatrix.description",
+      description:
+        "projects.pipeline.nextActionText.buildRelationMatrix.description",
     },
     finish_review_pack: {
       title: "projects.pipeline.nextActionText.finishReviewPack.title",
-      description: "projects.pipeline.nextActionText.finishReviewPack.description",
+      description:
+        "projects.pipeline.nextActionText.finishReviewPack.description",
     },
     start_improvement_iteration: {
       title: "projects.pipeline.nextActionText.startImprovementIteration.title",
-      description: "projects.pipeline.nextActionText.startImprovementIteration.description",
+      description:
+        "projects.pipeline.nextActionText.startImprovementIteration.description",
     },
   };
 
@@ -576,13 +676,21 @@ export default function ProjectAutomationPanel({
 }: ProjectAutomationPanelProps) {
   const { t } = useTranslation();
   const [expandedStepIds, setExpandedStepIds] = useState<string[]>([]);
-  const [collapsedPreviewSectionKeys, setCollapsedPreviewSectionKeys] = useState<string[]>([]);
+  const [collapsedPreviewSectionKeys, setCollapsedPreviewSectionKeys] =
+    useState<string[]>([]);
 
-  const isStepPreviewExpanded = (stepId: string): boolean => expandedStepIds.includes(stepId);
-  const makeSectionStateKey = (stepId: string, sectionKey: string): string => `${stepId}::${sectionKey}`;
+  const isStepPreviewExpanded = (stepId: string): boolean =>
+    expandedStepIds.includes(stepId);
+  const makeSectionStateKey = (stepId: string, sectionKey: string): string =>
+    `${stepId}::${sectionKey}`;
 
-  const isPreviewSectionCollapsed = (stepId: string, sectionKey: string): boolean =>
-    collapsedPreviewSectionKeys.includes(makeSectionStateKey(stepId, sectionKey));
+  const isPreviewSectionCollapsed = (
+    stepId: string,
+    sectionKey: string,
+  ): boolean =>
+    collapsedPreviewSectionKeys.includes(
+      makeSectionStateKey(stepId, sectionKey),
+    );
 
   const toggleStepPreview = (stepId: string) => {
     setExpandedStepIds((current) =>
@@ -601,7 +709,10 @@ export default function ProjectAutomationPanel({
     );
   };
 
-  const handleCopyPreviewSection = async (sectionLabel: string, value: string) => {
+  const handleCopyPreviewSection = async (
+    sectionLabel: string,
+    value: string,
+  ) => {
     try {
       await navigator.clipboard.writeText(value);
       message.success(
@@ -634,7 +745,9 @@ export default function ProjectAutomationPanel({
     contractInputs?: Record<string, unknown>;
   }): string[] => {
     const items: string[] = [];
-    const inputKeys = Object.keys(params.stepInputs || params.contractInputs || {});
+    const inputKeys = Object.keys(
+      params.stepInputs || params.contractInputs || {},
+    );
     for (const key of inputKeys) {
       items.push(`dataset:${key}`);
     }
@@ -663,7 +776,9 @@ export default function ProjectAutomationPanel({
     contractOutputs?: Record<string, unknown>;
   }): string[] => {
     const items: string[] = [];
-    const outputKeys = Object.keys(params.stepOutputs || params.contractOutputs || {});
+    const outputKeys = Object.keys(
+      params.stepOutputs || params.contractOutputs || {},
+    );
     for (const key of outputKeys) {
       items.push(`dataset:${key}`);
     }
@@ -690,14 +805,20 @@ export default function ProjectAutomationPanel({
     if (stepIds.length === 0) {
       return null;
     }
-    const allExpanded = stepIds.every((stepId) => expandedStepIds.includes(stepId));
+    const allExpanded = stepIds.every((stepId) =>
+      expandedStepIds.includes(stepId),
+    );
 
     return (
       <div className={styles.stepPreviewBatchActions}>
         <Button size="small" onClick={() => setStepPreviewBatch(stepIds, true)}>
           {t("projects.pipeline.stepPreviewExpandAll")}
         </Button>
-        <Button size="small" disabled={!allExpanded} onClick={() => setStepPreviewBatch(stepIds, false)}>
+        <Button
+          size="small"
+          disabled={!allExpanded}
+          onClick={() => setStepPreviewBatch(stepIds, false)}
+        >
           {t("projects.pipeline.stepPreviewCollapseAll")}
         </Button>
       </div>
@@ -707,7 +828,11 @@ export default function ProjectAutomationPanel({
   return (
     <>
       <Card
-        title={<span className={styles.sectionTitle}>{t("projects.automation.title")}</span>}
+        title={
+          <span className={styles.sectionTitle}>
+            {t("projects.automation.title")}
+          </span>
+        }
         styles={{ body: { padding: 12 } }}
         extra={
           <Text type="secondary" className={styles.panelExtraText}>
@@ -730,7 +855,9 @@ export default function ProjectAutomationPanel({
                   {t("projects.pipeline.importGlobal")}
                 </Button>
               </div>
-              <div className={styles.itemMeta}>{t("projects.upload.batchBehaviorHint")}</div>
+              <div className={styles.itemMeta}>
+                {t("projects.upload.batchBehaviorHint")}
+              </div>
             </div>
 
             <div className={styles.automationTopCard}>
@@ -741,7 +868,9 @@ export default function ProjectAutomationPanel({
                   value={selectedTemplateId || undefined}
                   placeholder={t("projects.pipeline.template")}
                   options={pipelineTemplates.map((template) => ({
-                    label: `${template.name}${template.version ? ` (${template.version})` : ""}`,
+                    label: `${template.name}${
+                      template.version ? ` (${template.version})` : ""
+                    }`,
                     value: template.id,
                   }))}
                   onChange={onSelectTemplateId}
@@ -759,13 +888,17 @@ export default function ProjectAutomationPanel({
               </div>
             </div>
 
-            <div className={`${styles.automationTopCard} ${styles.automationTopCardWide}`}>
+            <div
+              className={`${styles.automationTopCard} ${styles.automationTopCardWide}`}
+            >
               <div className={styles.progressCoach}>
                 <div className={styles.progressCoachMeta}>
                   <div className={styles.subSectionTitle}>
                     {t("projects.automation.guidance")}
                   </div>
-                  <div className={styles.itemMeta}>{verificationGateSummary}</div>
+                  <div className={styles.itemMeta}>
+                    {verificationGateSummary}
+                  </div>
                 </div>
                 <div className={styles.progressCoachActions}>
                   <Button size="small" onClick={onStartAutomation}>
@@ -780,7 +913,11 @@ export default function ProjectAutomationPanel({
                   <Button
                     size="small"
                     type="primary"
-                    disabled={!canPromoteToTemplateDraft || !selectedTemplateId || !selectedRunId}
+                    disabled={
+                      !canPromoteToTemplateDraft ||
+                      !selectedTemplateId ||
+                      !selectedRunId
+                    }
                     onClick={onPreparePromotionDraft}
                   >
                     {t("projects.pipeline.promoteDraft")}
@@ -808,7 +945,9 @@ export default function ProjectAutomationPanel({
                     ghost
                     activeKey={selectedRunId || undefined}
                     onChange={(activeKey) => {
-                      const key = Array.isArray(activeKey) ? activeKey[0] : activeKey;
+                      const key = Array.isArray(activeKey)
+                        ? activeKey[0]
+                        : activeKey;
                       onSelectRunId(typeof key === "string" ? key : "");
                     }}
                     items={runsForSelectedTemplate.map((run) => ({
@@ -820,14 +959,20 @@ export default function ProjectAutomationPanel({
                               time: formatRunTimeLabel(run.created_at),
                             })}
                           </span>
-                          <Tag color={statusTagColor(run.status)}>{run.status}</Tag>
+                          <Tag color={statusTagColor(run.status)}>
+                            {run.status}
+                          </Tag>
                         </div>
                       ),
                       children: (
                         <div className={styles.runAccordionBody}>
                           <div className={styles.itemMeta}>{run.id}</div>
-                          <div className={styles.itemMeta}>{run.template_id}</div>
-                          <div className={styles.itemMeta}>{run.updated_at}</div>
+                          <div className={styles.itemMeta}>
+                            {run.template_id}
+                          </div>
+                          <div className={styles.itemMeta}>
+                            {run.updated_at}
+                          </div>
                           {selectedRunId === run.id && runDetail ? (
                             <>
                               <div className={styles.detailSectionCard}>
@@ -836,29 +981,43 @@ export default function ProjectAutomationPanel({
                                 </div>
                                 <div className={styles.automationMetaGrid}>
                                   <div className={styles.itemMeta}>
-                                    {t("projects.pipeline.convergenceStage")}: {localizeConvergenceStage(
+                                    {t("projects.pipeline.convergenceStage")}:{" "}
+                                    {localizeConvergenceStage(
                                       t,
                                       runDetail.convergence?.stage || "",
                                     )}
                                   </div>
                                   <div className={styles.itemMeta}>
-                                    {t("projects.pipeline.convergenceScore")}: {runDetail.convergence?.score ?? 0}%
-                                    {" · "}
+                                    {t("projects.pipeline.convergenceScore")}:{" "}
+                                    {runDetail.convergence?.score ?? 0}%{" · "}
                                     {runDetail.convergence?.passed_checks ?? 0}/
                                     {runDetail.convergence?.total_checks ?? 0}
                                   </div>
-                                  {(runDetail.convergence?.highlights || []).length > 0 && (
-                                    <div className={`${styles.itemMeta} ${styles.automationMetaGridWide}`}>
-                                      {t("projects.pipeline.highlights")}: {runDetail.convergence.highlights.map(
-                                        (item) => localizeConvergenceItem(t, item),
-                                      ).join("; ")}
+                                  {(runDetail.convergence?.highlights || [])
+                                    .length > 0 && (
+                                    <div
+                                      className={`${styles.itemMeta} ${styles.automationMetaGridWide}`}
+                                    >
+                                      {t("projects.pipeline.highlights")}:{" "}
+                                      {runDetail.convergence.highlights
+                                        .map((item) =>
+                                          localizeConvergenceItem(t, item),
+                                        )
+                                        .join("; ")}
                                     </div>
                                   )}
-                                  {(runDetail.convergence?.blocking_issues || []).length > 0 && (
-                                    <div className={`${styles.itemMeta} ${styles.automationMetaGridWide}`}>
-                                      {t("projects.pipeline.blockingIssues")}: {runDetail.convergence.blocking_issues.map(
-                                        (item) => localizeConvergenceItem(t, item),
-                                      ).join("; ")}
+                                  {(
+                                    runDetail.convergence?.blocking_issues || []
+                                  ).length > 0 && (
+                                    <div
+                                      className={`${styles.itemMeta} ${styles.automationMetaGridWide}`}
+                                    >
+                                      {t("projects.pipeline.blockingIssues")}:{" "}
+                                      {runDetail.convergence.blocking_issues
+                                        .map((item) =>
+                                          localizeConvergenceItem(t, item),
+                                        )
+                                        .join("; ")}
                                     </div>
                                   )}
                                 </div>
@@ -868,32 +1027,61 @@ export default function ProjectAutomationPanel({
                                 <div className={styles.subSectionTitle}>
                                   {t("projects.pipeline.nextActions")}
                                 </div>
-                                {runDetail.next_actions && runDetail.next_actions.length > 0 ? (
+                                {runDetail.next_actions &&
+                                runDetail.next_actions.length > 0 ? (
                                   <div className={styles.nextActionsGrid}>
                                     {runDetail.next_actions.map((action) => (
-                                      <div key={action.id} className={styles.nextActionCard}>
+                                      <div
+                                        key={action.id}
+                                        className={styles.nextActionCard}
+                                      >
                                         <div className={styles.itemMeta}>
-                                          <Tag color={actionSeverityColor(action.severity)}>
-                                            {actionSeverityLabel(t, action.severity || "info")}
+                                          <Tag
+                                            color={actionSeverityColor(
+                                              action.severity,
+                                            )}
+                                          >
+                                            {actionSeverityLabel(
+                                              t,
+                                              action.severity || "info",
+                                            )}
                                           </Tag>
-                                          <strong>{localizeNextAction(t, action).title}</strong>
+                                          <strong>
+                                            {
+                                              localizeNextAction(t, action)
+                                                .title
+                                            }
+                                          </strong>
                                           {": "}
-                                          {localizeNextAction(t, action).description}
+                                          {
+                                            localizeNextAction(t, action)
+                                              .description
+                                          }
                                         </div>
-                                        <div className={styles.nextActionButtons}>
+                                        <div
+                                          className={styles.nextActionButtons}
+                                        >
                                           {action.target_step_id ? (
                                             <Button
                                               size="small"
                                               type="primary"
-                                              onClick={() => onExecuteNextAction(action)}
+                                              onClick={() =>
+                                                onExecuteNextAction(action)
+                                              }
                                             >
-                                              {t("projects.pipeline.executeAction")}
+                                              {t(
+                                                "projects.pipeline.executeAction",
+                                              )}
                                             </Button>
                                           ) : null}
                                           {action.target_step_id ? (
                                             <Button
                                               size="small"
-                                              onClick={() => onFocusNextActionStep(action.target_step_id || "")}
+                                              onClick={() =>
+                                                onFocusNextActionStep(
+                                                  action.target_step_id || "",
+                                                )
+                                              }
                                             >
                                               {t("projects.pipeline.focusStep")}
                                             </Button>
@@ -901,7 +1089,9 @@ export default function ProjectAutomationPanel({
                                           <Button
                                             size="small"
                                             type="primary"
-                                            onClick={() => onApplyNextAction(action)}
+                                            onClick={() =>
+                                              onApplyNextAction(action)
+                                            }
                                           >
                                             {t("projects.pipeline.useInChat")}
                                           </Button>
@@ -920,49 +1110,83 @@ export default function ProjectAutomationPanel({
                                 <div className={styles.subSectionTitle}>
                                   {t("projects.pipeline.steps")}
                                 </div>
-                                {renderStepPreviewBatchActions(runDetail.steps.map((step) => step.id))}
+                                {renderStepPreviewBatchActions(
+                                  runDetail.steps.map((step) => step.id),
+                                )}
                                 <div className={styles.progressLine}>
-                                  {t("projects.pipeline.progress")}: {runProgress.completed}/
-                                  {runProgress.total} · running {runProgress.running} · pending {runProgress.pending}
+                                  {t("projects.pipeline.progress")}:{" "}
+                                  {runProgress.completed}/{runProgress.total} ·
+                                  running {runProgress.running} · pending{" "}
+                                  {runProgress.pending}
                                 </div>
                                 {runDetail.steps.length > 0 ? (
                                   <div className={styles.stepCardGrid}>
                                     {runDetail.steps.map((step, stepIndex) => {
-                                      const contract = stepContractById.get(step.id);
+                                      const contract = stepContractById.get(
+                                        step.id,
+                                      );
                                       return renderStepContractSummary({
                                         step: {
                                           ...step,
-                                          description: step.description || contract?.description,
-                                          depends_on: step.depends_on?.length ? step.depends_on : contract?.depends_on,
-                                          inputs: Object.keys(step.inputs || {}).length ? step.inputs : contract?.inputs,
-                                          outputs: Object.keys(step.outputs || {}).length ? step.outputs : contract?.outputs,
-                                          input_bindings: Object.keys(step.input_bindings || {}).length
+                                          description:
+                                            step.description ||
+                                            contract?.description,
+                                          depends_on: step.depends_on?.length
+                                            ? step.depends_on
+                                            : contract?.depends_on,
+                                          inputs: Object.keys(step.inputs || {})
+                                            .length
+                                            ? step.inputs
+                                            : contract?.inputs,
+                                          outputs: Object.keys(
+                                            step.outputs || {},
+                                          ).length
+                                            ? step.outputs
+                                            : contract?.outputs,
+                                          input_bindings: Object.keys(
+                                            step.input_bindings || {},
+                                          ).length
                                             ? step.input_bindings
                                             : contract?.input_bindings,
-                                          prompt: step.prompt || contract?.prompt,
-                                          script: step.script || contract?.script,
-                                          input_preview_items: formatStepInputPreviewItems({
-                                            stepId: step.id,
-                                            stepInputs: step.inputs,
-                                            contractInputs: contract?.inputs,
-                                          }),
-                                          output_preview_items: formatStepOutputPreviewItems({
-                                            stepId: step.id,
-                                            stepOutputs: step.outputs,
-                                            contractOutputs: contract?.outputs,
-                                          }),
-                                          retry_policy: Object.keys(step.retry_policy || {}).length
+                                          prompt:
+                                            step.prompt || contract?.prompt,
+                                          script:
+                                            step.script || contract?.script,
+                                          input_preview_items:
+                                            formatStepInputPreviewItems({
+                                              stepId: step.id,
+                                              stepInputs: step.inputs,
+                                              contractInputs: contract?.inputs,
+                                            }),
+                                          output_preview_items:
+                                            formatStepOutputPreviewItems({
+                                              stepId: step.id,
+                                              stepOutputs: step.outputs,
+                                              contractOutputs:
+                                                contract?.outputs,
+                                            }),
+                                          retry_policy: Object.keys(
+                                            step.retry_policy || {},
+                                          ).length
                                             ? step.retry_policy
                                             : contract?.retry_policy,
                                         },
                                         selected: selectedStepId === step.id,
-                                        related: !selectedStepId && highlightedStepIds.has(step.id) ? false : highlightedStepIds.has(step.id) && selectedStepId !== step.id,
+                                        related:
+                                          !selectedStepId &&
+                                          highlightedStepIds.has(step.id)
+                                            ? false
+                                            : highlightedStepIds.has(step.id) &&
+                                              selectedStepId !== step.id,
                                         stepOrder: stepIndex,
-                                        previewExpanded: isStepPreviewExpanded(step.id),
+                                        previewExpanded: isStepPreviewExpanded(
+                                          step.id,
+                                        ),
                                         statusTagColor,
                                         onSelectStep,
                                         onTogglePreview: toggleStepPreview,
-                                        isSectionCollapsed: isPreviewSectionCollapsed,
+                                        isSectionCollapsed:
+                                          isPreviewSectionCollapsed,
                                         onToggleSection: togglePreviewSection,
                                         onCopySection: handleCopyPreviewSection,
                                         t,
@@ -991,9 +1215,14 @@ export default function ProjectAutomationPanel({
 
               {runsForSelectedTemplate.length === 0 && (
                 <div className={styles.stepPanel}>
-                  <div className={styles.subSectionTitle}>{t("projects.pipeline.steps")}</div>
-                  {renderStepPreviewBatchActions((activeRunTemplate?.steps || []).map((step) => step.id))}
-                  {activeRunTemplate?.steps && activeRunTemplate.steps.length > 0 ? (
+                  <div className={styles.subSectionTitle}>
+                    {t("projects.pipeline.steps")}
+                  </div>
+                  {renderStepPreviewBatchActions(
+                    (activeRunTemplate?.steps || []).map((step) => step.id),
+                  )}
+                  {activeRunTemplate?.steps &&
+                  activeRunTemplate.steps.length > 0 ? (
                     <div className={styles.stepCardGrid}>
                       {activeRunTemplate.steps.map((step, stepIndex) =>
                         renderStepContractSummary({
@@ -1011,7 +1240,9 @@ export default function ProjectAutomationPanel({
                             }),
                           },
                           selected: selectedStepId === step.id,
-                          related: highlightedStepIds.has(step.id) && selectedStepId !== step.id,
+                          related:
+                            highlightedStepIds.has(step.id) &&
+                            selectedStepId !== step.id,
                           templateMode: true,
                           stepOrder: stepIndex,
                           previewExpanded: isStepPreviewExpanded(step.id),
@@ -1057,7 +1288,9 @@ export default function ProjectAutomationPanel({
             className={styles.importTemplateSelect}
             value={selectedPlatformTemplateId || undefined}
             options={platformTemplates.map((template) => ({
-              label: `${template.name}${template.version ? ` (${template.version})` : ""}`,
+              label: `${template.name}${
+                template.version ? ` (${template.version})` : ""
+              }`,
               value: template.id,
             }))}
             onChange={onSelectPlatformTemplateId}

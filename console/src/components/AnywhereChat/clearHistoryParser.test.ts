@@ -55,8 +55,14 @@ describe("clearHistoryParser", () => {
   });
 
   test("payloadCompletesResponse only accepts completed response", () => {
-    expect(payloadCompletesResponse({ object: "response", status: "completed" })).toBe(true);
-    expect(payloadCompletesResponse({ object: "response", status: "in_progress" })).toBe(false);
-    expect(payloadCompletesResponse({ object: "message", status: "completed" })).toBe(false);
+    expect(
+      payloadCompletesResponse({ object: "response", status: "completed" }),
+    ).toBe(true);
+    expect(
+      payloadCompletesResponse({ object: "response", status: "in_progress" }),
+    ).toBe(false);
+    expect(
+      payloadCompletesResponse({ object: "message", status: "completed" }),
+    ).toBe(false);
   });
 });

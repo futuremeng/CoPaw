@@ -41,7 +41,10 @@ export function buildUnifiedBatchProgress(
   if (activeTask) {
     const percent = Math.max(
       0,
-      Math.min(100, Math.round(Number(activeTask.percent ?? activeTask.progress ?? 0))),
+      Math.min(
+        100,
+        Math.round(Number(activeTask.percent ?? activeTask.progress ?? 0)),
+      ),
     );
     const current = Number(activeTask.current ?? 0);
     const total = Number(activeTask.total ?? 0);
@@ -50,7 +53,12 @@ export function buildUnifiedBatchProgress(
       visible: true,
       percent,
       status: "active",
-      labelDefault: `${activeTask.stage_message || activeTask.current_stage || activeTask.task_type || "Knowledge task running"}${detail}`,
+      labelDefault: `${
+        activeTask.stage_message ||
+        activeTask.current_stage ||
+        activeTask.task_type ||
+        "Knowledge task running"
+      }${detail}`,
     };
   }
 

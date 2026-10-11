@@ -12,12 +12,7 @@ export interface ProjectKnowledgeSourceRow {
   category: "document" | "structured" | "image";
 }
 
-const STRUCTURED_EXTENSIONS = new Set([
-  "json",
-  "jsonl",
-  "ndjson",
-  "geojson",
-]);
+const STRUCTURED_EXTENSIONS = new Set(["json", "jsonl", "ndjson", "geojson"]);
 
 const IMAGE_EXTENSIONS = new Set([
   "png",
@@ -65,7 +60,9 @@ function extensionOf(path: string): string {
   return dotIndex >= 0 ? fileName.slice(dotIndex + 1) : "";
 }
 
-export function classifyKnowledgeSourceCategory(path: string): "document" | "structured" | "image" {
+export function classifyKnowledgeSourceCategory(
+  path: string,
+): "document" | "structured" | "image" {
   const extension = extensionOf(path);
   if (STRUCTURED_EXTENSIONS.has(extension)) {
     return "structured";
@@ -92,10 +89,17 @@ function resolveContentTypeLabel(file: AgentProjectFileInfo): string {
   return formatFileLabel(file.content_type || "other");
 }
 
-export function buildKnowledgeSourceRows(files: AgentProjectFileInfo[]): ProjectKnowledgeSourceRow[] {
+export function buildKnowledgeSourceRows(
+  files: AgentProjectFileInfo[],
+): ProjectKnowledgeSourceRow[] {
   return files
     .filter((file) => !file.ignored && !isBuiltInKnowledgeSource(file))
-    .filter((file) => !isExcludedKnowledgeSourcePath(String(file.path || file.filename || "")))
+    .filter(
+      (file) =>
+        !isExcludedKnowledgeSourcePath(
+          String(file.path || file.filename || ""),
+        ),
+    )
     .map((file, index) => ({
       key: `${file.path || file.filename || index}`,
       path: normalizePath(file.path || file.filename),
@@ -104,7 +108,9 @@ export function buildKnowledgeSourceRows(files: AgentProjectFileInfo[]): Project
       contentType: resolveContentTypeLabel(file),
       size: Math.max(0, Number(file.size || 0)),
       modifiedTime: String(file.modified_time || "").trim(),
-      category: classifyKnowledgeSourceCategory(String(file.path || file.filename || "")),
+      category: classifyKnowledgeSourceCategory(
+        String(file.path || file.filename || ""),
+      ),
     }))
     .sort((left, right) => left.path.localeCompare(right.path));
 }

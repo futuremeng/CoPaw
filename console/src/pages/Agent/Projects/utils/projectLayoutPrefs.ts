@@ -2,7 +2,14 @@ import type { ProjectFileFilterKey } from "./filtering";
 
 export type ProjectStageKey = "source" | "knowledge" | "output" | "builtin";
 export type TreeDisplayMode = "filter" | "highlight";
-export type KnowledgeDockTabKey = "explore" | "sources" | "processing" | "ner" | "outputs" | "health" | "settings";
+export type KnowledgeDockTabKey =
+  | "explore"
+  | "sources"
+  | "processing"
+  | "ner"
+  | "outputs"
+  | "health"
+  | "settings";
 
 function parsePaneSize(value: unknown, fallback: number): number {
   return typeof value === "number" && Number.isFinite(value) && value > 0
@@ -37,17 +44,30 @@ export interface ProjectDetailLayoutPrefs {
 }
 
 export const PROJECT_LAYOUT_PREFS_PREFIX = "copaw:projects:detail:layout:";
-const STAGE_KEYS: ProjectStageKey[] = ["source", "knowledge", "output", "builtin"];
+const STAGE_KEYS: ProjectStageKey[] = [
+  "source",
+  "knowledge",
+  "output",
+  "builtin",
+];
 const TREE_MODES: TreeDisplayMode[] = ["filter", "highlight"];
 
-function parseStageKey(value: unknown, fallback: ProjectStageKey): ProjectStageKey {
-  return typeof value === "string" && STAGE_KEYS.includes(value as ProjectStageKey)
+function parseStageKey(
+  value: unknown,
+  fallback: ProjectStageKey,
+): ProjectStageKey {
+  return typeof value === "string" &&
+    STAGE_KEYS.includes(value as ProjectStageKey)
     ? (value as ProjectStageKey)
     : fallback;
 }
 
-function parseTreeMode(value: unknown, fallback: TreeDisplayMode): TreeDisplayMode {
-  return typeof value === "string" && TREE_MODES.includes(value as TreeDisplayMode)
+function parseTreeMode(
+  value: unknown,
+  fallback: TreeDisplayMode,
+): TreeDisplayMode {
+  return typeof value === "string" &&
+    TREE_MODES.includes(value as TreeDisplayMode)
     ? (value as TreeDisplayMode)
     : fallback;
 }
@@ -73,7 +93,9 @@ export function defaultProjectLayoutPrefs(): ProjectDetailLayoutPrefs {
   };
 }
 
-export function parseProjectLayoutPrefs(raw: string | null): ProjectDetailLayoutPrefs {
+export function parseProjectLayoutPrefs(
+  raw: string | null,
+): ProjectDetailLayoutPrefs {
   const fallback = defaultProjectLayoutPrefs();
   if (!raw) {
     return fallback;
@@ -81,28 +103,35 @@ export function parseProjectLayoutPrefs(raw: string | null): ProjectDetailLayout
 
   try {
     const parsed = JSON.parse(raw) as Partial<ProjectDetailLayoutPrefs>;
-    const parsedKnowledgeDockTab = parsed.knowledgeDockTab as string | undefined;
+    const parsedKnowledgeDockTab = parsed.knowledgeDockTab as
+      | string
+      | undefined;
     return {
-      leftPanelCollapsed: parsed.leftPanelCollapsed ?? fallback.leftPanelCollapsed,
+      leftPanelCollapsed:
+        parsed.leftPanelCollapsed ?? fallback.leftPanelCollapsed,
       activeStage: parseStageKey(parsed.activeStage, fallback.activeStage),
       knowledgeModuleCollapsed:
         parsed.knowledgeModuleCollapsed ?? fallback.knowledgeModuleCollapsed,
       knowledgeDockTab:
-        parsedKnowledgeDockTab === "settings"
-        || parsedKnowledgeDockTab === "sources"
-        || parsedKnowledgeDockTab === "processing"
-        || parsedKnowledgeDockTab === "ner"
-        || parsedKnowledgeDockTab === "outputs"
-        || parsedKnowledgeDockTab === "health"
+        parsedKnowledgeDockTab === "settings" ||
+        parsedKnowledgeDockTab === "sources" ||
+        parsedKnowledgeDockTab === "processing" ||
+        parsedKnowledgeDockTab === "ner" ||
+        parsedKnowledgeDockTab === "outputs" ||
+        parsedKnowledgeDockTab === "health"
           ? parsedKnowledgeDockTab
           : parsedKnowledgeDockTab === "relations"
-            ? "outputs"
-          : parsedKnowledgeDockTab === "signals" || parsedKnowledgeDockTab === "insights"
-            ? "health"
-            : fallback.knowledgeDockTab,
+          ? "outputs"
+          : parsedKnowledgeDockTab === "signals" ||
+            parsedKnowledgeDockTab === "insights"
+          ? "health"
+          : fallback.knowledgeDockTab,
       selectedMetricFilter:
         parsed.selectedMetricFilter ?? fallback.selectedMetricFilter,
-      treeDisplayMode: parseTreeMode(parsed.treeDisplayMode, fallback.treeDisplayMode),
+      treeDisplayMode: parseTreeMode(
+        parsed.treeDisplayMode,
+        fallback.treeDisplayMode,
+      ),
       treeExpandedKeys: parseStringArray(parsed.treeExpandedKeys),
       selectedTreeFilePath:
         typeof parsed.selectedTreeFilePath === "string"

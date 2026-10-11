@@ -53,14 +53,24 @@ function isInternalAutoContinueUserMessage(message: Message): boolean {
   if (!isUserRole(message?.role)) {
     return false;
   }
-  return extractTextFromChatContent(message?.content) === INTERNAL_AUTO_CONTINUE_PROMPT;
+  return (
+    extractTextFromChatContent(message?.content) ===
+    INTERNAL_AUTO_CONTINUE_PROMPT
+  );
 }
 
-function filterInternalAutoContinueUserMessages(messages: Message[]): Message[] {
-  return messages.filter((message) => !isInternalAutoContinueUserMessage(message));
+function filterInternalAutoContinueUserMessages(
+  messages: Message[],
+): Message[] {
+  return messages.filter(
+    (message) => !isInternalAutoContinueUserMessage(message),
+  );
 }
 
-function collectSessionLineageIds(chats: ChatSpec[], sessionId: string): string[] {
+function collectSessionLineageIds(
+  chats: ChatSpec[],
+  sessionId: string,
+): string[] {
   const chatById = new Map(chats.map((chat) => [chat.id, chat]));
   const lineage: string[] = [];
   const visited = new Set<string>();
@@ -113,16 +123,21 @@ function mergeMessagesByStableId<T extends object>(messages: T[]): T[] {
   return merged;
 }
 
-export function getHistoryMessages(history: ChatHistory | null | undefined): Message[] {
+export function getHistoryMessages(
+  history: ChatHistory | null | undefined,
+): Message[] {
   return Array.isArray(history?.messages) ? history.messages : [];
 }
 
-export function getLastVisibleUserState(history: ChatHistory | null | undefined): {
+export function getLastVisibleUserState(
+  history: ChatHistory | null | undefined,
+): {
   stableId: string;
   text: string;
 } | null {
   const messages = getHistoryMessages(history);
-  const tailMessage = messages.length > 0 ? messages[messages.length - 1] : undefined;
+  const tailMessage =
+    messages.length > 0 ? messages[messages.length - 1] : undefined;
   if (!isUserRole(tailMessage?.role)) {
     return null;
   }
@@ -133,7 +148,8 @@ export function getLastVisibleUserState(history: ChatHistory | null | undefined)
   }
 
   return {
-    stableId: getStableMessageId((tailMessage || {}) as StableMessageIdentity) || text,
+    stableId:
+      getStableMessageId((tailMessage || {}) as StableMessageIdentity) || text,
     text,
   };
 }
@@ -218,9 +234,9 @@ async function loadPagedChatHistory(chatId: string): Promise<ChatHistory> {
 
   for (
     let i = 0;
-    i < RUNNING_EMPTY_HISTORY_RETRY_COUNT
-      && history.status === "running"
-      && history.messages.length === 0;
+    i < RUNNING_EMPTY_HISTORY_RETRY_COUNT &&
+    history.status === "running" &&
+    history.messages.length === 0;
     i += 1
   ) {
     await new Promise<void>((resolve) => {
@@ -232,8 +248,13 @@ async function loadPagedChatHistory(chatId: string): Promise<ChatHistory> {
   return history;
 }
 
-export async function loadMergedRawChatHistory(sessionId: string): Promise<ChatHistory | null> {
-  const chats = await chatApi.listChats({ user_id: "default", channel: "console" });
+export async function loadMergedRawChatHistory(
+  sessionId: string,
+): Promise<ChatHistory | null> {
+  const chats = await chatApi.listChats({
+    user_id: "default",
+    channel: "console",
+  });
   const lineageIds = collectSessionLineageIds(chats, sessionId);
   const histories: ChatHistory[] = [];
 
@@ -266,7 +287,10 @@ export async function loadMergedRawChatHistory(sessionId: string): Promise<ChatH
 export async function loadMergedRuntimeSession(
   sessionId: string,
 ): Promise<IAgentScopeRuntimeWebUISession | null> {
-  const chats = await chatApi.listChats({ user_id: "default", channel: "console" });
+  const chats = await chatApi.listChats({
+    user_id: "default",
+    channel: "console",
+  });
   const lineageIds = collectSessionLineageIds(chats, sessionId);
   const sessions: IAgentScopeRuntimeWebUISession[] = [];
 
@@ -292,7 +316,9 @@ export async function loadMergedRuntimeSession(
         : [],
     ),
   );
-  const leafSession = sessions[sessions.length - 1] as IAgentScopeRuntimeWebUISession & {
+  const leafSession = sessions[
+    sessions.length - 1
+  ] as IAgentScopeRuntimeWebUISession & {
     realId?: string;
     meta?: Record<string, unknown>;
   };

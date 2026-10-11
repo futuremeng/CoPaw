@@ -31,7 +31,9 @@ describe("runtimeResponseFallback", () => {
     };
 
     const normalized = materializeThinkingOnlyFallback(response);
-    const content = normalized.output?.[0]?.content as Array<Record<string, unknown>>;
+    const content = normalized.output?.[0]?.content as Array<
+      Record<string, unknown>
+    >;
 
     expect(content).toHaveLength(2);
     expect(content[1]).toMatchObject({

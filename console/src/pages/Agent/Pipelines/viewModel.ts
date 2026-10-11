@@ -10,7 +10,8 @@ export type FlowErrorSummary = {
   message: string;
 };
 
-const normalizeText = (value: string | null | undefined): string => String(value || "").trim();
+const normalizeText = (value: string | null | undefined): string =>
+  String(value || "").trim();
 
 export function humanizeFlowKey(value: string): string {
   const normalized = normalizeText(value);
@@ -27,11 +28,18 @@ export function humanizeFlowKey(value: string): string {
 
 export function isKnowledgeFlowDefinition(definition: FlowDefinition): boolean {
   const id = normalizeText(definition.id).toLowerCase();
-  const tags = (definition.tags || []).map((tag) => normalizeText(tag).toLowerCase());
-  return tags.includes("knowledge") || (tags.includes("project") && id.includes("knowledge"));
+  const tags = (definition.tags || []).map((tag) =>
+    normalizeText(tag).toLowerCase(),
+  );
+  return (
+    tags.includes("knowledge") ||
+    (tags.includes("project") && id.includes("knowledge"))
+  );
 }
 
-export function getFlowDefinitionCompatibilityIssues(definition: FlowDefinition): string[] {
+export function getFlowDefinitionCompatibilityIssues(
+  definition: FlowDefinition,
+): string[] {
   const issues: string[] = [];
   const definitionId = normalizeText(definition.id);
   const name = normalizeText(definition.name);
@@ -75,7 +83,9 @@ export function getFlowDefinitionCompatibilityIssues(definition: FlowDefinition)
     for (const dependency of step?.depends_on || []) {
       const depId = normalizeText(dependency);
       if (depId && !knownStepIds.has(depId)) {
-        issues.push(`step ${stepId || "unknown"} depends on missing step:${depId}`);
+        issues.push(
+          `step ${stepId || "unknown"} depends on missing step:${depId}`,
+        );
       }
     }
   }
@@ -83,15 +93,21 @@ export function getFlowDefinitionCompatibilityIssues(definition: FlowDefinition)
   return issues;
 }
 
-export function isCompatibleFlowDefinition(definition: FlowDefinition): boolean {
+export function isCompatibleFlowDefinition(
+  definition: FlowDefinition,
+): boolean {
   return getFlowDefinitionCompatibilityIssues(definition).length === 0;
 }
 
-export function filterCompatibleFlowDefinitions(definitions: FlowDefinition[]): FlowDefinition[] {
+export function filterCompatibleFlowDefinitions(
+  definitions: FlowDefinition[],
+): FlowDefinition[] {
   return definitions.filter(isCompatibleFlowDefinition);
 }
 
-export function sortFlowDefinitions(definitions: FlowDefinition[]): FlowDefinition[] {
+export function sortFlowDefinitions(
+  definitions: FlowDefinition[],
+): FlowDefinition[] {
   return [...definitions].sort((left, right) => {
     const leftKnowledge = isKnowledgeFlowDefinition(left) ? 1 : 0;
     const rightKnowledge = isKnowledgeFlowDefinition(right) ? 1 : 0;
@@ -131,17 +147,28 @@ export function getStructuredErrorSummary(error: unknown): FlowErrorSummary {
   const detail = parseErrorDetail(error);
   if (detail && typeof detail === "object") {
     return {
-      errorCode: typeof detail.error_code === "string" ? detail.error_code : undefined,
-      errorSource: typeof detail.error_source === "string" ? detail.error_source : undefined,
-      commandType: typeof detail.command_type === "string" ? detail.command_type : undefined,
-      flowRunId: typeof detail.flow_run_id === "string" ? detail.flow_run_id : undefined,
-      recoveryHint: typeof detail.recovery_hint === "string" ? detail.recovery_hint : undefined,
+      errorCode:
+        typeof detail.error_code === "string" ? detail.error_code : undefined,
+      errorSource:
+        typeof detail.error_source === "string"
+          ? detail.error_source
+          : undefined,
+      commandType:
+        typeof detail.command_type === "string"
+          ? detail.command_type
+          : undefined,
+      flowRunId:
+        typeof detail.flow_run_id === "string" ? detail.flow_run_id : undefined,
+      recoveryHint:
+        typeof detail.recovery_hint === "string"
+          ? detail.recovery_hint
+          : undefined,
       message:
         typeof detail.message === "string" && detail.message.trim()
           ? detail.message
           : error instanceof Error && error.message.trim()
-            ? error.message
-            : "Request failed",
+          ? error.message
+          : "Request failed",
     };
   }
 

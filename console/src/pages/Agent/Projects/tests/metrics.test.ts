@@ -51,21 +51,29 @@ describe("project metrics", () => {
     expect(isTextPath("original/doc.txt")).toBe(true);
     expect(isTextPath("assets/photo.webp")).toBe(false);
     expect(isScriptPath(".scripts/run.py")).toBe(true);
-    expect(matchesProjectKnowledgeFilter("markdown", {
-      path: "original/doc.txt",
-      modified_time: "2026-04-08T00:00:00Z",
-    })).toBe(false);
-    expect(matchesProjectKnowledgeFilter("text", {
-      path: "original/doc.txt",
-      modified_time: "2026-04-08T00:00:00Z",
-    })).toBe(true);
-    expect(matchesProjectKnowledgeFilter("script", {
-      path: ".scripts/run.py",
-      modified_time: "2026-04-08T00:00:00Z",
-    })).toBe(true);
-    expect(matchesProjectKnowledgeFilter("otherType", {
-      path: "assets/photo.webp",
-      modified_time: "2026-03-20T00:00:00Z",
-    })).toBe(true);
+    expect(
+      matchesProjectKnowledgeFilter("markdown", {
+        path: "original/doc.txt",
+        modified_time: "2026-04-08T00:00:00Z",
+      }),
+    ).toBe(false);
+    expect(
+      matchesProjectKnowledgeFilter("text", {
+        path: "original/doc.txt",
+        modified_time: "2026-04-08T00:00:00Z",
+      }),
+    ).toBe(true);
+    expect(
+      matchesProjectKnowledgeFilter("script", {
+        path: ".scripts/run.py",
+        modified_time: "2026-04-08T00:00:00Z",
+      }),
+    ).toBe(true);
+    expect(
+      matchesProjectKnowledgeFilter("otherType", {
+        path: "assets/photo.webp",
+        modified_time: "2026-03-20T00:00:00Z",
+      }),
+    ).toBe(true);
   });
 });

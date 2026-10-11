@@ -10,7 +10,10 @@ const ENTITY_TYPE_LABELS: Record<string, [string, string]> = {
 
 const RELATION_TYPE_LABELS: Record<string, [string, string]> = {
   mentions: ["copaw.projects.knowledge.graphRelationType.mentions", "Mentions"],
-  co_occurs_with: ["copaw.projects.knowledge.graphRelationType.co_occurs_with", "Co-occurs with"],
+  co_occurs_with: [
+    "copaw.projects.knowledge.graphRelationType.co_occurs_with",
+    "Co-occurs with",
+  ],
 };
 
 function humanizeGraphFilterValue(value: string): string {
@@ -24,7 +27,10 @@ function humanizeGraphFilterValue(value: string): string {
     .join(" ");
 }
 
-export function formatGraphEntityTypeLabel(value: string, t: TranslateFn): string {
+export function formatGraphEntityTypeLabel(
+  value: string,
+  t: TranslateFn,
+): string {
   const normalized = String(value || "").trim();
   if (!normalized) {
     return "";
@@ -36,7 +42,10 @@ export function formatGraphEntityTypeLabel(value: string, t: TranslateFn): strin
   return humanizeGraphFilterValue(normalized);
 }
 
-export function formatGraphRelationTypeLabel(value: string, t: TranslateFn): string {
+export function formatGraphRelationTypeLabel(
+  value: string,
+  t: TranslateFn,
+): string {
   const normalized = String(value || "").trim();
   if (!normalized) {
     return "";

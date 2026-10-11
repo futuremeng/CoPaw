@@ -40,7 +40,9 @@ interface EditableSource extends AgentsSquareSourceSpec {
 export function AgentSquarePanel({ onImported }: AgentSquarePanelProps) {
   const { t } = useTranslation();
   const [items, setItems] = useState<AgentSquareItem[]>([]);
-  const [sourceErrors, setSourceErrors] = useState<AgentSquareSourceError[]>([]);
+  const [sourceErrors, setSourceErrors] = useState<AgentSquareSourceError[]>(
+    [],
+  );
   const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState("");
   const [importingKey, setImportingKey] = useState<string | null>(null);
@@ -62,9 +64,7 @@ export function AgentSquarePanel({ onImported }: AgentSquarePanelProps) {
       setSourceErrors(data.source_errors || []);
     } catch (error: unknown) {
       const msg =
-        error instanceof Error
-          ? error.message
-          : t("agent.squareLoadFailed");
+        error instanceof Error ? error.message : t("agent.squareLoadFailed");
       message.error(msg);
     } finally {
       setLoading(false);
@@ -252,9 +252,7 @@ export function AgentSquarePanel({ onImported }: AgentSquarePanelProps) {
       await onImported?.();
     } catch (error: unknown) {
       const msg =
-        error instanceof Error
-          ? error.message
-          : t("agent.squareImportFailed");
+        error instanceof Error ? error.message : t("agent.squareImportFailed");
       message.error(msg);
     } finally {
       setImportingKey(null);
@@ -278,7 +276,10 @@ export function AgentSquarePanel({ onImported }: AgentSquarePanelProps) {
         >
           {t("agent.squareRefresh")}
         </Button>
-        <Button icon={<SettingOutlined />} onClick={() => void handleOpenSourceModal()}>
+        <Button
+          icon={<SettingOutlined />}
+          onClick={() => void handleOpenSourceModal()}
+        >
           {t("agent.squareSources")}
         </Button>
       </Space>
@@ -314,7 +315,9 @@ export function AgentSquarePanel({ onImported }: AgentSquarePanelProps) {
             key: "name",
             render: (_, record) => (
               <div>
-                <div style={{ fontWeight: 500 }}>{record.name || record.agent_id}</div>
+                <div style={{ fontWeight: 500 }}>
+                  {record.name || record.agent_id}
+                </div>
                 {record.description ? (
                   <div style={{ opacity: 0.7, fontSize: 12 }}>
                     {record.description}
@@ -382,7 +385,11 @@ export function AgentSquarePanel({ onImported }: AgentSquarePanelProps) {
           <Button key="add" icon={<PlusOutlined />} onClick={handleAddSource}>
             {t("agent.squareSourceAdd")}
           </Button>,
-          <Button key="reset" onClick={() => void handleResetSources()} loading={sourceSaving}>
+          <Button
+            key="reset"
+            onClick={() => void handleResetSources()}
+            loading={sourceSaving}
+          >
             {t("agent.squareSourceReset")}
           </Button>,
           <Button key="cancel" onClick={() => setSourceModalOpen(false)}>

@@ -68,14 +68,14 @@ export interface MarketplaceDrawerProps {
         stopped: boolean;
       }
   >;
-    installActionLabel?: string;
-    enableAllActionLabel?: string;
-    enableAllConfirmText?: string;
-    bulkEnableLoadingText?: string;
-    enableAllSummaryActionLabel?: string;
-    installAllInGroupLabel?: string;
-    installAllInGroupStopLabel?: string;
-    useBulkEnableForGroupInstall?: boolean;
+  installActionLabel?: string;
+  enableAllActionLabel?: string;
+  enableAllConfirmText?: string;
+  bulkEnableLoadingText?: string;
+  enableAllSummaryActionLabel?: string;
+  installAllInGroupLabel?: string;
+  installAllInGroupStopLabel?: string;
+  useBulkEnableForGroupInstall?: boolean;
 }
 
 export function MarketplaceDrawer({
@@ -422,7 +422,10 @@ export function MarketplaceDrawer({
     type: "enable" | "disable" | "delete",
     marketId: string,
   ) => {
-    if (bulkActionState?.marketId === marketId && bulkActionState.type === type) {
+    if (
+      bulkActionState?.marketId === marketId &&
+      bulkActionState.type === type
+    ) {
       stopBulkRef.current = true;
       return;
     }
@@ -431,20 +434,20 @@ export function MarketplaceDrawer({
       type === "enable"
         ? enableAllActionLabel || t("skills.marketEnableAll")
         : type === "disable"
-          ? t("skills.marketDisableAll")
-          : t("skills.marketDeleteAll");
+        ? t("skills.marketDisableAll")
+        : t("skills.marketDeleteAll");
     const actionConfirm =
       type === "enable"
         ? enableAllConfirmText || t("skills.marketEnableAllConfirm")
         : type === "disable"
-          ? t("skills.marketDisableAllConfirm")
-          : t("skills.marketDeleteAllConfirm");
+        ? t("skills.marketDisableAllConfirm")
+        : t("skills.marketDeleteAllConfirm");
     const actionLoading =
       type === "enable"
         ? bulkEnableLoadingText || t("skills.marketBulkEnableLoading")
         : type === "disable"
-          ? t("skills.marketBulkDisableLoading")
-          : t("skills.marketBulkDeleteLoading");
+        ? t("skills.marketBulkDisableLoading")
+        : t("skills.marketBulkDeleteLoading");
 
     Modal.confirm({
       title: actionTitle,
@@ -470,9 +473,10 @@ export function MarketplaceDrawer({
           });
 
           if (result.type === "enable") {
-            const notify = result.failed > 0 || result.stopped
-              ? message.warning
-              : message.success;
+            const notify =
+              result.failed > 0 || result.stopped
+                ? message.warning
+                : message.success;
             notify({
               key: messageKey,
               content: t("skills.marketBulkEnableSummary", {
@@ -487,9 +491,10 @@ export function MarketplaceDrawer({
               }),
             });
           } else if (result.type === "disable") {
-            const notify = result.failed > 0 || result.stopped
-              ? message.warning
-              : message.success;
+            const notify =
+              result.failed > 0 || result.stopped
+                ? message.warning
+                : message.success;
             notify({
               key: messageKey,
               content: t("skills.marketBulkDisableSummary", {
@@ -500,9 +505,10 @@ export function MarketplaceDrawer({
               }),
             });
           } else {
-            const notify = result.failed > 0 || result.stopped
-              ? message.warning
-              : message.success;
+            const notify =
+              result.failed > 0 || result.stopped
+                ? message.warning
+                : message.success;
             notify({
               key: messageKey,
               content: t("skills.marketBulkDeleteSummary", {
@@ -627,7 +633,10 @@ export function MarketplaceDrawer({
     setInstallProgress(null);
   };
 
-  const confirmInstallAllInMarket = (marketId: string, items: MarketplaceItem[]) => {
+  const confirmInstallAllInMarket = (
+    marketId: string,
+    items: MarketplaceItem[],
+  ) => {
     if (!items.length || installingMarketId) {
       return;
     }
@@ -669,7 +678,9 @@ export function MarketplaceDrawer({
             {t("skills.marketConfigTitle")}
           </h3>
           <div className={styles.marketEditorActions}>
-            <Button onClick={handleAddMarketRow}>{t("skills.marketAdd")}</Button>
+            <Button onClick={handleAddMarketRow}>
+              {t("skills.marketAdd")}
+            </Button>
             <Button onClick={confirmResetMarkets}>
               {t("skills.marketResetTemplate")}
             </Button>
@@ -770,8 +781,7 @@ export function MarketplaceDrawer({
                     value={market.order}
                     onChange={(e) =>
                       onUpdateMarket(idx, {
-                        order:
-                          Number.parseInt(e.target.value || "0", 10) || 0,
+                        order: Number.parseInt(e.target.value || "0", 10) || 0,
                       })
                     }
                     placeholder="order"
@@ -831,107 +841,111 @@ export function MarketplaceDrawer({
                   (err) => err.market_id === market.id,
                 );
                 return (
-              <div
-                key={`${market.id}-${idx}`}
-                className={styles.marketRowReadonly}
-              >
-                <div className={styles.marketRowReadonlyInfo}>
-                  <span className={styles.marketRowReadonlyId}>
-                    {market.id || "—"}
-                  </span>
-                  <span className={styles.marketRowReadonlyName}>
-                    {market.name || "—"}
-                  </span>
-                  <span
-                    className={styles.marketRowReadonlyUrl}
-                    title={market.url}
+                  <div
+                    key={`${market.id}-${idx}`}
+                    className={styles.marketRowReadonly}
                   >
-                    {market.url || "—"}
-                  </span>
-                </div>
-                <div className={styles.marketRowBulkActions}>
-                  <Button
-                    size="small"
-                    disabled={anyBulkRunning || loadingMarketKey !== null}
-                    onClick={() => handleEditRow(idx)}
-                  >
-                    {t("skills.marketEditRow")}
-                  </Button>
-                  <Button
-                    size="small"
-                    loading={loadingMarketKey === marketKey}
-                    disabled={
-                      marketDisabled ||
-                      anyBulkRunning ||
-                      (loadingMarketKey !== null && loadingMarketKey !== marketKey)
-                    }
-                    onClick={() => {
-                      void onLoadMarket(idx);
-                    }}
-                  >
-                    {hasMarketError
-                      ? t("skills.marketRetryLoad")
-                      : t("skills.marketLoad")}
-                  </Button>
-                  <span
-                    className={
-                      market.enabled
-                        ? styles.marketRowBadgeEnabled
-                        : styles.marketRowBadgeDisabled
-                    }
-                  >
-                    {market.enabled ? t("common.enabled") : t("common.disabled")}
-                  </span>
-                  <span className={styles.marketRowDivider}>|</span>
-                  <span className={styles.marketRowCount}>
-                    {t("skills.marketMetaItems")}: {marketItemCountMap[market.id] ?? 0}
-                  </span>
-                  <Button
-                    size="small"
-                    type={runningType === "enable" ? "primary" : "default"}
-                    danger={runningType === "enable"}
-                    disabled={
-                      marketDisabled ||
-                      anyBulkRunning &&
-                      !(marketBusy && runningType === "enable")
-                    }
-                    onClick={() => runBulkAction("enable", market.id)}
-                  >
-                    {runningType === "enable"
-                      ? t("skills.marketAbortEnable")
-                      : enableAllActionLabel || t("skills.marketEnableAll")}
-                  </Button>
-                  <Button
-                    size="small"
-                    type={runningType === "disable" ? "primary" : "default"}
-                    danger={runningType === "disable"}
-                    disabled={
-                      marketDisabled ||
-                      anyBulkRunning &&
-                      !(marketBusy && runningType === "disable")
-                    }
-                    onClick={() => runBulkAction("disable", market.id)}
-                  >
-                    {runningType === "disable"
-                      ? t("skills.marketAbortDisable")
-                      : t("skills.marketDisableAll")}
-                  </Button>
-                  <Button
-                    size="small"
-                    danger
-                    disabled={
-                      marketDisabled ||
-                      anyBulkRunning &&
-                      !(marketBusy && runningType === "delete")
-                    }
-                    onClick={() => runBulkAction("delete", market.id)}
-                  >
-                    {runningType === "delete"
-                      ? t("skills.marketAbortDelete")
-                      : t("skills.marketDeleteAll")}
-                  </Button>
-                </div>
-              </div>
+                    <div className={styles.marketRowReadonlyInfo}>
+                      <span className={styles.marketRowReadonlyId}>
+                        {market.id || "—"}
+                      </span>
+                      <span className={styles.marketRowReadonlyName}>
+                        {market.name || "—"}
+                      </span>
+                      <span
+                        className={styles.marketRowReadonlyUrl}
+                        title={market.url}
+                      >
+                        {market.url || "—"}
+                      </span>
+                    </div>
+                    <div className={styles.marketRowBulkActions}>
+                      <Button
+                        size="small"
+                        disabled={anyBulkRunning || loadingMarketKey !== null}
+                        onClick={() => handleEditRow(idx)}
+                      >
+                        {t("skills.marketEditRow")}
+                      </Button>
+                      <Button
+                        size="small"
+                        loading={loadingMarketKey === marketKey}
+                        disabled={
+                          marketDisabled ||
+                          anyBulkRunning ||
+                          (loadingMarketKey !== null &&
+                            loadingMarketKey !== marketKey)
+                        }
+                        onClick={() => {
+                          void onLoadMarket(idx);
+                        }}
+                      >
+                        {hasMarketError
+                          ? t("skills.marketRetryLoad")
+                          : t("skills.marketLoad")}
+                      </Button>
+                      <span
+                        className={
+                          market.enabled
+                            ? styles.marketRowBadgeEnabled
+                            : styles.marketRowBadgeDisabled
+                        }
+                      >
+                        {market.enabled
+                          ? t("common.enabled")
+                          : t("common.disabled")}
+                      </span>
+                      <span className={styles.marketRowDivider}>|</span>
+                      <span className={styles.marketRowCount}>
+                        {t("skills.marketMetaItems")}:{" "}
+                        {marketItemCountMap[market.id] ?? 0}
+                      </span>
+                      <Button
+                        size="small"
+                        type={runningType === "enable" ? "primary" : "default"}
+                        danger={runningType === "enable"}
+                        disabled={
+                          marketDisabled ||
+                          (anyBulkRunning &&
+                            !(marketBusy && runningType === "enable"))
+                        }
+                        onClick={() => runBulkAction("enable", market.id)}
+                      >
+                        {runningType === "enable"
+                          ? t("skills.marketAbortEnable")
+                          : enableAllActionLabel || t("skills.marketEnableAll")}
+                      </Button>
+                      <Button
+                        size="small"
+                        type={runningType === "disable" ? "primary" : "default"}
+                        danger={runningType === "disable"}
+                        disabled={
+                          marketDisabled ||
+                          (anyBulkRunning &&
+                            !(marketBusy && runningType === "disable"))
+                        }
+                        onClick={() => runBulkAction("disable", market.id)}
+                      >
+                        {runningType === "disable"
+                          ? t("skills.marketAbortDisable")
+                          : t("skills.marketDisableAll")}
+                      </Button>
+                      <Button
+                        size="small"
+                        danger
+                        disabled={
+                          marketDisabled ||
+                          (anyBulkRunning &&
+                            !(marketBusy && runningType === "delete"))
+                        }
+                        onClick={() => runBulkAction("delete", market.id)}
+                      >
+                        {runningType === "delete"
+                          ? t("skills.marketAbortDelete")
+                          : t("skills.marketDeleteAll")}
+                      </Button>
+                    </div>
+                  </div>
                 );
               })()
             ),
@@ -1043,14 +1057,16 @@ export function MarketplaceDrawer({
                         }
                         return (
                           groupItems.length === 0 ||
-                          (installingMarketId === marketId && stopConfirmCooling)
+                          (installingMarketId === marketId &&
+                            stopConfirmCooling)
                         );
                       })()}
                       loading={
                         useBulkEnableForGroupInstall
                           ? bulkActionState?.marketId === marketId &&
                             bulkActionState.type === "enable"
-                          : installingMarketId === marketId && !installStopRequested
+                          : installingMarketId === marketId &&
+                            !installStopRequested
                       }
                       danger={
                         useBulkEnableForGroupInstall
@@ -1080,10 +1096,13 @@ export function MarketplaceDrawer({
                               if (stopCoolTimerRef.current !== null) {
                                 window.clearTimeout(stopCoolTimerRef.current);
                               }
-                              stopCoolTimerRef.current = window.setTimeout(() => {
-                                setStopConfirmCooling(false);
-                                stopCoolTimerRef.current = null;
-                              }, 1000);
+                              stopCoolTimerRef.current = window.setTimeout(
+                                () => {
+                                  setStopConfirmCooling(false);
+                                  stopCoolTimerRef.current = null;
+                                },
+                                1000,
+                              );
                             },
                           });
                           return;
@@ -1094,15 +1113,16 @@ export function MarketplaceDrawer({
                       {useBulkEnableForGroupInstall
                         ? bulkActionState?.marketId === marketId &&
                           bulkActionState.type === "enable"
-                          ? installAllInGroupStopLabel || t("skills.marketAbortEnable")
+                          ? installAllInGroupStopLabel ||
+                            t("skills.marketAbortEnable")
                           : installAllInGroupLabel ||
                             enableAllActionLabel ||
                             t("skills.marketEnableAll")
                         : installingMarketId === marketId
-                          ?
-                              installAllInGroupStopLabel ||
-                              t("skills.marketInstallAllStop")
-                          : installAllInGroupLabel || t("skills.marketInstallAll")}
+                        ? installAllInGroupStopLabel ||
+                          t("skills.marketInstallAllStop")
+                        : installAllInGroupLabel ||
+                          t("skills.marketInstallAll")}
                     </Button>
                   </div>
                 </div>
@@ -1114,7 +1134,8 @@ export function MarketplaceDrawer({
                         style={{
                           width: `${
                             installProgress.total > 0
-                              ? (installProgress.done / installProgress.total) * 100
+                              ? (installProgress.done / installProgress.total) *
+                                100
                               : 0
                           }%`,
                         }}
@@ -1166,7 +1187,10 @@ export function MarketplaceDrawer({
                                 </span>
                               ) : null}
                               {(item.tags || []).slice(0, 2).map((tag) => (
-                                <span key={`${key}-${tag}`} className={styles.marketItemTag}>
+                                <span
+                                  key={`${key}-${tag}`}
+                                  className={styles.marketItemTag}
+                                >
                                   {tag}
                                 </span>
                               ))}
@@ -1181,7 +1205,10 @@ export function MarketplaceDrawer({
                             size="small"
                             loading={installingSkillKey === key}
                             onClick={() => {
-                              void onInstallSkill(item.market_id, item.skill_id);
+                              void onInstallSkill(
+                                item.market_id,
+                                item.skill_id,
+                              );
                             }}
                           >
                             {installActionLabel || t("skills.marketInstall")}
@@ -1199,8 +1226,8 @@ export function MarketplaceDrawer({
               {searchKeyword
                 ? t("skills.marketEmptySearch")
                 : selectedMarketId === "__all__"
-                  ? t("skills.marketEmptyItems")
-                  : t("skills.marketEmptyFiltered")}
+                ? t("skills.marketEmptyItems")
+                : t("skills.marketEmptyFiltered")}
             </div>
           ) : null}
         </div>

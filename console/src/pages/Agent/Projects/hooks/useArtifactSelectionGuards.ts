@@ -1,5 +1,8 @@
 import { useEffect } from "react";
-import type { AgentProjectFileInfo, ProjectPipelineArtifactRecord } from "../../../../api/types/agents";
+import type {
+  AgentProjectFileInfo,
+  ProjectPipelineArtifactRecord,
+} from "../../../../api/types/agents";
 import { isPreviewablePath } from "../utils/projectFileSelectionUtils";
 
 interface UseArtifactSelectionGuardsParams {
@@ -40,7 +43,10 @@ export default function useArtifactSelectionGuards({
     if (!selectedStepId) {
       return;
     }
-    if (selectedFilePath && relatedArtifactPathsForSelectedStep.has(selectedFilePath)) {
+    if (
+      selectedFilePath &&
+      relatedArtifactPathsForSelectedStep.has(selectedFilePath)
+    ) {
       return;
     }
     const firstRelatedPath = Array.from(relatedArtifactPathsForSelectedStep)[0];
@@ -65,24 +71,29 @@ export default function useArtifactSelectionGuards({
       return;
     }
     const stillVisible =
-      artifactRecords.some((item) => item.path === selectedFilePath)
-      || knownProjectFilePaths.has(selectedFilePath)
-      || projectFiles.some((item) => item.path === selectedFilePath);
+      artifactRecords.some((item) => item.path === selectedFilePath) ||
+      knownProjectFilePaths.has(selectedFilePath) ||
+      projectFiles.some((item) => item.path === selectedFilePath);
     if (!stillVisible) {
-      const rootLevelFallback = projectFiles.find((item) => (
-        !item.path.includes("/") && isPreviewablePath(item.path)
-      ))?.path || "";
-      const projectFilesFallback = projectFiles.find((item) => isPreviewablePath(item.path))?.path || "";
-      const artifactFallback = artifactRecords.find((item) => isPreviewablePath(item.path))?.path || "";
-      const knownPathFallback = Array.from(knownProjectFilePaths)
-        .sort((left, right) => left.localeCompare(right))
-        .find((item) => isPreviewablePath(item)) || "";
+      const rootLevelFallback =
+        projectFiles.find(
+          (item) => !item.path.includes("/") && isPreviewablePath(item.path),
+        )?.path || "";
+      const projectFilesFallback =
+        projectFiles.find((item) => isPreviewablePath(item.path))?.path || "";
+      const artifactFallback =
+        artifactRecords.find((item) => isPreviewablePath(item.path))?.path ||
+        "";
+      const knownPathFallback =
+        Array.from(knownProjectFilePaths)
+          .sort((left, right) => left.localeCompare(right))
+          .find((item) => isPreviewablePath(item)) || "";
       setSelectedFilePath(
-        rootLevelFallback
-        || projectFilesFallback
-        || artifactFallback
-        || knownPathFallback
-        || "",
+        rootLevelFallback ||
+          projectFilesFallback ||
+          artifactFallback ||
+          knownPathFallback ||
+          "",
       );
     }
   }, [

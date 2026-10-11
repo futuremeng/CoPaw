@@ -28,13 +28,9 @@ describe("parseMarkdownOutline", () => {
   });
 
   it("ignores headings inside fenced code blocks", () => {
-    const markdown = [
-      "# Real",
-      "```md",
-      "## Fake",
-      "```",
-      "## Also Real",
-    ].join("\n");
+    const markdown = ["# Real", "```md", "## Fake", "```", "## Also Real"].join(
+      "\n",
+    );
 
     const outline = parseMarkdownOutline(markdown);
     expect(outline.map((item) => item.text)).toEqual(["Real", "Also Real"]);

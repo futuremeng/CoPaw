@@ -100,7 +100,6 @@ export function KnowledgeMaintenanceCard() {
           placeholder={t("agentConfig.knowledgeChunkSizePlaceholder")}
         />
       </Form.Item>
-
     </Card>
   );
 }

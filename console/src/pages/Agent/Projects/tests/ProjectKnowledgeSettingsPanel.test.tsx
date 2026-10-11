@@ -30,7 +30,9 @@ vi.mock("../../../../api/modules/agents", () => ({
 // The app renders the English bundle (i18n default language is "en"), so the
 // double resolves copy from that bundle instead of an inline default.
 vi.mock("react-i18next", async () => {
-  const { t } = await vi.importActual<typeof import("./enLocaleTranslate")>("./enLocaleTranslate");
+  const { t } = await vi.importActual<typeof import("./enLocaleTranslate")>(
+    "./enLocaleTranslate",
+  );
   return { useTranslation: () => ({ t, i18n: { language: "en" } }) };
 });
 
@@ -141,11 +143,11 @@ describe("ProjectKnowledgeSettingsPanel", () => {
     await user.click(switches[1]);
 
     await waitFor(() => {
-      expect(mockedAgentsApi.updateProjectKnowledgeRegistration).toHaveBeenCalledWith(
-        "default",
-        projectId,
-        { project_agent_knowledge_registered: true },
-      );
+      expect(
+        mockedAgentsApi.updateProjectKnowledgeRegistration,
+      ).toHaveBeenCalledWith("default", projectId, {
+        project_agent_knowledge_registered: true,
+      });
     });
   });
 
@@ -168,11 +170,11 @@ describe("ProjectKnowledgeSettingsPanel", () => {
     await user.click(switches[1]);
 
     await waitFor(() => {
-      expect(mockedAgentsApi.updateProjectKnowledgeRegistration).toHaveBeenCalledWith(
-        "default",
-        projectId,
-        { project_agent_knowledge_registered: false },
-      );
+      expect(
+        mockedAgentsApi.updateProjectKnowledgeRegistration,
+      ).toHaveBeenCalledWith("default", projectId, {
+        project_agent_knowledge_registered: false,
+      });
     });
   });
 
@@ -202,7 +204,9 @@ describe("ProjectKnowledgeSettingsPanel", () => {
   it("handles structured pipeline control errors", async () => {
     const user = userEvent.setup();
     mockedApi.commandProjectKnowledgePipeline.mockRejectedValueOnce(
-      new Error("pipeline conflict - {\"detail\":{\"error_code\":\"PROJECT_PIPELINE_COMMAND_CONFLICT\",\"message\":\"transition not allowed\",\"recovery_hint\":\"retry with valid sequence\"}}"),
+      new Error(
+        'pipeline conflict - {"detail":{"error_code":"PROJECT_PIPELINE_COMMAND_CONFLICT","message":"transition not allowed","recovery_hint":"retry with valid sequence"}}',
+      ),
     );
 
     render(
@@ -217,7 +221,9 @@ describe("ProjectKnowledgeSettingsPanel", () => {
     await user.click(await screen.findByRole("button", { name: "Pause" }));
 
     await waitFor(() => {
-      expect(mockedApi.commandProjectKnowledgePipeline).toHaveBeenCalledTimes(1);
+      expect(mockedApi.commandProjectKnowledgePipeline).toHaveBeenCalledTimes(
+        1,
+      );
     });
   });
 });

@@ -127,7 +127,7 @@ export function parseCreateClientsJson(input: string): Array<{
 
   if (clientsToCreate.length === 0) {
     throw new Error(
-      "No valid MCP clients found. Use { \"mcpServers\": { \"key\": {...} } } or a single client object.",
+      'No valid MCP clients found. Use { "mcpServers": { "key": {...} } } or a single client object.',
     );
   }
 
@@ -178,6 +178,6 @@ export function parseUpdateClientJson(
   }
 
   throw new Error(
-    "Invalid MCP client JSON. Provide a single client object or { \"mcpServers\": { currentKey: {...} } }.",
+    'Invalid MCP client JSON. Provide a single client object or { "mcpServers": { currentKey: {...} } }.',
   );
 }

@@ -18,7 +18,9 @@ export function createProjectWorkspaceAdapter(
 ): ProjectWorkspaceAdapter {
   if (options.scope === "project") {
     if (!options.agentId || !options.projectId) {
-      throw new Error("agentId and projectId are required for project-scoped adapter.");
+      throw new Error(
+        "agentId and projectId are required for project-scoped adapter.",
+      );
     }
     return createProjectScopedAdapter({
       agentId: options.agentId,
@@ -29,7 +31,9 @@ export function createProjectWorkspaceAdapter(
   return createWorkspaceScopedAdapter();
 }
 
-export function normalizeAdapterError(error: unknown): ProjectWorkspaceAdapterError {
+export function normalizeAdapterError(
+  error: unknown,
+): ProjectWorkspaceAdapterError {
   return normalizeProjectApiError(error);
 }
 

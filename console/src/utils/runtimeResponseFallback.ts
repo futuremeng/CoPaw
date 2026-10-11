@@ -29,8 +29,12 @@ function isContentPartArray(content: unknown): content is RuntimeContentPart[] {
 
 function isVisibleTextPart(part: RuntimeContentPart): boolean {
   return (
-    (part.type === "text" && typeof part.text === "string" && part.text.trim().length > 0)
-    || (part.type === "refusal" && typeof part.refusal === "string" && part.refusal.trim().length > 0)
+    (part.type === "text" &&
+      typeof part.text === "string" &&
+      part.text.trim().length > 0) ||
+    (part.type === "refusal" &&
+      typeof part.refusal === "string" &&
+      part.refusal.trim().length > 0)
   );
 }
 
@@ -38,9 +42,9 @@ function collectThinkingParts(content: RuntimeContentPart[]): string[] {
   return content
     .filter(
       (part) =>
-        part.type === "thinking"
-        && typeof part.thinking === "string"
-        && part.thinking.trim().length > 0,
+        part.type === "thinking" &&
+        typeof part.thinking === "string" &&
+        part.thinking.trim().length > 0,
     )
     .map((part) => part.thinking!.trim());
 }
@@ -48,11 +52,11 @@ function collectThinkingParts(content: RuntimeContentPart[]): string[] {
 function hasFallbackPart(content: RuntimeContentPart[]): boolean {
   return content.some(
     (part) =>
-      part.copaw_fallback_kind === THINKING_ONLY_FALLBACK_KIND
-      || (part.type === "text"
-        && part.copaw_synthetic === true
-        && typeof part.text === "string"
-        && part.text.includes("thinking")),
+      part.copaw_fallback_kind === THINKING_ONLY_FALLBACK_KIND ||
+      (part.type === "text" &&
+        part.copaw_synthetic === true &&
+        typeof part.text === "string" &&
+        part.text.includes("thinking")),
   );
 }
 
@@ -76,7 +80,9 @@ export function buildThinkingOnlyFallbackText(thinking: string): string {
     "```thinking-fallback",
     merged,
     "```",
-  ].join("\n").trim();
+  ]
+    .join("\n")
+    .trim();
 }
 
 function materializeMessageContent(content: unknown): unknown {
@@ -104,8 +110,14 @@ function materializeMessageContent(content: unknown): unknown {
   ];
 }
 
-export function materializeThinkingOnlyFallback<T extends RuntimeResponseLike>(response: T): T {
-  if (!response || !Array.isArray(response.output) || response.output.length === 0) {
+export function materializeThinkingOnlyFallback<T extends RuntimeResponseLike>(
+  response: T,
+): T {
+  if (
+    !response ||
+    !Array.isArray(response.output) ||
+    response.output.length === 0
+  ) {
     return response;
   }
 
@@ -132,7 +144,9 @@ export function materializeThinkingOnlyFallback<T extends RuntimeResponseLike>(r
   } as T;
 }
 
-export function extractRenderableAssistantText(response: RuntimeResponseLike | null): string {
+export function extractRenderableAssistantText(
+  response: RuntimeResponseLike | null,
+): string {
   if (!response || !Array.isArray(response.output)) {
     return "";
   }

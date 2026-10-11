@@ -56,7 +56,8 @@ export type ProjectKnowledgeStepStatsStepId =
   | "semantic_role_labeling";
 
 export interface ProjectKnowledgeStepStatsResponse<
-  TStepId extends ProjectKnowledgeStepStatsStepId = ProjectKnowledgeStepStatsStepId,
+  TStepId extends
+    ProjectKnowledgeStepStatsStepId = ProjectKnowledgeStepStatsStepId,
 > {
   project_id: string;
   step_id: TStepId;
@@ -64,13 +65,17 @@ export interface ProjectKnowledgeStepStatsResponse<
   history: ProjectKnowledgeStepStatsRecord[];
 }
 
-export type ProjectKnowledgeFileAnalysisStatsResponse = ProjectKnowledgeStepStatsResponse<"build_chunks">;
+export type ProjectKnowledgeFileAnalysisStatsResponse =
+  ProjectKnowledgeStepStatsResponse<"build_chunks">;
 
-export type ProjectKnowledgeSourceScanStatsResponse = ProjectKnowledgeStepStatsResponse<"snapshot_raw">;
+export type ProjectKnowledgeSourceScanStatsResponse =
+  ProjectKnowledgeStepStatsResponse<"snapshot_raw">;
 
-export type ProjectKnowledgeDomainGraphBuildStatsResponse = ProjectKnowledgeStepStatsResponse<"syntax_parse">;
+export type ProjectKnowledgeDomainGraphBuildStatsResponse =
+  ProjectKnowledgeStepStatsResponse<"syntax_parse">;
 
-export type ProjectKnowledgeQualityReviewStatsResponse = ProjectKnowledgeStepStatsResponse<"semantic_role_labeling">;
+export type ProjectKnowledgeQualityReviewStatsResponse =
+  ProjectKnowledgeStepStatsResponse<"semantic_role_labeling">;
 
 export interface KnowledgeIndexConfig {
   engine: string;
@@ -164,7 +169,10 @@ export interface ProjectKnowledgeModeOutputPayload {
 export interface ProjectKnowledgeModeMetricsPayload {
   mode: ProjectKnowledgeProcessingMode;
   evidence_paths?: Record<string, string>;
-  evidence_bundles?: Record<string, ProjectKnowledgeMetricEvidenceBundlePayload>;
+  evidence_bundles?: Record<
+    string,
+    ProjectKnowledgeMetricEvidenceBundlePayload
+  >;
   document_count?: number;
   chunk_count?: number;
   entity_count?: number;
@@ -413,17 +421,27 @@ export interface ProjectKnowledgePipelineState {
   recent_control_command?: string;
   control_updated_at?: string;
   recent_error_code?: string;
-  recent_error_source?: "" | "workflow_step" | "execution_loop" | "flow_control";
+  recent_error_source?:
+    | ""
+    | "workflow_step"
+    | "execution_loop"
+    | "flow_control";
   quantization_stage?: ProjectKnowledgeQuantizationStage;
   latest_requested_mode?: ProjectKnowledgeProcessingMode;
   processing_modes?: ProjectKnowledgeProcessingModeStatePayload[];
   output_resolution?: ProjectKnowledgeOutputResolutionPayload;
   output_scheduler?: ProjectKnowledgeProcessingSchedulerPayload;
-  mode_outputs?: Partial<Record<ProjectKnowledgeProcessingMode, ProjectKnowledgeModeOutputPayload>>;
-  mode_metrics?: Partial<Record<ProjectKnowledgeProcessingMode, ProjectKnowledgeModeMetricsPayload>>;
+  mode_outputs?: Partial<
+    Record<ProjectKnowledgeProcessingMode, ProjectKnowledgeModeOutputPayload>
+  >;
+  mode_metrics?: Partial<
+    Record<ProjectKnowledgeProcessingMode, ProjectKnowledgeModeMetricsPayload>
+  >;
   mode_metrics_by_source?: Record<
     string,
-    Partial<Record<ProjectKnowledgeProcessingMode, ProjectKnowledgeModeMetricsPayload>>
+    Partial<
+      Record<ProjectKnowledgeProcessingMode, ProjectKnowledgeModeMetricsPayload>
+    >
   >;
   global_metrics?: ProjectKnowledgeGlobalMetricsPayload;
   l2_progress?: ProjectKnowledgeL2ProgressPayload;

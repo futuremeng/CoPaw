@@ -22,7 +22,10 @@ interface UseProjectChatFocusEffectsParams {
   setError: (value: string) => void;
 }
 
-function getMetaString(meta: Record<string, unknown> | undefined, key: string): string {
+function getMetaString(
+  meta: Record<string, unknown> | undefined,
+  key: string,
+): string {
   const value = meta?.[key];
   return typeof value === "string" ? value : "";
 }
@@ -41,7 +44,9 @@ function sortChatsForRestore<T extends ChatSpec>(chats: T[]): T[] {
 }
 
 function pickLeafChatCandidates(chats: ChatSpec[]): ChatSpec[] {
-  const parentIds = new Set(chats.map((chat) => chat.session_id).filter(Boolean) as string[]);
+  const parentIds = new Set(
+    chats.map((chat) => chat.session_id).filter(Boolean) as string[],
+  );
   const leaves = chats.filter((chat) => !parentIds.has(chat.id));
   return leaves.length > 0 ? leaves : chats;
 }
@@ -83,8 +88,13 @@ export default function useProjectChatFocusEffects({
   }, [designFocusChatId, designFocusChatIdRef]);
 
   useEffect(() => {
-    const fallbackChatId = runDetailFocusChatId || selectedRunSummaryFocusChatId || "";
-    if (!runFocusChatId && fallbackChatId && fallbackChatId !== runFocusChatId) {
+    const fallbackChatId =
+      runDetailFocusChatId || selectedRunSummaryFocusChatId || "";
+    if (
+      !runFocusChatId &&
+      fallbackChatId &&
+      fallbackChatId !== runFocusChatId
+    ) {
       setRunFocusChatId(fallbackChatId);
     }
   }, [
@@ -110,7 +120,10 @@ export default function useProjectChatFocusEffects({
 
     let cancelled = false;
     const resolveLatestRunBoundChatId = async (): Promise<string> => {
-      const chats = await chatApi.listChats({ user_id: "default", channel: "console" });
+      const chats = await chatApi.listChats({
+        user_id: "default",
+        channel: "console",
+      });
       const matched = chats.filter((chat) => {
         const meta =
           chat.meta && typeof chat.meta === "object"
@@ -152,7 +165,8 @@ export default function useProjectChatFocusEffects({
         if (cancelled || !restoredChatId) {
           return;
         }
-        const fallbackChatId = runDetailFocusChatId || selectedRunSummaryFocusChatId || "";
+        const fallbackChatId =
+          runDetailFocusChatId || selectedRunSummaryFocusChatId || "";
         const currentFocusChatId = runFocusChatIdRef.current;
         if (
           currentFocusChatId &&

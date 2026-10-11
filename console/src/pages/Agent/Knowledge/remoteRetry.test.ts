@@ -1,9 +1,14 @@
 import { describe, expect, it } from "vitest";
 import type { KnowledgeSourceItem } from "../../../api/types";
 import { summarizeRemoteRetryResults } from "./metrics";
-import { buildRemoteRetryNotice, collectRemoteRetrySources } from "./remoteRetry";
+import {
+  buildRemoteRetryNotice,
+  collectRemoteRetrySources,
+} from "./remoteRetry";
 
-function createSource(overrides: Partial<KnowledgeSourceItem>): KnowledgeSourceItem {
+function createSource(
+  overrides: Partial<KnowledgeSourceItem>,
+): KnowledgeSourceItem {
   return {
     id: "manual-file-a1b2c3",
     name: "Source",
@@ -111,21 +116,25 @@ describe("remoteRetry summary", () => {
   });
 
   it("builds remote retry notices for success, partial and full failure", () => {
-    expect(buildRemoteRetryNotice({
-      successCount: 2,
-      failedCount: 0,
-      failedNames: [],
-    })).toEqual({
+    expect(
+      buildRemoteRetryNotice({
+        successCount: 2,
+        failedCount: 0,
+        failedNames: [],
+      }),
+    ).toEqual({
       level: "success",
       i18nKey: "knowledge.remoteRetrySuccess",
       params: { count: 2 },
     });
 
-    expect(buildRemoteRetryNotice({
-      successCount: 1,
-      failedCount: 2,
-      failedNames: ["A", "B", "C", "D"],
-    })).toEqual({
+    expect(
+      buildRemoteRetryNotice({
+        successCount: 1,
+        failedCount: 2,
+        failedNames: ["A", "B", "C", "D"],
+      }),
+    ).toEqual({
       level: "warning",
       i18nKey: "knowledge.remoteRetryPartial",
       params: {
@@ -135,11 +144,13 @@ describe("remoteRetry summary", () => {
       },
     });
 
-    expect(buildRemoteRetryNotice({
-      successCount: 0,
-      failedCount: 2,
-      failedNames: ["A", "B"],
-    })).toEqual({
+    expect(
+      buildRemoteRetryNotice({
+        successCount: 0,
+        failedCount: 2,
+        failedNames: ["A", "B"],
+      }),
+    ).toEqual({
       level: "error",
       i18nKey: "knowledge.remoteRetryAllFailed",
       params: {

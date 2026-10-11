@@ -10,7 +10,9 @@ import {
   sortFlowDefinitions,
 } from "./viewModel.ts";
 
-const buildDefinition = (partial?: Partial<FlowDefinition>): FlowDefinition => ({
+const buildDefinition = (
+  partial?: Partial<FlowDefinition>,
+): FlowDefinition => ({
   id: "knowledge.project.pipeline",
   name: "Knowledge Project Pipeline",
   version: "1.0.0",
@@ -60,7 +62,9 @@ describe("pipelines view model", () => {
       ],
     });
 
-    expect(filterCompatibleFlowDefinitions([compatible, incompatible])).toEqual([compatible]);
+    expect(filterCompatibleFlowDefinitions([compatible, incompatible])).toEqual(
+      [compatible],
+    );
     expect(getFlowDefinitionCompatibilityIssues(incompatible)).toEqual([
       "step broken missing kind",
       "step broken depends on missing step:missing_step",
@@ -91,7 +95,7 @@ describe("pipelines view model", () => {
 
   it("parses structured detail from request errors", () => {
     const error = new Error(
-      "Conflict - {\"detail\":{\"error_code\":\"FLOW_TRANSITION_NOT_ALLOWED\",\"message\":\"Run cannot be resumed from succeeded\",\"recovery_hint\":\"Refresh status and retry on an active run\"}}",
+      'Conflict - {"detail":{"error_code":"FLOW_TRANSITION_NOT_ALLOWED","message":"Run cannot be resumed from succeeded","recovery_hint":"Refresh status and retry on an active run"}}',
     );
 
     expect(getStructuredErrorSummary(error)).toEqual({
@@ -105,6 +109,8 @@ describe("pipelines view model", () => {
   });
 
   it("humanizes stage and status keys", () => {
-    expect(humanizeFlowKey("semantic_role_labeling")).toBe("Semantic Role Labeling");
+    expect(humanizeFlowKey("semantic_role_labeling")).toBe(
+      "Semantic Role Labeling",
+    );
   });
 });

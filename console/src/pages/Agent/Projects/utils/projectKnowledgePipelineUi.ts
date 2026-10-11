@@ -15,9 +15,13 @@ export interface ProjectKnowledgeArtifactLike {
 
 type Translate = TFunction;
 
-function getProjectKnowledgeArtifactPriority(artifact: ProjectKnowledgeArtifactLike): number {
+function getProjectKnowledgeArtifactPriority(
+  artifact: ProjectKnowledgeArtifactLike,
+): number {
   const kind = String(artifact.kind || "").trim();
-  const path = String(artifact.path || "").trim().toLowerCase();
+  const path = String(artifact.path || "")
+    .trim()
+    .toLowerCase();
 
   if (kind === "graph") {
     return 0;
@@ -49,9 +53,9 @@ function getProjectKnowledgeArtifactPriority(artifact: ProjectKnowledgeArtifactL
   return 99;
 }
 
-export function prioritizeProjectKnowledgeArtifacts<T extends ProjectKnowledgeArtifactLike>(
-  artifacts: T[] | null | undefined,
-): T[] {
+export function prioritizeProjectKnowledgeArtifacts<
+  T extends ProjectKnowledgeArtifactLike,
+>(artifacts: T[] | null | undefined): T[] {
   if (!Array.isArray(artifacts) || artifacts.length <= 1) {
     return Array.isArray(artifacts) ? [...artifacts] : [];
   }
@@ -60,8 +64,8 @@ export function prioritizeProjectKnowledgeArtifacts<T extends ProjectKnowledgeAr
     .map((artifact, index) => ({ artifact, index }))
     .sort((left, right) => {
       const priorityDelta =
-        getProjectKnowledgeArtifactPriority(left.artifact)
-        - getProjectKnowledgeArtifactPriority(right.artifact);
+        getProjectKnowledgeArtifactPriority(left.artifact) -
+        getProjectKnowledgeArtifactPriority(right.artifact);
       if (priorityDelta !== 0) {
         return priorityDelta;
       }
@@ -111,7 +115,9 @@ export function getProjectKnowledgeModeTitle(
   mode: ProjectKnowledgeProcessingMode,
   t: Translate,
 ): string {
-  return `${getProjectKnowledgeModeLevel(mode)} · ${getProjectKnowledgeModeLabel(mode, t)}`;
+  return `${getProjectKnowledgeModeLevel(
+    mode,
+  )} · ${getProjectKnowledgeModeLabel(mode, t)}`;
 }
 
 export function getProjectKnowledgeModeRouteHint(
@@ -128,12 +134,17 @@ export function getProjectKnowledgeModeRouteHint(
 }
 
 export function getProjectKnowledgePipelineStageLabel(
-  stage: { key?: string | null; label?: string | null; label_key?: string | null },
+  stage: {
+    key?: string | null;
+    label?: string | null;
+    label_key?: string | null;
+  },
   t: Translate,
 ): string {
   const explicitKey = String(stage.label_key || "").trim();
   if (explicitKey) {
-    const fallback = String(stage.label || stage.key || "").trim() || explicitKey;
+    const fallback =
+      String(stage.label || stage.key || "").trim() || explicitKey;
     return t(explicitKey, fallback);
   }
   const modeKey = String(stage.key || "").trim();
@@ -168,7 +179,9 @@ function getGraphStats(syncState: ProjectKnowledgePipelineState): {
   if (!memify || typeof memify !== "object") {
     return null;
   }
-  const relationCount = Number((memify as { relation_count?: unknown }).relation_count);
+  const relationCount = Number(
+    (memify as { relation_count?: unknown }).relation_count,
+  );
   const nodeCount = Number((memify as { node_count?: unknown }).node_count);
   if (!Number.isFinite(relationCount) || relationCount <= 0) {
     return null;
@@ -183,7 +196,9 @@ export function getProjectKnowledgePipelineStatusLabel(
   syncState: ProjectKnowledgePipelineState,
   t: Translate,
 ): string {
-  const stage = String(syncState.current_stage || syncState.status || "idle").trim() || "idle";
+  const stage =
+    String(syncState.current_stage || syncState.status || "idle").trim() ||
+    "idle";
   const fallbackMap: Record<string, string> = {
     idle: "Idle",
     queued: "Queued",
@@ -197,7 +212,10 @@ export function getProjectKnowledgePipelineStatusLabel(
     succeeded: "Done",
     failed: "Failed",
   };
-  return t(`copaw.projects.knowledge.syncStage.${stage}`, fallbackMap[stage] || stage);
+  return t(
+    `copaw.projects.knowledge.syncStage.${stage}`,
+    fallbackMap[stage] || stage,
+  );
 }
 
 export function getProjectKnowledgeSemanticSummary(
@@ -208,8 +226,13 @@ export function getProjectKnowledgeSemanticSummary(
     return "";
   }
   const reasonCode = String(semanticEngine.reason_code || "").trim();
-  const fallback = String(semanticEngine.summary || semanticEngine.reason || "").trim();
-  return t(`copaw.projects.knowledge.semanticReasonSummary.${reasonCode}`, fallback);
+  const fallback = String(
+    semanticEngine.summary || semanticEngine.reason || "",
+  ).trim();
+  return t(
+    `copaw.projects.knowledge.semanticReasonSummary.${reasonCode}`,
+    fallback,
+  );
 }
 
 export function getProjectKnowledgeSemanticReasonLabel(
@@ -221,7 +244,10 @@ export function getProjectKnowledgeSemanticReasonLabel(
   }
   const reasonCode = String(semanticEngine.reason_code || "").trim();
   const fallback = t("copaw.projects.knowledge.semanticReasonReady");
-  return t(`copaw.projects.knowledge.semanticReasonCode.${reasonCode}`, fallback);
+  return t(
+    `copaw.projects.knowledge.semanticReasonCode.${reasonCode}`,
+    fallback,
+  );
 }
 
 export function getProjectKnowledgeSemanticDescription(
@@ -236,7 +262,9 @@ export function getProjectKnowledgeSemanticDescription(
   const fallbackReason = String(semanticEngine.reason || "").trim();
   const suffix = summary || fallbackReason;
   return suffix
-    ? `${t("copaw.projects.knowledge.semanticEngineCode")}: ${reasonCode}. ${suffix}`
+    ? `${t(
+        "copaw.projects.knowledge.semanticEngineCode",
+      )}: ${reasonCode}. ${suffix}`
     : `${t("copaw.projects.knowledge.semanticEngineCode")}: ${reasonCode}`;
 }
 
@@ -245,22 +273,26 @@ export function getProjectKnowledgePipelineAlertDescription(
   t: Translate,
 ): string {
   const recentErrorCode = String(syncState.recent_error_code || "").trim();
-  const recentErrorSource = String(syncState.recent_error_source || "").trim().toLowerCase();
+  const recentErrorSource = String(syncState.recent_error_source || "")
+    .trim()
+    .toLowerCase();
   const errorRecoveryHint = recentErrorCode
     ? recentErrorSource === "workflow_step"
       ? t("copaw.projects.knowledge.errorRecovery.workflowStep")
       : recentErrorSource === "execution_loop"
-        ? t("copaw.projects.knowledge.errorRecovery.executionLoop")
-        : recentErrorSource === "flow_control"
-          ? t("copaw.projects.knowledge.errorRecovery.flowControl")
-          : t("copaw.projects.knowledge.errorRecovery.generic")
+      ? t("copaw.projects.knowledge.errorRecovery.executionLoop")
+      : recentErrorSource === "flow_control"
+      ? t("copaw.projects.knowledge.errorRecovery.flowControl")
+      : t("copaw.projects.knowledge.errorRecovery.generic")
     : "";
   const graphStats = getGraphStats(syncState);
   const segments = [
     getProjectKnowledgePipelineStatusLabel(syncState, t),
     `${syncState.percent ?? syncState.progress ?? 0}%`,
     syncState.stage_message || "",
-    typeof syncState.current === "number" && typeof syncState.total === "number" && syncState.total > 0
+    typeof syncState.current === "number" &&
+    typeof syncState.total === "number" &&
+    syncState.total > 0
       ? `${syncState.current}/${syncState.total}`
       : "",
     typeof syncState.eta_seconds === "number" && syncState.eta_seconds > 0
@@ -273,7 +305,9 @@ export function getProjectKnowledgePipelineAlertDescription(
         })
       : "",
     syncState.changed_count > 0
-      ? t("copaw.projects.knowledge.syncChangedCount", { count: syncState.changed_count })
+      ? t("copaw.projects.knowledge.syncChangedCount", {
+          count: syncState.changed_count,
+        })
       : "",
     syncState.status === "queued" && syncState.scheduled_for
       ? t("copaw.projects.knowledge.syncScheduledFor", {
@@ -313,7 +347,10 @@ export function getProjectKnowledgePipelineAlertType(
   return "info";
 }
 
-export function getTriggerModeLabel(t: Translate, triggerMode?: string): string {
+export function getTriggerModeLabel(
+  t: Translate,
+  triggerMode?: string,
+): string {
   if (!triggerMode) {
     return t("copaw.projects.knowledge.unknown");
   }
@@ -326,7 +363,10 @@ export function getTriggerModeLabel(t: Translate, triggerMode?: string): string 
   return String(triggerMode);
 }
 
-export function getProcessingStatusLabel(t: Translate, status?: string): string {
+export function getProcessingStatusLabel(
+  t: Translate,
+  status?: string,
+): string {
   if (!status) {
     return t("copaw.projects.knowledge.unknown");
   }

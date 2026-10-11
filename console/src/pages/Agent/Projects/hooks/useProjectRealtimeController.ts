@@ -74,10 +74,11 @@ export default function useProjectRealtimeController({
   onFileTreeInvalidated,
   onPipelineInvalidated,
 }: UseProjectRealtimeControllerParams) {
-  const [connectionState, setConnectionState] = useState<ProjectRealtimeConnectionState>({
-    status: "idle",
-    reconnectAttempt: 0,
-  });
+  const [connectionState, setConnectionState] =
+    useState<ProjectRealtimeConnectionState>({
+      status: "idle",
+      reconnectAttempt: 0,
+    });
   const fileFingerprintRef = useRef("");
   const pipelineFingerprintRef = useRef("");
   const initializedRef = useRef(false);
@@ -125,7 +126,8 @@ export default function useProjectRealtimeController({
       if (!socket) {
         return;
       }
-      shouldResyncRef.current = hasConnectedRef.current || initializedRef.current;
+      shouldResyncRef.current =
+        hasConnectedRef.current || initializedRef.current;
       const activeSocket = socket;
       socket = null;
       if (activeSocket.readyState === WebSocket.CONNECTING) {
@@ -147,10 +149,13 @@ export default function useProjectRealtimeController({
       });
       const baseDelay = Math.min(
         RECONNECT_MAX_DELAY_MS,
-        RECONNECT_BASE_DELAY_MS * (2 ** Math.max(0, attempt - 1)),
+        RECONNECT_BASE_DELAY_MS * 2 ** Math.max(0, attempt - 1),
       );
       const jitter = Math.floor(Math.random() * RECONNECT_JITTER_MS);
-      reconnectTimerRef.current = window.setTimeout(connect, baseDelay + jitter);
+      reconnectTimerRef.current = window.setTimeout(
+        connect,
+        baseDelay + jitter,
+      );
     };
 
     const connect = () => {
@@ -165,7 +170,11 @@ export default function useProjectRealtimeController({
 
       try {
         const wsUrl = new URL(
-          getApiUrl(`/agents/${agentId}/projects/${encodeURIComponent(projectId)}/realtime/ws`),
+          getApiUrl(
+            `/agents/${agentId}/projects/${encodeURIComponent(
+              projectId,
+            )}/realtime/ws`,
+          ),
           window.location.origin,
         );
         wsUrl.protocol = wsUrl.protocol === "https:" ? "wss:" : "ws:";
@@ -189,7 +198,9 @@ export default function useProjectRealtimeController({
           }
 
           try {
-            const payload = JSON.parse(event.data || "{}") as ProjectRealtimeEnvelope;
+            const payload = JSON.parse(
+              event.data || "{}",
+            ) as ProjectRealtimeEnvelope;
             if (payload.type === "heartbeat") {
               reconnectAttemptRef.current = 0;
               setConnectionState({ status: "connected", reconnectAttempt: 0 });
@@ -202,10 +213,14 @@ export default function useProjectRealtimeController({
 
             const changedPaths = payload.changed_paths || [];
             const changedDirs = payload.changed_dirs || [];
-            const changedPathsTruncated = Boolean(payload.changed_paths_truncated);
+            const changedPathsTruncated = Boolean(
+              payload.changed_paths_truncated,
+            );
             const reason = payload.reason || "change";
-            const nextFileFingerprint = payload.snapshot.file_tree.fingerprint || "";
-            const nextPipelineFingerprint = payload.snapshot.pipeline.fingerprint || "";
+            const nextFileFingerprint =
+              payload.snapshot.file_tree.fingerprint || "";
+            const nextPipelineFingerprint =
+              payload.snapshot.pipeline.fingerprint || "";
             const fileSummary = payload.snapshot.file_tree.summary;
 
             if (!initializedRef.current) {
@@ -235,7 +250,10 @@ export default function useProjectRealtimeController({
               return;
             }
 
-            if (nextFileFingerprint && nextFileFingerprint !== fileFingerprintRef.current) {
+            if (
+              nextFileFingerprint &&
+              nextFileFingerprint !== fileFingerprintRef.current
+            ) {
               fileFingerprintRef.current = nextFileFingerprint;
               void fileCallbackRef.current?.({
                 changedPaths,
@@ -246,7 +264,10 @@ export default function useProjectRealtimeController({
               });
             }
 
-            if (nextPipelineFingerprint && nextPipelineFingerprint !== pipelineFingerprintRef.current) {
+            if (
+              nextPipelineFingerprint &&
+              nextPipelineFingerprint !== pipelineFingerprintRef.current
+            ) {
               pipelineFingerprintRef.current = nextPipelineFingerprint;
               void pipelineCallbackRef.current?.({
                 changedPaths,
@@ -271,13 +292,17 @@ export default function useProjectRealtimeController({
           if (!document.hidden) {
             scheduleReconnect();
           } else {
-            setConnectionState({ status: "paused", reconnectAttempt: reconnectAttemptRef.current });
+            setConnectionState({
+              status: "paused",
+              reconnectAttempt: reconnectAttemptRef.current,
+            });
           }
         };
         socket.onerror = () => {
           shouldResyncRef.current = true;
           setConnectionState({
-            status: reconnectAttemptRef.current >= 2 ? "degraded" : "reconnecting",
+            status:
+              reconnectAttemptRef.current >= 2 ? "degraded" : "reconnecting",
             reconnectAttempt: reconnectAttemptRef.current,
           });
         };
@@ -291,7 +316,10 @@ export default function useProjectRealtimeController({
       if (document.hidden) {
         clearReconnectTimer();
         closeSocket();
-        setConnectionState({ status: "paused", reconnectAttempt: reconnectAttemptRef.current });
+        setConnectionState({
+          status: "paused",
+          reconnectAttempt: reconnectAttemptRef.current,
+        });
         return;
       }
       shouldResyncRef.current = true;

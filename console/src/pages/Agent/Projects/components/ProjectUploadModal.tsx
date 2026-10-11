@@ -2,7 +2,10 @@ import { Input, Modal, Segmented, Upload } from "antd";
 import { useEffect, useMemo, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import styles from "../index.module.less";
-import type { ProjectPendingUpload, ProjectUploadMode } from "../hooks/useProjectUploadController";
+import type {
+  ProjectPendingUpload,
+  ProjectUploadMode,
+} from "../hooks/useProjectUploadController";
 
 const { Dragger } = Upload;
 const PREVIEW_UPLOAD_LIMIT = 200;
@@ -15,7 +18,9 @@ interface ProjectUploadModalProps {
   uploadMode: ProjectUploadMode;
   uploadHint?: string;
   onChangeUploadTargetDir: (value: string) => void;
-  onChangePendingUploads: (updater: (prev: ProjectPendingUpload[]) => ProjectPendingUpload[]) => void;
+  onChangePendingUploads: (
+    updater: (prev: ProjectPendingUpload[]) => ProjectPendingUpload[],
+  ) => void;
   onChangeUploadMode: (mode: ProjectUploadMode) => void;
   onUpload: () => void;
   onCancel: () => void;
@@ -48,10 +53,16 @@ export default function ProjectUploadModal({
     onChangePendingUploads((prev) => {
       const dedup = new Map<string, ProjectPendingUpload>();
       for (const item of prev) {
-        dedup.set(`${item.relativePath}::${item.file.size}::${item.file.lastModified}`, item);
+        dedup.set(
+          `${item.relativePath}::${item.file.size}::${item.file.lastModified}`,
+          item,
+        );
       }
       for (const item of staged) {
-        dedup.set(`${item.relativePath}::${item.file.size}::${item.file.lastModified}`, item);
+        dedup.set(
+          `${item.relativePath}::${item.file.size}::${item.file.lastModified}`,
+          item,
+        );
       }
       return Array.from(dedup.values());
     });
@@ -92,7 +103,10 @@ export default function ProjectUploadModal({
 
   const normalizeRelativePath = (file: File): string => {
     const uploadFile = file as File & { webkitRelativePath?: string };
-    const raw = typeof uploadFile.webkitRelativePath === "string" ? uploadFile.webkitRelativePath.trim() : "";
+    const raw =
+      typeof uploadFile.webkitRelativePath === "string"
+        ? uploadFile.webkitRelativePath.trim()
+        : "";
     if (!raw) {
       return file.name;
     }
@@ -127,7 +141,9 @@ export default function ProjectUploadModal({
       okText={t("projects.upload.confirm")}
     >
       <div className={styles.uploadModalBody}>
-        {uploadHint ? <div className={styles.itemMeta}>{uploadHint}</div> : null}
+        {uploadHint ? (
+          <div className={styles.itemMeta}>{uploadHint}</div>
+        ) : null}
         <Input
           value={uploadTargetDir}
           onChange={(event) => onChangeUploadTargetDir(event.target.value)}
@@ -165,11 +181,19 @@ export default function ProjectUploadModal({
             const nativeFile = file.originFileObj ?? (file as unknown as File);
             const relativePath = normalizeRelativePath(nativeFile);
             stagedUploadsRef.current = stagedUploadsRef.current.filter(
-              (item) => !(item.relativePath === relativePath && item.file.size === file.size),
+              (item) =>
+                !(
+                  item.relativePath === relativePath &&
+                  item.file.size === file.size
+                ),
             );
             onChangePendingUploads((prev) =>
               prev.filter(
-                (item) => !(item.relativePath === relativePath && item.file.size === file.size),
+                (item) =>
+                  !(
+                    item.relativePath === relativePath &&
+                    item.file.size === file.size
+                  ),
               ),
             );
             return true;

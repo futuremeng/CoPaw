@@ -41,7 +41,8 @@ describe("chatAutoContinue", () => {
 
   describe("endsWithOnlyThinking", () => {
     it("detects a complete <think> block with no response after it", () => {
-      const text = "<think>\n分析一下用户的问题，需要创建一个可视化图表。\n好的，我来整理思路。\n</think>";
+      const text =
+        "<think>\n分析一下用户的问题，需要创建一个可视化图表。\n好的，我来整理思路。\n</think>";
       expect(endsWithOnlyThinking(text)).toBe(true);
       expect(
         shouldAutoContinueResponse({
@@ -69,7 +70,8 @@ describe("chatAutoContinue", () => {
 
   describe("endsWithIncompleteVisibleOutput", () => {
     it("detects thinking block + short mid-sentence visible text", () => {
-      const text = "<think>\n需要分析一下这个情况。\n</think>\n\n好的！我理解了，您要求严格按照 MCP";
+      const text =
+        "<think>\n需要分析一下这个情况。\n</think>\n\n好的！我理解了，您要求严格按照 MCP";
       expect(endsWithIncompleteVisibleOutput(text)).toBe(true);
       expect(
         shouldAutoContinueResponse({
@@ -97,7 +99,9 @@ describe("chatAutoContinue", () => {
 
     it("does not trigger when visible text is long enough even without thinking", () => {
       // No thinking block → rule should not apply
-      expect(endsWithIncompleteVisibleOutput("没有thinking块，但文字较短")).toBe(false);
+      expect(
+        endsWithIncompleteVisibleOutput("没有thinking块，但文字较短"),
+      ).toBe(false);
     });
   });
 });

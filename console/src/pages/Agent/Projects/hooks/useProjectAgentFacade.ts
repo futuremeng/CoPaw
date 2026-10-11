@@ -5,7 +5,9 @@ import type { ProjectWorkspaceAdapterError } from "../adapters";
 
 interface ProjectAgentFacade {
   listAgents: () => ReturnType<typeof agentsApi.listAgents>;
-  listAgentProjects: (agentId: string) => ReturnType<typeof agentsApi.listAgentProjects>;
+  listAgentProjects: (
+    agentId: string,
+  ) => ReturnType<typeof agentsApi.listAgentProjects>;
   acquireProjectKnowledgeWatchLease: (
     agentId: string,
     projectId: string,
@@ -15,40 +17,60 @@ interface ProjectAgentFacade {
     projectId: string,
     leaseId: string,
   ) => ReturnType<typeof agentsApi.releaseProjectKnowledgeWatchLease>;
-  deleteProject: (agentId: string, projectId: string) => ReturnType<typeof agentsApi.deleteProject>;
+  deleteProject: (
+    agentId: string,
+    projectId: string,
+  ) => ReturnType<typeof agentsApi.deleteProject>;
   normalizeError: (error: unknown) => ProjectWorkspaceAdapterError;
 }
 
 export default function useProjectAgentFacade(): ProjectAgentFacade {
   const listAgents = useCallback(() => agentsApi.listAgents(), []);
 
-  const listAgentProjects = useCallback((agentId: string) =>
-    agentsApi.listAgentProjects(agentId), []);
+  const listAgentProjects = useCallback(
+    (agentId: string) => agentsApi.listAgentProjects(agentId),
+    [],
+  );
 
-  const acquireProjectKnowledgeWatchLease = useCallback((agentId: string, projectId: string) =>
-    agentsApi.acquireProjectKnowledgeWatchLease(agentId, projectId), []);
+  const acquireProjectKnowledgeWatchLease = useCallback(
+    (agentId: string, projectId: string) =>
+      agentsApi.acquireProjectKnowledgeWatchLease(agentId, projectId),
+    [],
+  );
 
-  const releaseProjectKnowledgeWatchLease = useCallback((agentId: string, projectId: string, leaseId: string) =>
-    agentsApi.releaseProjectKnowledgeWatchLease(agentId, projectId, leaseId), []);
+  const releaseProjectKnowledgeWatchLease = useCallback(
+    (agentId: string, projectId: string, leaseId: string) =>
+      agentsApi.releaseProjectKnowledgeWatchLease(agentId, projectId, leaseId),
+    [],
+  );
 
-  const deleteProject = useCallback((agentId: string, projectId: string) =>
-    agentsApi.deleteProject(agentId, projectId), []);
+  const deleteProject = useCallback(
+    (agentId: string, projectId: string) =>
+      agentsApi.deleteProject(agentId, projectId),
+    [],
+  );
 
-  const normalizeError = useCallback((error: unknown) => normalizeProjectApiError(error), []);
+  const normalizeError = useCallback(
+    (error: unknown) => normalizeProjectApiError(error),
+    [],
+  );
 
-  return useMemo(() => ({
-    listAgents,
-    listAgentProjects,
-    acquireProjectKnowledgeWatchLease,
-    releaseProjectKnowledgeWatchLease,
-    deleteProject,
-    normalizeError,
-  }), [
-    acquireProjectKnowledgeWatchLease,
-    deleteProject,
-    listAgentProjects,
-    listAgents,
-    normalizeError,
-    releaseProjectKnowledgeWatchLease,
-  ]);
+  return useMemo(
+    () => ({
+      listAgents,
+      listAgentProjects,
+      acquireProjectKnowledgeWatchLease,
+      releaseProjectKnowledgeWatchLease,
+      deleteProject,
+      normalizeError,
+    }),
+    [
+      acquireProjectKnowledgeWatchLease,
+      deleteProject,
+      listAgentProjects,
+      listAgents,
+      normalizeError,
+      releaseProjectKnowledgeWatchLease,
+    ],
+  );
 }

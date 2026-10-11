@@ -20,6 +20,9 @@ export function isBuiltInProjectFile(path: string): boolean {
 }
 
 export function isBuiltInProjectDirectory(path: string): boolean {
-  const segments = normalizeProjectPath(path).toLowerCase().split("/").filter(Boolean);
+  const segments = normalizeProjectPath(path)
+    .toLowerCase()
+    .split("/")
+    .filter(Boolean);
   return (segments[0] || "").startsWith(".");
 }

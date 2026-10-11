@@ -1,11 +1,29 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Alert, Button, Card, Descriptions, Empty, List, Progress, Select, Space, Spin, Tag, Typography, message } from "antd";
+import {
+  Alert,
+  Button,
+  Card,
+  Descriptions,
+  Empty,
+  List,
+  Progress,
+  Select,
+  Space,
+  Spin,
+  Tag,
+  Typography,
+  message,
+} from "antd";
 import { useAgentStore } from "../../../stores/agentStore";
 import { agentsApi } from "../../../api/modules/agents";
 import { flowsApi } from "../../../api/modules/flows";
 import { knowledgeApi } from "../../../api/modules/knowledge";
 import type { AgentProjectSummary } from "../../../api/types/agents";
-import type { FlowDefinition, FlowRunRecord, FlowRunTimeline } from "../../../api/types/flows";
+import type {
+  FlowDefinition,
+  FlowRunRecord,
+  FlowRunTimeline,
+} from "../../../api/types/flows";
 import type { ProjectKnowledgePipelineState } from "../../../api/types/knowledge";
 import { formatPipelineDateTime, getCanonicalStageLabel } from "./display.ts";
 import { deriveBuiltinProjectKnowledgeStages } from "./builtinStages.ts";
@@ -30,8 +48,10 @@ export default function PipelinesPage() {
   const [selectedDefinitionId, setSelectedDefinitionId] = useState("");
   const [runs, setRuns] = useState<FlowRunRecord[]>([]);
   const [selectedRunId, setSelectedRunId] = useState("");
-  const [selectedRunTimeline, setSelectedRunTimeline] = useState<FlowRunTimeline | null>(null);
-  const [knowledgeStatus, setKnowledgeStatus] = useState<ProjectKnowledgePipelineState | null>(null);
+  const [selectedRunTimeline, setSelectedRunTimeline] =
+    useState<FlowRunTimeline | null>(null);
+  const [knowledgeStatus, setKnowledgeStatus] =
+    useState<ProjectKnowledgePipelineState | null>(null);
   const [pageLoading, setPageLoading] = useState(false);
   const [runtimeLoading, setRuntimeLoading] = useState(false);
   const [timelineLoading, setTimelineLoading] = useState(false);
@@ -40,12 +60,20 @@ export default function PipelinesPage() {
   const [runtimeError, setRuntimeError] = useState("");
 
   const agentOptions = useMemo(
-    () => agents.map((agent) => ({ value: agent.id, label: agent.name || agent.id })),
+    () =>
+      agents.map((agent) => ({
+        value: agent.id,
+        label: agent.name || agent.id,
+      })),
     [agents],
   );
 
   const projectOptions = useMemo(
-    () => projects.map((project) => ({ value: project.id, label: project.name || project.id })),
+    () =>
+      projects.map((project) => ({
+        value: project.id,
+        label: project.name || project.id,
+      })),
     [projects],
   );
 
@@ -55,7 +83,10 @@ export default function PipelinesPage() {
   );
 
   const selectedDefinition = useMemo(
-    () => visibleDefinitions.find((definition) => definition.id === selectedDefinitionId) || null,
+    () =>
+      visibleDefinitions.find(
+        (definition) => definition.id === selectedDefinitionId,
+      ) || null,
     [selectedDefinitionId, visibleDefinitions],
   );
 
@@ -69,41 +100,47 @@ export default function PipelinesPage() {
     [knowledgeStatus],
   );
 
-  const refreshRuntime = useCallback(async (projectId: string, preferredRunId?: string) => {
-    if (!projectId) {
-      setKnowledgeStatus(null);
-      setRuns([]);
-      setSelectedRunId("");
-      setSelectedRunTimeline(null);
-      return;
-    }
+  const refreshRuntime = useCallback(
+    async (projectId: string, preferredRunId?: string) => {
+      if (!projectId) {
+        setKnowledgeStatus(null);
+        setRuns([]);
+        setSelectedRunId("");
+        setSelectedRunTimeline(null);
+        return;
+      }
 
-    setRuntimeLoading(true);
-    setRuntimeError("");
-    try {
-      const [status, scopedRuns] = await Promise.all([
-        knowledgeApi.getProjectKnowledgePipelineStatus({ projectId }),
-        flowsApi.listFlowRuns({ scopeKind: "project", scopeId: projectId }),
-      ]);
+      setRuntimeLoading(true);
+      setRuntimeError("");
+      try {
+        const [status, scopedRuns] = await Promise.all([
+          knowledgeApi.getProjectKnowledgePipelineStatus({ projectId }),
+          flowsApi.listFlowRuns({ scopeKind: "project", scopeId: projectId }),
+        ]);
 
-      const orderedRuns = [...scopedRuns].sort((left, right) => right.created_at.localeCompare(left.created_at));
-      setKnowledgeStatus(status);
-      setRuns(orderedRuns);
+        const orderedRuns = [...scopedRuns].sort((left, right) =>
+          right.created_at.localeCompare(left.created_at),
+        );
+        setKnowledgeStatus(status);
+        setRuns(orderedRuns);
 
-      const nextRunId = preferredRunId || status.flow_run_id || orderedRuns[0]?.id || "";
-      setSelectedRunId(nextRunId);
-      setSelectedRunTimeline(null);
-    } catch (error) {
-      const summary = getStructuredErrorSummary(error);
-      setRuntimeError(summary.message);
-      setKnowledgeStatus(null);
-      setRuns([]);
-      setSelectedRunId("");
-      setSelectedRunTimeline(null);
-    } finally {
-      setRuntimeLoading(false);
-    }
-  }, []);
+        const nextRunId =
+          preferredRunId || status.flow_run_id || orderedRuns[0]?.id || "";
+        setSelectedRunId(nextRunId);
+        setSelectedRunTimeline(null);
+      } catch (error) {
+        const summary = getStructuredErrorSummary(error);
+        setRuntimeError(summary.message);
+        setKnowledgeStatus(null);
+        setRuns([]);
+        setSelectedRunId("");
+        setSelectedRunTimeline(null);
+      } finally {
+        setRuntimeLoading(false);
+      }
+    },
+    [],
+  );
 
   useEffect(() => {
     let active = true;
@@ -121,14 +158,20 @@ export default function PipelinesPage() {
           return;
         }
 
-        const visible = sortFlowDefinitions(filterCompatibleFlowDefinitions(definitionList));
+        const visible = sortFlowDefinitions(
+          filterCompatibleFlowDefinitions(definitionList),
+        );
         setProjects(projectList);
         setDefinitions(definitionList);
         setSelectedProjectId((current) =>
-          projectList.some((project) => project.id === current) ? current : (projectList[0]?.id || ""),
+          projectList.some((project) => project.id === current)
+            ? current
+            : projectList[0]?.id || "",
         );
         setSelectedDefinitionId((current) =>
-          visible.some((definition) => definition.id === current) ? current : (visible[0]?.id || ""),
+          visible.some((definition) => definition.id === current)
+            ? current
+            : visible[0]?.id || "",
         );
       } catch (error) {
         if (!active) {
@@ -198,7 +241,11 @@ export default function PipelinesPage() {
         trigger: "manual",
       });
       await refreshRuntime(selectedProjectId, response.state.flow_run_id);
-      message.success(response.deduplicated ? "Reused existing pipeline run." : "Knowledge pipeline started.");
+      message.success(
+        response.deduplicated
+          ? "Reused existing pipeline run."
+          : "Knowledge pipeline started.",
+      );
     } catch (error) {
       message.error(getStructuredErrorSummary(error).message);
     } finally {
@@ -228,32 +275,38 @@ export default function PipelinesPage() {
     }
   }, [refreshRuntime, selectedDefinitionId, selectedProjectId]);
 
-  const sendKnowledgeCommand = useCallback(async (commandType: "pause" | "resume" | "cancel") => {
-    if (!selectedProjectId) {
-      return;
-    }
-    setActionKey(commandType);
-    try {
-      const response = await knowledgeApi.commandProjectKnowledgePipeline({
-        projectId: selectedProjectId,
-        commandType,
-      });
-      await refreshRuntime(selectedProjectId, response.flow_run_id);
-      message.success(`${humanizeFlowKey(commandType)} command accepted.`);
-    } catch (error) {
-      message.error(getStructuredErrorSummary(error).message);
-    } finally {
-      setActionKey("");
-    }
-  }, [refreshRuntime, selectedProjectId]);
+  const sendKnowledgeCommand = useCallback(
+    async (commandType: "pause" | "resume" | "cancel") => {
+      if (!selectedProjectId) {
+        return;
+      }
+      setActionKey(commandType);
+      try {
+        const response = await knowledgeApi.commandProjectKnowledgePipeline({
+          projectId: selectedProjectId,
+          commandType,
+        });
+        await refreshRuntime(selectedProjectId, response.flow_run_id);
+        message.success(`${humanizeFlowKey(commandType)} command accepted.`);
+      } catch (error) {
+        message.error(getStructuredErrorSummary(error).message);
+      } finally {
+        setActionKey("");
+      }
+    },
+    [refreshRuntime, selectedProjectId],
+  );
 
   return (
     <div className={styles.page}>
       <div className={styles.toolbar}>
         <div>
-          <Title level={2} className={styles.pageTitle}>Pipelines</Title>
+          <Title level={2} className={styles.pageTitle}>
+            Pipelines
+          </Title>
           <Paragraph className={styles.pageDescription}>
-            Canonical flow definitions, scoped project knowledge controls, and run timelines.
+            Canonical flow definitions, scoped project knowledge controls, and
+            run timelines.
           </Paragraph>
         </div>
         <Space wrap>
@@ -271,18 +324,26 @@ export default function PipelinesPage() {
             onChange={(value) => setSelectedProjectId(String(value))}
             placeholder="Select project"
           />
-          <Button onClick={() => void refreshRuntime(selectedProjectId)} loading={runtimeLoading}>
+          <Button
+            onClick={() => void refreshRuntime(selectedProjectId)}
+            loading={runtimeLoading}
+          >
             Refresh
           </Button>
         </Space>
       </div>
 
       {pageError ? <Alert type="error" showIcon message={pageError} /> : null}
-      {runtimeError ? <Alert type="warning" showIcon message={runtimeError} /> : null}
+      {runtimeError ? (
+        <Alert type="warning" showIcon message={runtimeError} />
+      ) : null}
 
       <Spin spinning={pageLoading}>
         <div className={styles.grid}>
-          <Card title={`Definitions (${visibleDefinitions.length})`} className={styles.card}>
+          <Card
+            title={`Definitions (${visibleDefinitions.length})`}
+            className={styles.card}
+          >
             {visibleDefinitions.length === 0 ? (
               <Empty description="No compatible flow definitions were loaded." />
             ) : (
@@ -290,7 +351,11 @@ export default function PipelinesPage() {
                 dataSource={visibleDefinitions}
                 renderItem={(definition) => (
                   <List.Item
-                    className={definition.id === selectedDefinitionId ? styles.listItemActive : styles.listItem}
+                    className={
+                      definition.id === selectedDefinitionId
+                        ? styles.listItemActive
+                        : styles.listItem
+                    }
                     onClick={() => setSelectedDefinitionId(definition.id)}
                   >
                     <div className={styles.listItemHeader}>
@@ -313,14 +378,24 @@ export default function PipelinesPage() {
             {selectedDefinition ? (
               <div className={styles.definitionDetail}>
                 <Title level={4}>{selectedDefinition.name}</Title>
-                <Paragraph>{selectedDefinition.description || "No description."}</Paragraph>
+                <Paragraph>
+                  {selectedDefinition.description || "No description."}
+                </Paragraph>
                 <Descriptions size="small" column={1} bordered>
-                  <Descriptions.Item label="Definition ID">{selectedDefinition.id}</Descriptions.Item>
-                  <Descriptions.Item label="Version">{selectedDefinition.version || "-"}</Descriptions.Item>
-                  <Descriptions.Item label="Classification">
-                    {isKnowledgeFlowDefinition(selectedDefinition) ? "Knowledge pipeline" : "Flow definition"}
+                  <Descriptions.Item label="Definition ID">
+                    {selectedDefinition.id}
                   </Descriptions.Item>
-                  <Descriptions.Item label="Updated At">{formatPipelineDateTime(selectedDefinition.updated_at)}</Descriptions.Item>
+                  <Descriptions.Item label="Version">
+                    {selectedDefinition.version || "-"}
+                  </Descriptions.Item>
+                  <Descriptions.Item label="Classification">
+                    {isKnowledgeFlowDefinition(selectedDefinition)
+                      ? "Knowledge pipeline"
+                      : "Flow definition"}
+                  </Descriptions.Item>
+                  <Descriptions.Item label="Updated At">
+                    {formatPipelineDateTime(selectedDefinition.updated_at)}
+                  </Descriptions.Item>
                 </Descriptions>
 
                 <List
@@ -332,12 +407,16 @@ export default function PipelinesPage() {
                         <Text strong>{step.name}</Text>
                         <div className={styles.stepMeta}>
                           <Tag>{step.kind}</Tag>
-                          {step.executor ? <Tag color="blue">{step.executor}</Tag> : null}
+                          {step.executor ? (
+                            <Tag color="blue">{step.executor}</Tag>
+                          ) : null}
                           {(step.depends_on || []).map((dependency) => (
                             <Tag key={dependency}>after:{dependency}</Tag>
                           ))}
                         </div>
-                        <Text type="secondary">{step.description || "No description."}</Text>
+                        <Text type="secondary">
+                          {step.description || "No description."}
+                        </Text>
                       </div>
                     </List.Item>
                   )}
@@ -346,47 +425,108 @@ export default function PipelinesPage() {
             ) : null}
           </Card>
 
-          <Card title="Project Knowledge Control" className={styles.card} extra={selectedProject ? <Text type="secondary">{selectedProject.name}</Text> : null}>
+          <Card
+            title="Project Knowledge Control"
+            className={styles.card}
+            extra={
+              selectedProject ? (
+                <Text type="secondary">{selectedProject.name}</Text>
+              ) : null
+            }
+          >
             {!selectedProject ? (
               <Empty description="Select a project to inspect knowledge runtime." />
             ) : (
               <Spin spinning={runtimeLoading}>
                 <Space className={styles.actionRow} wrap>
-                  <Button type="primary" onClick={() => void runKnowledgePipeline()} loading={actionKey === "run"}>
+                  <Button
+                    type="primary"
+                    onClick={() => void runKnowledgePipeline()}
+                    loading={actionKey === "run"}
+                  >
                     Run Knowledge Pipeline
                   </Button>
-                  <Button onClick={() => void createFlowRun()} loading={actionKey === "create"}>
+                  <Button
+                    onClick={() => void createFlowRun()}
+                    loading={actionKey === "create"}
+                  >
                     Create Flow Run
                   </Button>
-                  <Button onClick={() => void sendKnowledgeCommand("pause")} loading={actionKey === "pause"}>
+                  <Button
+                    onClick={() => void sendKnowledgeCommand("pause")}
+                    loading={actionKey === "pause"}
+                  >
                     Pause
                   </Button>
-                  <Button onClick={() => void sendKnowledgeCommand("resume")} loading={actionKey === "resume"}>
+                  <Button
+                    onClick={() => void sendKnowledgeCommand("resume")}
+                    loading={actionKey === "resume"}
+                  >
                     Resume
                   </Button>
-                  <Button danger onClick={() => void sendKnowledgeCommand("cancel")} loading={actionKey === "cancel"}>
+                  <Button
+                    danger
+                    onClick={() => void sendKnowledgeCommand("cancel")}
+                    loading={actionKey === "cancel"}
+                  >
                     Cancel
                   </Button>
                 </Space>
 
-                <Descriptions size="small" column={1} bordered className={styles.statusPanel}>
+                <Descriptions
+                  size="small"
+                  column={1}
+                  bordered
+                  className={styles.statusPanel}
+                >
                   <Descriptions.Item label="Status">
-                    <Tag color={getRunStatusColor(knowledgeStatus?.status || "idle")}>{knowledgeStatus?.status || "idle"}</Tag>
+                    <Tag
+                      color={getRunStatusColor(
+                        knowledgeStatus?.status || "idle",
+                      )}
+                    >
+                      {knowledgeStatus?.status || "idle"}
+                    </Tag>
                   </Descriptions.Item>
-                  <Descriptions.Item label="Current Stage">{getCanonicalStageLabel(knowledgeStatus?.current_stage || knowledgeStatus?.stage || "idle")}</Descriptions.Item>
-                  <Descriptions.Item label="Flow Run ID">{knowledgeStatus?.flow_run_id || "-"}</Descriptions.Item>
-                  <Descriptions.Item label="Recent Control Command">{knowledgeStatus?.recent_control_command || "-"}</Descriptions.Item>
-                  <Descriptions.Item label="Updated At">{formatPipelineDateTime(knowledgeStatus?.control_updated_at || knowledgeStatus?.operation_updated_at)}</Descriptions.Item>
-                  <Descriptions.Item label="Workspace">{selectedProject.workspace_dir}</Descriptions.Item>
+                  <Descriptions.Item label="Current Stage">
+                    {getCanonicalStageLabel(
+                      knowledgeStatus?.current_stage ||
+                        knowledgeStatus?.stage ||
+                        "idle",
+                    )}
+                  </Descriptions.Item>
+                  <Descriptions.Item label="Flow Run ID">
+                    {knowledgeStatus?.flow_run_id || "-"}
+                  </Descriptions.Item>
+                  <Descriptions.Item label="Recent Control Command">
+                    {knowledgeStatus?.recent_control_command || "-"}
+                  </Descriptions.Item>
+                  <Descriptions.Item label="Updated At">
+                    {formatPipelineDateTime(
+                      knowledgeStatus?.control_updated_at ||
+                        knowledgeStatus?.operation_updated_at,
+                    )}
+                  </Descriptions.Item>
+                  <Descriptions.Item label="Workspace">
+                    {selectedProject.workspace_dir}
+                  </Descriptions.Item>
                 </Descriptions>
 
-                {knowledgeStatus?.recent_error_code || knowledgeStatus?.last_error ? (
+                {knowledgeStatus?.recent_error_code ||
+                knowledgeStatus?.last_error ? (
                   <Alert
                     className={styles.runtimeAlert}
                     type="warning"
                     showIcon
-                    message={knowledgeStatus.recent_error_code || "Knowledge pipeline warning"}
-                    description={knowledgeStatus.last_error || knowledgeStatus.recent_error_source || "The backend reported a recoverable issue."}
+                    message={
+                      knowledgeStatus.recent_error_code ||
+                      "Knowledge pipeline warning"
+                    }
+                    description={
+                      knowledgeStatus.last_error ||
+                      knowledgeStatus.recent_error_source ||
+                      "The backend reported a recoverable issue."
+                    }
                   />
                 ) : null}
 
@@ -395,10 +535,18 @@ export default function PipelinesPage() {
                     <div key={stage.key} className={styles.stageItem}>
                       <div className={styles.stageHeader}>
                         <Text strong>{getCanonicalStageLabel(stage.key)}</Text>
-                        <Tag color={getRunStatusColor(stage.status)}>{stage.status}</Tag>
+                        <Tag color={getRunStatusColor(stage.status)}>
+                          {stage.status}
+                        </Tag>
                       </div>
                       <Text type="secondary">{stage.summary || "-"}</Text>
-                      {typeof stage.progress === "number" ? <Progress percent={stage.progress} size="small" showInfo={false} /> : null}
+                      {typeof stage.progress === "number" ? (
+                        <Progress
+                          percent={stage.progress}
+                          size="small"
+                          showInfo={false}
+                        />
+                      ) : null}
                     </div>
                   ))}
                 </div>
@@ -420,15 +568,23 @@ export default function PipelinesPage() {
                       dataSource={runs}
                       renderItem={(run) => (
                         <List.Item
-                          className={run.id === selectedRunId ? styles.listItemActive : styles.listItem}
+                          className={
+                            run.id === selectedRunId
+                              ? styles.listItemActive
+                              : styles.listItem
+                          }
                           onClick={() => setSelectedRunId(run.id)}
                         >
                           <div className={styles.listItemHeader}>
                             <Text strong>{run.definition_id}</Text>
-                            <Tag color={getRunStatusColor(run.status)}>{run.status}</Tag>
+                            <Tag color={getRunStatusColor(run.status)}>
+                              {run.status}
+                            </Tag>
                           </div>
                           <Text type="secondary">{run.id}</Text>
-                          <Text type="secondary">Updated {formatPipelineDateTime(run.updated_at)}</Text>
+                          <Text type="secondary">
+                            Updated {formatPipelineDateTime(run.updated_at)}
+                          </Text>
                         </List.Item>
                       )}
                     />
@@ -437,11 +593,24 @@ export default function PipelinesPage() {
                       {selectedRunTimeline ? (
                         <>
                           <Descriptions size="small" column={1} bordered>
-                            <Descriptions.Item label="Run ID">{selectedRunTimeline.run.id}</Descriptions.Item>
-                            <Descriptions.Item label="Definition">{selectedRunTimeline.run.definition_id}</Descriptions.Item>
-                            <Descriptions.Item label="Scope">{selectedRunTimeline.run.scope_kind}:{selectedRunTimeline.run.scope_id}</Descriptions.Item>
-                            <Descriptions.Item label="Current Step">{selectedRunTimeline.run.current_step_id || "-"}</Descriptions.Item>
-                            <Descriptions.Item label="Created At">{formatPipelineDateTime(selectedRunTimeline.run.created_at)}</Descriptions.Item>
+                            <Descriptions.Item label="Run ID">
+                              {selectedRunTimeline.run.id}
+                            </Descriptions.Item>
+                            <Descriptions.Item label="Definition">
+                              {selectedRunTimeline.run.definition_id}
+                            </Descriptions.Item>
+                            <Descriptions.Item label="Scope">
+                              {selectedRunTimeline.run.scope_kind}:
+                              {selectedRunTimeline.run.scope_id}
+                            </Descriptions.Item>
+                            <Descriptions.Item label="Current Step">
+                              {selectedRunTimeline.run.current_step_id || "-"}
+                            </Descriptions.Item>
+                            <Descriptions.Item label="Created At">
+                              {formatPipelineDateTime(
+                                selectedRunTimeline.run.created_at,
+                              )}
+                            </Descriptions.Item>
                           </Descriptions>
 
                           <List
@@ -453,10 +622,20 @@ export default function PipelinesPage() {
                                 <div>
                                   <div className={styles.listItemHeader}>
                                     <Text strong>{event.event_type}</Text>
-                                    {event.status ? <Tag color={getRunStatusColor(event.status)}>{event.status}</Tag> : null}
+                                    {event.status ? (
+                                      <Tag
+                                        color={getRunStatusColor(event.status)}
+                                      >
+                                        {event.status}
+                                      </Tag>
+                                    ) : null}
                                   </div>
-                                  <Text type="secondary">{event.step_id || "run-level event"}</Text>
-                                  <Text type="secondary">{formatPipelineDateTime(event.created_at)}</Text>
+                                  <Text type="secondary">
+                                    {event.step_id || "run-level event"}
+                                  </Text>
+                                  <Text type="secondary">
+                                    {formatPipelineDateTime(event.created_at)}
+                                  </Text>
                                 </div>
                               </List.Item>
                             )}
@@ -471,9 +650,15 @@ export default function PipelinesPage() {
                                 <div>
                                   <div className={styles.listItemHeader}>
                                     <Text strong>{command.command_type}</Text>
-                                    <Tag color={getRunStatusColor(command.status)}>{command.status}</Tag>
+                                    <Tag
+                                      color={getRunStatusColor(command.status)}
+                                    >
+                                      {command.status}
+                                    </Tag>
                                   </div>
-                                  <Text type="secondary">{formatPipelineDateTime(command.updated_at)}</Text>
+                                  <Text type="secondary">
+                                    {formatPipelineDateTime(command.updated_at)}
+                                  </Text>
                                 </div>
                               </List.Item>
                             )}

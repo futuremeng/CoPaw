@@ -10,7 +10,9 @@ export function parseScopeFilterProvenance(
   provenance: Record<string, unknown>,
 ): ScopeFilterProvenanceState {
   const applied = Boolean(provenance.scope_filter_applied);
-  const rawScopeType = String(provenance.scope_type || "").trim().toLowerCase();
+  const rawScopeType = String(provenance.scope_type || "")
+    .trim()
+    .toLowerCase();
   const scopeType: ScopeFilterType =
     rawScopeType === "agent" || rawScopeType === "project"
       ? rawScopeType

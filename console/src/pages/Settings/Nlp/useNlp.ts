@@ -9,35 +9,41 @@ const NLP_STATUS_REFRESH_INTERVAL_MS = 15 * 1000;
 
 export interface NlpStatus {
   provider?: string;
-  providers?: Record<string, {
-    provider?: string;
-    sidecar: {
-      status: string;
-      reason_code: string;
-      reason: string;
-      enabled: boolean;
-      python_executable: string;
-      python_version?: string;
-      managed: boolean;
-      uv_available: boolean;
-      uv_executable: string;
-      model_home?: string;
-      model_cache_path?: string;
-      hanlp_home?: string;
-    };
-    model: {
-      status: string;
-      reason_code: string;
-      reason: string;
-      model_id: string;
-    };
-    tasks?: Record<string, {
-      enabled?: boolean;
-      status?: string;
-      reason_code?: string;
-      reason?: string;
-    }>;
-  }>;
+  providers?: Record<
+    string,
+    {
+      provider?: string;
+      sidecar: {
+        status: string;
+        reason_code: string;
+        reason: string;
+        enabled: boolean;
+        python_executable: string;
+        python_version?: string;
+        managed: boolean;
+        uv_available: boolean;
+        uv_executable: string;
+        model_home?: string;
+        model_cache_path?: string;
+        hanlp_home?: string;
+      };
+      model: {
+        status: string;
+        reason_code: string;
+        reason: string;
+        model_id: string;
+      };
+      tasks?: Record<
+        string,
+        {
+          enabled?: boolean;
+          status?: string;
+          reason_code?: string;
+          reason?: string;
+        }
+      >;
+    }
+  >;
   strategy?: {
     mode?: string;
     default_model_id?: string;
@@ -69,12 +75,15 @@ export interface NlpStatus {
     model_id: string;
   };
   api?: Record<string, unknown>;
-  tasks?: Record<string, {
-    enabled?: boolean;
-    status?: string;
-    reason_code?: string;
-    reason?: string;
-  }>;
+  tasks?: Record<
+    string,
+    {
+      enabled?: boolean;
+      status?: string;
+      reason_code?: string;
+      reason?: string;
+    }
+  >;
   preload?: {
     enabled: boolean;
     scope: "critical" | "all_enabled_tasks";
@@ -88,12 +97,15 @@ export interface NlpStatus {
       model_id: string;
       status: string;
     }>;
-    task_results?: Record<string, {
-      status: string;
-      reason_code?: string;
-      reason?: string;
-      model_id?: string;
-    }>;
+    task_results?: Record<
+      string,
+      {
+        status: string;
+        reason_code?: string;
+        reason?: string;
+        model_id?: string;
+      }
+    >;
   };
   deprecated?: boolean;
   migration?: {
@@ -237,7 +249,9 @@ function buildSiameseDemoPayload(
   } = {};
 
   if (parsed && SIAMESE_STRUCTURED_TASKS.has(normalizedTaskKey)) {
-    const pickString = (key: "text" | "text_a" | "text_b" | "context" | "question") => {
+    const pickString = (
+      key: "text" | "text_a" | "text_b" | "context" | "question",
+    ) => {
       const value = parsed[key];
       if (typeof value === "string" && value.trim()) {
         payload[key] = value;
@@ -332,8 +346,10 @@ function readNlpStatusSnapshot(): NlpStatusSnapshot | null {
     return {
       ts: parsed.ts,
       status: (parsed.status || null) as NlpStatus | null,
-      localModelsStatus: (parsed.localModelsStatus || null) as NlpLocalModelsStatus | null,
-      methodsCatalog: (parsed.methodsCatalog || null) as NlpMethodsCatalog | null,
+      localModelsStatus: (parsed.localModelsStatus ||
+        null) as NlpLocalModelsStatus | null,
+      methodsCatalog: (parsed.methodsCatalog ||
+        null) as NlpMethodsCatalog | null,
     };
   } catch {
     return null;
@@ -345,7 +361,10 @@ function writeNlpStatusSnapshot(snapshot: NlpStatusSnapshot): void {
     return;
   }
   try {
-    window.localStorage.setItem(NLP_STATUS_SNAPSHOT_KEY, JSON.stringify(snapshot));
+    window.localStorage.setItem(
+      NLP_STATUS_SNAPSHOT_KEY,
+      JSON.stringify(snapshot),
+    );
   } catch {
     // Best-effort cache; ignore quota or serialization errors.
   }
@@ -356,13 +375,16 @@ export function useNlp() {
   const { message } = useAppMessage();
   const fetchRequestIdRef = useRef(0);
 
-  const [snapshotSeed] = useState<NlpStatusSnapshot | null>(() => readNlpStatusSnapshot());
+  const [snapshotSeed] = useState<NlpStatusSnapshot | null>(() =>
+    readNlpStatusSnapshot(),
+  );
 
   const [loading, setLoading] = useState(snapshotSeed == null);
   const [installing, setInstalling] = useState(false);
   const [initializingSiamese, setInitializingSiamese] = useState(false);
   const [downloadingModel, setDownloadingModel] = useState(false);
-  const [downloadingMissingLocalModels, setDownloadingMissingLocalModels] = useState(false);
+  const [downloadingMissingLocalModels, setDownloadingMissingLocalModels] =
+    useState(false);
   const [lastDownloadAttempts, setLastDownloadAttempts] = useState<Array<{
     model_id: string;
     status: string;
@@ -373,20 +395,28 @@ export function useNlp() {
   const [runningPreload, setRunningPreload] = useState(false);
   const [savingStrategy, setSavingStrategy] = useState(false);
   const [dryRunningDecision, setDryRunningDecision] = useState(false);
-  const [status, setStatus] = useState<NlpStatus | null>(snapshotSeed?.status ?? null);
-  const [localModelsStatus, setLocalModelsStatus] = useState<NlpLocalModelsStatus | null>(
-    snapshotSeed?.localModelsStatus ?? null,
+  const [status, setStatus] = useState<NlpStatus | null>(
+    snapshotSeed?.status ?? null,
   );
-  const [methodsCatalog, setMethodsCatalog] = useState<NlpMethodsCatalog | null>(
-    snapshotSeed?.methodsCatalog ?? null,
-  );
+  const [localModelsStatus, setLocalModelsStatus] =
+    useState<NlpLocalModelsStatus | null>(
+      snapshotSeed?.localModelsStatus ?? null,
+    );
+  const [methodsCatalog, setMethodsCatalog] =
+    useState<NlpMethodsCatalog | null>(snapshotSeed?.methodsCatalog ?? null);
   const [lastManualSteps, setLastManualSteps] = useState<string[]>([]);
   const [lastOperations, setLastOperations] = useState<HanlpOperation[]>([]);
-  const [lastStrategyDecision, setLastStrategyDecision] = useState<NlpStrategyDryRunDecision | null>(null);
+  const [lastStrategyDecision, setLastStrategyDecision] =
+    useState<NlpStrategyDryRunDecision | null>(null);
   const [runningDemoTask, setRunningDemoTask] = useState<string | null>(null);
-  const [demoResults, setDemoResults] = useState<Record<string, NlpMethodDemoResult>>({});
+  const [demoResults, setDemoResults] = useState<
+    Record<string, NlpMethodDemoResult>
+  >({});
 
-  const fetchStatus = async ({ showLoading = false, silent = false }: FetchStatusOptions = {}) => {
+  const fetchStatus = async ({
+    showLoading = false,
+    silent = false,
+  }: FetchStatusOptions = {}) => {
     const requestId = fetchRequestIdRef.current + 1;
     fetchRequestIdRef.current = requestId;
     if (showLoading) {
@@ -539,7 +569,9 @@ export function useNlp() {
       if (res.success) {
         message.success("本地缺失模型已全部下载完成");
       } else {
-        const remaining = res.after?.missing_count ?? (res.attempts ?? []).filter((a) => a.status !== "ready").length;
+        const remaining =
+          res.after?.missing_count ??
+          (res.attempts ?? []).filter((a) => a.status !== "ready").length;
         message.warning(`下载完成，仍有 ${remaining} 个模型未就绪，请查看详情`);
       }
       await fetchStatus();
@@ -612,7 +644,10 @@ export function useNlp() {
     }
     setDryRunningDecision(true);
     try {
-      const res = await api.dryRunNlpStrategy({ text: normalizedText, task_key: taskKey });
+      const res = await api.dryRunNlpStrategy({
+        text: normalizedText,
+        task_key: taskKey,
+      });
       setLastStrategyDecision(res.decision || null);
       return res.decision || null;
     } catch (error) {
@@ -644,21 +679,38 @@ export function useNlp() {
     setRunningDemoTask(normalizedTaskKey);
     try {
       let result;
-      const demoTimeoutMs = providerType === "siamese_uninlu" ? 60_000 : undefined;
-      if (providerType === "hanlp" && (normalizedTaskKey === "srl" || normalizedTaskKey === "ner")) {
-        const tokenizeResult = await api.runNlpProviderTaskDemo("hanlp", "tokenize", {
-          text: normalizedText,
-        });
+      const demoTimeoutMs =
+        providerType === "siamese_uninlu" ? 60_000 : undefined;
+      if (
+        providerType === "hanlp" &&
+        (normalizedTaskKey === "srl" || normalizedTaskKey === "ner")
+      ) {
+        const tokenizeResult = await api.runNlpProviderTaskDemo(
+          "hanlp",
+          "tokenize",
+          {
+            text: normalizedText,
+          },
+        );
         const tokens = Array.isArray(tokenizeResult.result)
-          ? tokenizeResult.result.map((item) => String(item || "").trim()).filter(Boolean)
+          ? tokenizeResult.result
+              .map((item) => String(item || "").trim())
+              .filter(Boolean)
           : [];
         if (tokens.length === 0) {
-          message.warning(`${normalizedTaskKey} demo: tokenize returned empty tokens`);
+          message.warning(
+            `${normalizedTaskKey} demo: tokenize returned empty tokens`,
+          );
           return null;
         }
-        result = await api.runNlpProviderTaskDemo(providerType, normalizedTaskKey, {
-          tokens,
-        }, { timeoutMs: demoTimeoutMs });
+        result = await api.runNlpProviderTaskDemo(
+          providerType,
+          normalizedTaskKey,
+          {
+            tokens,
+          },
+          { timeoutMs: demoTimeoutMs },
+        );
       } else {
         const requestPayload =
           providerType === "siamese_uninlu"
@@ -667,9 +719,14 @@ export function useNlp() {
                 text: normalizedText,
                 schema,
               };
-        result = await api.runNlpProviderTaskDemo(providerType, normalizedTaskKey, {
-          ...requestPayload,
-        }, { timeoutMs: demoTimeoutMs });
+        result = await api.runNlpProviderTaskDemo(
+          providerType,
+          normalizedTaskKey,
+          {
+            ...requestPayload,
+          },
+          { timeoutMs: demoTimeoutMs },
+        );
       }
       setDemoResults((prev) => ({ ...prev, [normalizedTaskKey]: result }));
       if (result.status === "ready") {

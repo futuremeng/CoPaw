@@ -41,7 +41,10 @@ interface ProjectKnowledgeSignalsPanelProps {
   onRunSuggestedQuery?: (query: string) => void;
 }
 
-function formatMetricsSourceLabel(source: string, t: ReturnType<typeof useTranslation>["t"]): string {
+function formatMetricsSourceLabel(
+  source: string,
+  t: ReturnType<typeof useTranslation>["t"],
+): string {
   const normalized = String(source || "").trim();
   if (!normalized) {
     return t("copaw.projects.knowledge.metricsSourceUnknown");
@@ -88,21 +91,43 @@ export default function ProjectKnowledgeSignalsPanel(
     latestQualityLoopSummary,
   } = props;
   const semanticEngine = knowledgeState.syncState?.semantic_engine;
-  const syncOperationId = String(knowledgeState.syncState?.operation_id || "").trim();
-  const syncIdempotencyKey = String(knowledgeState.syncState?.idempotency_key || "").trim();
-  const syncLastAction = String(knowledgeState.syncState?.last_action || "").trim();
-  const syncQuantizationStage = String(knowledgeState.syncState?.quantization_stage || "").trim().toUpperCase();
+  const syncOperationId = String(
+    knowledgeState.syncState?.operation_id || "",
+  ).trim();
+  const syncIdempotencyKey = String(
+    knowledgeState.syncState?.idempotency_key || "",
+  ).trim();
+  const syncLastAction = String(
+    knowledgeState.syncState?.last_action || "",
+  ).trim();
+  const syncQuantizationStage = String(
+    knowledgeState.syncState?.quantization_stage || "",
+  )
+    .trim()
+    .toUpperCase();
   const syncDeduplicated = knowledgeState.syncState?.deduplicated === true;
   const syncOperationUpdatedAt = formatLocalDateTime(
     String(knowledgeState.syncState?.operation_updated_at || "").trim(),
   );
-  const semanticReasonLabel = getProjectKnowledgeSemanticReasonLabel(semanticEngine, t);
-  const metricsSourceLabel = formatMetricsSourceLabel(knowledgeState.quantMetricsMeta?.source || "", t);
-  const metricsUpdatedAtLabel = formatLocalDateTime(knowledgeState.quantMetricsMeta?.updatedAt || "");
-  const latestSummaryModel = buildProjectKnowledgeLatestSummaryModelFromState(t, knowledgeState);
-  const nlpMode = knowledgeState.processingCompareModes.find((mode) => mode.mode === "nlp")
-    || knowledgeState.processingModes.find((mode) => mode.mode === "nlp")
-    || null;
+  const semanticReasonLabel = getProjectKnowledgeSemanticReasonLabel(
+    semanticEngine,
+    t,
+  );
+  const metricsSourceLabel = formatMetricsSourceLabel(
+    knowledgeState.quantMetricsMeta?.source || "",
+    t,
+  );
+  const metricsUpdatedAtLabel = formatLocalDateTime(
+    knowledgeState.quantMetricsMeta?.updatedAt || "",
+  );
+  const latestSummaryModel = buildProjectKnowledgeLatestSummaryModelFromState(
+    t,
+    knowledgeState,
+  );
+  const nlpMode =
+    knowledgeState.processingCompareModes.find((mode) => mode.mode === "nlp") ||
+    knowledgeState.processingModes.find((mode) => mode.mode === "nlp") ||
+    null;
   const nlpNerBatchCount = Number(nlpMode?.nerBatchCount || 0);
   const nlpNerWorkerRestartCount = Number(nlpMode?.nerWorkerRestartCount || 0);
   const nlpNerWorkerPidCount = Number(nlpMode?.nerWorkerPidCount || 0);
@@ -110,7 +135,10 @@ export default function ProjectKnowledgeSignalsPanel(
   return (
     <div className={styles.projectKnowledgeWorkbench}>
       <div>
-        <Typography.Title level={5} className={styles.projectKnowledgeSectionTitle}>
+        <Typography.Title
+          level={5}
+          className={styles.projectKnowledgeSectionTitle}
+        >
           {t("projects.knowledgeDock.tabHealth")}
         </Typography.Title>
         <Typography.Text type="secondary">
@@ -118,20 +146,25 @@ export default function ProjectKnowledgeSignalsPanel(
         </Typography.Text>
         {knowledgeState.quantMetricsMeta ? (
           <Typography.Text type="secondary">
-            {t("copaw.projects.knowledge.metricsSourceLabel")}: {metricsSourceLabel}
+            {t("copaw.projects.knowledge.metricsSourceLabel")}:{" "}
+            {metricsSourceLabel}
             {metricsUpdatedAtLabel
-              ? ` · ${t("copaw.projects.knowledge.metricsUpdatedAt")}: ${metricsUpdatedAtLabel}`
+              ? ` · ${t(
+                  "copaw.projects.knowledge.metricsUpdatedAt",
+                )}: ${metricsUpdatedAtLabel}`
               : ""}
           </Typography.Text>
         ) : null}
         {latestSummaryModel.l1Parts.length ? (
           <Typography.Text type="secondary">
-            {t("copaw.projects.knowledge.latestL1Summary")}: {latestSummaryModel.l1Parts.join(" · ")}
+            {t("copaw.projects.knowledge.latestL1Summary")}:{" "}
+            {latestSummaryModel.l1Parts.join(" · ")}
           </Typography.Text>
         ) : null}
         {latestSummaryModel.l23Parts.length ? (
           <Typography.Text type="secondary">
-            {t("copaw.projects.knowledge.latestL23Summary")}: {latestSummaryModel.l23Parts.join(" · ")}
+            {t("copaw.projects.knowledge.latestL23Summary")}:{" "}
+            {latestSummaryModel.l23Parts.join(" · ")}
           </Typography.Text>
         ) : null}
         {showRealtimeConnectionNotice ? (
@@ -139,12 +172,14 @@ export default function ProjectKnowledgeSignalsPanel(
             style={{ marginTop: 8 }}
             type={realtimeConnectionStatus === "degraded" ? "warning" : "info"}
             showIcon
-            message={realtimeConnectionText || t("projects.realtime.connecting")}
+            message={
+              realtimeConnectionText || t("projects.realtime.connecting")
+            }
             description={
               (realtimeReconnectAttempt || 0) > 0
                 ? t("projects.realtime.retryingAttempt", {
-                  count: realtimeReconnectAttempt,
-                })
+                    count: realtimeReconnectAttempt,
+                  })
                 : undefined
             }
           />
@@ -160,12 +195,17 @@ export default function ProjectKnowledgeSignalsPanel(
           <Button
             size="small"
             type="primary"
-            onClick={() => props.onRunSuggestedQuery?.(knowledgeState.suggestedQuery)}
+            onClick={() =>
+              props.onRunSuggestedQuery?.(knowledgeState.suggestedQuery)
+            }
           >
             {t("copaw.projects.knowledge.actionRunSuggestedQuery")}
           </Button>
         ) : null}
-        <Button size="small" onClick={() => void knowledgeState.loadProjectSourceStatus()}>
+        <Button
+          size="small"
+          onClick={() => void knowledgeState.loadProjectSourceStatus()}
+        >
           {t("copaw.projects.knowledge.actionRefreshSignals")}
         </Button>
       </div>
@@ -181,63 +221,119 @@ export default function ProjectKnowledgeSignalsPanel(
           classNames={{ root: styles.knowledgeRuntimeTooltipOverlay }}
         >
           <div
-            className={`${styles.knowledgeModuleHeaderSignal} ${knowledgeState.activeKnowledgeTask ? styles.knowledgeModuleHeaderSignalActive : ""}`}
+            className={`${styles.knowledgeModuleHeaderSignal} ${
+              knowledgeState.activeKnowledgeTask
+                ? styles.knowledgeModuleHeaderSignalActive
+                : ""
+            }`}
           >
-            <Typography.Text type="secondary">{t("copaw.projects.knowledge.signalRuntimeStatus")}</Typography.Text>
+            <Typography.Text type="secondary">
+              {t("copaw.projects.knowledge.signalRuntimeStatus")}
+            </Typography.Text>
             <Typography.Text strong>{runtimeSignalValue}</Typography.Text>
           </div>
         </Tooltip>
         <div className={styles.knowledgeModuleHeaderSignal}>
-          <Typography.Text type="secondary">{t("copaw.projects.knowledge.signalIndexedCoverage")}</Typography.Text>
-          <Typography.Text strong>{`${Math.round(knowledgeHeaderSignals.indexedRatio * 100)}%`}</Typography.Text>
+          <Typography.Text type="secondary">
+            {t("copaw.projects.knowledge.signalIndexedCoverage")}
+          </Typography.Text>
+          <Typography.Text strong>{`${Math.round(
+            knowledgeHeaderSignals.indexedRatio * 100,
+          )}%`}</Typography.Text>
         </div>
         <div className={styles.knowledgeModuleHeaderSignal}>
-          <Typography.Text type="secondary">{t("copaw.projects.knowledge.signalDocuments")}</Typography.Text>
-          <Typography.Text strong>{String(knowledgeHeaderSignals.documentCount)}</Typography.Text>
+          <Typography.Text type="secondary">
+            {t("copaw.projects.knowledge.signalDocuments")}
+          </Typography.Text>
+          <Typography.Text strong>
+            {String(knowledgeHeaderSignals.documentCount)}
+          </Typography.Text>
         </div>
         <div className={styles.knowledgeModuleHeaderSignal}>
-          <Typography.Text type="secondary">{t("copaw.projects.knowledge.signalChunks")}</Typography.Text>
-          <Typography.Text strong>{String(knowledgeHeaderSignals.chunkCount)}</Typography.Text>
+          <Typography.Text type="secondary">
+            {t("copaw.projects.knowledge.signalChunks")}
+          </Typography.Text>
+          <Typography.Text strong>
+            {String(knowledgeHeaderSignals.chunkCount)}
+          </Typography.Text>
         </div>
         <div className={styles.knowledgeModuleHeaderSignal}>
-          <Typography.Text type="secondary">{t("copaw.projects.knowledge.signalSentences")}</Typography.Text>
-          <Typography.Text strong>{String(knowledgeHeaderSignals.sentenceCount)}</Typography.Text>
+          <Typography.Text type="secondary">
+            {t("copaw.projects.knowledge.signalSentences")}
+          </Typography.Text>
+          <Typography.Text strong>
+            {String(knowledgeHeaderSignals.sentenceCount)}
+          </Typography.Text>
         </div>
         <div className={styles.knowledgeModuleHeaderSignal}>
-          <Typography.Text type="secondary">{t("copaw.projects.knowledge.signalEntityMentions")}</Typography.Text>
-          <Typography.Text strong>{String(knowledgeHeaderSignals.entityMentionsCount)}</Typography.Text>
+          <Typography.Text type="secondary">
+            {t("copaw.projects.knowledge.signalEntityMentions")}
+          </Typography.Text>
+          <Typography.Text strong>
+            {String(knowledgeHeaderSignals.entityMentionsCount)}
+          </Typography.Text>
         </div>
         <div className={styles.knowledgeModuleHeaderSignal}>
-          <Typography.Text type="secondary">{t("copaw.projects.knowledge.signalAvgEntitiesPerSentence")}</Typography.Text>
-          <Typography.Text strong>{knowledgeHeaderSignals.avgEntitiesPerSentence.toFixed(2)}</Typography.Text>
+          <Typography.Text type="secondary">
+            {t("copaw.projects.knowledge.signalAvgEntitiesPerSentence")}
+          </Typography.Text>
+          <Typography.Text strong>
+            {knowledgeHeaderSignals.avgEntitiesPerSentence.toFixed(2)}
+          </Typography.Text>
         </div>
         <div className={styles.knowledgeModuleHeaderSignal}>
-          <Typography.Text type="secondary">{t("copaw.projects.knowledge.signalEntityCharRatio")}</Typography.Text>
-          <Typography.Text strong>{`${Math.round(knowledgeHeaderSignals.avgEntityCharRatio * 100)}%`}</Typography.Text>
+          <Typography.Text type="secondary">
+            {t("copaw.projects.knowledge.signalEntityCharRatio")}
+          </Typography.Text>
+          <Typography.Text strong>{`${Math.round(
+            knowledgeHeaderSignals.avgEntityCharRatio * 100,
+          )}%`}</Typography.Text>
         </div>
         <div className={styles.knowledgeModuleHeaderSignal}>
-          <Typography.Text type="secondary">{t("copaw.projects.knowledge.signalRelations")}</Typography.Text>
-          <Typography.Text strong>{String(knowledgeHeaderSignals.relationCount)}</Typography.Text>
+          <Typography.Text type="secondary">
+            {t("copaw.projects.knowledge.signalRelations")}
+          </Typography.Text>
+          <Typography.Text strong>
+            {String(knowledgeHeaderSignals.relationCount)}
+          </Typography.Text>
         </div>
         <div className={styles.knowledgeModuleHeaderSignal}>
-          <Typography.Text type="secondary">{t("copaw.projects.knowledge.entities")}</Typography.Text>
-          <Typography.Text strong>{String(knowledgeHeaderSignals.entityCount)}</Typography.Text>
+          <Typography.Text type="secondary">
+            {t("copaw.projects.knowledge.entities")}
+          </Typography.Text>
+          <Typography.Text strong>
+            {String(knowledgeHeaderSignals.entityCount)}
+          </Typography.Text>
         </div>
         <div className={styles.knowledgeModuleHeaderSignal}>
-          <Typography.Text type="secondary">{t("copaw.projects.knowledge.nerBatchCount")}</Typography.Text>
+          <Typography.Text type="secondary">
+            {t("copaw.projects.knowledge.nerBatchCount")}
+          </Typography.Text>
           <Typography.Text strong>{String(nlpNerBatchCount)}</Typography.Text>
         </div>
         <div className={styles.knowledgeModuleHeaderSignal}>
-          <Typography.Text type="secondary">{t("copaw.projects.knowledge.nerWorkerRestartCount")}</Typography.Text>
-          <Typography.Text strong>{String(nlpNerWorkerRestartCount)}</Typography.Text>
+          <Typography.Text type="secondary">
+            {t("copaw.projects.knowledge.nerWorkerRestartCount")}
+          </Typography.Text>
+          <Typography.Text strong>
+            {String(nlpNerWorkerRestartCount)}
+          </Typography.Text>
         </div>
         <div className={styles.knowledgeModuleHeaderSignal}>
-          <Typography.Text type="secondary">{t("copaw.projects.knowledge.nerWorkerPidCount")}</Typography.Text>
-          <Typography.Text strong>{String(nlpNerWorkerPidCount)}</Typography.Text>
+          <Typography.Text type="secondary">
+            {t("copaw.projects.knowledge.nerWorkerPidCount")}
+          </Typography.Text>
+          <Typography.Text strong>
+            {String(nlpNerWorkerPidCount)}
+          </Typography.Text>
         </div>
         <div className={styles.knowledgeModuleHeaderSignal}>
-          <Typography.Text type="secondary">{t("copaw.projects.knowledge.signalQualityScore")}</Typography.Text>
-          <Typography.Text strong>{`${Math.round(knowledgeHeaderSignals.qualityAssessmentScore * 100)}`}</Typography.Text>
+          <Typography.Text type="secondary">
+            {t("copaw.projects.knowledge.signalQualityScore")}
+          </Typography.Text>
+          <Typography.Text strong>{`${Math.round(
+            knowledgeHeaderSignals.qualityAssessmentScore * 100,
+          )}`}</Typography.Text>
         </div>
         {semanticEngine ? (
           <div className={styles.knowledgeModuleHeaderSignal}>
@@ -252,50 +348,79 @@ export default function ProjectKnowledgeSignalsPanel(
             <Typography.Text type="secondary">
               {t("copaw.projects.knowledge.syncTrace")}
             </Typography.Text>
-            <Typography.Text strong>
-              {syncOperationId || "-"}
+            <Typography.Text strong>{syncOperationId || "-"}</Typography.Text>
+            <Typography.Text type="secondary">
+              {t("copaw.projects.knowledge.syncIdempotencyShort")}:{" "}
+              {syncIdempotencyKey || "-"}
             </Typography.Text>
             <Typography.Text type="secondary">
-              {t("copaw.projects.knowledge.syncIdempotencyShort")}: {syncIdempotencyKey || "-"}
-            </Typography.Text>
-            <Typography.Text type="secondary">
-              {t("copaw.projects.knowledge.syncDeduplicated")}: {syncDeduplicated ? t("common.yes") : t("common.no")}
+              {t("copaw.projects.knowledge.syncDeduplicated")}:{" "}
+              {syncDeduplicated ? t("common.yes") : t("common.no")}
               {syncLastAction
-                ? ` · ${t("copaw.projects.knowledge.syncLastAction")}: ${syncLastAction}`
+                ? ` · ${t(
+                    "copaw.projects.knowledge.syncLastAction",
+                  )}: ${syncLastAction}`
                 : ""}
               {syncQuantizationStage
-                ? ` · ${t("copaw.projects.knowledge.syncQuantizationStage")}: ${syncQuantizationStage}`
+                ? ` · ${t(
+                    "copaw.projects.knowledge.syncQuantizationStage",
+                  )}: ${syncQuantizationStage}`
                 : ""}
             </Typography.Text>
             {syncOperationUpdatedAt ? (
               <Typography.Text type="secondary">
-                {t("copaw.projects.knowledge.syncOperationUpdatedAt")}: {syncOperationUpdatedAt}
+                {t("copaw.projects.knowledge.syncOperationUpdatedAt")}:{" "}
+                {syncOperationUpdatedAt}
               </Typography.Text>
             ) : null}
           </div>
         ) : null}
         <div className={styles.knowledgeModuleHeaderSignal}>
-          <Typography.Text type="secondary">{t("knowledge.quantRelationNormalizationCoverage")}</Typography.Text>
+          <Typography.Text type="secondary">
+            {t("knowledge.quantRelationNormalizationCoverage")}
+          </Typography.Text>
           <Typography.Text strong>
-            {`${Math.round(knowledgeHeaderSignals.relationNormalizationCoverage * 100)}% / >=${Math.round(knowledgeHeaderSignals.relationNormalizationThreshold * 100)}%`}
+            {`${Math.round(
+              knowledgeHeaderSignals.relationNormalizationCoverage * 100,
+            )}% / >=${Math.round(
+              knowledgeHeaderSignals.relationNormalizationThreshold * 100,
+            )}%`}
           </Typography.Text>
         </div>
         <div className={styles.knowledgeModuleHeaderSignal}>
-          <Typography.Text type="secondary">{t("knowledge.quantEntityCanonicalCoverage")}</Typography.Text>
+          <Typography.Text type="secondary">
+            {t("knowledge.quantEntityCanonicalCoverage")}
+          </Typography.Text>
           <Typography.Text strong>
-            {`${Math.round(knowledgeHeaderSignals.entityCanonicalCoverage * 100)}% / >=${Math.round(knowledgeHeaderSignals.entityCanonicalThreshold * 100)}%`}
+            {`${Math.round(
+              knowledgeHeaderSignals.entityCanonicalCoverage * 100,
+            )}% / >=${Math.round(
+              knowledgeHeaderSignals.entityCanonicalThreshold * 100,
+            )}%`}
           </Typography.Text>
         </div>
         <div className={styles.knowledgeModuleHeaderSignal}>
-          <Typography.Text type="secondary">{t("knowledge.quantLowConfidenceRatio")}</Typography.Text>
+          <Typography.Text type="secondary">
+            {t("knowledge.quantLowConfidenceRatio")}
+          </Typography.Text>
           <Typography.Text strong>
-            {`${Math.round(knowledgeHeaderSignals.lowConfidenceRatio * 100)}% / <=${Math.round(knowledgeHeaderSignals.lowConfidenceThreshold * 100)}%`}
+            {`${Math.round(
+              knowledgeHeaderSignals.lowConfidenceRatio * 100,
+            )}% / <=${Math.round(
+              knowledgeHeaderSignals.lowConfidenceThreshold * 100,
+            )}%`}
           </Typography.Text>
         </div>
         <div className={styles.knowledgeModuleHeaderSignal}>
-          <Typography.Text type="secondary">{t("knowledge.quantMissingEvidenceRatio")}</Typography.Text>
+          <Typography.Text type="secondary">
+            {t("knowledge.quantMissingEvidenceRatio")}
+          </Typography.Text>
           <Typography.Text strong>
-            {`${Math.round(knowledgeHeaderSignals.missingEvidenceRatio * 100)}% / <=${Math.round(knowledgeHeaderSignals.missingEvidenceThreshold * 100)}%`}
+            {`${Math.round(
+              knowledgeHeaderSignals.missingEvidenceRatio * 100,
+            )}% / <=${Math.round(
+              knowledgeHeaderSignals.missingEvidenceThreshold * 100,
+            )}%`}
           </Typography.Text>
         </div>
       </div>
@@ -313,7 +438,9 @@ export default function ProjectKnowledgeSignalsPanel(
             latestQualityLoopSummary.tone === "error"
               ? styles.knowledgeLoopSummaryError
               : "",
-          ].filter(Boolean).join(" ")}
+          ]
+            .filter(Boolean)
+            .join(" ")}
         >
           <div className={styles.knowledgeLoopSummaryHeaderRow}>
             <Typography.Text strong>
@@ -321,10 +448,14 @@ export default function ProjectKnowledgeSignalsPanel(
             </Typography.Text>
             <div className={styles.knowledgeLoopSummaryTags}>
               <Tag color={latestQualityLoopSummary.tone}>
-                {latestQualityLoopSummary.jobStatus || t("projects.statusUnknown")}
+                {latestQualityLoopSummary.jobStatus ||
+                  t("projects.statusUnknown")}
               </Tag>
               {latestQualityLoopSummary.roundNo ? (
-                <Tag>{t("copaw.projects.knowledge.roundLabel")} {latestQualityLoopSummary.roundNo}</Tag>
+                <Tag>
+                  {t("copaw.projects.knowledge.roundLabel")}{" "}
+                  {latestQualityLoopSummary.roundNo}
+                </Tag>
               ) : null}
               {latestQualityLoopSummary.stopReason ? (
                 <Tag color={latestQualityLoopSummary.tone}>
@@ -332,7 +463,13 @@ export default function ProjectKnowledgeSignalsPanel(
                 </Tag>
               ) : null}
               {latestQualityLoopSummary.gateStatus ? (
-                <Tag color={latestQualityLoopSummary.gateStatus === "accepted" ? "success" : "warning"}>
+                <Tag
+                  color={
+                    latestQualityLoopSummary.gateStatus === "accepted"
+                      ? "success"
+                      : "warning"
+                  }
+                >
                   {t("copaw.projects.knowledge.agentGate", {
                     status: latestQualityLoopSummary.gateStatus,
                   })}
@@ -343,17 +480,21 @@ export default function ProjectKnowledgeSignalsPanel(
           <div className={styles.knowledgeLoopSummaryMetaRow}>
             {latestQualityLoopSummary.scoreAfter !== null ? (
               <Typography.Text type="secondary">
-                {t("copaw.projects.knowledge.signalQualityScore")}: {Math.round(latestQualityLoopSummary.scoreAfter * 100)}
+                {t("copaw.projects.knowledge.signalQualityScore")}:{" "}
+                {Math.round(latestQualityLoopSummary.scoreAfter * 100)}
               </Typography.Text>
             ) : null}
             {latestQualityLoopSummary.delta !== null ? (
               <Typography.Text type="secondary">
-                {t("copaw.projects.knowledge.runtimeStatusScoreDelta")}: {latestQualityLoopSummary.delta >= 0 ? "+" : ""}{Math.round(latestQualityLoopSummary.delta * 100)}
+                {t("copaw.projects.knowledge.runtimeStatusScoreDelta")}:{" "}
+                {latestQualityLoopSummary.delta >= 0 ? "+" : ""}
+                {Math.round(latestQualityLoopSummary.delta * 100)}
               </Typography.Text>
             ) : null}
             {latestQualityLoopSummary.updatedAt ? (
               <Typography.Text type="secondary">
-                {t("copaw.projects.knowledge.runtimeStatusUpdatedAt")}: {latestQualityLoopSummary.updatedAt}
+                {t("copaw.projects.knowledge.runtimeStatusUpdatedAt")}:{" "}
+                {latestQualityLoopSummary.updatedAt}
               </Typography.Text>
             ) : null}
           </div>
@@ -368,12 +509,14 @@ export default function ProjectKnowledgeSignalsPanel(
           ) : null}
           {latestQualityLoopSummary.hypotheses.length ? (
             <Typography.Text type="secondary">
-              {t("copaw.projects.knowledge.qualityLoopHypotheses")}: {latestQualityLoopSummary.hypotheses.join(", ")}
+              {t("copaw.projects.knowledge.qualityLoopHypotheses")}:{" "}
+              {latestQualityLoopSummary.hypotheses.join(", ")}
             </Typography.Text>
           ) : null}
           {latestQualityLoopSummary.nextPlan.length ? (
             <Typography.Text type="secondary">
-              {t("copaw.projects.knowledge.qualityLoopNextPlan")}: {latestQualityLoopSummary.nextPlan.join(", ")}
+              {t("copaw.projects.knowledge.qualityLoopNextPlan")}:{" "}
+              {latestQualityLoopSummary.nextPlan.join(", ")}
             </Typography.Text>
           ) : null}
         </div>
@@ -381,70 +524,108 @@ export default function ProjectKnowledgeSignalsPanel(
 
       <div className={styles.projectKnowledgeSignalGrid}>
         <div className={styles.projectKnowledgeSignalCard}>
-          <Typography.Text type="secondary">{t("copaw.projects.knowledge.signalDocuments")}</Typography.Text>
-          <Typography.Text strong>{knowledgeState.quantMetrics.documentCount}</Typography.Text>
+          <Typography.Text type="secondary">
+            {t("copaw.projects.knowledge.signalDocuments")}
+          </Typography.Text>
+          <Typography.Text strong>
+            {knowledgeState.quantMetrics.documentCount}
+          </Typography.Text>
         </div>
         <div className={styles.projectKnowledgeSignalCard}>
-          <Typography.Text type="secondary">{t("copaw.projects.knowledge.signalChunks")}</Typography.Text>
-          <Typography.Text strong>{knowledgeState.quantMetrics.chunkCount}</Typography.Text>
+          <Typography.Text type="secondary">
+            {t("copaw.projects.knowledge.signalChunks")}
+          </Typography.Text>
+          <Typography.Text strong>
+            {knowledgeState.quantMetrics.chunkCount}
+          </Typography.Text>
         </div>
         <div className={styles.projectKnowledgeSignalCard}>
-          <Typography.Text type="secondary">{t("copaw.projects.knowledge.signalSentences")}</Typography.Text>
-          <Typography.Text strong>{knowledgeState.quantMetrics.sentenceCount}</Typography.Text>
+          <Typography.Text type="secondary">
+            {t("copaw.projects.knowledge.signalSentences")}
+          </Typography.Text>
+          <Typography.Text strong>
+            {knowledgeState.quantMetrics.sentenceCount}
+          </Typography.Text>
         </div>
         <div className={styles.projectKnowledgeSignalCard}>
-          <Typography.Text type="secondary">{t("copaw.projects.knowledge.signalEntityMentions")}</Typography.Text>
-          <Typography.Text strong>{knowledgeState.quantMetrics.entityMentionsCount}</Typography.Text>
+          <Typography.Text type="secondary">
+            {t("copaw.projects.knowledge.signalEntityMentions")}
+          </Typography.Text>
+          <Typography.Text strong>
+            {knowledgeState.quantMetrics.entityMentionsCount}
+          </Typography.Text>
         </div>
         <div className={styles.projectKnowledgeSignalCard}>
-          <Typography.Text type="secondary">{t("copaw.projects.knowledge.signalAvgEntitiesPerSentence")}</Typography.Text>
-          <Typography.Text strong>{knowledgeState.quantMetrics.avgEntitiesPerSentence.toFixed(2)}</Typography.Text>
+          <Typography.Text type="secondary">
+            {t("copaw.projects.knowledge.signalAvgEntitiesPerSentence")}
+          </Typography.Text>
+          <Typography.Text strong>
+            {knowledgeState.quantMetrics.avgEntitiesPerSentence.toFixed(2)}
+          </Typography.Text>
         </div>
         <div className={styles.projectKnowledgeSignalCard}>
-          <Typography.Text type="secondary">{t("copaw.projects.knowledge.signalEntityCharRatio")}</Typography.Text>
-          <Typography.Text strong>{`${Math.round(knowledgeState.quantMetrics.avgEntityCharRatio * 100)}%`}</Typography.Text>
+          <Typography.Text type="secondary">
+            {t("copaw.projects.knowledge.signalEntityCharRatio")}
+          </Typography.Text>
+          <Typography.Text strong>{`${Math.round(
+            knowledgeState.quantMetrics.avgEntityCharRatio * 100,
+          )}%`}</Typography.Text>
         </div>
         <div className={styles.projectKnowledgeSignalCard}>
-          <Typography.Text type="secondary">{t("copaw.projects.knowledge.signalCoverage")}</Typography.Text>
+          <Typography.Text type="secondary">
+            {t("copaw.projects.knowledge.signalCoverage")}
+          </Typography.Text>
           <Typography.Text strong>
             {Math.round(knowledgeState.quantMetrics.indexedRatio * 100)}%
           </Typography.Text>
         </div>
         <div className={styles.projectKnowledgeSignalCard}>
-          <Typography.Text type="secondary">{t("copaw.projects.knowledge.signalRelations")}</Typography.Text>
-          <Typography.Text strong>{knowledgeState.quantMetrics.relationCount}</Typography.Text>
+          <Typography.Text type="secondary">
+            {t("copaw.projects.knowledge.signalRelations")}
+          </Typography.Text>
+          <Typography.Text strong>
+            {knowledgeState.quantMetrics.relationCount}
+          </Typography.Text>
         </div>
         <div className={styles.projectKnowledgeSignalCard}>
-          <Typography.Text type="secondary">{t("copaw.projects.knowledge.entities")}</Typography.Text>
-          <Typography.Text strong>{knowledgeState.quantMetrics.entityCount}</Typography.Text>
+          <Typography.Text type="secondary">
+            {t("copaw.projects.knowledge.entities")}
+          </Typography.Text>
+          <Typography.Text strong>
+            {knowledgeState.quantMetrics.entityCount}
+          </Typography.Text>
         </div>
         <div className={styles.projectKnowledgeSignalCard}>
-          <Typography.Text type="secondary">{t("copaw.projects.knowledge.nerBatchCount")}</Typography.Text>
+          <Typography.Text type="secondary">
+            {t("copaw.projects.knowledge.nerBatchCount")}
+          </Typography.Text>
           <Typography.Text strong>{nlpNerBatchCount}</Typography.Text>
         </div>
         <div className={styles.projectKnowledgeSignalCard}>
-          <Typography.Text type="secondary">{t("copaw.projects.knowledge.nerWorkerRestartCount")}</Typography.Text>
+          <Typography.Text type="secondary">
+            {t("copaw.projects.knowledge.nerWorkerRestartCount")}
+          </Typography.Text>
           <Typography.Text strong>{nlpNerWorkerRestartCount}</Typography.Text>
         </div>
         <div className={styles.projectKnowledgeSignalCard}>
-          <Typography.Text type="secondary">{t("copaw.projects.knowledge.nerWorkerPidCount")}</Typography.Text>
+          <Typography.Text type="secondary">
+            {t("copaw.projects.knowledge.nerWorkerPidCount")}
+          </Typography.Text>
           <Typography.Text strong>{nlpNerWorkerPidCount}</Typography.Text>
         </div>
       </div>
 
-      {knowledgeState.syncState
-        && (
-          knowledgeState.syncState.status !== "idle"
-          || Boolean(knowledgeState.syncState.last_error)
-          || Boolean(knowledgeState.syncState.last_finished_at)
-        ) ? (
-          <Alert
-            type={knowledgeState.syncAlertType}
-            showIcon
-            message={t("copaw.projects.knowledge.sinkJob")}
-            description={knowledgeState.syncAlertDescription}
-          />
-        ) : null}
+      {knowledgeState.syncState &&
+      (knowledgeState.syncState.status !== "idle" ||
+        Boolean(knowledgeState.syncState.last_error) ||
+        Boolean(knowledgeState.syncState.last_finished_at)) ? (
+        <Alert
+          type={knowledgeState.syncAlertType}
+          showIcon
+          message={t("copaw.projects.knowledge.sinkJob")}
+          description={knowledgeState.syncAlertDescription}
+        />
+      ) : null}
 
       <div className={styles.projectKnowledgeTrendSection}>
         <div className={styles.projectKnowledgeTrendHeader}>
@@ -455,12 +636,19 @@ export default function ProjectKnowledgeSignalsPanel(
             <Select
               size="small"
               value={knowledgeState.trendRangeDays}
-              classNames={{ popup: { root: styles.projectKnowledgeSelectDropdown } }}
+              classNames={{
+                popup: { root: styles.projectKnowledgeSelectDropdown },
+              }}
               options={[
                 { value: 7, label: t("copaw.projects.knowledge.trendRange7d") },
-                { value: 30, label: t("copaw.projects.knowledge.trendRange30d") },
+                {
+                  value: 30,
+                  label: t("copaw.projects.knowledge.trendRange30d"),
+                },
               ]}
-              onChange={(value) => knowledgeState.setTrendRangeDays(value as 7 | 30)}
+              onChange={(value) =>
+                knowledgeState.setTrendRangeDays(value as 7 | 30)
+              }
               style={{ width: 96 }}
             />
             <Button
@@ -475,11 +663,22 @@ export default function ProjectKnowledgeSignalsPanel(
           </Space>
         </div>
 
-        {knowledgeState.trendExpanded && knowledgeState.filteredTrendSnapshots.length > 1 ? (
+        {knowledgeState.trendExpanded &&
+        knowledgeState.filteredTrendSnapshots.length > 1 ? (
           <div className={styles.projectKnowledgeTrendChart}>
             <svg viewBox="0 0 300 70" preserveAspectRatio="none">
-              <path d={knowledgeState.trendDocumentPath} fill="none" stroke="#1677ff" strokeWidth="2" />
-              <path d={knowledgeState.trendChunkPath} fill="none" stroke="#13c2c2" strokeWidth="2" />
+              <path
+                d={knowledgeState.trendDocumentPath}
+                fill="none"
+                stroke="#1677ff"
+                strokeWidth="2"
+              />
+              <path
+                d={knowledgeState.trendChunkPath}
+                fill="none"
+                stroke="#13c2c2"
+                strokeWidth="2"
+              />
             </svg>
             <div className={styles.projectKnowledgeTrendLegend}>
               <span>{t("copaw.projects.knowledge.signalDocuments")}</span>
@@ -494,13 +693,22 @@ export default function ProjectKnowledgeSignalsPanel(
 
         <div className={styles.projectKnowledgeTrendDeltaRow}>
           <Typography.Text type="secondary">
-            {t("copaw.projects.knowledge.signalDocuments")}: {t("copaw.projects.knowledge.signalDelta", { value: knowledgeState.trendDelta.documentDelta })}
+            {t("copaw.projects.knowledge.signalDocuments")}:{" "}
+            {t("copaw.projects.knowledge.signalDelta", {
+              value: knowledgeState.trendDelta.documentDelta,
+            })}
           </Typography.Text>
           <Typography.Text type="secondary">
-            {t("copaw.projects.knowledge.signalChunks")}: {t("copaw.projects.knowledge.signalDelta", { value: knowledgeState.trendDelta.chunkDelta })}
+            {t("copaw.projects.knowledge.signalChunks")}:{" "}
+            {t("copaw.projects.knowledge.signalDelta", {
+              value: knowledgeState.trendDelta.chunkDelta,
+            })}
           </Typography.Text>
           <Typography.Text type="secondary">
-            {t("copaw.projects.knowledge.signalRelations")}: {t("copaw.projects.knowledge.signalDelta", { value: knowledgeState.trendDelta.relationDelta })}
+            {t("copaw.projects.knowledge.signalRelations")}:{" "}
+            {t("copaw.projects.knowledge.signalDelta", {
+              value: knowledgeState.trendDelta.relationDelta,
+            })}
           </Typography.Text>
         </div>
       </div>

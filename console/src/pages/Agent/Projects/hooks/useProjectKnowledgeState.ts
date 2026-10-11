@@ -1,6 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import api, { type GraphQueryResponse, getApiToken, getApiUrl } from "../../../../api";
+import api, {
+  type GraphQueryResponse,
+  getApiToken,
+  getApiUrl,
+} from "../../../../api";
 import type {
   GraphQueryRecord,
   KnowledgeTaskProgress,
@@ -114,7 +118,11 @@ export type ProjectKnowledgeLayerKey =
   | "semantic"
   | "pragmatic";
 export type ProjectKnowledgeRealtimeChannel = "project-pipeline" | "tasks";
-export type ProjectKnowledgeRealtimeChannelStatus = "idle" | "connecting" | "open" | "reconnecting";
+export type ProjectKnowledgeRealtimeChannelStatus =
+  | "idle"
+  | "connecting"
+  | "open"
+  | "reconnecting";
 
 export interface ProjectKnowledgeModeState {
   mode: ProjectKnowledgeProcessingMode;
@@ -199,7 +207,10 @@ export interface ProjectKnowledgeProcessingFreshness {
   stale: boolean;
   staleModes: ProjectKnowledgeProcessingMode[];
   staleSources: ProjectKnowledgeRealtimeChannel[];
-  channelStatus: Record<ProjectKnowledgeRealtimeChannel, ProjectKnowledgeRealtimeChannelStatus>;
+  channelStatus: Record<
+    ProjectKnowledgeRealtimeChannel,
+    ProjectKnowledgeRealtimeChannelStatus
+  >;
 }
 
 export interface ProjectKnowledgeModeArtifact {
@@ -221,10 +232,12 @@ export interface ProjectKnowledgeState {
   projectSourceId: string;
   sourceLoaded: boolean;
   sourceRegistered: boolean;
-  projectStepStats: Partial<Record<
-    ProjectKnowledgeStepStatsStepId,
-    ProjectKnowledgeStepStatsResponse<ProjectKnowledgeStepStatsStepId> | null
-  >>;
+  projectStepStats: Partial<
+    Record<
+      ProjectKnowledgeStepStatsStepId,
+      ProjectKnowledgeStepStatsResponse<ProjectKnowledgeStepStatsStepId> | null
+    >
+  >;
   fileAnalysisStats: ProjectKnowledgeFileAnalysisStatsResponse | null;
   sourceScanStats: ProjectKnowledgeSourceScanStatsResponse | null;
   projectSourceCandidates?: ProjectKnowledgePipelineSourceCandidateItem[];
@@ -242,7 +255,14 @@ export interface ProjectKnowledgeState {
   changedFilesNormalized: Array<{
     path: string;
     trigger_mode?: "automatic" | "manual";
-    processing_status?: "idle" | "queued" | "pending" | "indexing" | "graphifying" | "succeeded" | "failed";
+    processing_status?:
+      | "idle"
+      | "queued"
+      | "pending"
+      | "indexing"
+      | "graphifying"
+      | "succeeded"
+      | "failed";
     detected_at?: string;
     scope?: "original" | "intermediate" | "derived";
   }>;
@@ -254,14 +274,19 @@ export interface ProjectKnowledgeState {
   resolveProcessingModeMetrics?: (
     scope: ProjectKnowledgeProcessingScope,
     sourceId?: string,
-  ) => Partial<Record<ProjectKnowledgeProcessingMode, ProjectKnowledgeModeMetricsPayload>>;
+  ) => Partial<
+    Record<ProjectKnowledgeProcessingMode, ProjectKnowledgeModeMetricsPayload>
+  >;
   processingCompareModes: ProjectKnowledgeModeState[];
   processingCompareDelta: ProjectKnowledgeProcessingCompareDelta;
   processingFreshness: ProjectKnowledgeProcessingFreshness;
   outputModes: ProjectKnowledgeModeState[];
   outputResolution: ProjectKnowledgeOutputResolution;
   processingScheduler: ProjectKnowledgeProcessingScheduler;
-  modeOutputs: Record<ProjectKnowledgeProcessingMode, ProjectKnowledgeModeOutput>;
+  modeOutputs: Record<
+    ProjectKnowledgeProcessingMode,
+    ProjectKnowledgeModeOutput
+  >;
   quantMetrics: ProjectKnowledgeMetrics;
   quantMetricsMeta?: ProjectKnowledgeMetricsMeta | null;
   graphQueryText: string;
@@ -304,7 +329,10 @@ export interface ProjectKnowledgeState {
       overwrite?: boolean;
     },
   ) => Promise<void>;
-  runSourceFullPipeline: (sourceFilePath: string, options?: { force?: boolean; overwrite?: boolean }) => Promise<void>;
+  runSourceFullPipeline: (
+    sourceFilePath: string,
+    options?: { force?: boolean; overwrite?: boolean },
+  ) => Promise<void>;
   rerunKnowledgeLayer: (
     layer: ProjectKnowledgeLayerKey,
     options?: { sourceId?: string; force?: boolean; overwrite?: boolean },
@@ -331,7 +359,15 @@ export interface ProjectKnowledgeState {
   loadProjectSourceStatus: () => Promise<void>;
   addManualSourcePath: (sourcePath: string) => Promise<void>;
   removeManualSourcePath: (sourcePath: string) => Promise<void>;
-  semanticBySourceId: Record<string, { subject?: string; summary?: string; keywords?: string[]; semanticStatus?: KnowledgeSourceSemanticStatus }>;
+  semanticBySourceId: Record<
+    string,
+    {
+      subject?: string;
+      summary?: string;
+      keywords?: string[];
+      semanticStatus?: KnowledgeSourceSemanticStatus;
+    }
+  >;
   semanticLoadingBySourceId: Record<string, boolean>;
   loadSourceSemantic: (sourceId: string) => Promise<void>;
 }
@@ -355,10 +391,12 @@ interface ProjectKnowledgeL1StepStatsState {
   sourceScan: ProjectKnowledgeSourceScanStatsResponse | null;
 }
 
-type ProjectKnowledgeStepStatsState = Partial<Record<
-  ProjectKnowledgeStepStatsStepId,
-  ProjectKnowledgeStepStatsResponse<ProjectKnowledgeStepStatsStepId> | null
->>;
+type ProjectKnowledgeStepStatsState = Partial<
+  Record<
+    ProjectKnowledgeStepStatsStepId,
+    ProjectKnowledgeStepStatsResponse<ProjectKnowledgeStepStatsStepId> | null
+  >
+>;
 
 type ProjectKnowledgeL1StepStatsKey = keyof ProjectKnowledgeL1StepStatsState;
 
@@ -366,7 +404,10 @@ const PROJECT_TREND_STORAGE_PREFIX = "copaw.project.knowledge.trend.v1";
 const PROJECT_KNOWLEDGE_UI_PREFS_PREFIX = "copaw.project.knowledge.ui.v1";
 const DAY_MS = 24 * 60 * 60 * 1000;
 const PROJECT_GRAPH_QUERY_TOP_K = 200;
-const HIGH_ORDER_OUTPUT_MODES: ProjectKnowledgeProcessingMode[] = ["agentic", "nlp"];
+const HIGH_ORDER_OUTPUT_MODES: ProjectKnowledgeProcessingMode[] = [
+  "agentic",
+  "nlp",
+];
 const PROCESSING_STALE_AFTER_MS = 15_000;
 
 function resolveExecutionForLayer(layer: ProjectKnowledgeLayerKey): {
@@ -387,10 +428,11 @@ function resolveExecutionForLayer(layer: ProjectKnowledgeLayerKey): {
 
 const EMPTY_PROJECT_KNOWLEDGE_STEP_STATS: ProjectKnowledgeStepStatsState = {};
 
-const EMPTY_PROJECT_KNOWLEDGE_L1_STEP_STATS: ProjectKnowledgeL1StepStatsState = {
-  fileAnalysis: null,
-  sourceScan: null,
-};
+const EMPTY_PROJECT_KNOWLEDGE_L1_STEP_STATS: ProjectKnowledgeL1StepStatsState =
+  {
+    fileAnalysis: null,
+    sourceScan: null,
+  };
 
 const PROJECT_KNOWLEDGE_STEP_STATS_IDS = [
   "snapshot_raw",
@@ -417,7 +459,11 @@ const PROJECT_KNOWLEDGE_L1_STEP_STATS_DESCRIPTORS = [
 }>;
 
 export function resolveProjectKnowledgeL1StepStats(
-  results: Array<PromiseSettledResult<ProjectKnowledgeStepStatsResponse<ProjectKnowledgeStepStatsStepId>>>,
+  results: Array<
+    PromiseSettledResult<
+      ProjectKnowledgeStepStatsResponse<ProjectKnowledgeStepStatsStepId>
+    >
+  >,
 ): ProjectKnowledgeL1StepStatsState {
   const nextState: ProjectKnowledgeL1StepStatsState = {
     ...EMPTY_PROJECT_KNOWLEDGE_L1_STEP_STATS,
@@ -426,25 +472,32 @@ export function resolveProjectKnowledgeL1StepStats(
     const result = results[index];
     const value = result?.status === "fulfilled" ? result.value : null;
     if (descriptor.stateKey === "fileAnalysis") {
-      nextState.fileAnalysis = value as ProjectKnowledgeFileAnalysisStatsResponse | null;
+      nextState.fileAnalysis =
+        value as ProjectKnowledgeFileAnalysisStatsResponse | null;
       return;
     }
-    nextState.sourceScan = value as ProjectKnowledgeSourceScanStatsResponse | null;
+    nextState.sourceScan =
+      value as ProjectKnowledgeSourceScanStatsResponse | null;
   });
   return nextState;
 }
 
 export function resolveProjectKnowledgeStepStats(
-  results: Array<PromiseSettledResult<ProjectKnowledgeStepStatsResponse<ProjectKnowledgeStepStatsStepId>>>,
+  results: Array<
+    PromiseSettledResult<
+      ProjectKnowledgeStepStatsResponse<ProjectKnowledgeStepStatsStepId>
+    >
+  >,
 ): ProjectKnowledgeStepStatsState {
   const nextState: ProjectKnowledgeStepStatsState = {
     ...EMPTY_PROJECT_KNOWLEDGE_STEP_STATS,
   };
   PROJECT_KNOWLEDGE_STEP_STATS_IDS.forEach((stepId, index) => {
     const result = results[index];
-    nextState[stepId] = result?.status === "fulfilled"
-      ? result.value as ProjectKnowledgeStepStatsResponse<typeof stepId>
-      : null;
+    nextState[stepId] =
+      result?.status === "fulfilled"
+        ? (result.value as ProjectKnowledgeStepStatsResponse<typeof stepId>)
+        : null;
   });
   return nextState;
 }
@@ -461,29 +514,47 @@ const ACTIVE_KNOWLEDGE_STATUSES = new Set([
  * Normalize changed_files from sync state.
  * Prefers new changed_files field; falls back to generating from changed_paths + metadata.
  */
-function normalizeChangedFiles(syncState: ProjectKnowledgePipelineState | null) {
+function normalizeChangedFiles(
+  syncState: ProjectKnowledgePipelineState | null,
+) {
   if (!syncState) {
     return [];
   }
 
   // If new field exists and is non-empty, use it directly
-  if (Array.isArray(syncState.changed_files) && syncState.changed_files.length > 0) {
+  if (
+    Array.isArray(syncState.changed_files) &&
+    syncState.changed_files.length > 0
+  ) {
     return syncState.changed_files;
   }
 
   // Fallback: generate from changed_paths + metadata
-  const paths = Array.isArray(syncState.changed_paths) ? syncState.changed_paths : [];
+  const paths = Array.isArray(syncState.changed_paths)
+    ? syncState.changed_paths
+    : [];
   if (paths.length === 0) {
     return [];
   }
 
   // Determine trigger mode from last_trigger
-  const triggerMode: "automatic" | "manual" = (syncState.last_trigger || "").includes("watcher") || (syncState.last_trigger || "").includes("resume")
-    ? "automatic"
-    : "manual";
+  const triggerMode: "automatic" | "manual" =
+    (syncState.last_trigger || "").includes("watcher") ||
+    (syncState.last_trigger || "").includes("resume")
+      ? "automatic"
+      : "manual";
 
   // Map sync status to processing status
-  const statusMap: Record<string, "idle" | "queued" | "pending" | "indexing" | "graphifying" | "succeeded" | "failed"> = {
+  const statusMap: Record<
+    string,
+    | "idle"
+    | "queued"
+    | "pending"
+    | "indexing"
+    | "graphifying"
+    | "succeeded"
+    | "failed"
+  > = {
     idle: "idle",
     queued: "queued",
     pending: "pending",
@@ -510,7 +581,9 @@ function mergeSemanticSummaryIntoStage(
 ): string {
   const normalizedStage = String(baseStage || "").trim();
   const normalizedSummary = String(semanticSummary || "").trim();
-  const normalizedStatus = String(semanticStatus || "").trim().toLowerCase();
+  const normalizedStatus = String(semanticStatus || "")
+    .trim()
+    .toLowerCase();
   if (!normalizedSummary || normalizedStatus === "ready") {
     return normalizedStage;
   }
@@ -524,7 +597,9 @@ function mergeSemanticSummaryIntoStage(
 }
 
 function activeKnowledgeTaskPriority(task: KnowledgeTaskProgress): number {
-  const type = String(task.task_type || "").trim().toLowerCase();
+  const type = String(task.task_type || "")
+    .trim()
+    .toLowerCase();
   if (type === "quality_loop") {
     return 0;
   }
@@ -540,7 +615,9 @@ function activeKnowledgeTaskPriority(task: KnowledgeTaskProgress): number {
   return 9;
 }
 
-export function getActiveKnowledgeTasks(tasks: KnowledgeTaskProgress[]): KnowledgeTaskProgress[] {
+export function getActiveKnowledgeTasks(
+  tasks: KnowledgeTaskProgress[],
+): KnowledgeTaskProgress[] {
   const priority = (task: KnowledgeTaskProgress): number => {
     return activeKnowledgeTaskPriority(task);
   };
@@ -552,11 +629,15 @@ export function getActiveKnowledgeTasks(tasks: KnowledgeTaskProgress[]): Knowled
       if (p !== 0) {
         return p;
       }
-      return String(right.updated_at || "").localeCompare(String(left.updated_at || ""));
+      return String(right.updated_at || "").localeCompare(
+        String(left.updated_at || ""),
+      );
     });
 }
 
-export function pickActiveKnowledgeTask(tasks: KnowledgeTaskProgress[]): KnowledgeTaskProgress | null {
+export function pickActiveKnowledgeTask(
+  tasks: KnowledgeTaskProgress[],
+): KnowledgeTaskProgress | null {
   const active = getActiveKnowledgeTasks(tasks);
   return active[0] || null;
 }
@@ -574,22 +655,31 @@ export function filterGraphQueryRecordsBySourceId(
   if (!target) {
     return records;
   }
-  return (records || []).filter((record) => String(record.source_id || "").trim() === target);
+  return (records || []).filter(
+    (record) => String(record.source_id || "").trim() === target,
+  );
 }
 
 export function applySourceFilterToGraphQueryResponse(
   response: GraphQueryResponse,
   sourceId?: string,
 ): GraphQueryResponse {
-  const filtered = filterGraphQueryRecordsBySourceId(response.records || [], sourceId);
+  const filtered = filterGraphQueryRecordsBySourceId(
+    response.records || [],
+    sourceId,
+  );
   return {
     ...response,
     records: filtered,
-    summary: `Filtered ${filtered.length} of ${(response.records || []).length} graph records by source.`,
+    summary: `Filtered ${filtered.length} of ${
+      (response.records || []).length
+    } graph records by source.`,
     provenance: {
       ...(response.provenance || {}),
       source_filter_id: String(sourceId || "").trim(),
-      source_filter_mode: String(sourceId || "").trim() ? "selected_source" : "all_sources",
+      source_filter_mode: String(sourceId || "").trim()
+        ? "selected_source"
+        : "all_sources",
       source_filter_baseline_record_count: (response.records || []).length,
     },
   };
@@ -631,7 +721,10 @@ function loadUiPrefs(projectId: string): ProjectKnowledgeUiPrefs {
 
 function saveUiPrefs(projectId: string, prefs: ProjectKnowledgeUiPrefs): void {
   try {
-    window.localStorage.setItem(uiPrefsStorageKey(projectId), JSON.stringify(prefs));
+    window.localStorage.setItem(
+      uiPrefsStorageKey(projectId),
+      JSON.stringify(prefs),
+    );
   } catch {
     // Ignore localStorage quota or availability issues.
   }
@@ -646,7 +739,9 @@ function dayToken(timestamp: number): string {
   return `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
 }
 
-function loadTrendSnapshots(projectId: string): ProjectKnowledgeTrendSnapshot[] {
+function loadTrendSnapshots(
+  projectId: string,
+): ProjectKnowledgeTrendSnapshot[] {
   try {
     const raw = window.localStorage.getItem(trendStorageKey(projectId));
     if (!raw) {
@@ -665,7 +760,10 @@ function loadTrendSnapshots(projectId: string): ProjectKnowledgeTrendSnapshot[] 
   }
 }
 
-function saveTrendSnapshots(projectId: string, snapshots: ProjectKnowledgeTrendSnapshot[]): void {
+function saveTrendSnapshots(
+  projectId: string,
+  snapshots: ProjectKnowledgeTrendSnapshot[],
+): void {
   try {
     window.localStorage.setItem(
       trendStorageKey(projectId),
@@ -699,14 +797,18 @@ function isSameSnapshotValue(
   right: ProjectKnowledgeTrendSnapshot,
 ): boolean {
   return (
-    left.indexedRatio === right.indexedRatio
-    && left.documentCount === right.documentCount
-    && left.chunkCount === right.chunkCount
-    && left.relationCount === right.relationCount
+    left.indexedRatio === right.indexedRatio &&
+    left.documentCount === right.documentCount &&
+    left.chunkCount === right.chunkCount &&
+    left.relationCount === right.relationCount
   );
 }
 
-function buildSparklinePath(values: number[], width: number, height: number): string {
+function buildSparklinePath(
+  values: number[],
+  width: number,
+  height: number,
+): string {
   if (!values.length) {
     return "";
   }
@@ -724,17 +826,22 @@ function buildSparklinePath(values: number[], width: number, height: number): st
     .join(" ");
 }
 
-function getSyncRelationCount(syncState: ProjectKnowledgePipelineState | null): number {
+function getSyncRelationCount(
+  syncState: ProjectKnowledgePipelineState | null,
+): number {
   const l2Metrics = syncState?.l2_metrics;
   if (l2Metrics && typeof l2Metrics === "object") {
-    const l2RelationCount = (l2Metrics as { syntax_relation_count?: unknown }).syntax_relation_count;
+    const l2RelationCount = (l2Metrics as { syntax_relation_count?: unknown })
+      .syntax_relation_count;
     if (Number.isFinite(Number(l2RelationCount))) {
       return Number(l2RelationCount);
     }
   }
   const indexResult = syncState?.last_result?.index;
   if (indexResult && typeof indexResult === "object") {
-    const syntaxRelationCount = (indexResult as { syntax_relation_count?: unknown }).syntax_relation_count;
+    const syntaxRelationCount = (
+      indexResult as { syntax_relation_count?: unknown }
+    ).syntax_relation_count;
     if (Number.isFinite(Number(syntaxRelationCount))) {
       return Number(syntaxRelationCount);
     }
@@ -744,20 +851,26 @@ function getSyncRelationCount(syncState: ProjectKnowledgePipelineState | null): 
     return 0;
   }
   const relationCount = (memify as { relation_count?: unknown }).relation_count;
-  return Number.isFinite(Number(relationCount)) ? Number(relationCount) : Number(relationCount || 0);
+  return Number.isFinite(Number(relationCount))
+    ? Number(relationCount)
+    : Number(relationCount || 0);
 }
 
-function getSyncNodeCount(syncState: ProjectKnowledgePipelineState | null): number {
+function getSyncNodeCount(
+  syncState: ProjectKnowledgePipelineState | null,
+): number {
   const l2Metrics = syncState?.l2_metrics;
   if (l2Metrics && typeof l2Metrics === "object") {
-    const l2EntityCount = (l2Metrics as { ner_entity_count?: unknown }).ner_entity_count;
+    const l2EntityCount = (l2Metrics as { ner_entity_count?: unknown })
+      .ner_entity_count;
     if (Number.isFinite(Number(l2EntityCount))) {
       return Number(l2EntityCount);
     }
   }
   const indexResult = syncState?.last_result?.index;
   if (indexResult && typeof indexResult === "object") {
-    const nerEntityCount = (indexResult as { ner_entity_count?: unknown }).ner_entity_count;
+    const nerEntityCount = (indexResult as { ner_entity_count?: unknown })
+      .ner_entity_count;
     if (Number.isFinite(Number(nerEntityCount))) {
       return Number(nerEntityCount);
     }
@@ -767,19 +880,29 @@ function getSyncNodeCount(syncState: ProjectKnowledgePipelineState | null): numb
     return 0;
   }
   const nodeCount = (memify as { node_count?: unknown }).node_count;
-  return Number.isFinite(Number(nodeCount)) ? Number(nodeCount) : Number(nodeCount || 0);
+  return Number.isFinite(Number(nodeCount))
+    ? Number(nodeCount)
+    : Number(nodeCount || 0);
 }
 
 function getSyncIndexCount(
   syncState: ProjectKnowledgePipelineState | null,
-  key: "document_count" | "snapshot_count" | "chunk_count" | "sentence_count" | "char_count" | "token_count",
+  key:
+    | "document_count"
+    | "snapshot_count"
+    | "chunk_count"
+    | "sentence_count"
+    | "char_count"
+    | "token_count",
 ): number {
   const indexResult = syncState?.last_result?.index;
   if (!indexResult || typeof indexResult !== "object") {
     return 0;
   }
   const rawValue = (indexResult as Record<string, unknown>)[key];
-  return Number.isFinite(Number(rawValue)) ? Number(rawValue) : Number(rawValue || 0);
+  return Number.isFinite(Number(rawValue))
+    ? Number(rawValue)
+    : Number(rawValue || 0);
 }
 
 function getSyncIndexMetric(
@@ -791,7 +914,9 @@ function getSyncIndexMetric(
     return 0;
   }
   const rawValue = (indexResult as Record<string, unknown>)[key];
-  return Number.isFinite(Number(rawValue)) ? Number(rawValue) : Number(rawValue || 0);
+  return Number.isFinite(Number(rawValue))
+    ? Number(rawValue)
+    : Number(rawValue || 0);
 }
 
 function getSyncEnrichmentMetric(
@@ -802,12 +927,15 @@ function getSyncEnrichmentMetric(
   if (!memify || typeof memify !== "object") {
     return 0;
   }
-  const enrichment = (memify as { enrichment_metrics?: unknown }).enrichment_metrics;
+  const enrichment = (memify as { enrichment_metrics?: unknown })
+    .enrichment_metrics;
   if (!enrichment || typeof enrichment !== "object") {
     return 0;
   }
   const rawValue = (enrichment as Record<string, unknown>)[key];
-  return Number.isFinite(Number(rawValue)) ? Number(rawValue) : Number(rawValue || 0);
+  return Number.isFinite(Number(rawValue))
+    ? Number(rawValue)
+    : Number(rawValue || 0);
 }
 
 function getSyncMemifyMetric(
@@ -819,7 +947,9 @@ function getSyncMemifyMetric(
     return 0;
   }
   const rawValue = (memify as Record<string, unknown>)[key];
-  return Number.isFinite(Number(rawValue)) ? Number(rawValue) : Number(rawValue || 0);
+  return Number.isFinite(Number(rawValue))
+    ? Number(rawValue)
+    : Number(rawValue || 0);
 }
 
 function toFiniteNumber(value: unknown, fallback = 0): number {
@@ -838,7 +968,9 @@ function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value));
 }
 
-function getPipelineRunMeta(syncState: ProjectKnowledgePipelineState | null): Record<string, unknown> {
+function getPipelineRunMeta(
+  syncState: ProjectKnowledgePipelineState | null,
+): Record<string, unknown> {
   const pipelineRun = syncState?.last_result?.pipeline_run;
   if (!pipelineRun || typeof pipelineRun !== "object") {
     return {};
@@ -855,12 +987,12 @@ function isProcessingMode(
 function normalizeModeStatus(
   value: unknown,
 ): ProjectKnowledgeModeState["status"] {
-  return value === "queued"
-    || value === "running"
-    || value === "ready"
-    || value === "failed"
-    || value === "blocked"
-    || value === "idle"
+  return value === "queued" ||
+    value === "running" ||
+    value === "ready" ||
+    value === "failed" ||
+    value === "blocked" ||
+    value === "idle"
     ? value
     : "idle";
 }
@@ -868,17 +1000,21 @@ function normalizeModeStatus(
 function normalizeNumber(value: unknown): number {
   return typeof value === "number" && Number.isFinite(value)
     ? value
-    : typeof value === "string" && value.trim() && Number.isFinite(Number(value))
-      ? Number(value)
-      : 0;
+    : typeof value === "string" &&
+      value.trim() &&
+      Number.isFinite(Number(value))
+    ? Number(value)
+    : 0;
 }
 
 function normalizeNullableNumber(value: unknown): number | null {
   return typeof value === "number" && Number.isFinite(value)
     ? value
-    : typeof value === "string" && value.trim() && Number.isFinite(Number(value))
-      ? Number(value)
-      : null;
+    : typeof value === "string" &&
+      value.trim() &&
+      Number.isFinite(Number(value))
+    ? Number(value)
+    : null;
 }
 
 function normalizeTokenizeDocumentsProgress(
@@ -888,10 +1024,16 @@ function normalizeTokenizeDocumentsProgress(
     return [];
   }
   return value
-    .filter((item): item is Record<string, unknown> => Boolean(item && typeof item === "object"))
+    .filter((item): item is Record<string, unknown> =>
+      Boolean(item && typeof item === "object"),
+    )
     .map((item) => {
-      const statusText = String(item.status || "").trim().toLowerCase();
-      const status = ["queued", "running", "ready", "failed"].includes(statusText)
+      const statusText = String(item.status || "")
+        .trim()
+        .toLowerCase();
+      const status = ["queued", "running", "ready", "failed"].includes(
+        statusText,
+      )
         ? (statusText as "queued" | "running" | "ready" | "failed")
         : "queued";
       return {
@@ -1004,7 +1146,9 @@ export function deriveSourceQuantBaseMetrics(
 ): ProjectKnowledgeSourceQuantBaseMetrics {
   const totalSources = projectSources.length;
   // indexed 仅代表 interlinear 工件存在，统计已与后端一致
-  const indexedSources = projectSources.filter((item) => item.status.indexed).length;
+  const indexedSources = projectSources.filter(
+    (item) => item.status.indexed,
+  ).length;
 
   const sourceDocumentCount = sumSourceMetric(projectSources, "document_count");
   const sourceSnapshotCount = sumSourceMetric(projectSources, "snapshot_count");
@@ -1013,28 +1157,60 @@ export function deriveSourceQuantBaseMetrics(
   const sourceCharCount = sumSourceMetric(projectSources, "char_count");
   const sourceTokenCount = sumSourceMetric(projectSources, "token_count");
 
-  const documentCount = resolveCountMetric(syncState, sourceDocumentCount, "document_count");
-  const snapshotCount = resolveCountMetric(syncState, sourceSnapshotCount, "snapshot_count");
-  const chunkCount = resolveCountMetric(syncState, sourceChunkCount, "chunk_count");
-  const sentenceCount = resolveCountMetric(syncState, sourceSentenceCount, "sentence_count");
-  const charCount = resolveCountMetric(syncState, sourceCharCount, "char_count");
-  const tokenCount = resolveCountMetric(syncState, sourceTokenCount, "token_count");
+  const documentCount = resolveCountMetric(
+    syncState,
+    sourceDocumentCount,
+    "document_count",
+  );
+  const snapshotCount = resolveCountMetric(
+    syncState,
+    sourceSnapshotCount,
+    "snapshot_count",
+  );
+  const chunkCount = resolveCountMetric(
+    syncState,
+    sourceChunkCount,
+    "chunk_count",
+  );
+  const sentenceCount = resolveCountMetric(
+    syncState,
+    sourceSentenceCount,
+    "sentence_count",
+  );
+  const charCount = resolveCountMetric(
+    syncState,
+    sourceCharCount,
+    "char_count",
+  );
+  const tokenCount = resolveCountMetric(
+    syncState,
+    sourceTokenCount,
+    "token_count",
+  );
 
-  const hasIndexedSignal = documentCount > 0
-    || snapshotCount > 0
-    || chunkCount > 0
-    || getSyncIndexCount(syncState, "document_count") > 0
-    || getSyncIndexCount(syncState, "snapshot_count") > 0
-    || getSyncIndexCount(syncState, "chunk_count") > 0;
-  const effectiveTotalSources = totalSources > 0
-    ? totalSources
-    : (sourceRegistered || hasIndexedSignal ? 1 : 0);
-  const effectiveIndexedSources = totalSources > 0
-    ? Math.max(indexedSources, hasIndexedSignal ? 1 : 0)
-    : (hasIndexedSignal ? 1 : 0);
-  const indexedRatio = effectiveTotalSources > 0
-    ? effectiveIndexedSources / effectiveTotalSources
-    : 0;
+  const hasIndexedSignal =
+    documentCount > 0 ||
+    snapshotCount > 0 ||
+    chunkCount > 0 ||
+    getSyncIndexCount(syncState, "document_count") > 0 ||
+    getSyncIndexCount(syncState, "snapshot_count") > 0 ||
+    getSyncIndexCount(syncState, "chunk_count") > 0;
+  const effectiveTotalSources =
+    totalSources > 0
+      ? totalSources
+      : sourceRegistered || hasIndexedSignal
+      ? 1
+      : 0;
+  const effectiveIndexedSources =
+    totalSources > 0
+      ? Math.max(indexedSources, hasIndexedSignal ? 1 : 0)
+      : hasIndexedSignal
+      ? 1
+      : 0;
+  const indexedRatio =
+    effectiveTotalSources > 0
+      ? effectiveIndexedSources / effectiveTotalSources
+      : 0;
 
   return {
     totalSources: effectiveTotalSources,
@@ -1067,28 +1243,37 @@ function parseBackendProcessingModes(
       const modeMetric = getBackendModeMetric(syncState, modePayload.mode);
       const l2Progress = syncState?.l2_progress;
       const l2Metrics = syncState?.l2_metrics;
-      const nlpProgress = syncState?.nlp_progress as ProjectKnowledgeNlpProgressPayload | undefined;
+      const nlpProgress = syncState?.nlp_progress as
+        | ProjectKnowledgeNlpProgressPayload
+        | undefined;
       const nlpStages = nlpProgress?.stages;
       const nlpTokenizeStage = nlpStages?.tokenize;
       const nlpNerStage = nlpStages?.ner;
       const nlpSyntaxStage = nlpStages?.syntax;
       const nlpCorStage = nlpStages?.cor;
       const isNlpMode = modePayload.mode === "nlp";
-      const tokenizeStageDocuments = normalizeTokenizeDocumentsProgress(nlpTokenizeStage?.documents_progress);
-      const l2TokenizeDocuments = normalizeTokenizeDocumentsProgress(syncState?.l2_documents_progress);
-      const tokenizeDocumentsProgress = tokenizeStageDocuments.length > 0
-        ? tokenizeStageDocuments
-        : l2TokenizeDocuments;
+      const tokenizeStageDocuments = normalizeTokenizeDocumentsProgress(
+        nlpTokenizeStage?.documents_progress,
+      );
+      const l2TokenizeDocuments = normalizeTokenizeDocumentsProgress(
+        syncState?.l2_documents_progress,
+      );
+      const tokenizeDocumentsProgress =
+        tokenizeStageDocuments.length > 0
+          ? tokenizeStageDocuments
+          : l2TokenizeDocuments;
       const latestQualityLoopRound = Array.isArray(latestQualityLoopJob?.rounds)
-        ? latestQualityLoopJob.rounds[latestQualityLoopJob.rounds.length - 1] as Record<string, unknown> | undefined
+        ? (latestQualityLoopJob.rounds[
+            latestQualityLoopJob.rounds.length - 1
+          ] as Record<string, unknown> | undefined)
         : undefined;
       const qualityLoopRoundValue = latestQualityLoopRound
         ? normalizeNumber(
-          latestQualityLoopRound.round
-          ?? latestQualityLoopRound.round_index
-          ?? latestQualityLoopRound.roundNo
-          ?? latestQualityLoopRound.index,
-        )
+            latestQualityLoopRound.round ??
+              latestQualityLoopRound.round_index ??
+              latestQualityLoopRound.roundNo ??
+              latestQualityLoopRound.index,
+          )
         : 0;
       const next: ProjectKnowledgeModeState = {
         mode: modePayload.mode,
@@ -1104,204 +1289,231 @@ function parseBackendProcessingModes(
         chunkCount: normalizeNumber(modePayload.chunk_count),
         entityCount: isNlpMode
           ? Math.max(
-            normalizeNumber(nlpNerStage?.entity_count),
-            normalizeNumber(modeMetric?.ner_entity_count),
-            normalizeNumber(l2Metrics?.ner_entity_count),
-            normalizeNumber(modePayload.entity_count),
-          )
+              normalizeNumber(nlpNerStage?.entity_count),
+              normalizeNumber(modeMetric?.ner_entity_count),
+              normalizeNumber(l2Metrics?.ner_entity_count),
+              normalizeNumber(modePayload.entity_count),
+            )
           : normalizeNumber(modePayload.entity_count),
         relationCount: isNlpMode
           ? Math.max(
-            normalizeNumber(nlpSyntaxStage?.relation_count),
-            normalizeNumber(modeMetric?.syntax_relation_count),
-            normalizeNumber(l2Metrics?.syntax_relation_count),
-            normalizeNumber(modePayload.relation_count),
-          )
+              normalizeNumber(nlpSyntaxStage?.relation_count),
+              normalizeNumber(modeMetric?.syntax_relation_count),
+              normalizeNumber(l2Metrics?.syntax_relation_count),
+              normalizeNumber(modePayload.relation_count),
+            )
           : normalizeNumber(modePayload.relation_count),
         qualityScore: normalizeNullableNumber(modePayload.quality_score),
-        auditRound: qualityLoopRoundValue > 0 ? qualityLoopRoundValue : undefined,
+        auditRound:
+          qualityLoopRoundValue > 0 ? qualityLoopRoundValue : undefined,
         corReadyChunkCount: isNlpMode
           ? Math.max(
-            normalizeNumber(nlpCorStage?.ready_chunks),
-            normalizeNumber(modeMetric?.cor_ready_chunk_count),
-            normalizeNumber(l2Metrics?.cor_ready_chunk_count),
-          )
+              normalizeNumber(nlpCorStage?.ready_chunks),
+              normalizeNumber(modeMetric?.cor_ready_chunk_count),
+              normalizeNumber(l2Metrics?.cor_ready_chunk_count),
+            )
           : normalizeNumber(modeMetric?.cor_ready_chunk_count),
         corClusterCount: isNlpMode
           ? Math.max(
-            normalizeNumber(modeMetric?.cor_cluster_count),
-            normalizeNumber(l2Metrics?.cor_cluster_count),
-          )
+              normalizeNumber(modeMetric?.cor_cluster_count),
+              normalizeNumber(l2Metrics?.cor_cluster_count),
+            )
           : normalizeNumber(modeMetric?.cor_cluster_count),
         corReplacementCount: isNlpMode
           ? Math.max(
-            normalizeNumber(modeMetric?.cor_replacement_count),
-            normalizeNumber(l2Metrics?.cor_replacement_count),
-          )
+              normalizeNumber(modeMetric?.cor_replacement_count),
+              normalizeNumber(l2Metrics?.cor_replacement_count),
+            )
           : normalizeNumber(modeMetric?.cor_replacement_count),
         corEffectiveChunkCount: isNlpMode
           ? Math.max(
-            normalizeNumber(modeMetric?.cor_effective_chunk_count),
-            normalizeNumber(l2Metrics?.cor_effective_chunk_count),
-          )
+              normalizeNumber(modeMetric?.cor_effective_chunk_count),
+              normalizeNumber(l2Metrics?.cor_effective_chunk_count),
+            )
           : normalizeNumber(modeMetric?.cor_effective_chunk_count),
-        corReadyChunkRatio: normalizeNullableNumber(modeMetric?.cor_ready_chunk_ratio) ?? undefined,
-        corEffectiveChunkRatio: normalizeNullableNumber(modeMetric?.cor_effective_chunk_ratio) ?? undefined,
+        corReadyChunkRatio:
+          normalizeNullableNumber(modeMetric?.cor_ready_chunk_ratio) ??
+          undefined,
+        corEffectiveChunkRatio:
+          normalizeNullableNumber(modeMetric?.cor_effective_chunk_ratio) ??
+          undefined,
         corReasonCode: String(modeMetric?.cor_reason_code || "").trim(),
         corReason: String(modeMetric?.cor_reason || "").trim(),
         nerReadyChunkCount: isNlpMode
           ? Math.max(
-            normalizeNumber(nlpNerStage?.ready_chunks),
-            normalizeNumber(modeMetric?.ner_ready_chunk_count),
-            normalizeNumber(l2Metrics?.ner_ready_chunk_count),
-          )
+              normalizeNumber(nlpNerStage?.ready_chunks),
+              normalizeNumber(modeMetric?.ner_ready_chunk_count),
+              normalizeNumber(l2Metrics?.ner_ready_chunk_count),
+            )
           : normalizeNumber(modeMetric?.ner_ready_chunk_count),
         nerEntityCount: isNlpMode
           ? Math.max(
-            normalizeNumber(nlpNerStage?.entity_count),
-            normalizeNumber(modeMetric?.ner_entity_count),
-            normalizeNumber(l2Metrics?.ner_entity_count),
-          )
+              normalizeNumber(nlpNerStage?.entity_count),
+              normalizeNumber(modeMetric?.ner_entity_count),
+              normalizeNumber(l2Metrics?.ner_entity_count),
+            )
           : normalizeNumber(modeMetric?.ner_entity_count),
         nerBatchCount: isNlpMode
           ? Math.max(
-            normalizeNumber(modeMetric?.ner_batch_count),
-            normalizeNumber(l2Metrics?.ner_batch_count),
-            normalizeNumber(modePayload.ner_batch_count),
-          )
+              normalizeNumber(modeMetric?.ner_batch_count),
+              normalizeNumber(l2Metrics?.ner_batch_count),
+              normalizeNumber(modePayload.ner_batch_count),
+            )
           : Math.max(
-            normalizeNumber(modeMetric?.ner_batch_count),
-            normalizeNumber(modePayload.ner_batch_count),
-          ),
+              normalizeNumber(modeMetric?.ner_batch_count),
+              normalizeNumber(modePayload.ner_batch_count),
+            ),
         nerWorkerRestartCount: isNlpMode
           ? Math.max(
-            normalizeNumber(modeMetric?.ner_worker_restart_count),
-            normalizeNumber(l2Metrics?.ner_worker_restart_count),
-            normalizeNumber(modePayload.ner_worker_restart_count),
-          )
+              normalizeNumber(modeMetric?.ner_worker_restart_count),
+              normalizeNumber(l2Metrics?.ner_worker_restart_count),
+              normalizeNumber(modePayload.ner_worker_restart_count),
+            )
           : Math.max(
-            normalizeNumber(modeMetric?.ner_worker_restart_count),
-            normalizeNumber(modePayload.ner_worker_restart_count),
-          ),
+              normalizeNumber(modeMetric?.ner_worker_restart_count),
+              normalizeNumber(modePayload.ner_worker_restart_count),
+            ),
         nerWorkerPidCount: isNlpMode
           ? Math.max(
-            normalizeNumber(modeMetric?.ner_worker_pid_count),
-            normalizeNumber(l2Metrics?.ner_worker_pid_count),
-            normalizeNumber(modePayload.ner_worker_pid_count),
-          )
+              normalizeNumber(modeMetric?.ner_worker_pid_count),
+              normalizeNumber(l2Metrics?.ner_worker_pid_count),
+              normalizeNumber(modePayload.ner_worker_pid_count),
+            )
           : Math.max(
-            normalizeNumber(modeMetric?.ner_worker_pid_count),
-            normalizeNumber(modePayload.ner_worker_pid_count),
-          ),
+              normalizeNumber(modeMetric?.ner_worker_pid_count),
+              normalizeNumber(modePayload.ner_worker_pid_count),
+            ),
         syntaxReadyChunkCount: isNlpMode
           ? Math.max(
-            normalizeNumber(nlpSyntaxStage?.ready_chunks),
-            normalizeNumber(modeMetric?.syntax_ready_chunk_count),
-            normalizeNumber(l2Metrics?.syntax_ready_chunk_count),
-          )
+              normalizeNumber(nlpSyntaxStage?.ready_chunks),
+              normalizeNumber(modeMetric?.syntax_ready_chunk_count),
+              normalizeNumber(l2Metrics?.syntax_ready_chunk_count),
+            )
           : normalizeNumber(modeMetric?.syntax_ready_chunk_count),
         syntaxSentenceCount: isNlpMode
           ? Math.max(
-            normalizeNumber(nlpSyntaxStage?.sentence_count),
-            normalizeNumber(modeMetric?.syntax_sentence_count),
-            normalizeNumber(l2Metrics?.syntax_sentence_count),
-          )
+              normalizeNumber(nlpSyntaxStage?.sentence_count),
+              normalizeNumber(modeMetric?.syntax_sentence_count),
+              normalizeNumber(l2Metrics?.syntax_sentence_count),
+            )
           : normalizeNumber(modeMetric?.syntax_sentence_count),
         syntaxTokenCount: isNlpMode
           ? Math.max(
-            normalizeNumber(nlpTokenizeStage?.token_count),
-            normalizeNumber(modeMetric?.tokenize_token_count),
-            normalizeNumber(l2Metrics?.tokenize_token_count),
-          )
+              normalizeNumber(nlpTokenizeStage?.token_count),
+              normalizeNumber(modeMetric?.tokenize_token_count),
+              normalizeNumber(l2Metrics?.tokenize_token_count),
+            )
           : normalizeNumber(modeMetric?.tokenize_token_count),
         syntaxPosCount: isNlpMode
           ? Math.max(
-            normalizeNumber(nlpSyntaxStage?.pos_count),
-            normalizeNumber(modeMetric?.syntax_pos_count),
-            normalizeNumber(l2Metrics?.syntax_pos_count),
-          )
+              normalizeNumber(nlpSyntaxStage?.pos_count),
+              normalizeNumber(modeMetric?.syntax_pos_count),
+              normalizeNumber(l2Metrics?.syntax_pos_count),
+            )
           : normalizeNumber(modeMetric?.syntax_pos_count),
         syntaxPosTagTypeCount: isNlpMode
           ? Math.max(
-            normalizeNumber(nlpSyntaxStage?.pos_tag_type_count),
-            normalizeNumber(modeMetric?.syntax_pos_tag_type_count),
-            normalizeNumber(l2Metrics?.syntax_pos_tag_type_count),
-          )
+              normalizeNumber(nlpSyntaxStage?.pos_tag_type_count),
+              normalizeNumber(modeMetric?.syntax_pos_tag_type_count),
+              normalizeNumber(l2Metrics?.syntax_pos_tag_type_count),
+            )
           : normalizeNumber(modeMetric?.syntax_pos_tag_type_count),
         posCoverageOnSyntaxTokens: isNlpMode
           ? Math.max(
-            normalizeNullableNumber(nlpSyntaxStage?.pos_coverage_on_syntax_tokens) ?? 0,
-            normalizeNullableNumber(modeMetric?.pos_coverage_on_syntax_tokens) ?? 0,
-            normalizeNullableNumber(l2Metrics?.pos_coverage_on_syntax_tokens) ?? 0,
-          )
-          : (normalizeNullableNumber(modeMetric?.pos_coverage_on_syntax_tokens) ?? undefined),
+              normalizeNullableNumber(
+                nlpSyntaxStage?.pos_coverage_on_syntax_tokens,
+              ) ?? 0,
+              normalizeNullableNumber(
+                modeMetric?.pos_coverage_on_syntax_tokens,
+              ) ?? 0,
+              normalizeNullableNumber(
+                l2Metrics?.pos_coverage_on_syntax_tokens,
+              ) ?? 0,
+            )
+          : normalizeNullableNumber(
+              modeMetric?.pos_coverage_on_syntax_tokens,
+            ) ?? undefined,
         posCoverageOnDocumentTokens: isNlpMode
           ? Math.max(
-            normalizeNullableNumber(nlpSyntaxStage?.pos_coverage_on_document_tokens) ?? 0,
-            normalizeNullableNumber(modeMetric?.pos_coverage_on_document_tokens) ?? 0,
-            normalizeNullableNumber(l2Metrics?.pos_coverage_on_document_tokens) ?? 0,
-          )
-          : (normalizeNullableNumber(modeMetric?.pos_coverage_on_document_tokens) ?? undefined),
+              normalizeNullableNumber(
+                nlpSyntaxStage?.pos_coverage_on_document_tokens,
+              ) ?? 0,
+              normalizeNullableNumber(
+                modeMetric?.pos_coverage_on_document_tokens,
+              ) ?? 0,
+              normalizeNullableNumber(
+                l2Metrics?.pos_coverage_on_document_tokens,
+              ) ?? 0,
+            )
+          : normalizeNullableNumber(
+              modeMetric?.pos_coverage_on_document_tokens,
+            ) ?? undefined,
         syntaxRelationCount: isNlpMode
           ? Math.max(
-            normalizeNumber(nlpSyntaxStage?.relation_count),
-            normalizeNumber(modeMetric?.syntax_relation_count),
-            normalizeNumber(l2Metrics?.syntax_relation_count),
-          )
+              normalizeNumber(nlpSyntaxStage?.relation_count),
+              normalizeNumber(modeMetric?.syntax_relation_count),
+              normalizeNumber(l2Metrics?.syntax_relation_count),
+            )
           : normalizeNumber(modeMetric?.syntax_relation_count),
         l2TotalChunks: isNlpMode
           ? Math.max(
-            normalizeNumber(nlpProgress?.total_chunks),
-            normalizeNumber(l2Progress?.total_chunks),
-          )
+              normalizeNumber(nlpProgress?.total_chunks),
+              normalizeNumber(l2Progress?.total_chunks),
+            )
           : undefined,
         tokenizeDoneLines: isNlpMode
           ? Math.max(
-            normalizeNumber(nlpTokenizeStage?.done_lines),
-            normalizeNumber(l2Progress?.tokenize_done_lines),
-          )
+              normalizeNumber(nlpTokenizeStage?.done_lines),
+              normalizeNumber(l2Progress?.tokenize_done_lines),
+            )
           : undefined,
         tokenizeTotalLines: isNlpMode
           ? Math.max(
-            normalizeNumber(nlpTokenizeStage?.total_lines),
-            normalizeNumber(l2Progress?.tokenize_total_lines),
-          )
+              normalizeNumber(nlpTokenizeStage?.total_lines),
+              normalizeNumber(l2Progress?.tokenize_total_lines),
+            )
           : undefined,
         tokenizeDoneDocuments: isNlpMode
           ? Math.max(
-            normalizeNumber(nlpTokenizeStage?.done_documents),
-            normalizeNumber(l2Progress?.tokenize_done_documents),
-          )
+              normalizeNumber(nlpTokenizeStage?.done_documents),
+              normalizeNumber(l2Progress?.tokenize_done_documents),
+            )
           : undefined,
         tokenizeTotalDocuments: isNlpMode
           ? Math.max(
-            normalizeNumber(nlpTokenizeStage?.total_documents),
-            normalizeNumber(l2Progress?.tokenize_total_documents),
-          )
+              normalizeNumber(nlpTokenizeStage?.total_documents),
+              normalizeNumber(l2Progress?.tokenize_total_documents),
+            )
           : undefined,
-        tokenizeDocumentsProgress: isNlpMode ? tokenizeDocumentsProgress : undefined,
+        tokenizeDocumentsProgress: isNlpMode
+          ? tokenizeDocumentsProgress
+          : undefined,
         corDoneChunks: isNlpMode
           ? Math.max(
-            normalizeNumber(nlpCorStage?.done_chunks),
-            normalizeNumber(l2Progress?.cor_done_chunks),
-          )
+              normalizeNumber(nlpCorStage?.done_chunks),
+              normalizeNumber(l2Progress?.cor_done_chunks),
+            )
           : undefined,
         nerDoneChunks: isNlpMode
           ? Math.max(
-            normalizeNumber(nlpNerStage?.done_chunks),
-            normalizeNumber(l2Progress?.ner_done_chunks),
-          )
+              normalizeNumber(nlpNerStage?.done_chunks),
+              normalizeNumber(l2Progress?.ner_done_chunks),
+            )
           : undefined,
         syntaxDoneChunks: isNlpMode
           ? Math.max(
-            normalizeNumber(nlpSyntaxStage?.done_chunks),
-            normalizeNumber(l2Progress?.syntax_done_chunks),
-          )
+              normalizeNumber(nlpSyntaxStage?.done_chunks),
+              normalizeNumber(l2Progress?.syntax_done_chunks),
+            )
           : undefined,
       };
       if (isNlpMode) {
-        next.corReasonCode = String(nlpCorStage?.reason_code || next.corReasonCode || "").trim();
-        next.corReason = String(nlpCorStage?.reason || next.corReason || "").trim();
+        next.corReasonCode = String(
+          nlpCorStage?.reason_code || next.corReasonCode || "",
+        ).trim();
+        next.corReason = String(
+          nlpCorStage?.reason || next.corReason || "",
+        ).trim();
       }
       return next;
     })
@@ -1314,34 +1526,51 @@ function parseBackendOutputResolution(
   syncState: ProjectKnowledgePipelineState | null,
   processingModes: ProjectKnowledgeModeState[],
 ): ProjectKnowledgeOutputResolution | null {
-  const payload = syncState?.output_resolution as ProjectKnowledgeOutputResolutionPayload | undefined;
+  const payload = syncState?.output_resolution as
+    | ProjectKnowledgeOutputResolutionPayload
+    | undefined;
   if (!payload) {
     return null;
   }
 
-  const outputModes = processingModes.filter((item) => item.mode === "nlp" || item.mode === "agentic");
-  if (outputModes.length === 0 || (payload.active_mode !== "nlp" && payload.active_mode !== "agentic")) {
+  const outputModes = processingModes.filter(
+    (item) => item.mode === "nlp" || item.mode === "agentic",
+  );
+  if (
+    outputModes.length === 0 ||
+    (payload.active_mode !== "nlp" && payload.active_mode !== "agentic")
+  ) {
     return null;
   }
 
   const availableModes = Array.isArray(payload.available_modes)
-    ? payload.available_modes.filter((mode): mode is ProjectKnowledgeProcessingMode => mode === "nlp" || mode === "agentic")
+    ? payload.available_modes.filter(
+        (mode): mode is ProjectKnowledgeProcessingMode =>
+          mode === "nlp" || mode === "agentic",
+      )
     : [];
-  const fallbackChain: ProjectKnowledgeProcessingMode[] = Array.isArray(payload.fallback_chain)
-    ? payload.fallback_chain.filter((mode): mode is ProjectKnowledgeProcessingMode => mode === "nlp" || mode === "agentic")
+  const fallbackChain: ProjectKnowledgeProcessingMode[] = Array.isArray(
+    payload.fallback_chain,
+  )
+    ? payload.fallback_chain.filter(
+        (mode): mode is ProjectKnowledgeProcessingMode =>
+          mode === "nlp" || mode === "agentic",
+      )
     : HIGH_ORDER_OUTPUT_MODES;
-  const activeMode = outputModes.some((item) => item.mode === payload.active_mode)
+  const activeMode = outputModes.some(
+    (item) => item.mode === payload.active_mode,
+  )
     ? payload.active_mode
     : outputModes[0]?.mode || "agentic";
   const skippedModes = Array.isArray(payload.skipped_modes)
     ? payload.skipped_modes
-      .filter((item) => item?.mode === "nlp" || item?.mode === "agentic")
-      .map((item) => ({
-        mode: item.mode,
-        status: normalizeModeStatus(item.status),
-        reasonCode: String(item.reason_code || "").trim() || "UNKNOWN",
-        reason: String(item.reason || "").trim(),
-      }))
+        .filter((item) => item?.mode === "nlp" || item?.mode === "agentic")
+        .map((item) => ({
+          mode: item.mode,
+          status: normalizeModeStatus(item.status),
+          reasonCode: String(item.reason_code || "").trim() || "UNKNOWN",
+          reason: String(item.reason || "").trim(),
+        }))
     : [];
 
   return {
@@ -1359,12 +1588,16 @@ function parseBackendProcessingScheduler(
   processingModes: ProjectKnowledgeModeState[],
   outputResolution: ProjectKnowledgeOutputResolution,
 ): ProjectKnowledgeProcessingScheduler | null {
-  const payload = syncState?.output_scheduler as ProjectKnowledgeProcessingSchedulerPayload | undefined;
+  const payload = syncState?.output_scheduler as
+    | ProjectKnowledgeProcessingSchedulerPayload
+    | undefined;
   if (!payload || payload.strategy !== "parallel") {
     return null;
   }
 
-  const modeOrder: ProjectKnowledgeProcessingMode[] = Array.isArray(payload.mode_order)
+  const modeOrder: ProjectKnowledgeProcessingMode[] = Array.isArray(
+    payload.mode_order,
+  )
     ? payload.mode_order.filter(isProcessingMode)
     : ["agentic", "nlp", "fast"];
   const runningModes = Array.isArray(payload.running_modes)
@@ -1379,8 +1612,12 @@ function parseBackendProcessingScheduler(
   const failedModes = Array.isArray(payload.failed_modes)
     ? payload.failed_modes.filter(isProcessingMode)
     : [];
-  const nextMode = isProcessingMode(payload.next_mode) ? payload.next_mode : null;
-  const consumptionMode = processingModes.some((item) => item.mode === payload.consumption_mode)
+  const nextMode = isProcessingMode(payload.next_mode)
+    ? payload.next_mode
+    : null;
+  const consumptionMode = processingModes.some(
+    (item) => item.mode === payload.consumption_mode,
+  )
     ? payload.consumption_mode
     : outputResolution.activeMode;
 
@@ -1401,27 +1638,38 @@ function deriveProcessingScheduler(
   processingModes: ProjectKnowledgeModeState[],
   outputResolution: ProjectKnowledgeOutputResolution,
 ): ProjectKnowledgeProcessingScheduler {
-  const modeOrder: ProjectKnowledgeProcessingMode[] = ["agentic", "nlp", "fast"];
+  const modeOrder: ProjectKnowledgeProcessingMode[] = [
+    "agentic",
+    "nlp",
+    "fast",
+  ];
   const runningModes = modeOrder.filter(
-    (mode) => processingModes.find((item) => item.mode === mode)?.status === "running",
+    (mode) =>
+      processingModes.find((item) => item.mode === mode)?.status === "running",
   );
   const queuedModes = modeOrder.filter(
-    (mode) => processingModes.find((item) => item.mode === mode)?.status === "queued",
+    (mode) =>
+      processingModes.find((item) => item.mode === mode)?.status === "queued",
   );
   const readyModes = modeOrder.filter(
-    (mode) => processingModes.find((item) => item.mode === mode)?.status === "ready",
+    (mode) =>
+      processingModes.find((item) => item.mode === mode)?.status === "ready",
   );
   const failedModes = modeOrder.filter(
-    (mode) => processingModes.find((item) => item.mode === mode)?.status === "failed",
+    (mode) =>
+      processingModes.find((item) => item.mode === mode)?.status === "failed",
   );
-  const nextMode = modeOrder.find((mode) => {
-    const status = processingModes.find((item) => item.mode === mode)?.status;
-    return status === "queued" || status === "idle";
-  }) || null;
+  const nextMode =
+    modeOrder.find((mode) => {
+      const status = processingModes.find((item) => item.mode === mode)?.status;
+      return status === "queued" || status === "idle";
+    }) || null;
 
   let reason = `当前按 ${outputResolution.activeMode} 输出消费。`;
   if (runningModes.length > 0) {
-    reason = `当前正在推进 ${runningModes.join(" / ")}，消费侧继续读取 ${outputResolution.activeMode}。`;
+    reason = `当前正在推进 ${runningModes.join(" / ")}，消费侧继续读取 ${
+      outputResolution.activeMode
+    }。`;
   } else if (queuedModes.length > 0) {
     reason = `当前无活跃执行，下一条待推进轨道为 ${queuedModes[0]}。`;
   } else if (readyModes.length > 0) {
@@ -1450,24 +1698,29 @@ function parseBackendModeOutputs(
   }
 
   const modes: ProjectKnowledgeProcessingMode[] = ["fast", "nlp", "agentic"];
-  const parsed = {} as Record<ProjectKnowledgeProcessingMode, ProjectKnowledgeModeOutput>;
+  const parsed = {} as Record<
+    ProjectKnowledgeProcessingMode,
+    ProjectKnowledgeModeOutput
+  >;
   for (const mode of modes) {
     const item = payload[mode] as ProjectKnowledgeModeOutputPayload | undefined;
     parsed[mode] = {
       mode,
       source: String(item?.source || "").trim(),
       summaryLines: Array.isArray(item?.summary_lines)
-        ? item.summary_lines.map((entry) => String(entry || "").trim()).filter(Boolean)
+        ? item.summary_lines
+            .map((entry) => String(entry || "").trim())
+            .filter(Boolean)
         : [],
       artifacts: prioritizeProjectKnowledgeArtifacts(
         Array.isArray(item?.artifacts)
           ? item.artifacts
-            .map((artifact) => ({
-              kind: String(artifact.kind || "").trim(),
-              label: String(artifact.label || "").trim(),
-              path: String(artifact.path || "").trim(),
-            }))
-            .filter((artifact) => artifact.path)
+              .map((artifact) => ({
+                kind: String(artifact.kind || "").trim(),
+                label: String(artifact.label || "").trim(),
+                path: String(artifact.path || "").trim(),
+              }))
+              .filter((artifact) => artifact.path)
           : [],
       ),
     };
@@ -1483,8 +1736,13 @@ function deriveModeOutputs(
       mode: "fast",
       source: "indexed-preview",
       summaryLines: [
-        `Documents: ${processingModes.find((item) => item.mode === "fast")?.documentCount || 0}`,
-        `Chunks: ${processingModes.find((item) => item.mode === "fast")?.chunkCount || 0}`,
+        `Documents: ${
+          processingModes.find((item) => item.mode === "fast")?.documentCount ||
+          0
+        }`,
+        `Chunks: ${
+          processingModes.find((item) => item.mode === "fast")?.chunkCount || 0
+        }`,
       ],
       artifacts: [],
     },
@@ -1492,8 +1750,13 @@ function deriveModeOutputs(
       mode: "nlp",
       source: "graph-artifacts",
       summaryLines: [
-        `Entities: ${processingModes.find((item) => item.mode === "nlp")?.entityCount || 0}`,
-        `Relations: ${processingModes.find((item) => item.mode === "nlp")?.relationCount || 0}`,
+        `Entities: ${
+          processingModes.find((item) => item.mode === "nlp")?.entityCount || 0
+        }`,
+        `Relations: ${
+          processingModes.find((item) => item.mode === "nlp")?.relationCount ||
+          0
+        }`,
       ],
       artifacts: [],
     },
@@ -1501,8 +1764,13 @@ function deriveModeOutputs(
       mode: "agentic",
       source: "pipeline-artifacts",
       summaryLines: [
-        `Run: ${processingModes.find((item) => item.mode === "agentic")?.runId || ""}`,
-        `Status: ${processingModes.find((item) => item.mode === "agentic")?.status || "idle"}`,
+        `Run: ${
+          processingModes.find((item) => item.mode === "agentic")?.runId || ""
+        }`,
+        `Status: ${
+          processingModes.find((item) => item.mode === "agentic")?.status ||
+          "idle"
+        }`,
       ],
       artifacts: [],
     },
@@ -1514,27 +1782,29 @@ function isSameHeaderSignals(
   right: ProjectKnowledgeHeaderSignals,
 ): boolean {
   return (
-    left.indexedRatio === right.indexedRatio
-    && left.documentCount === right.documentCount
-    && left.chunkCount === right.chunkCount
-    && left.sentenceCount === right.sentenceCount
-    && left.charCount === right.charCount
-    && left.tokenCount === right.tokenCount
-    && left.sentenceWithEntitiesCount === right.sentenceWithEntitiesCount
-    && left.entityMentionsCount === right.entityMentionsCount
-    && left.avgEntitiesPerSentence === right.avgEntitiesPerSentence
-    && left.avgEntityCharRatio === right.avgEntityCharRatio
-    && left.relationCount === right.relationCount
-    && left.entityCount === right.entityCount
-    && left.relationNormalizationCoverage === right.relationNormalizationCoverage
-    && left.entityCanonicalCoverage === right.entityCanonicalCoverage
-    && left.lowConfidenceRatio === right.lowConfidenceRatio
-    && left.missingEvidenceRatio === right.missingEvidenceRatio
-    && left.relationNormalizationThreshold === right.relationNormalizationThreshold
-    && left.entityCanonicalThreshold === right.entityCanonicalThreshold
-    && left.lowConfidenceThreshold === right.lowConfidenceThreshold
-    && left.missingEvidenceThreshold === right.missingEvidenceThreshold
-    && left.qualityAssessmentScore === right.qualityAssessmentScore
+    left.indexedRatio === right.indexedRatio &&
+    left.documentCount === right.documentCount &&
+    left.chunkCount === right.chunkCount &&
+    left.sentenceCount === right.sentenceCount &&
+    left.charCount === right.charCount &&
+    left.tokenCount === right.tokenCount &&
+    left.sentenceWithEntitiesCount === right.sentenceWithEntitiesCount &&
+    left.entityMentionsCount === right.entityMentionsCount &&
+    left.avgEntitiesPerSentence === right.avgEntitiesPerSentence &&
+    left.avgEntityCharRatio === right.avgEntityCharRatio &&
+    left.relationCount === right.relationCount &&
+    left.entityCount === right.entityCount &&
+    left.relationNormalizationCoverage ===
+      right.relationNormalizationCoverage &&
+    left.entityCanonicalCoverage === right.entityCanonicalCoverage &&
+    left.lowConfidenceRatio === right.lowConfidenceRatio &&
+    left.missingEvidenceRatio === right.missingEvidenceRatio &&
+    left.relationNormalizationThreshold ===
+      right.relationNormalizationThreshold &&
+    left.entityCanonicalThreshold === right.entityCanonicalThreshold &&
+    left.lowConfidenceThreshold === right.lowConfidenceThreshold &&
+    left.missingEvidenceThreshold === right.missingEvidenceThreshold &&
+    left.qualityAssessmentScore === right.qualityAssessmentScore
   );
 }
 
@@ -1544,44 +1814,89 @@ export function useProjectKnowledgeState(
   const { t } = useTranslation();
   const { onSignalsChange } = params;
   const [sourceLoaded, setSourceLoaded] = useState(false);
-  const [projectSources, setProjectSources] = useState<KnowledgeSourceItem[]>([]);
-  const [projectSourceCandidates, setProjectSourceCandidates] =
-    useState<ProjectKnowledgePipelineSourceCandidateItem[]>([]);
-  const [projectManualSources, setProjectManualSources] =
-    useState<ProjectKnowledgePipelineSourceCandidateItem[]>([]);
-  const [projectStepStats, setProjectStepStats] = useState<ProjectKnowledgeStepStatsState>(EMPTY_PROJECT_KNOWLEDGE_STEP_STATS);
-  const [l1StepStats, setL1StepStats] = useState<ProjectKnowledgeL1StepStatsState>(EMPTY_PROJECT_KNOWLEDGE_L1_STEP_STATS);
+  const [projectSources, setProjectSources] = useState<KnowledgeSourceItem[]>(
+    [],
+  );
+  const [projectSourceCandidates, setProjectSourceCandidates] = useState<
+    ProjectKnowledgePipelineSourceCandidateItem[]
+  >([]);
+  const [projectManualSources, setProjectManualSources] = useState<
+    ProjectKnowledgePipelineSourceCandidateItem[]
+  >([]);
+  const [projectStepStats, setProjectStepStats] =
+    useState<ProjectKnowledgeStepStatsState>(
+      EMPTY_PROJECT_KNOWLEDGE_STEP_STATS,
+    );
+  const [l1StepStats, setL1StepStats] =
+    useState<ProjectKnowledgeL1StepStatsState>(
+      EMPTY_PROJECT_KNOWLEDGE_L1_STEP_STATS,
+    );
   const [selectedSourceId, setSelectedSourceId] = useState("");
-  const [sourceContentById, setSourceContentById] = useState<Record<string, KnowledgeSourceContent>>({});
-  const [sourceContentLoadingById, setSourceContentLoadingById] =
-    useState<Record<string, boolean>>({});
+  const [sourceContentById, setSourceContentById] = useState<
+    Record<string, KnowledgeSourceContent>
+  >({});
+  const [sourceContentLoadingById, setSourceContentLoadingById] = useState<
+    Record<string, boolean>
+  >({});
   const [graphQueryText, setGraphQueryText] = useState("");
-  const [graphQueryMode, setGraphQueryMode] = useState<ProjectGraphQueryMode>("template");
-  const [graphQueryTopK, setGraphQueryTopK] = useState(PROJECT_GRAPH_QUERY_TOP_K);
+  const [graphQueryMode, setGraphQueryMode] =
+    useState<ProjectGraphQueryMode>("template");
+  const [graphQueryTopK, setGraphQueryTopK] = useState(
+    PROJECT_GRAPH_QUERY_TOP_K,
+  );
   const [graphNeedsRefresh, setGraphNeedsRefresh] = useState(false);
   const [graphLoading, setGraphLoading] = useState(false);
   const [graphError, setGraphError] = useState("");
-  const [graphBaseResult, setGraphBaseResult] = useState<GraphQueryResponse | null>(null);
-  const [graphResult, setGraphResult] = useState<GraphQueryResponse | null>(null);
-  const [graphRelationTypeFilters, setGraphRelationTypeFilters] = useState<string[]>([]);
-  const [graphEntityTypeFilters, setGraphEntityTypeFilters] = useState<string[]>([]);
+  const [graphBaseResult, setGraphBaseResult] =
+    useState<GraphQueryResponse | null>(null);
+  const [graphResult, setGraphResult] = useState<GraphQueryResponse | null>(
+    null,
+  );
+  const [graphRelationTypeFilters, setGraphRelationTypeFilters] = useState<
+    string[]
+  >([]);
+  const [graphEntityTypeFilters, setGraphEntityTypeFilters] = useState<
+    string[]
+  >([]);
   const [memifyEnabled, setMemifyEnabled] = useState(false);
-  const [processingLaunchMode, setProcessingLaunchMode] = useState<ProjectKnowledgeProcessingMode | null>(null);
+  const [processingLaunchMode, setProcessingLaunchMode] =
+    useState<ProjectKnowledgeProcessingMode | null>(null);
   const [relationKeywordSeed, setRelationKeywordSeed] = useState("");
-  const [activeGraphNodeId, setActiveGraphNodeId] = useState<string | null>(null);
+  const [activeGraphNodeId, setActiveGraphNodeId] = useState<string | null>(
+    null,
+  );
   const [trendRangeDays, setTrendRangeDays] = useState<7 | 30>(7);
-  const [trendSnapshots, setTrendSnapshots] = useState<ProjectKnowledgeTrendSnapshot[]>([]);
+  const [trendSnapshots, setTrendSnapshots] = useState<
+    ProjectKnowledgeTrendSnapshot[]
+  >([]);
   const [trendExpanded, setTrendExpanded] = useState(true);
-  const [syncState, setSyncState] = useState<ProjectKnowledgePipelineState | null>(null);
-  const [activeKnowledgeTasks, setActiveKnowledgeTasks] = useState<KnowledgeTaskProgress[]>([]);
-  const [activeKnowledgeTask, setActiveKnowledgeTask] = useState<KnowledgeTaskProgress | null>(null);
-  const [latestQualityLoopJob, setLatestQualityLoopJob] = useState<QualityLoopJobStatus | null>(null);
+  const [syncState, setSyncState] =
+    useState<ProjectKnowledgePipelineState | null>(null);
+  const [activeKnowledgeTasks, setActiveKnowledgeTasks] = useState<
+    KnowledgeTaskProgress[]
+  >([]);
+  const [activeKnowledgeTask, setActiveKnowledgeTask] =
+    useState<KnowledgeTaskProgress | null>(null);
+  const [latestQualityLoopJob, setLatestQualityLoopJob] =
+    useState<QualityLoopJobStatus | null>(null);
   const [projectPipelineChannelStatus, setProjectPipelineChannelStatus] =
     useState<ProjectKnowledgeRealtimeChannelStatus>("idle");
   const [tasksChannelStatus, setTasksChannelStatus] =
     useState<ProjectKnowledgeRealtimeChannelStatus>("idle");
-  const [semanticBySourceId, setSemanticBySourceId] = useState<Record<string, { subject?: string; summary?: string; keywords?: string[]; semanticStatus?: KnowledgeSourceSemanticStatus }>>({});
-  const [semanticLoadingBySourceId, setSemanticLoadingBySourceId] = useState<Record<string, boolean>>({});
+  const [semanticBySourceId, setSemanticBySourceId] = useState<
+    Record<
+      string,
+      {
+        subject?: string;
+        summary?: string;
+        keywords?: string[];
+        semanticStatus?: KnowledgeSourceSemanticStatus;
+      }
+    >
+  >({});
+  const [semanticLoadingBySourceId, setSemanticLoadingBySourceId] = useState<
+    Record<string, boolean>
+  >({});
   const refreshReasonRef = useRef("");
   const graphRefreshReasonRef = useRef("");
   const defaultExploreTokenRef = useRef("");
@@ -1616,29 +1931,15 @@ export function useProjectKnowledgeState(
       });
       const normalizedManualSources = Array.isArray(payload.manual_sources)
         ? payload.manual_sources
-          .map((item) => ({
-            path: String(item?.path || "").trim(),
-            category: ["document", "structured", "image"].includes(String(item?.category || ""))
-              ? String(item?.category || "") as "document" | "structured" | "image"
-              : "document",
-            stage: String(item?.stage || "other").trim() || "other",
-            content_type: String(item?.content_type || "").trim(),
-            size_bytes: Math.max(0, Number(item?.size_bytes || 0)),
-            modified_time: String(item?.modified_time || "").trim(),
-          }))
-          .filter((item) => item.path)
-        : [];
-      setProjectManualSources(normalizedManualSources);
-      try {
-        const candidatePayload = await api.getProjectKnowledgePipelineSourceCandidates({
-          projectId: params.projectId,
-        });
-        const normalizedCandidates = Array.isArray(candidatePayload.candidates)
-          ? candidatePayload.candidates
             .map((item) => ({
               path: String(item?.path || "").trim(),
-              category: ["document", "structured", "image"].includes(String(item?.category || ""))
-                ? String(item?.category || "") as "document" | "structured" | "image"
+              category: ["document", "structured", "image"].includes(
+                String(item?.category || ""),
+              )
+                ? (String(item?.category || "") as
+                    | "document"
+                    | "structured"
+                    | "image")
                 : "document",
               stage: String(item?.stage || "other").trim() || "other",
               content_type: String(item?.content_type || "").trim(),
@@ -1646,22 +1947,54 @@ export function useProjectKnowledgeState(
               modified_time: String(item?.modified_time || "").trim(),
             }))
             .filter((item) => item.path)
+        : [];
+      setProjectManualSources(normalizedManualSources);
+      try {
+        const candidatePayload =
+          await api.getProjectKnowledgePipelineSourceCandidates({
+            projectId: params.projectId,
+          });
+        const normalizedCandidates = Array.isArray(candidatePayload.candidates)
+          ? candidatePayload.candidates
+              .map((item) => ({
+                path: String(item?.path || "").trim(),
+                category: ["document", "structured", "image"].includes(
+                  String(item?.category || ""),
+                )
+                  ? (String(item?.category || "") as
+                      | "document"
+                      | "structured"
+                      | "image")
+                  : "document",
+                stage: String(item?.stage || "other").trim() || "other",
+                content_type: String(item?.content_type || "").trim(),
+                size_bytes: Math.max(0, Number(item?.size_bytes || 0)),
+                modified_time: String(item?.modified_time || "").trim(),
+              }))
+              .filter((item) => item.path)
           : [];
         setProjectSourceCandidates(normalizedCandidates);
       } catch {
         setProjectSourceCandidates([]);
       }
       const manualPaths = Array.isArray(payload.manual_source_paths)
-        ? payload.manual_source_paths.map((item) => String(item || "").trim()).filter(Boolean)
+        ? payload.manual_source_paths
+            .map((item) => String(item || "").trim())
+            .filter(Boolean)
         : [];
 
       const agentId = params.agentId || "";
       const metaByPath: Record<string, { filename?: string }> = {};
       if (agentId && manualPaths.length > 0) {
         try {
-          const metaRows = await import("../../../../api/modules/agents").then((m) => (
-            m.agentsApi.getProjectFilesMetadata(agentId, params.projectId, manualPaths)
-          ));
+          const metaRows = await import("../../../../api/modules/agents").then(
+            (m) =>
+              m.agentsApi.getProjectFilesMetadata(
+                agentId,
+                params.projectId,
+                manualPaths,
+              ),
+          );
           for (const row of metaRows || []) {
             const key = String(row.path || "").trim();
             if (!key) {
@@ -1678,7 +2011,8 @@ export function useProjectKnowledgeState(
 
       const sources = manualPaths.map((path) => ({
         id: path,
-        name: metaByPath[path]?.filename || path.split("/").slice(-1)[0] || path,
+        name:
+          metaByPath[path]?.filename || path.split("/").slice(-1)[0] || path,
         type: "file" as const,
         location: path,
         content: "",
@@ -1711,118 +2045,149 @@ export function useProjectKnowledgeState(
     }
   }, [params.projectId, params.agentId]);
 
-  const addManualSourcePath = useCallback(async (sourcePath: string) => {
-    const normalizedPath = String(sourcePath || "").trim();
-    if (!params.projectId || !normalizedPath) {
-      return;
-    }
-    const currentPaths = projectSources
-      .map((source) => String(source.location || "").trim())
-      .filter(Boolean);
-    if (currentPaths.includes(normalizedPath)) {
-      return;
-    }
-    await api.updateProjectKnowledgePipelineSources({
-      projectId: params.projectId,
-      manualSourcePaths: [...currentPaths, normalizedPath],
-    });
-    await loadProjectSourceStatus();
-  }, [loadProjectSourceStatus, params.projectId, projectSources]);
-
-  const removeManualSourcePath = useCallback(async (sourcePath: string) => {
-    const normalizedPath = String(sourcePath || "").trim();
-    if (!params.projectId || !normalizedPath) {
-      return;
-    }
-    const currentPaths = projectSources
-      .map((source) => String(source.location || "").trim())
-      .filter(Boolean);
-    if (!currentPaths.includes(normalizedPath)) {
-      return;
-    }
-    await api.updateProjectKnowledgePipelineSources({
-      projectId: params.projectId,
-      manualSourcePaths: currentPaths.filter((item) => item !== normalizedPath),
-    });
-    await loadProjectSourceStatus();
-  }, [loadProjectSourceStatus, params.projectId, projectSources]);
-
-  const loadSourceContent = useCallback(async (
-    sourceId: string,
-    options?: { force?: boolean },
-  ) => {
-    const normalizedSourceId = sourceId.trim();
-    if (!normalizedSourceId || !params.projectId) {
-      return null;
-    }
-    if (!options?.force && sourceContentById[normalizedSourceId]) {
-      return sourceContentById[normalizedSourceId];
-    }
-
-    setSourceContentLoadingById((prev) => ({
-      ...prev,
-      [normalizedSourceId]: true,
-    }));
-    try {
-      const response = await api.getKnowledgeSourceContent(normalizedSourceId, {
+  const addManualSourcePath = useCallback(
+    async (sourcePath: string) => {
+      const normalizedPath = String(sourcePath || "").trim();
+      if (!params.projectId || !normalizedPath) {
+        return;
+      }
+      const currentPaths = projectSources
+        .map((source) => String(source.location || "").trim())
+        .filter(Boolean);
+      if (currentPaths.includes(normalizedPath)) {
+        return;
+      }
+      await api.updateProjectKnowledgePipelineSources({
         projectId: params.projectId,
+        manualSourcePaths: [...currentPaths, normalizedPath],
       });
-      setSourceContentById((prev) => ({
-        ...prev,
-        [normalizedSourceId]: response,
-      }));
-      return response;
-    } catch {
-      return null;
-    } finally {
+      await loadProjectSourceStatus();
+    },
+    [loadProjectSourceStatus, params.projectId, projectSources],
+  );
+
+  const removeManualSourcePath = useCallback(
+    async (sourcePath: string) => {
+      const normalizedPath = String(sourcePath || "").trim();
+      if (!params.projectId || !normalizedPath) {
+        return;
+      }
+      const currentPaths = projectSources
+        .map((source) => String(source.location || "").trim())
+        .filter(Boolean);
+      if (!currentPaths.includes(normalizedPath)) {
+        return;
+      }
+      await api.updateProjectKnowledgePipelineSources({
+        projectId: params.projectId,
+        manualSourcePaths: currentPaths.filter(
+          (item) => item !== normalizedPath,
+        ),
+      });
+      await loadProjectSourceStatus();
+    },
+    [loadProjectSourceStatus, params.projectId, projectSources],
+  );
+
+  const loadSourceContent = useCallback(
+    async (sourceId: string, options?: { force?: boolean }) => {
+      const normalizedSourceId = sourceId.trim();
+      if (!normalizedSourceId || !params.projectId) {
+        return null;
+      }
+      if (!options?.force && sourceContentById[normalizedSourceId]) {
+        return sourceContentById[normalizedSourceId];
+      }
+
       setSourceContentLoadingById((prev) => ({
         ...prev,
-        [normalizedSourceId]: false,
+        [normalizedSourceId]: true,
       }));
-    }
-  }, [params.projectId, sourceContentById]);
+      try {
+        const response = await api.getKnowledgeSourceContent(
+          normalizedSourceId,
+          {
+            projectId: params.projectId,
+          },
+        );
+        setSourceContentById((prev) => ({
+          ...prev,
+          [normalizedSourceId]: response,
+        }));
+        return response;
+      } catch {
+        return null;
+      } finally {
+        setSourceContentLoadingById((prev) => ({
+          ...prev,
+          [normalizedSourceId]: false,
+        }));
+      }
+    },
+    [params.projectId, sourceContentById],
+  );
 
-  const loadSourceSemantic = useCallback(async (sourceId: string) => {
-    const normalizedSourceId = sourceId.trim();
-    if (!normalizedSourceId || !params.projectId) {
-      return;
-    }
-    if (semanticBySourceId[normalizedSourceId] || semanticLoadingBySourceId[normalizedSourceId]) {
-      return;
-    }
-    const matchedSource = projectSources.find((source) => source.id === normalizedSourceId);
-    if (matchedSource) {
-      setSemanticBySourceId((prev) => ({
+  const loadSourceSemantic = useCallback(
+    async (sourceId: string) => {
+      const normalizedSourceId = sourceId.trim();
+      if (!normalizedSourceId || !params.projectId) {
+        return;
+      }
+      if (
+        semanticBySourceId[normalizedSourceId] ||
+        semanticLoadingBySourceId[normalizedSourceId]
+      ) {
+        return;
+      }
+      const matchedSource = projectSources.find(
+        (source) => source.id === normalizedSourceId,
+      );
+      if (matchedSource) {
+        setSemanticBySourceId((prev) => ({
+          ...prev,
+          [normalizedSourceId]: {
+            subject: matchedSource.subject || matchedSource.name,
+            summary: matchedSource.summary,
+            keywords: matchedSource.keywords || [],
+            semanticStatus: matchedSource.semantic_status,
+          },
+        }));
+        return;
+      }
+      setSemanticLoadingBySourceId((prev) => ({
         ...prev,
-        [normalizedSourceId]: {
-          subject: matchedSource.subject || matchedSource.name,
-          summary: matchedSource.summary,
-          keywords: matchedSource.keywords || [],
-          semanticStatus: matchedSource.semantic_status,
-        },
+        [normalizedSourceId]: true,
       }));
-      return;
-    }
-    setSemanticLoadingBySourceId((prev) => ({ ...prev, [normalizedSourceId]: true }));
-    try {
-      setSemanticBySourceId((prev) => ({
-        ...prev,
-        [normalizedSourceId]: {
-          subject: normalizedSourceId,
-          summary: "",
-          keywords: [],
-        },
-      }));
-    } catch {
-      // best-effort semantic fetch
-    } finally {
-      setSemanticLoadingBySourceId((prev) => ({ ...prev, [normalizedSourceId]: false }));
-    }
-  }, [params.projectId, projectSources, semanticBySourceId, semanticLoadingBySourceId]);
+      try {
+        setSemanticBySourceId((prev) => ({
+          ...prev,
+          [normalizedSourceId]: {
+            subject: normalizedSourceId,
+            summary: "",
+            keywords: [],
+          },
+        }));
+      } catch {
+        // best-effort semantic fetch
+      } finally {
+        setSemanticLoadingBySourceId((prev) => ({
+          ...prev,
+          [normalizedSourceId]: false,
+        }));
+      }
+    },
+    [
+      params.projectId,
+      projectSources,
+      semanticBySourceId,
+      semanticLoadingBySourceId,
+    ],
+  );
 
   useEffect(() => {
     let cancelled = false;
-    void api.getKnowledgeConfig()
+    void api
+      .getKnowledgeConfig()
       .then((config) => {
         if (!cancelled) {
           setMemifyEnabled(Boolean(config.memify_enabled));
@@ -1842,140 +2207,181 @@ export function useProjectKnowledgeState(
     }
   }, [loadSourceSemantic, selectedSourceId]);
 
-  const defaultOutputModeForQuery = useMemo<ProjectKnowledgeProcessingMode>(() => {
-    const payload = syncState?.output_resolution as ProjectKnowledgeOutputResolutionPayload | undefined;
-    if (payload && (payload.active_mode === "nlp" || payload.active_mode === "agentic")) {
-      return payload.active_mode;
-    }
-    return "fast";
-  }, [syncState]);
+  const defaultOutputModeForQuery =
+    useMemo<ProjectKnowledgeProcessingMode>(() => {
+      const payload = syncState?.output_resolution as
+        | ProjectKnowledgeOutputResolutionPayload
+        | undefined;
+      if (
+        payload &&
+        (payload.active_mode === "nlp" || payload.active_mode === "agentic")
+      ) {
+        return payload.active_mode;
+      }
+      return "fast";
+    }, [syncState]);
 
-  const allGraphQueryTopK = useMemo(() => Math.max(
-    MIN_ALL_GRAPH_QUERY_TOP_K,
-    getSyncRelationCount(syncState),
-    getSyncEnrichmentMetric(syncState, "edge_count"),
-  ), [syncState]);
+  const allGraphQueryTopK = useMemo(
+    () =>
+      Math.max(
+        MIN_ALL_GRAPH_QUERY_TOP_K,
+        getSyncRelationCount(syncState),
+        getSyncEnrichmentMetric(syncState, "edge_count"),
+      ),
+    [syncState],
+  );
 
-  const buildLocalFilteredGraphResult = useCallback((
-    baseResult: GraphQueryResponse,
-    filterText: string,
-    relationTypeFilters: string[],
-    entityTypeFilters: string[],
-    sourceId: string,
-  ): GraphQueryResponse => {
-    const normalizedFilter = String(filterText || "").trim();
-    const sourceScopedRecords = filterGraphQueryRecordsBySourceId(baseResult.records || [], sourceId);
-    const filteredRecords = filterGraphQuerySourceRecords(sourceScopedRecords, normalizedFilter, {
-      relationTypes: relationTypeFilters,
-      entityTypes: entityTypeFilters,
-    });
-    return {
-      ...baseResult,
-      records: filteredRecords,
-      summary: normalizedFilter
-        ? `Filtered ${filteredRecords.length} of ${sourceScopedRecords.length} graph records.`
-        : `Loaded ${sourceScopedRecords.length} graph records for local explore.`,
-      provenance: {
-        ...baseResult.provenance,
-        baseline_record_count: sourceScopedRecords.length,
-        filter_text: normalizedFilter,
-        relation_type_filters: relationTypeFilters,
-        entity_type_filters: entityTypeFilters,
-        source_filter_id: sourceId,
-        filter_mode: "local",
-      },
-    };
-  }, []);
+  const buildLocalFilteredGraphResult = useCallback(
+    (
+      baseResult: GraphQueryResponse,
+      filterText: string,
+      relationTypeFilters: string[],
+      entityTypeFilters: string[],
+      sourceId: string,
+    ): GraphQueryResponse => {
+      const normalizedFilter = String(filterText || "").trim();
+      const sourceScopedRecords = filterGraphQueryRecordsBySourceId(
+        baseResult.records || [],
+        sourceId,
+      );
+      const filteredRecords = filterGraphQuerySourceRecords(
+        sourceScopedRecords,
+        normalizedFilter,
+        {
+          relationTypes: relationTypeFilters,
+          entityTypes: entityTypeFilters,
+        },
+      );
+      return {
+        ...baseResult,
+        records: filteredRecords,
+        summary: normalizedFilter
+          ? `Filtered ${filteredRecords.length} of ${sourceScopedRecords.length} graph records.`
+          : `Loaded ${sourceScopedRecords.length} graph records for local explore.`,
+        provenance: {
+          ...baseResult.provenance,
+          baseline_record_count: sourceScopedRecords.length,
+          filter_text: normalizedFilter,
+          relation_type_filters: relationTypeFilters,
+          entity_type_filters: entityTypeFilters,
+          source_filter_id: sourceId,
+          filter_mode: "local",
+        },
+      };
+    },
+    [],
+  );
 
   const markGraphNeedsRefresh = useCallback(() => {
     setGraphNeedsRefresh(true);
   }, []);
 
-  const runGraphQuery = useCallback(async (
-    overrideQuery?: string,
-    overrideMode?: ProjectGraphQueryMode,
-    overrideTopK?: number,
-    overrideOutputMode?: ProjectKnowledgeProcessingMode,
-  ) => {
-    const rawQuery = overrideQuery ?? graphQueryText;
-    const query = rawQuery.trim();
-    const mode = overrideMode ?? graphQueryMode;
-    const outputMode = overrideOutputMode ?? defaultOutputModeForQuery;
-    if (!params.projectId) {
-      setGraphError(t("copaw.projects.knowledge.emptyQuery"));
-      return;
-    }
-    if (mode === "cypher" && !query) {
-      setGraphError(t("copaw.projects.knowledge.emptyQuery"));
-      return;
-    }
-
-    setGraphLoading(true);
-    setGraphError("");
-    try {
-      if (mode === "template") {
-        const baseResponse = await api.graphQuery({
-          query: ALL_GRAPH_QUERY_TOKEN,
-          mode,
-          topK: Math.max(
-            allGraphQueryTopK,
-            Number(overrideTopK ?? graphQueryTopK) || PROJECT_GRAPH_QUERY_TOP_K,
-          ),
-          outputMode,
-          datasetScope: selectedSourceId ? [selectedSourceId] : undefined,
-          scopeType: "project",
-          scopeId: params.projectId,
-          timeoutSec: 20,
-          projectScope: [params.projectId],
-          includeGlobal: params.includeGlobal,
-          projectId: params.projectId,
-        });
-        const filteredResponse = buildLocalFilteredGraphResult(
-          baseResponse,
-          query,
-          graphRelationTypeFilters,
-          graphEntityTypeFilters,
-          selectedSourceId,
-        );
-        setGraphQueryText(rawQuery);
-        setGraphQueryMode(mode);
-        setGraphBaseResult(baseResponse);
-        setGraphResult(filteredResponse);
-      } else {
-        const response = await api.graphQuery({
-          query,
-          mode,
-          topK: Math.max(
-            20,
-            Number(overrideTopK ?? graphQueryTopK) || PROJECT_GRAPH_QUERY_TOP_K,
-          ),
-          outputMode,
-          datasetScope: selectedSourceId ? [selectedSourceId] : undefined,
-          scopeType: "project",
-          scopeId: params.projectId,
-          timeoutSec: 20,
-          projectScope: [params.projectId],
-          includeGlobal: params.includeGlobal,
-          projectId: params.projectId,
-        });
-        const sourceFilteredResponse = applySourceFilterToGraphQueryResponse(
-          response,
-          selectedSourceId,
-        );
-        setGraphQueryText(query);
-        setGraphQueryMode(mode);
-        setGraphBaseResult(response);
-        setGraphResult(sourceFilteredResponse);
+  const runGraphQuery = useCallback(
+    async (
+      overrideQuery?: string,
+      overrideMode?: ProjectGraphQueryMode,
+      overrideTopK?: number,
+      overrideOutputMode?: ProjectKnowledgeProcessingMode,
+    ) => {
+      const rawQuery = overrideQuery ?? graphQueryText;
+      const query = rawQuery.trim();
+      const mode = overrideMode ?? graphQueryMode;
+      const outputMode = overrideOutputMode ?? defaultOutputModeForQuery;
+      if (!params.projectId) {
+        setGraphError(t("copaw.projects.knowledge.emptyQuery"));
+        return;
       }
-      setActiveGraphNodeId(null);
-      setGraphNeedsRefresh(false);
-    } catch (err) {
-      const messageText = err instanceof Error ? err.message : t("copaw.projects.knowledge.queryFailed");
-      setGraphError(messageText);
-    } finally {
-      setGraphLoading(false);
-    }
-  }, [allGraphQueryTopK, buildLocalFilteredGraphResult, defaultOutputModeForQuery, graphEntityTypeFilters, graphQueryMode, graphQueryText, graphQueryTopK, graphRelationTypeFilters, params.includeGlobal, params.projectId, selectedSourceId, t]);
+      if (mode === "cypher" && !query) {
+        setGraphError(t("copaw.projects.knowledge.emptyQuery"));
+        return;
+      }
+
+      setGraphLoading(true);
+      setGraphError("");
+      try {
+        if (mode === "template") {
+          const baseResponse = await api.graphQuery({
+            query: ALL_GRAPH_QUERY_TOKEN,
+            mode,
+            topK: Math.max(
+              allGraphQueryTopK,
+              Number(overrideTopK ?? graphQueryTopK) ||
+                PROJECT_GRAPH_QUERY_TOP_K,
+            ),
+            outputMode,
+            datasetScope: selectedSourceId ? [selectedSourceId] : undefined,
+            scopeType: "project",
+            scopeId: params.projectId,
+            timeoutSec: 20,
+            projectScope: [params.projectId],
+            includeGlobal: params.includeGlobal,
+            projectId: params.projectId,
+          });
+          const filteredResponse = buildLocalFilteredGraphResult(
+            baseResponse,
+            query,
+            graphRelationTypeFilters,
+            graphEntityTypeFilters,
+            selectedSourceId,
+          );
+          setGraphQueryText(rawQuery);
+          setGraphQueryMode(mode);
+          setGraphBaseResult(baseResponse);
+          setGraphResult(filteredResponse);
+        } else {
+          const response = await api.graphQuery({
+            query,
+            mode,
+            topK: Math.max(
+              20,
+              Number(overrideTopK ?? graphQueryTopK) ||
+                PROJECT_GRAPH_QUERY_TOP_K,
+            ),
+            outputMode,
+            datasetScope: selectedSourceId ? [selectedSourceId] : undefined,
+            scopeType: "project",
+            scopeId: params.projectId,
+            timeoutSec: 20,
+            projectScope: [params.projectId],
+            includeGlobal: params.includeGlobal,
+            projectId: params.projectId,
+          });
+          const sourceFilteredResponse = applySourceFilterToGraphQueryResponse(
+            response,
+            selectedSourceId,
+          );
+          setGraphQueryText(query);
+          setGraphQueryMode(mode);
+          setGraphBaseResult(response);
+          setGraphResult(sourceFilteredResponse);
+        }
+        setActiveGraphNodeId(null);
+        setGraphNeedsRefresh(false);
+      } catch (err) {
+        const messageText =
+          err instanceof Error
+            ? err.message
+            : t("copaw.projects.knowledge.queryFailed");
+        setGraphError(messageText);
+      } finally {
+        setGraphLoading(false);
+      }
+    },
+    [
+      allGraphQueryTopK,
+      buildLocalFilteredGraphResult,
+      defaultOutputModeForQuery,
+      graphEntityTypeFilters,
+      graphQueryMode,
+      graphQueryText,
+      graphQueryTopK,
+      graphRelationTypeFilters,
+      params.includeGlobal,
+      params.projectId,
+      selectedSourceId,
+      t,
+    ],
+  );
 
   useEffect(() => {
     if (!graphBaseResult) {
@@ -1993,7 +2399,9 @@ export function useProjectKnowledgeState(
       );
       return;
     }
-    setGraphResult(applySourceFilterToGraphQueryResponse(graphBaseResult, selectedSourceId));
+    setGraphResult(
+      applySourceFilterToGraphQueryResponse(graphBaseResult, selectedSourceId),
+    );
   }, [
     buildLocalFilteredGraphResult,
     graphBaseResult,
@@ -2004,91 +2412,107 @@ export function useProjectKnowledgeState(
     selectedSourceId,
   ]);
 
-  const startProcessingMode = useCallback(async (
-    mode: ProjectKnowledgeProcessingMode,
-    options?: {
-      force?: boolean;
-      trigger?: string;
-      quantizationStage?: ProjectKnowledgeQuantizationStage;
-      sourceFilePath?: string;
-      rerunLayer?: string;
-      rerunStepId?: string;
-      overwrite?: boolean;
+  const startProcessingMode = useCallback(
+    async (
+      mode: ProjectKnowledgeProcessingMode,
+      options?: {
+        force?: boolean;
+        trigger?: string;
+        quantizationStage?: ProjectKnowledgeQuantizationStage;
+        sourceFilePath?: string;
+        rerunLayer?: string;
+        rerunStepId?: string;
+        overwrite?: boolean;
+      },
+    ) => {
+      if (!params.projectId) {
+        return;
+      }
+      const selectedSource = selectedSourceId
+        ? projectSources.find(
+            (item) => String(item.id || "").trim() === selectedSourceId,
+          )
+        : null;
+      const fallbackSourcePath = String(
+        options?.sourceFilePath ||
+          selectedSource?.location ||
+          projectSources[0]?.location ||
+          "",
+      ).trim();
+      setProcessingLaunchMode(mode);
+      try {
+        const response = await api.runProjectKnowledgePipeline({
+          projectId: params.projectId,
+          trigger: options?.trigger ?? `processing-panel:${mode}`,
+          force: options?.force ?? true,
+          processingMode: mode,
+          quantizationStage:
+            options?.quantizationStage ??
+            getProjectKnowledgeQuantizationStage(mode),
+          sourceFilePath: fallbackSourcePath || undefined,
+          rerunLayer: options?.rerunLayer,
+          rerunStepId: options?.rerunStepId,
+          overwrite: options?.overwrite ?? true,
+        });
+        setSyncState(response.state);
+      } finally {
+        setProcessingLaunchMode(null);
+      }
     },
-  ) => {
-    if (!params.projectId) {
-      return;
-    }
-    const selectedSource = selectedSourceId
-      ? projectSources.find((item) => String(item.id || "").trim() === selectedSourceId)
-      : null;
-    const fallbackSourcePath = String(
-      options?.sourceFilePath
-      || selectedSource?.location
-      || projectSources[0]?.location
-      || "",
-    ).trim();
-    setProcessingLaunchMode(mode);
-    try {
-      const response = await api.runProjectKnowledgePipeline({
-        projectId: params.projectId,
-        trigger: options?.trigger ?? `processing-panel:${mode}`,
+    [params.projectId, projectSources, selectedSourceId],
+  );
+
+  const runSourceFullPipeline = useCallback(
+    async (
+      sourceFilePath: string,
+      options?: { force?: boolean; overwrite?: boolean },
+    ) => {
+      const normalizedPath = String(sourceFilePath || "").trim();
+      if (!normalizedPath) {
+        return;
+      }
+      await startProcessingMode("agentic", {
         force: options?.force ?? true,
-        processingMode: mode,
-        quantizationStage: options?.quantizationStage ?? getProjectKnowledgeQuantizationStage(mode),
-        sourceFilePath: fallbackSourcePath || undefined,
-        rerunLayer: options?.rerunLayer,
-        rerunStepId: options?.rerunStepId,
         overwrite: options?.overwrite ?? true,
+        trigger: "manual:source-file-full",
+        quantizationStage: "l3",
+        sourceFilePath: normalizedPath,
       });
-      setSyncState(response.state);
-    } finally {
-      setProcessingLaunchMode(null);
-    }
-  }, [params.projectId, projectSources, selectedSourceId]);
+    },
+    [startProcessingMode],
+  );
 
-  const runSourceFullPipeline = useCallback(async (
-    sourceFilePath: string,
-    options?: { force?: boolean; overwrite?: boolean },
-  ) => {
-    const normalizedPath = String(sourceFilePath || "").trim();
-    if (!normalizedPath) {
-      return;
-    }
-    await startProcessingMode("agentic", {
-      force: options?.force ?? true,
-      overwrite: options?.overwrite ?? true,
-      trigger: "manual:source-file-full",
-      quantizationStage: "l3",
-      sourceFilePath: normalizedPath,
-    });
-  }, [startProcessingMode]);
+  const rerunKnowledgeLayer = useCallback(
+    async (
+      layer: ProjectKnowledgeLayerKey,
+      options?: { sourceId?: string; force?: boolean; overwrite?: boolean },
+    ) => {
+      const execution = resolveExecutionForLayer(layer);
+      if (!execution) {
+        return;
+      }
+      const sourceId = String(options?.sourceId || "").trim();
+      const source = sourceId
+        ? projectSources.find(
+            (item) => String(item.id || "").trim() === sourceId,
+          )
+        : null;
+      const sourceFilePath =
+        source && String(source.location || "").trim()
+          ? String(source.location || "").trim()
+          : undefined;
 
-  const rerunKnowledgeLayer = useCallback(async (
-    layer: ProjectKnowledgeLayerKey,
-    options?: { sourceId?: string; force?: boolean; overwrite?: boolean },
-  ) => {
-    const execution = resolveExecutionForLayer(layer);
-    if (!execution) {
-      return;
-    }
-    const sourceId = String(options?.sourceId || "").trim();
-    const source = sourceId
-      ? projectSources.find((item) => String(item.id || "").trim() === sourceId)
-      : null;
-    const sourceFilePath = source && String(source.location || "").trim()
-      ? String(source.location || "").trim()
-      : undefined;
-
-    await startProcessingMode(execution.mode, {
-      force: options?.force ?? true,
-      overwrite: options?.overwrite ?? true,
-      trigger: "manual:layer-rerun",
-      quantizationStage: execution.quantizationStage,
-      sourceFilePath,
-      rerunLayer: layer,
-    });
-  }, [projectSources, startProcessingMode]);
+      await startProcessingMode(execution.mode, {
+        force: options?.force ?? true,
+        overwrite: options?.overwrite ?? true,
+        trigger: "manual:layer-rerun",
+        quantizationStage: execution.quantizationStage,
+        sourceFilePath,
+        rerunLayer: layer,
+      });
+    },
+    [projectSources, startProcessingMode],
+  );
 
   const resetGraphQuery = useCallback(() => {
     setGraphError("");
@@ -2145,9 +2569,12 @@ export function useProjectKnowledgeState(
           return;
         }
         const items = Array.isArray(response.items) ? response.items : [];
-        const latest = items.find((item) =>
-          ["running", "pending", "succeeded", "failed"].includes(String(item.status || ""))
-        ) || null;
+        const latest =
+          items.find((item) =>
+            ["running", "pending", "succeeded", "failed"].includes(
+              String(item.status || ""),
+            ),
+          ) || null;
         setLatestQualityLoopJob(latest);
       } catch {
         if (!cancelled) {
@@ -2159,7 +2586,11 @@ export function useProjectKnowledgeState(
     return () => {
       cancelled = true;
     };
-  }, [params.projectId, syncState?.last_finished_at, activeKnowledgeTask?.updated_at]);
+  }, [
+    params.projectId,
+    syncState?.last_finished_at,
+    activeKnowledgeTask?.updated_at,
+  ]);
 
   useEffect(() => {
     if (!params.projectId) {
@@ -2176,7 +2607,10 @@ export function useProjectKnowledgeState(
   }, [loadProjectSourceStatus, params.eagerSourceLoad, params.projectId]);
 
   useEffect(() => {
-    if (selectedSourceId && projectSources.some((source) => source.id === selectedSourceId)) {
+    if (
+      selectedSourceId &&
+      projectSources.some((source) => source.id === selectedSourceId)
+    ) {
       return;
     }
     setSelectedSourceId(projectSources[0]?.id || "");
@@ -2217,7 +2651,10 @@ export function useProjectKnowledgeState(
         return;
       }
       setProjectPipelineChannelStatus("reconnecting");
-      const baseDelay = Math.min(15_000, 1_000 * (2 ** Math.max(0, reconnectAttempt)));
+      const baseDelay = Math.min(
+        15_000,
+        1_000 * 2 ** Math.max(0, reconnectAttempt),
+      );
       const jitter = Math.floor(Math.random() * 250);
       reconnectAttempt += 1;
       reconnectTimer = window.setTimeout(() => {
@@ -2294,7 +2731,10 @@ export function useProjectKnowledgeState(
           scheduleReconnect();
         };
         ws.onerror = () => {
-          if (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING) {
+          if (
+            ws.readyState === WebSocket.OPEN ||
+            ws.readyState === WebSocket.CONNECTING
+          ) {
             ws.close();
           }
         };
@@ -2347,7 +2787,10 @@ export function useProjectKnowledgeState(
         return;
       }
       setTasksChannelStatus("reconnecting");
-      const baseDelay = Math.min(15_000, 1_000 * (2 ** Math.max(0, reconnectAttempt)));
+      const baseDelay = Math.min(
+        15_000,
+        1_000 * 2 ** Math.max(0, reconnectAttempt),
+      );
       const jitter = Math.floor(Math.random() * 250);
       reconnectAttempt += 1;
       reconnectTimer = window.setTimeout(() => {
@@ -2376,7 +2819,9 @@ export function useProjectKnowledgeState(
         return;
       }
       clearReconnectTimer();
-      setTasksChannelStatus(reconnectAttempt === 0 ? "connecting" : "reconnecting");
+      setTasksChannelStatus(
+        reconnectAttempt === 0 ? "connecting" : "reconnecting",
+      );
       try {
         const baseUrl = getApiUrl("/knowledge/tasks/ws");
         const wsUrl = new URL(baseUrl, window.location.origin);
@@ -2424,7 +2869,10 @@ export function useProjectKnowledgeState(
           scheduleReconnect();
         };
         ws.onerror = () => {
-          if (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING) {
+          if (
+            ws.readyState === WebSocket.OPEN ||
+            ws.readyState === WebSocket.CONNECTING
+          ) {
             ws.close();
           }
         };
@@ -2467,7 +2915,10 @@ export function useProjectKnowledgeState(
       if (disposed || inFlight) {
         return;
       }
-      if (projectPipelineChannelStatus === "open" && tasksChannelStatus === "open") {
+      if (
+        projectPipelineChannelStatus === "open" &&
+        tasksChannelStatus === "open"
+      ) {
         return;
       }
 
@@ -2516,12 +2967,23 @@ export function useProjectKnowledgeState(
     if (!params.eagerSourceLoad) {
       return;
     }
-    const refreshReason = `${syncState.status}:${syncState.last_finished_at || ""}:${syncState.latest_job_id || ""}`;
+    const refreshReason = `${syncState.status}:${
+      syncState.last_finished_at || ""
+    }:${syncState.latest_job_id || ""}`;
     if (refreshReasonRef.current === refreshReason) {
       return;
     }
     refreshReasonRef.current = refreshReason;
-    if (["pending", "queued", "indexing", "graphifying", "succeeded", "failed"].includes(syncState.status)) {
+    if (
+      [
+        "pending",
+        "queued",
+        "indexing",
+        "graphifying",
+        "succeeded",
+        "failed",
+      ].includes(syncState.status)
+    ) {
       void loadProjectSourceStatus();
     }
   }, [loadProjectSourceStatus, params.eagerSourceLoad, syncState]);
@@ -2535,18 +2997,35 @@ export function useProjectKnowledgeState(
     if (!params.projectId || !params.eagerExploreLoad) {
       return;
     }
-    const defaultToken = `${params.projectId}:${String(params.includeGlobal)}:all-records`;
-    if (defaultExploreTokenRef.current === defaultToken || graphLoading || graphBaseResult) {
+    const defaultToken = `${params.projectId}:${String(
+      params.includeGlobal,
+    )}:all-records`;
+    if (
+      defaultExploreTokenRef.current === defaultToken ||
+      graphLoading ||
+      graphBaseResult
+    ) {
       return;
     }
     defaultExploreTokenRef.current = defaultToken;
     setGraphQueryText((prev) => prev);
     void runGraphQuery("", "template");
-  }, [graphBaseResult, graphLoading, params.eagerExploreLoad, params.includeGlobal, params.projectId, runGraphQuery]);
+  }, [
+    graphBaseResult,
+    graphLoading,
+    params.eagerExploreLoad,
+    params.includeGlobal,
+    params.projectId,
+    runGraphQuery,
+  ]);
 
   useEffect(() => {
     const finishToken = syncState?.last_finished_at || "";
-    if (!finishToken || graphRefreshReasonRef.current === finishToken || !graphQueryText.trim()) {
+    if (
+      !finishToken ||
+      graphRefreshReasonRef.current === finishToken ||
+      !graphQueryText.trim()
+    ) {
       return;
     }
     graphRefreshReasonRef.current = finishToken;
@@ -2567,21 +3046,27 @@ export function useProjectKnowledgeState(
   }, [params.projectId, trendExpanded]);
 
   const sourceRegistered = useMemo(
-    () => (
-      projectSources.some((source) => source.id === projectSourceId)
-      || syncState?.latest_source_id === projectSourceId
-    ),
+    () =>
+      projectSources.some((source) => source.id === projectSourceId) ||
+      syncState?.latest_source_id === projectSourceId,
     [projectSourceId, projectSources, syncState?.latest_source_id],
   );
 
   const quantMetrics = useMemo(() => {
     const latestRound = Array.isArray(latestQualityLoopJob?.rounds)
-      ? latestQualityLoopJob.rounds[latestQualityLoopJob.rounds.length - 1] as Record<string, unknown> | undefined
+      ? (latestQualityLoopJob.rounds[latestQualityLoopJob.rounds.length - 1] as
+          | Record<string, unknown>
+          | undefined)
       : undefined;
-    const latestRoundAfter = latestRound && typeof latestRound.after === "object"
-      ? latestRound.after as Record<string, unknown>
-      : null;
-    const sourceBaseMetrics = deriveSourceQuantBaseMetrics(projectSources, sourceRegistered, syncState);
+    const latestRoundAfter =
+      latestRound && typeof latestRound.after === "object"
+        ? (latestRound.after as Record<string, unknown>)
+        : null;
+    const sourceBaseMetrics = deriveSourceQuantBaseMetrics(
+      projectSources,
+      sourceRegistered,
+      syncState,
+    );
     const {
       totalSources,
       indexedSources,
@@ -2593,14 +3078,27 @@ export function useProjectKnowledgeState(
       charCount,
       tokenCount,
     } = sourceBaseMetrics;
-    const sentenceWithEntitiesCount = getSyncMemifyMetric(syncState, "sentence_with_entities_count");
-    const entityMentionsCount = getSyncMemifyMetric(syncState, "entity_mentions_count");
-    const avgEntitiesPerSentence = getSyncMemifyMetric(syncState, "avg_entities_per_sentence");
-    const avgEntityCharRatio = getSyncMemifyMetric(syncState, "avg_entity_char_ratio");
+    const sentenceWithEntitiesCount = getSyncMemifyMetric(
+      syncState,
+      "sentence_with_entities_count",
+    );
+    const entityMentionsCount = getSyncMemifyMetric(
+      syncState,
+      "entity_mentions_count",
+    );
+    const avgEntitiesPerSentence = getSyncMemifyMetric(
+      syncState,
+      "avg_entities_per_sentence",
+    );
+    const avgEntityCharRatio = getSyncMemifyMetric(
+      syncState,
+      "avg_entity_char_ratio",
+    );
     const relationCount = getSyncRelationCount(syncState);
     const entityCount = getSyncNodeCount(syncState);
     const effectiveEntityCount = entityCount;
-    const activeEnrichmentMetrics = (activeKnowledgeTask?.enrichment_metrics || {}) as Record<string, unknown>;
+    const activeEnrichmentMetrics = (activeKnowledgeTask?.enrichment_metrics ||
+      {}) as Record<string, unknown>;
 
     const edgeCount = Math.max(
       getSyncEnrichmentMetric(syncState, "edge_count"),
@@ -2630,8 +3128,14 @@ export function useProjectKnowledgeState(
       toFiniteNumber(activeEnrichmentMetrics.missing_evidence_edges, 0),
     );
 
-    const relationNormalizationCoverage = safeRatio(relationNormalizedCount, edgeCount);
-    const entityCanonicalCoverage = safeRatio(entityCanonicalizedCount, nodeCount);
+    const relationNormalizationCoverage = safeRatio(
+      relationNormalizedCount,
+      edgeCount,
+    );
+    const entityCanonicalCoverage = safeRatio(
+      entityCanonicalizedCount,
+      nodeCount,
+    );
     const lowConfidenceRatio = safeRatio(lowConfidenceEdges, edgeCount);
     const missingEvidenceRatio = safeRatio(missingEvidenceEdges, edgeCount);
 
@@ -2654,23 +3158,47 @@ export function useProjectKnowledgeState(
 
     const relationScale = Math.log10(Math.max(10, relationCount));
     const entityScale = Math.log10(Math.max(10, effectiveEntityCount));
-    const relationNormalizationThreshold = clamp(0.48 + relationScale * 0.08, 0.5, 0.82);
-    const entityCanonicalThreshold = clamp(0.45 + entityScale * 0.08, 0.48, 0.8);
-    const lowConfidenceThreshold = clamp(0.28 - relationScale * 0.03, 0.12, 0.28);
-    const missingEvidenceThreshold = clamp(0.3 - relationScale * 0.03, 0.15, 0.3);
+    const relationNormalizationThreshold = clamp(
+      0.48 + relationScale * 0.08,
+      0.5,
+      0.82,
+    );
+    const entityCanonicalThreshold = clamp(
+      0.45 + entityScale * 0.08,
+      0.48,
+      0.8,
+    );
+    const lowConfidenceThreshold = clamp(
+      0.28 - relationScale * 0.03,
+      0.12,
+      0.28,
+    );
+    const missingEvidenceThreshold = clamp(
+      0.3 - relationScale * 0.03,
+      0.15,
+      0.3,
+    );
 
     const normalizedQualityScores = [
-      safeRatio(reflectedRelationNormalizationCoverage, relationNormalizationThreshold),
+      safeRatio(
+        reflectedRelationNormalizationCoverage,
+        relationNormalizationThreshold,
+      ),
       safeRatio(reflectedEntityCanonicalCoverage, entityCanonicalThreshold),
       lowConfidenceThreshold > 0
-        ? clamp(1 - (reflectedLowConfidenceRatio / lowConfidenceThreshold), 0, 1)
+        ? clamp(1 - reflectedLowConfidenceRatio / lowConfidenceThreshold, 0, 1)
         : 0,
       missingEvidenceThreshold > 0
-        ? clamp(1 - (reflectedMissingEvidenceRatio / missingEvidenceThreshold), 0, 1)
+        ? clamp(
+            1 - reflectedMissingEvidenceRatio / missingEvidenceThreshold,
+            0,
+            1,
+          )
         : 0,
     ];
-    const qualityAssessmentScore = normalizedQualityScores.reduce((sum, item) => sum + item, 0)
-      / normalizedQualityScores.length;
+    const qualityAssessmentScore =
+      normalizedQualityScores.reduce((sum, item) => sum + item, 0) /
+      normalizedQualityScores.length;
 
     return {
       totalSources,
@@ -2714,7 +3242,9 @@ export function useProjectKnowledgeState(
     const source = String(payload.metrics_source || "").trim();
     const updatedAt = String(payload.metrics_updated_at || "").trim();
     const sourceId = String(payload.source_id || "").trim();
-    const sourceStatsUpdatedAt = String(payload.source_stats_updated_at || "").trim();
+    const sourceStatsUpdatedAt = String(
+      payload.source_stats_updated_at || "",
+    ).trim();
     if (!source && !updatedAt && !sourceId && !sourceStatsUpdatedAt) {
       return null;
     }
@@ -2732,20 +3262,30 @@ export function useProjectKnowledgeState(
   );
 
   const processingModes = useMemo<ProjectKnowledgeModeState[]>(() => {
-    const backendModes = parseBackendProcessingModes(syncState, latestQualityLoopJob);
+    const backendModes = parseBackendProcessingModes(
+      syncState,
+      latestQualityLoopJob,
+    );
     if (backendModes) {
       return backendModes;
     }
 
     const pipelineRunMeta = getPipelineRunMeta(syncState);
     const pipelineRunId = String(
-      pipelineRunMeta.run_id || (syncState as Record<string, unknown> | null)?.latest_pipeline_run_id || "",
+      pipelineRunMeta.run_id ||
+        (syncState as Record<string, unknown> | null)?.latest_pipeline_run_id ||
+        "",
     ).trim();
-    const pipelineStatus = String(pipelineRunMeta.status || "").trim().toLowerCase();
-    const activeTaskType = String(activeKnowledgeTask?.task_type || "").trim().toLowerCase();
-    const syncPercent = typeof syncState?.percent === "number"
-      ? Math.max(0, Math.min(100, Math.round(syncState.percent)))
-      : typeof syncState?.progress === "number"
+    const pipelineStatus = String(pipelineRunMeta.status || "")
+      .trim()
+      .toLowerCase();
+    const activeTaskType = String(activeKnowledgeTask?.task_type || "")
+      .trim()
+      .toLowerCase();
+    const syncPercent =
+      typeof syncState?.percent === "number"
+        ? Math.max(0, Math.min(100, Math.round(syncState.percent)))
+        : typeof syncState?.progress === "number"
         ? Math.max(0, Math.min(100, Math.round(syncState.progress * 100)))
         : null;
     const fastDocumentCount = Math.max(
@@ -2825,7 +3365,11 @@ export function useProjectKnowledgeState(
     );
     const nlpSyntaxTokenCount = Math.max(
       normalizeNumber(
-        ((syncState?.nlp_progress?.stages?.tokenize as { token_count?: unknown } | undefined)?.token_count),
+        (
+          syncState?.nlp_progress?.stages?.tokenize as
+            | { token_count?: unknown }
+            | undefined
+        )?.token_count,
       ),
       getBackendModeMetricNumber(syncState, "nlp", "tokenize_token_count"),
       normalizeNumber(syncState?.l2_metrics?.tokenize_token_count),
@@ -2841,34 +3385,83 @@ export function useProjectKnowledgeState(
       normalizeNumber(syncState?.l2_metrics?.syntax_pos_tag_type_count),
       0,
     );
-    const nlpPosCoverageOnSyntaxTokens = getBackendModeMetricNullableNumber(syncState, "nlp", "pos_coverage_on_syntax_tokens")
-      ?? normalizeNullableNumber(getSyncIndexMetric(syncState, "pos_coverage_on_syntax_tokens"));
-    const nlpPosCoverageOnDocumentTokens = getBackendModeMetricNullableNumber(syncState, "nlp", "pos_coverage_on_document_tokens")
-      ?? normalizeNullableNumber(getSyncIndexMetric(syncState, "pos_coverage_on_document_tokens"));
+    const nlpPosCoverageOnSyntaxTokens =
+      getBackendModeMetricNullableNumber(
+        syncState,
+        "nlp",
+        "pos_coverage_on_syntax_tokens",
+      ) ??
+      normalizeNullableNumber(
+        getSyncIndexMetric(syncState, "pos_coverage_on_syntax_tokens"),
+      );
+    const nlpPosCoverageOnDocumentTokens =
+      getBackendModeMetricNullableNumber(
+        syncState,
+        "nlp",
+        "pos_coverage_on_document_tokens",
+      ) ??
+      normalizeNullableNumber(
+        getSyncIndexMetric(syncState, "pos_coverage_on_document_tokens"),
+      );
     const nlpSyntaxRelationCount = Math.max(
       getBackendModeMetricNumber(syncState, "nlp", "syntax_relation_count"),
       normalizeNumber(syncState?.l2_metrics?.syntax_relation_count),
       0,
     );
     const l2TotalChunks = normalizeNumber(syncState?.l2_progress?.total_chunks);
-    const l2TokenizeDoneLines = normalizeNumber(syncState?.l2_progress?.tokenize_done_lines);
-    const l2TokenizeTotalLines = normalizeNumber(syncState?.l2_progress?.tokenize_total_lines);
-    const l2TokenizeDoneDocuments = normalizeNumber(syncState?.l2_progress?.tokenize_done_documents);
-    const l2TokenizeTotalDocuments = normalizeNumber(syncState?.l2_progress?.tokenize_total_documents);
-    const l2CorDoneChunks = normalizeNumber(syncState?.l2_progress?.cor_done_chunks);
-    const l2NerDoneChunks = normalizeNumber(syncState?.l2_progress?.ner_done_chunks);
-    const l2SyntaxDoneChunks = normalizeNumber(syncState?.l2_progress?.syntax_done_chunks);
-    const nlpTokenizeDocumentsProgress = normalizeTokenizeDocumentsProgress(
-      (syncState?.nlp_progress?.stages?.tokenize as { documents_progress?: unknown } | undefined)?.documents_progress,
+    const l2TokenizeDoneLines = normalizeNumber(
+      syncState?.l2_progress?.tokenize_done_lines,
     );
-    const l2TokenizeDocumentsProgress = normalizeTokenizeDocumentsProgress(syncState?.l2_documents_progress);
-    const tokenizeDocumentsProgress = nlpTokenizeDocumentsProgress.length > 0
-      ? nlpTokenizeDocumentsProgress
-      : l2TokenizeDocumentsProgress;
-    const nlpCorReadyChunkRatio = getBackendModeMetricNullableNumber(syncState, "nlp", "cor_ready_chunk_ratio")
-      ?? normalizeNullableNumber(getSyncIndexMetric(syncState, "cor_ready_chunk_ratio"));
-    const nlpCorEffectiveChunkRatio = getBackendModeMetricNullableNumber(syncState, "nlp", "cor_effective_chunk_ratio")
-      ?? normalizeNullableNumber(getSyncIndexMetric(syncState, "cor_effective_chunk_ratio"));
+    const l2TokenizeTotalLines = normalizeNumber(
+      syncState?.l2_progress?.tokenize_total_lines,
+    );
+    const l2TokenizeDoneDocuments = normalizeNumber(
+      syncState?.l2_progress?.tokenize_done_documents,
+    );
+    const l2TokenizeTotalDocuments = normalizeNumber(
+      syncState?.l2_progress?.tokenize_total_documents,
+    );
+    const l2CorDoneChunks = normalizeNumber(
+      syncState?.l2_progress?.cor_done_chunks,
+    );
+    const l2NerDoneChunks = normalizeNumber(
+      syncState?.l2_progress?.ner_done_chunks,
+    );
+    const l2SyntaxDoneChunks = normalizeNumber(
+      syncState?.l2_progress?.syntax_done_chunks,
+    );
+    const nlpTokenizeDocumentsProgress = normalizeTokenizeDocumentsProgress(
+      (
+        syncState?.nlp_progress?.stages?.tokenize as
+          | { documents_progress?: unknown }
+          | undefined
+      )?.documents_progress,
+    );
+    const l2TokenizeDocumentsProgress = normalizeTokenizeDocumentsProgress(
+      syncState?.l2_documents_progress,
+    );
+    const tokenizeDocumentsProgress =
+      nlpTokenizeDocumentsProgress.length > 0
+        ? nlpTokenizeDocumentsProgress
+        : l2TokenizeDocumentsProgress;
+    const nlpCorReadyChunkRatio =
+      getBackendModeMetricNullableNumber(
+        syncState,
+        "nlp",
+        "cor_ready_chunk_ratio",
+      ) ??
+      normalizeNullableNumber(
+        getSyncIndexMetric(syncState, "cor_ready_chunk_ratio"),
+      );
+    const nlpCorEffectiveChunkRatio =
+      getBackendModeMetricNullableNumber(
+        syncState,
+        "nlp",
+        "cor_effective_chunk_ratio",
+      ) ??
+      normalizeNullableNumber(
+        getSyncIndexMetric(syncState, "cor_effective_chunk_ratio"),
+      );
     const agenticEntityCount = 0;
     const agenticRelationCount = 0;
     const agenticQualityScore = null;
@@ -2876,42 +3469,55 @@ export function useProjectKnowledgeState(
     const fastAvailable = fastDocumentCount > 0 || fastChunkCount > 0;
     const nlpAvailable = nlpEntityCount > 0 || nlpRelationCount > 0;
     const agenticAvailable = false;
-    const semanticSummary = getProjectKnowledgeSemanticSummary(syncState?.semantic_engine, t);
-    const semanticStatus = String(syncState?.semantic_engine?.status || "").trim();
+    const semanticSummary = getProjectKnowledgeSemanticSummary(
+      syncState?.semantic_engine,
+      t,
+    );
+    const semanticStatus = String(
+      syncState?.semantic_engine?.status || "",
+    ).trim();
     const latestUpdatedAt = String(
-      latestQualityLoopJob?.updated_at
-      || syncState?.last_finished_at
-      || syncState?.updated_at
-      || "",
+      latestQualityLoopJob?.updated_at ||
+        syncState?.last_finished_at ||
+        syncState?.updated_at ||
+        "",
     ).trim();
 
-    const fastStatus: ProjectKnowledgeModeState["status"] = !fastAvailable && syncState?.status === "failed"
-      ? "failed"
-      : ["project_pipeline", "history_backfill"].includes(activeTaskType)
+    const fastStatus: ProjectKnowledgeModeState["status"] =
+      !fastAvailable && syncState?.status === "failed"
+        ? "failed"
+        : ["project_pipeline", "history_backfill"].includes(activeTaskType)
         ? "running"
         : fastAvailable
-          ? "ready"
-          : sourceRegistered
-            ? "queued"
-            : "idle";
-    const nlpStatus: ProjectKnowledgeModeState["status"] = !nlpAvailable && String(syncState?.status || "") === "failed"
-      ? "failed"
-      : ["memify", "quality_loop"].includes(activeTaskType)
+        ? "ready"
+        : sourceRegistered
+        ? "queued"
+        : "idle";
+    const nlpStatus: ProjectKnowledgeModeState["status"] =
+      !nlpAvailable && String(syncState?.status || "") === "failed"
+        ? "failed"
+        : ["memify", "quality_loop"].includes(activeTaskType)
         ? "running"
         : nlpAvailable
-          ? "ready"
-          : fastAvailable
-            ? "queued"
-            : "idle";
-    const agenticStatus: ProjectKnowledgeModeState["status"] = ["running", "pending", "queued"].includes(pipelineStatus)
-      ? (pipelineStatus === "queued" ? "queued" : "running")
+        ? "ready"
+        : fastAvailable
+        ? "queued"
+        : "idle";
+    const agenticStatus: ProjectKnowledgeModeState["status"] = [
+      "running",
+      "pending",
+      "queued",
+    ].includes(pipelineStatus)
+      ? pipelineStatus === "queued"
+        ? "queued"
+        : "running"
       : ["failed", "blocked", "cancelled"].includes(pipelineStatus)
-        ? "failed"
-        : agenticAvailable
-          ? "ready"
-          : nlpAvailable
-            ? "queued"
-            : "idle";
+      ? "failed"
+      : agenticAvailable
+      ? "ready"
+      : nlpAvailable
+      ? "queued"
+      : "idle";
 
     return [
       {
@@ -2919,15 +3525,22 @@ export function useProjectKnowledgeState(
         status: fastStatus,
         available: fastAvailable,
         progress: fastStatus === "running" ? syncPercent : null,
-        stage: fastStatus === "running"
-          ? String(syncState?.stage_message || syncState?.current_stage || "Building fast preview")
-          : fastAvailable
+        stage:
+          fastStatus === "running"
+            ? String(
+                syncState?.stage_message ||
+                  syncState?.current_stage ||
+                  "Building fast preview",
+              )
+            : fastAvailable
             ? "Fast preview ready"
             : "Waiting for source indexing",
         summary: fastAvailable
           ? "秒级预览，优先保障可用性。"
           : "基础索引尚未就绪，无法提供极速预览。",
-        lastUpdatedAt: String(syncState?.last_finished_at || syncState?.updated_at || "").trim(),
+        lastUpdatedAt: String(
+          syncState?.last_finished_at || syncState?.updated_at || "",
+        ).trim(),
         runId: "",
         jobId: String(syncState?.latest_job_id || "").trim(),
         documentCount: fastDocumentCount,
@@ -2943,10 +3556,14 @@ export function useProjectKnowledgeState(
         progress: nlpStatus === "running" ? syncPercent : null,
         stage: mergeSemanticSummaryIntoStage(
           nlpStatus === "running"
-            ? String(activeKnowledgeTask?.stage_message || activeKnowledgeTask?.current_stage || "Building NLP artifacts")
+            ? String(
+                activeKnowledgeTask?.stage_message ||
+                  activeKnowledgeTask?.current_stage ||
+                  "Building NLP artifacts",
+              )
             : nlpAvailable
-              ? "NLP graph artifacts ready"
-              : "Waiting for graph extraction",
+            ? "NLP graph artifacts ready"
+            : "Waiting for graph extraction",
           semanticSummary,
           semanticStatus,
         ),
@@ -2955,7 +3572,9 @@ export function useProjectKnowledgeState(
           : "图谱与结构化产物尚未形成。",
         lastUpdatedAt: latestUpdatedAt,
         runId: "",
-        jobId: String(activeKnowledgeTask?.job_id || syncState?.latest_job_id || "").trim(),
+        jobId: String(
+          activeKnowledgeTask?.job_id || syncState?.latest_job_id || "",
+        ).trim(),
         documentCount: fastDocumentCount,
         chunkCount: fastChunkCount,
         entityCount: nlpEntityCount,
@@ -2978,7 +3597,8 @@ export function useProjectKnowledgeState(
         syntaxPosCount: nlpSyntaxPosCount,
         syntaxPosTagTypeCount: nlpSyntaxPosTagTypeCount,
         posCoverageOnSyntaxTokens: nlpPosCoverageOnSyntaxTokens ?? undefined,
-        posCoverageOnDocumentTokens: nlpPosCoverageOnDocumentTokens ?? undefined,
+        posCoverageOnDocumentTokens:
+          nlpPosCoverageOnDocumentTokens ?? undefined,
         syntaxRelationCount: nlpSyntaxRelationCount,
         l2TotalChunks,
         tokenizeDoneLines: l2TokenizeDoneLines,
@@ -2995,17 +3615,24 @@ export function useProjectKnowledgeState(
         status: agenticStatus,
         available: agenticAvailable,
         progress: agenticStatus === "running" ? syncPercent : null,
-        stage: agenticStatus === "running"
-          ? String(syncState?.stage_message || syncState?.current_stage || "Running multi-agent pipeline")
-          : agenticAvailable
+        stage:
+          agenticStatus === "running"
+            ? String(
+                syncState?.stage_message ||
+                  syncState?.current_stage ||
+                  "Running multi-agent pipeline",
+              )
+            : agenticAvailable
             ? "Multi-agent outputs ready"
             : pipelineRunId
-              ? "Pipeline run exists but outputs are incomplete"
-              : "Waiting for multi-agent pipeline scheduling",
+            ? "Pipeline run exists but outputs are incomplete"
+            : "Waiting for multi-agent pipeline scheduling",
         summary: agenticAvailable
           ? "最高质量产物层，优先作为知识消费来源。"
           : "长耗时深加工轨道，产物缺失时将自动降级。",
-        lastUpdatedAt: String(pipelineRunMeta.updated_at || latestUpdatedAt || "").trim(),
+        lastUpdatedAt: String(
+          pipelineRunMeta.updated_at || latestUpdatedAt || "",
+        ).trim(),
         runId: pipelineRunId,
         jobId: String(syncState?.latest_job_id || "").trim(),
         documentCount: fastDocumentCount,
@@ -3028,57 +3655,90 @@ export function useProjectKnowledgeState(
     t,
   ]);
 
-  const resolveProcessingModeMetrics = useCallback((
-    scope: ProjectKnowledgeProcessingScope,
-    sourceId?: string,
-  ): Partial<Record<ProjectKnowledgeProcessingMode, ProjectKnowledgeModeMetricsPayload>> => {
-    const globalPayload = (syncState?.mode_metrics || {}) as Partial<Record<
-      ProjectKnowledgeProcessingMode,
-      ProjectKnowledgeModeMetricsPayload
-    >>;
-    if (scope !== "source") {
-      return globalPayload;
-    }
-    const normalizedSourceId = String(sourceId || "").trim();
-    if (!normalizedSourceId) {
-      return globalPayload;
-    }
-    const bySourcePayload = (syncState as {
-      mode_metrics_by_source?: Record<string, Partial<Record<ProjectKnowledgeProcessingMode, ProjectKnowledgeModeMetricsPayload>>>;
-    } | null)?.mode_metrics_by_source || {};
-    if (bySourcePayload[normalizedSourceId]) {
-      return bySourcePayload[normalizedSourceId];
-    }
-
-    const normalizedLookup = normalizedSourceId
-      .replace(/\\/g, "/")
-      .replace(/\/+/g, "/")
-      .replace(/\/$/, "")
-      .toLowerCase();
-    const matchedSource = projectSources.find((source) => {
-      const candidates = [source.id, source.location, source.name, source.project_id]
-        .map((item) => String(item || "").trim().replace(/\\/g, "/").replace(/\/+/g, "/").replace(/\/$/, "").toLowerCase());
-      return candidates.includes(normalizedLookup);
-    });
-    if (matchedSource) {
-      const resolvedKey = String(matchedSource.id || "").trim();
-      if (resolvedKey && bySourcePayload[resolvedKey]) {
-        return bySourcePayload[resolvedKey];
+  const resolveProcessingModeMetrics = useCallback(
+    (
+      scope: ProjectKnowledgeProcessingScope,
+      sourceId?: string,
+    ): Partial<
+      Record<ProjectKnowledgeProcessingMode, ProjectKnowledgeModeMetricsPayload>
+    > => {
+      const globalPayload = (syncState?.mode_metrics || {}) as Partial<
+        Record<
+          ProjectKnowledgeProcessingMode,
+          ProjectKnowledgeModeMetricsPayload
+        >
+      >;
+      if (scope !== "source") {
+        return globalPayload;
       }
-    }
+      const normalizedSourceId = String(sourceId || "").trim();
+      if (!normalizedSourceId) {
+        return globalPayload;
+      }
+      const bySourcePayload =
+        (
+          syncState as {
+            mode_metrics_by_source?: Record<
+              string,
+              Partial<
+                Record<
+                  ProjectKnowledgeProcessingMode,
+                  ProjectKnowledgeModeMetricsPayload
+                >
+              >
+            >;
+          } | null
+        )?.mode_metrics_by_source || {};
+      if (bySourcePayload[normalizedSourceId]) {
+        return bySourcePayload[normalizedSourceId];
+      }
 
-    return globalPayload;
-  }, [projectSources, syncState]);
+      const normalizedLookup = normalizedSourceId
+        .replace(/\\/g, "/")
+        .replace(/\/+/g, "/")
+        .replace(/\/$/, "")
+        .toLowerCase();
+      const matchedSource = projectSources.find((source) => {
+        const candidates = [
+          source.id,
+          source.location,
+          source.name,
+          source.project_id,
+        ].map((item) =>
+          String(item || "")
+            .trim()
+            .replace(/\\/g, "/")
+            .replace(/\/+/g, "/")
+            .replace(/\/$/, "")
+            .toLowerCase(),
+        );
+        return candidates.includes(normalizedLookup);
+      });
+      if (matchedSource) {
+        const resolvedKey = String(matchedSource.id || "").trim();
+        if (resolvedKey && bySourcePayload[resolvedKey]) {
+          return bySourcePayload[resolvedKey];
+        }
+      }
+
+      return globalPayload;
+    },
+    [projectSources, syncState],
+  );
 
   const outputModes = useMemo<ProjectKnowledgeModeState[]>(
-    () => HIGH_ORDER_OUTPUT_MODES
-      .map((mode) => processingModes.find((item) => item.mode === mode) || null)
-      .filter((item): item is ProjectKnowledgeModeState => Boolean(item)),
+    () =>
+      HIGH_ORDER_OUTPUT_MODES.map(
+        (mode) => processingModes.find((item) => item.mode === mode) || null,
+      ).filter((item): item is ProjectKnowledgeModeState => Boolean(item)),
     [processingModes],
   );
 
   const outputResolution = useMemo<ProjectKnowledgeOutputResolution>(() => {
-    const backendResolution = parseBackendOutputResolution(syncState, processingModes);
+    const backendResolution = parseBackendOutputResolution(
+      syncState,
+      processingModes,
+    );
     if (backendResolution) {
       return backendResolution;
     }
@@ -3086,7 +3746,8 @@ export function useProjectKnowledgeState(
     const availableModes = outputModes
       .filter((mode) => mode.available)
       .map((mode) => mode.mode);
-    const fallbackChain: ProjectKnowledgeProcessingMode[] = HIGH_ORDER_OUTPUT_MODES;
+    const fallbackChain: ProjectKnowledgeProcessingMode[] =
+      HIGH_ORDER_OUTPUT_MODES;
 
     if (availableModes.includes("agentic")) {
       return {
@@ -3108,7 +3769,9 @@ export function useProjectKnowledgeState(
         skippedModes: [
           {
             mode: "agentic",
-            status: processingModes.find((item) => item.mode === "agentic")?.status || "idle",
+            status:
+              processingModes.find((item) => item.mode === "agentic")?.status ||
+              "idle",
             reasonCode: "OUTPUT_NOT_READY",
             reason: "多智能体产物未就绪。",
           },
@@ -3124,13 +3787,17 @@ export function useProjectKnowledgeState(
       skippedModes: [
         {
           mode: "agentic",
-          status: processingModes.find((item) => item.mode === "agentic")?.status || "idle",
+          status:
+            processingModes.find((item) => item.mode === "agentic")?.status ||
+            "idle",
           reasonCode: "OUTPUT_NOT_READY",
           reason: "多智能体产物未就绪。",
         },
         {
           mode: "nlp",
-          status: processingModes.find((item) => item.mode === "nlp")?.status || "idle",
+          status:
+            processingModes.find((item) => item.mode === "nlp")?.status ||
+            "idle",
           reasonCode: "OUTPUT_NOT_READY",
           reason: "NLP 产物未就绪。",
         },
@@ -3138,62 +3805,84 @@ export function useProjectKnowledgeState(
     };
   }, [outputModes, processingModes, syncState]);
 
-  const processingScheduler = useMemo<ProjectKnowledgeProcessingScheduler>(() => {
-    const backendScheduler = parseBackendProcessingScheduler(
-      syncState,
-      processingModes,
-      outputResolution,
-    );
-    if (backendScheduler) {
-      return backendScheduler;
-    }
-    return deriveProcessingScheduler(processingModes, outputResolution);
-  }, [outputResolution, processingModes, syncState]);
+  const processingScheduler =
+    useMemo<ProjectKnowledgeProcessingScheduler>(() => {
+      const backendScheduler = parseBackendProcessingScheduler(
+        syncState,
+        processingModes,
+        outputResolution,
+      );
+      if (backendScheduler) {
+        return backendScheduler;
+      }
+      return deriveProcessingScheduler(processingModes, outputResolution);
+    }, [outputResolution, processingModes, syncState]);
 
   const processingCompareModes = useMemo<ProjectKnowledgeModeState[]>(
-    () => ["nlp", "agentic"]
-      .map((mode) => processingModes.find((item) => item.mode === mode) || null)
-      .filter((item): item is ProjectKnowledgeModeState => Boolean(item)),
+    () =>
+      ["nlp", "agentic"]
+        .map(
+          (mode) => processingModes.find((item) => item.mode === mode) || null,
+        )
+        .filter((item): item is ProjectKnowledgeModeState => Boolean(item)),
     [processingModes],
   );
 
-  const processingCompareDelta = useMemo<ProjectKnowledgeProcessingCompareDelta>(() => {
-    const nlpMode = processingCompareModes.find((item) => item.mode === "nlp") || null;
-    const agenticMode = processingCompareModes.find((item) => item.mode === "agentic") || null;
+  const processingCompareDelta =
+    useMemo<ProjectKnowledgeProcessingCompareDelta>(() => {
+      const nlpMode =
+        processingCompareModes.find((item) => item.mode === "nlp") || null;
+      const agenticMode =
+        processingCompareModes.find((item) => item.mode === "agentic") || null;
 
-    return {
-      entityDelta: nlpMode && agenticMode ? Math.max(0, agenticMode.entityCount - nlpMode.entityCount) : 0,
-      relationDelta: nlpMode && agenticMode ? Math.max(0, agenticMode.relationCount - nlpMode.relationCount) : 0,
-    };
-  }, [processingCompareModes]);
+      return {
+        entityDelta:
+          nlpMode && agenticMode
+            ? Math.max(0, agenticMode.entityCount - nlpMode.entityCount)
+            : 0,
+        relationDelta:
+          nlpMode && agenticMode
+            ? Math.max(0, agenticMode.relationCount - nlpMode.relationCount)
+            : 0,
+      };
+    }, [processingCompareModes]);
 
-  const processingFreshness = useMemo<ProjectKnowledgeProcessingFreshness>(() => {
-    const staleModeStates = processingCompareModes.filter((mode) => isModeStatusStale(mode));
-    const staleModes = staleModeStates.map((mode) => mode.mode);
-    const staleSources: ProjectKnowledgeRealtimeChannel[] = [];
-    const hasQueuedOrRunningModes = staleModeStates.some(
-      (mode) => mode.status === "running" || mode.status === "queued",
-    );
+  const processingFreshness =
+    useMemo<ProjectKnowledgeProcessingFreshness>(() => {
+      const staleModeStates = processingCompareModes.filter((mode) =>
+        isModeStatusStale(mode),
+      );
+      const staleModes = staleModeStates.map((mode) => mode.mode);
+      const staleSources: ProjectKnowledgeRealtimeChannel[] = [];
+      const hasQueuedOrRunningModes = staleModeStates.some(
+        (mode) => mode.status === "running" || mode.status === "queued",
+      );
 
-    if (staleModes.length > 0 && projectPipelineChannelStatus !== "open") {
-      staleSources.push("project-pipeline");
-    }
-    if (hasQueuedOrRunningModes && tasksChannelStatus !== "open") {
-      staleSources.push("tasks");
-    }
+      if (staleModes.length > 0 && projectPipelineChannelStatus !== "open") {
+        staleSources.push("project-pipeline");
+      }
+      if (hasQueuedOrRunningModes && tasksChannelStatus !== "open") {
+        staleSources.push("tasks");
+      }
 
-    return {
-      stale: staleModes.length > 0,
-      staleModes,
-      staleSources,
-      channelStatus: {
-        "project-pipeline": projectPipelineChannelStatus,
-        tasks: tasksChannelStatus,
-      },
-    };
-  }, [processingCompareModes, projectPipelineChannelStatus, tasksChannelStatus]);
+      return {
+        stale: staleModes.length > 0,
+        staleModes,
+        staleSources,
+        channelStatus: {
+          "project-pipeline": projectPipelineChannelStatus,
+          tasks: tasksChannelStatus,
+        },
+      };
+    }, [
+      processingCompareModes,
+      projectPipelineChannelStatus,
+      tasksChannelStatus,
+    ]);
 
-  const modeOutputs = useMemo<Record<ProjectKnowledgeProcessingMode, ProjectKnowledgeModeOutput>>(() => {
+  const modeOutputs = useMemo<
+    Record<ProjectKnowledgeProcessingMode, ProjectKnowledgeModeOutput>
+  >(() => {
     const backendModeOutputs = parseBackendModeOutputs(syncState);
     if (backendModeOutputs) {
       return backendModeOutputs;
@@ -3204,7 +3893,12 @@ export function useProjectKnowledgeState(
   const syncAlertDescription = useMemo(() => {
     const activeTaskText = activeKnowledgeTask
       ? [
-          String(activeKnowledgeTask.stage_message || activeKnowledgeTask.current_stage || activeKnowledgeTask.task_type || "").trim(),
+          String(
+            activeKnowledgeTask.stage_message ||
+              activeKnowledgeTask.current_stage ||
+              activeKnowledgeTask.task_type ||
+              "",
+          ).trim(),
           typeof activeKnowledgeTask.percent === "number"
             ? `${Math.max(0, Math.min(100, activeKnowledgeTask.percent))}%`
             : "",
@@ -3217,7 +3911,10 @@ export function useProjectKnowledgeState(
       return activeTaskText;
     }
     const syncText = getProjectKnowledgePipelineAlertDescription(syncState, t);
-    if (!activeTaskText || activeKnowledgeTask?.task_type === "project_pipeline") {
+    if (
+      !activeTaskText ||
+      activeKnowledgeTask?.task_type === "project_pipeline"
+    ) {
       return syncText;
     }
     return [syncText, activeTaskText].filter(Boolean).join(" · ");
@@ -3244,7 +3941,8 @@ export function useProjectKnowledgeState(
       entityCanonicalCoverage: quantMetrics.entityCanonicalCoverage,
       lowConfidenceRatio: quantMetrics.lowConfidenceRatio,
       missingEvidenceRatio: quantMetrics.missingEvidenceRatio,
-      relationNormalizationThreshold: quantMetrics.relationNormalizationThreshold,
+      relationNormalizationThreshold:
+        quantMetrics.relationNormalizationThreshold,
       entityCanonicalThreshold: quantMetrics.entityCanonicalThreshold,
       lowConfidenceThreshold: quantMetrics.lowConfidenceThreshold,
       missingEvidenceThreshold: quantMetrics.missingEvidenceThreshold,
@@ -3354,29 +4052,35 @@ export function useProjectKnowledgeState(
   );
 
   const graphRelationTypeOptions = useMemo(
-    () => Array.from(new Set(
-      (graphBaseResult?.records || [])
-        .map((record) => String(record.predicate || "").trim())
-        .filter(Boolean),
-    )).sort(),
+    () =>
+      Array.from(
+        new Set(
+          (graphBaseResult?.records || [])
+            .map((record) => String(record.predicate || "").trim())
+            .filter(Boolean),
+        ),
+      ).sort(),
     [graphBaseResult?.records],
   );
 
   const graphEntityTypeOptions = useMemo(
-    () => Array.from(new Set(
-      (graphBaseResult?.records || [])
-        .flatMap((record) => [record.subject_type, record.object_type])
-        .map((item) => String(item || "").trim())
-        .filter(Boolean),
-    )).sort(),
+    () =>
+      Array.from(
+        new Set(
+          (graphBaseResult?.records || [])
+            .flatMap((record) => [record.subject_type, record.object_type])
+            .map((item) => String(item || "").trim())
+            .filter(Boolean),
+        ),
+      ).sort(),
     [graphBaseResult?.records],
   );
 
   const insightAction = useMemo<ProjectKnowledgeInsightAction>(() => {
     if (
-      quantMetrics.indexedRatio < 1
-      || quantMetrics.documentCount <= 0
-      || quantMetrics.chunkCount <= 0
+      quantMetrics.indexedRatio < 1 ||
+      quantMetrics.documentCount <= 0 ||
+      quantMetrics.chunkCount <= 0
     ) {
       return "settings";
     }
@@ -3401,154 +4105,157 @@ export function useProjectKnowledgeState(
     return "copaw.projects.knowledge.insightHealthy";
   }, [insightAction]);
 
-  const knowledgeState = useMemo<ProjectKnowledgeState>(() => ({
-    projectSourceId,
-    sourceLoaded,
-    sourceRegistered,
-    projectStepStats,
-    fileAnalysisStats,
-    sourceScanStats,
-    projectSourceCandidates,
-    projectManualSources,
-    projectSources,
-    selectedSourceId,
-    setSelectedSourceId,
-    sourceContentById,
-    sourceContentLoadingById,
-    loadSourceContent,
-    syncState,
-    changedFilesNormalized: normalizeChangedFiles(syncState),
-    activeKnowledgeTasks,
-    activeKnowledgeTask,
-    latestQualityLoopJob,
-    memifyEnabled,
-    processingModes,
-    resolveProcessingModeMetrics,
-    processingCompareModes,
-    processingCompareDelta,
-    processingFreshness,
-    outputModes,
-    outputResolution,
-    processingScheduler,
-    modeOutputs,
-    quantMetrics,
-    quantMetricsMeta,
-    graphQueryText,
-    setGraphQueryText,
-    graphQueryMode,
-    setGraphQueryMode,
-    graphQueryTopK,
-    setGraphQueryTopK,
-    graphNeedsRefresh,
-    markGraphNeedsRefresh,
-    graphLoading,
-    graphError,
-    graphResult,
-    graphRelationTypeFilters,
-    setGraphRelationTypeFilters,
-    graphEntityTypeFilters,
-    setGraphEntityTypeFilters,
-    graphRelationTypeOptions,
-    graphEntityTypeOptions,
-    relationRecords,
-    relationKeywordSeed,
-    setRelationKeywordSeed,
-    activeGraphNodeId,
-    setActiveGraphNodeId,
-    runGraphQuery,
-    startProcessingMode,
-    runSourceFullPipeline,
-    rerunKnowledgeLayer,
-    processingLaunchMode,
-    resetGraphQuery,
-    trendRangeDays,
-    setTrendRangeDays,
-    trendExpanded,
-    setTrendExpanded,
-    filteredTrendSnapshots,
-    trendDocumentPath,
-    trendChunkPath,
-    trendDelta,
-    syncAlertType,
-    syncAlertDescription,
-    suggestedQuery,
-    insightAction,
-    insightMessageKey,
-    loadProjectSourceStatus,
-    addManualSourcePath,
-    removeManualSourcePath,
-    semanticBySourceId,
-    semanticLoadingBySourceId,
-    loadSourceSemantic,
-  }), [
-    activeGraphNodeId,
-    activeKnowledgeTask,
-    activeKnowledgeTasks,
-    filteredTrendSnapshots,
-    graphError,
-    graphEntityTypeFilters,
-    graphEntityTypeOptions,
-    graphLoading,
-    graphQueryMode,
-    graphQueryText,
-    graphQueryTopK,
-    graphNeedsRefresh,
-    graphRelationTypeFilters,
-    graphRelationTypeOptions,
-    graphResult,
-    insightAction,
-    insightMessageKey,
-    latestQualityLoopJob,
-    memifyEnabled,
-    loadProjectSourceStatus,
-    addManualSourcePath,
-    loadSourceContent,
-    loadSourceSemantic,
-    modeOutputs,
-    outputModes,
-    outputResolution,
-    processingCompareDelta,
-    processingCompareModes,
-    processingFreshness,
-    processingModes,
-    resolveProcessingModeMetrics,
-    processingScheduler,
-    projectStepStats,
-    projectSourceId,
-    projectSourceCandidates,
-    projectManualSources,
-    projectSources,
-    fileAnalysisStats,
-    sourceScanStats,
-    quantMetrics,
-    quantMetricsMeta,
-    relationKeywordSeed,
-    removeManualSourcePath,
-    relationRecords,
-    markGraphNeedsRefresh,
-    resetGraphQuery,
-    runGraphQuery,
-    startProcessingMode,
-    runSourceFullPipeline,
-    rerunKnowledgeLayer,
-    processingLaunchMode,
-    selectedSourceId,
-    semanticBySourceId,
-    semanticLoadingBySourceId,
-    sourceContentById,
-    sourceContentLoadingById,
-    sourceLoaded,
-    sourceRegistered,
-    suggestedQuery,
-    syncAlertDescription,
-    syncAlertType,
-    syncState,
-    trendChunkPath,
-    trendDelta,
-    trendDocumentPath,
-    trendExpanded,
-    trendRangeDays,
-  ]);
+  const knowledgeState = useMemo<ProjectKnowledgeState>(
+    () => ({
+      projectSourceId,
+      sourceLoaded,
+      sourceRegistered,
+      projectStepStats,
+      fileAnalysisStats,
+      sourceScanStats,
+      projectSourceCandidates,
+      projectManualSources,
+      projectSources,
+      selectedSourceId,
+      setSelectedSourceId,
+      sourceContentById,
+      sourceContentLoadingById,
+      loadSourceContent,
+      syncState,
+      changedFilesNormalized: normalizeChangedFiles(syncState),
+      activeKnowledgeTasks,
+      activeKnowledgeTask,
+      latestQualityLoopJob,
+      memifyEnabled,
+      processingModes,
+      resolveProcessingModeMetrics,
+      processingCompareModes,
+      processingCompareDelta,
+      processingFreshness,
+      outputModes,
+      outputResolution,
+      processingScheduler,
+      modeOutputs,
+      quantMetrics,
+      quantMetricsMeta,
+      graphQueryText,
+      setGraphQueryText,
+      graphQueryMode,
+      setGraphQueryMode,
+      graphQueryTopK,
+      setGraphQueryTopK,
+      graphNeedsRefresh,
+      markGraphNeedsRefresh,
+      graphLoading,
+      graphError,
+      graphResult,
+      graphRelationTypeFilters,
+      setGraphRelationTypeFilters,
+      graphEntityTypeFilters,
+      setGraphEntityTypeFilters,
+      graphRelationTypeOptions,
+      graphEntityTypeOptions,
+      relationRecords,
+      relationKeywordSeed,
+      setRelationKeywordSeed,
+      activeGraphNodeId,
+      setActiveGraphNodeId,
+      runGraphQuery,
+      startProcessingMode,
+      runSourceFullPipeline,
+      rerunKnowledgeLayer,
+      processingLaunchMode,
+      resetGraphQuery,
+      trendRangeDays,
+      setTrendRangeDays,
+      trendExpanded,
+      setTrendExpanded,
+      filteredTrendSnapshots,
+      trendDocumentPath,
+      trendChunkPath,
+      trendDelta,
+      syncAlertType,
+      syncAlertDescription,
+      suggestedQuery,
+      insightAction,
+      insightMessageKey,
+      loadProjectSourceStatus,
+      addManualSourcePath,
+      removeManualSourcePath,
+      semanticBySourceId,
+      semanticLoadingBySourceId,
+      loadSourceSemantic,
+    }),
+    [
+      activeGraphNodeId,
+      activeKnowledgeTask,
+      activeKnowledgeTasks,
+      filteredTrendSnapshots,
+      graphError,
+      graphEntityTypeFilters,
+      graphEntityTypeOptions,
+      graphLoading,
+      graphQueryMode,
+      graphQueryText,
+      graphQueryTopK,
+      graphNeedsRefresh,
+      graphRelationTypeFilters,
+      graphRelationTypeOptions,
+      graphResult,
+      insightAction,
+      insightMessageKey,
+      latestQualityLoopJob,
+      memifyEnabled,
+      loadProjectSourceStatus,
+      addManualSourcePath,
+      loadSourceContent,
+      loadSourceSemantic,
+      modeOutputs,
+      outputModes,
+      outputResolution,
+      processingCompareDelta,
+      processingCompareModes,
+      processingFreshness,
+      processingModes,
+      resolveProcessingModeMetrics,
+      processingScheduler,
+      projectStepStats,
+      projectSourceId,
+      projectSourceCandidates,
+      projectManualSources,
+      projectSources,
+      fileAnalysisStats,
+      sourceScanStats,
+      quantMetrics,
+      quantMetricsMeta,
+      relationKeywordSeed,
+      removeManualSourcePath,
+      relationRecords,
+      markGraphNeedsRefresh,
+      resetGraphQuery,
+      runGraphQuery,
+      startProcessingMode,
+      runSourceFullPipeline,
+      rerunKnowledgeLayer,
+      processingLaunchMode,
+      selectedSourceId,
+      semanticBySourceId,
+      semanticLoadingBySourceId,
+      sourceContentById,
+      sourceContentLoadingById,
+      sourceLoaded,
+      sourceRegistered,
+      suggestedQuery,
+      syncAlertDescription,
+      syncAlertType,
+      syncState,
+      trendChunkPath,
+      trendDelta,
+      trendDocumentPath,
+      trendExpanded,
+      trendRangeDays,
+    ],
+  );
 
   return knowledgeState;
 }

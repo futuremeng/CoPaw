@@ -126,7 +126,9 @@ describe("projectWorkspaceAdapter contract", () => {
       path: "original/a.md",
       content: "hello",
     });
-    mockedWorkspaceApi.getBinaryFileUrl.mockReturnValue("/api/workspace/binary-files/a.md");
+    mockedWorkspaceApi.getBinaryFileUrl.mockReturnValue(
+      "/api/workspace/binary-files/a.md",
+    );
 
     const adapter = createProjectWorkspaceAdapter({ scope: "workspace" });
     const query = await adapter.queryFiles({ search: "a" });
@@ -134,12 +136,16 @@ describe("projectWorkspaceAdapter contract", () => {
     const read = await adapter.readText("original/a.md");
 
     expect(query.items.length).toBe(2);
-    const markdownItem = query.items.find((item) => item.path === "original/a.md");
+    const markdownItem = query.items.find(
+      (item) => item.path === "original/a.md",
+    );
     expect(markdownItem?.contentType).toBe("markdown");
     expect(markdownItem?.readonly).toBe(false);
     expect(tree.length).toBe(2);
     expect(read.content).toBe("hello");
-    expect(adapter.getBinaryUrl("original/a.md")).toBe("/api/workspace/binary-files/a.md");
+    expect(adapter.getBinaryUrl("original/a.md")).toBe(
+      "/api/workspace/binary-files/a.md",
+    );
   });
 
   it("throws on project scope when required ids are missing", () => {

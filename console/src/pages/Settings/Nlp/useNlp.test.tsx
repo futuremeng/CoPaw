@@ -201,7 +201,9 @@ describe("useNlp", () => {
       { text: "产品体验很好，我非常满意。" },
       { timeoutMs: 60_000 },
     );
-    expect(mockMessage.success).toHaveBeenCalledWith("sentiment_classification demo finished");
+    expect(mockMessage.success).toHaveBeenCalledWith(
+      "sentiment_classification demo finished",
+    );
   });
 
   it("会把 Siamese demo 的 schema 一并传给后端", async () => {

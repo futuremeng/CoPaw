@@ -6,12 +6,17 @@ import ProjectKnowledgeSignalsPanel from "../components/ProjectKnowledgeSignalsP
 import ProjectKnowledgeSourcesPanel from "../components/ProjectKnowledgeSourcesPanel";
 import { buildModeState } from "../utils/projectKnowledgeTestUtils";
 import type { AgentProjectFileInfo } from "../../../../api/types/agents";
-import type { ProjectKnowledgeHeaderSignals, ProjectKnowledgeState } from "../hooks/useProjectKnowledgeState";
+import type {
+  ProjectKnowledgeHeaderSignals,
+  ProjectKnowledgeState,
+} from "../hooks/useProjectKnowledgeState";
 
 // The app renders the English bundle (i18n default language is "en"), so the
 // double resolves copy from that bundle instead of an inline default.
 vi.mock("react-i18next", async () => {
-  const { t } = await vi.importActual<typeof import("./enLocaleTranslate")>("./enLocaleTranslate");
+  const { t } = await vi.importActual<typeof import("./enLocaleTranslate")>(
+    "./enLocaleTranslate",
+  );
   return { useTranslation: () => ({ t, i18n: { language: "en" } }) };
 });
 
@@ -78,7 +83,12 @@ function buildKnowledgeState(): ProjectKnowledgeState {
           source_id: "project-project-abc-workspace",
           step_id: "semantic_role_labeling",
           updated_at: "2026-05-12T10:56:00Z",
-          metrics: { quality_score_before: 0.91, quality_score_after: 0.95, quality_delta: 0.04, quality_rounds: 1 },
+          metrics: {
+            quality_score_before: 0.91,
+            quality_score_after: 0.95,
+            quality_delta: 0.04,
+            quality_rounds: 1,
+          },
         },
         history: [],
       },
@@ -91,7 +101,12 @@ function buildKnowledgeState(): ProjectKnowledgeState {
         source_id: "project-project-abc-workspace",
         step_id: "build_chunks",
         updated_at: "2026-05-12T10:31:00Z",
-        metrics: { document_count: 3, snapshot_count: 3, chunk_count: 7, sentence_count: 11 },
+        metrics: {
+          document_count: 3,
+          snapshot_count: 3,
+          chunk_count: 7,
+          sentence_count: 11,
+        },
       },
       history: [],
     },
@@ -120,23 +135,74 @@ function buildKnowledgeState(): ProjectKnowledgeState {
       last_action: "start_sync",
       quantization_stage: "l3",
       operation_updated_at: "2026-04-11T23:30:00+00:00",
-      semantic_engine: { engine: "hanlp", status: "unavailable", reason_code: "HANLP_IMPORT_UNAVAILABLE", reason: "", summary: "" },
+      semantic_engine: {
+        engine: "hanlp",
+        status: "unavailable",
+        reason_code: "HANLP_IMPORT_UNAVAILABLE",
+        reason: "",
+        summary: "",
+      },
     } as ProjectKnowledgeState["syncState"],
     activeKnowledgeTasks: [],
     activeKnowledgeTask: null,
     latestQualityLoopJob: null,
     memifyEnabled: true,
-    processingModes: [buildModeState(), buildModeState({ mode: "nlp", status: "idle", available: false }), buildModeState({ mode: "agentic", status: "idle", available: false })],
-    processingCompareModes: [buildModeState({ mode: "nlp", status: "idle", available: false }), buildModeState({ mode: "agentic", status: "idle", available: false })],
+    processingModes: [
+      buildModeState(),
+      buildModeState({ mode: "nlp", status: "idle", available: false }),
+      buildModeState({ mode: "agentic", status: "idle", available: false }),
+    ],
+    processingCompareModes: [
+      buildModeState({ mode: "nlp", status: "idle", available: false }),
+      buildModeState({ mode: "agentic", status: "idle", available: false }),
+    ],
     processingCompareDelta: { entityDelta: 0, relationDelta: 0 },
-    processingFreshness: { stale: false, staleModes: [], staleSources: [], channelStatus: { "project-pipeline": "open", tasks: "open" } },
-    outputModes: [buildModeState({ mode: "agentic", status: "idle", available: false }), buildModeState({ mode: "nlp", status: "idle", available: false })],
-    outputResolution: { activeMode: "agentic", availableModes: [], fallbackChain: ["agentic", "nlp"], reason: "" },
-    processingScheduler: { strategy: "parallel", modeOrder: ["agentic", "nlp", "fast"], runningModes: [], queuedModes: ["nlp", "agentic"], readyModes: ["fast"], failedModes: [], nextMode: "nlp", consumptionMode: "fast", reason: "" },
+    processingFreshness: {
+      stale: false,
+      staleModes: [],
+      staleSources: [],
+      channelStatus: { "project-pipeline": "open", tasks: "open" },
+    },
+    outputModes: [
+      buildModeState({ mode: "agentic", status: "idle", available: false }),
+      buildModeState({ mode: "nlp", status: "idle", available: false }),
+    ],
+    outputResolution: {
+      activeMode: "agentic",
+      availableModes: [],
+      fallbackChain: ["agentic", "nlp"],
+      reason: "",
+    },
+    processingScheduler: {
+      strategy: "parallel",
+      modeOrder: ["agentic", "nlp", "fast"],
+      runningModes: [],
+      queuedModes: ["nlp", "agentic"],
+      readyModes: ["fast"],
+      failedModes: [],
+      nextMode: "nlp",
+      consumptionMode: "fast",
+      reason: "",
+    },
     modeOutputs: {
-      fast: { mode: "fast", source: "indexed-preview", summaryLines: ["Documents: 1"], artifacts: [] },
-      nlp: { mode: "nlp", source: "graph-artifacts", summaryLines: ["Entities: 0"], artifacts: [] },
-      agentic: { mode: "agentic", source: "pipeline-artifacts", summaryLines: ["Run:"], artifacts: [] },
+      fast: {
+        mode: "fast",
+        source: "indexed-preview",
+        summaryLines: ["Documents: 1"],
+        artifacts: [],
+      },
+      nlp: {
+        mode: "nlp",
+        source: "graph-artifacts",
+        summaryLines: ["Entities: 0"],
+        artifacts: [],
+      },
+      agentic: {
+        mode: "agentic",
+        source: "pipeline-artifacts",
+        summaryLines: ["Run:"],
+        artifacts: [],
+      },
     },
     quantMetrics: {
       totalSources: 1,
@@ -274,26 +340,34 @@ function buildProjectFiles(): AgentProjectFileInfo[] {
   ];
 }
 
-function buildHeaderSignals(knowledgeState: ProjectKnowledgeState): ProjectKnowledgeHeaderSignals {
+function buildHeaderSignals(
+  knowledgeState: ProjectKnowledgeState,
+): ProjectKnowledgeHeaderSignals {
   return {
     indexedRatio: knowledgeState.quantMetrics.indexedRatio,
     documentCount: knowledgeState.quantMetrics.documentCount,
     chunkCount: knowledgeState.quantMetrics.chunkCount,
     sentenceCount: knowledgeState.quantMetrics.sentenceCount,
-    sentenceWithEntitiesCount: knowledgeState.quantMetrics.sentenceWithEntitiesCount,
+    sentenceWithEntitiesCount:
+      knowledgeState.quantMetrics.sentenceWithEntitiesCount,
     entityMentionsCount: knowledgeState.quantMetrics.entityMentionsCount,
     avgEntitiesPerSentence: knowledgeState.quantMetrics.avgEntitiesPerSentence,
     avgEntityCharRatio: knowledgeState.quantMetrics.avgEntityCharRatio,
     relationCount: knowledgeState.quantMetrics.relationCount,
     entityCount: knowledgeState.quantMetrics.entityCount,
-    relationNormalizationCoverage: knowledgeState.quantMetrics.relationNormalizationCoverage,
-    entityCanonicalCoverage: knowledgeState.quantMetrics.entityCanonicalCoverage,
+    relationNormalizationCoverage:
+      knowledgeState.quantMetrics.relationNormalizationCoverage,
+    entityCanonicalCoverage:
+      knowledgeState.quantMetrics.entityCanonicalCoverage,
     lowConfidenceRatio: knowledgeState.quantMetrics.lowConfidenceRatio,
     missingEvidenceRatio: knowledgeState.quantMetrics.missingEvidenceRatio,
-    relationNormalizationThreshold: knowledgeState.quantMetrics.relationNormalizationThreshold,
-    entityCanonicalThreshold: knowledgeState.quantMetrics.entityCanonicalThreshold,
+    relationNormalizationThreshold:
+      knowledgeState.quantMetrics.relationNormalizationThreshold,
+    entityCanonicalThreshold:
+      knowledgeState.quantMetrics.entityCanonicalThreshold,
     lowConfidenceThreshold: knowledgeState.quantMetrics.lowConfidenceThreshold,
-    missingEvidenceThreshold: knowledgeState.quantMetrics.missingEvidenceThreshold,
+    missingEvidenceThreshold:
+      knowledgeState.quantMetrics.missingEvidenceThreshold,
     qualityAssessmentScore: knowledgeState.quantMetrics.qualityAssessmentScore,
   };
 }
@@ -337,7 +411,12 @@ describe("project knowledge panels", () => {
     expect(screen.getByText("Health")).not.toBeNull();
     expect(screen.getByText(/Metrics Source/)).not.toBeNull();
 
-    render(<ProjectKnowledgeSourcesPanel knowledgeState={knowledgeState} projectFiles={projectFiles} />);
+    render(
+      <ProjectKnowledgeSourcesPanel
+        knowledgeState={knowledgeState}
+        projectFiles={projectFiles}
+      />,
+    );
     expect(screen.getByText("original/a.md")).not.toBeNull();
     expect(screen.getByText("data/b.txt")).not.toBeNull();
     expect(screen.queryByText("No project files found")).toBeNull();
@@ -368,7 +447,12 @@ describe("project knowledge panels", () => {
       },
     ];
 
-    render(<ProjectKnowledgeSourcesPanel knowledgeState={knowledgeState} projectFiles={projectFiles} />);
+    render(
+      <ProjectKnowledgeSourcesPanel
+        knowledgeState={knowledgeState}
+        projectFiles={projectFiles}
+      />,
+    );
 
     expect(screen.queryByText("No project files found")).toBeNull();
     expect(screen.getByText("original/a.md")).not.toBeNull();
@@ -383,7 +467,12 @@ describe("project knowledge panels", () => {
     const knowledgeState = buildKnowledgeState();
     const projectFiles = buildProjectFiles();
 
-    render(<ProjectKnowledgeSourcesPanel knowledgeState={knowledgeState} projectFiles={projectFiles} />);
+    render(
+      <ProjectKnowledgeSourcesPanel
+        knowledgeState={knowledgeState}
+        projectFiles={projectFiles}
+      />,
+    );
 
     expect(screen.getByText("Total Sources")).not.toBeNull();
     expect(screen.getByText("Document Sources")).not.toBeNull();
@@ -434,7 +523,12 @@ describe("project knowledge panels", () => {
       },
     ];
 
-    render(<ProjectKnowledgeSourcesPanel knowledgeState={knowledgeState} projectFiles={projectFiles} />);
+    render(
+      <ProjectKnowledgeSourcesPanel
+        knowledgeState={knowledgeState}
+        projectFiles={projectFiles}
+      />,
+    );
 
     expect(screen.getByText("original/a.md")).not.toBeNull();
     expect(screen.queryByText(".agent/AGENTS.md")).toBeNull();
@@ -475,14 +569,23 @@ describe("project knowledge panels", () => {
 
     const row = screen.getByText("original/a.md").closest("tr");
     expect(row).not.toBeNull();
-    fireEvent.click(within(row as HTMLTableRowElement).getByRole("button", { name: "View Document Processing" }));
+    fireEvent.click(
+      within(row as HTMLTableRowElement).getByRole("button", {
+        name: "View Document Processing",
+      }),
+    );
     expect(openProcessing).toHaveBeenCalledWith("source-a");
   });
 
   it("renders processing and outputs panels", () => {
     const knowledgeState = buildKnowledgeState();
 
-    render(<ProjectKnowledgeProcessingPanel knowledgeState={knowledgeState} projectFiles={buildProjectFiles()} />);
+    render(
+      <ProjectKnowledgeProcessingPanel
+        knowledgeState={knowledgeState}
+        projectFiles={buildProjectFiles()}
+      />,
+    );
     expect(screen.getByText("Processing")).not.toBeNull();
     expect(screen.getAllByText("Layer Dimension").length).toBeGreaterThan(0);
 
@@ -514,8 +617,17 @@ describe("project knowledge panels", () => {
     ] as ProjectKnowledgeState["projectSources"];
     knowledgeState.selectedSourceId = "source-a";
 
-    render(<ProjectKnowledgeProcessingPanel knowledgeState={knowledgeState} projectFiles={buildProjectFiles()} />);
-    expect(screen.queryByText("No source-specific metrics yet; showing project-level aggregate as fallback.")).toBeNull();
+    render(
+      <ProjectKnowledgeProcessingPanel
+        knowledgeState={knowledgeState}
+        projectFiles={buildProjectFiles()}
+      />,
+    );
+    expect(
+      screen.queryByText(
+        "No source-specific metrics yet; showing project-level aggregate as fallback.",
+      ),
+    ).toBeNull();
   });
 
   it("triggers full flow run from source row action", () => {
@@ -531,11 +643,18 @@ describe("project knowledge panels", () => {
 
     const row = screen.getByText("original/a.md").closest("tr");
     expect(row).not.toBeNull();
-    fireEvent.click(within(row as HTMLTableRowElement).getByRole("button", { name: "Run Document Flow" }));
-    expect(knowledgeState.runSourceFullPipeline).toHaveBeenCalledWith("original/a.md", {
-      force: true,
-      overwrite: true,
-    });
+    fireEvent.click(
+      within(row as HTMLTableRowElement).getByRole("button", {
+        name: "Run Document Flow",
+      }),
+    );
+    expect(knowledgeState.runSourceFullPipeline).toHaveBeenCalledWith(
+      "original/a.md",
+      {
+        force: true,
+        overwrite: true,
+      },
+    );
   });
 
   it("triggers layer rerun from processing matrix", () => {
@@ -562,7 +681,12 @@ describe("project knowledge panels", () => {
     ] as ProjectKnowledgeState["projectSources"];
     knowledgeState.selectedSourceId = "source-a";
 
-    render(<ProjectKnowledgeProcessingPanel knowledgeState={knowledgeState} projectFiles={buildProjectFiles()} />);
+    render(
+      <ProjectKnowledgeProcessingPanel
+        knowledgeState={knowledgeState}
+        projectFiles={buildProjectFiles()}
+      />,
+    );
     fireEvent.click(screen.getAllByRole("button", { name: "Rerun Layer" })[0]);
     expect(knowledgeState.rerunKnowledgeLayer).toHaveBeenCalled();
   });

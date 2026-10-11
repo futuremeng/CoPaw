@@ -65,9 +65,17 @@ describe("createClearHistoryResponseParser", () => {
       clearHistoryWhenCompleted: vi.fn(),
     });
 
-    const chunk = JSON.stringify({ object: "response", status: "completed", output: [] });
+    const chunk = JSON.stringify({
+      object: "response",
+      status: "completed",
+      output: [],
+    });
     const payload = parse(chunk);
 
-    expect(payload).toEqual({ object: "response", status: "completed", output: [] });
+    expect(payload).toEqual({
+      object: "response",
+      status: "completed",
+      output: [],
+    });
   });
 });

@@ -28,7 +28,7 @@ describe("knowledge quant cards view models", () => {
         },
       ],
       [],
-        null,
+      null,
     );
 
     const onAddSource = vi.fn();
@@ -53,7 +53,7 @@ describe("knowledge quant cards view models", () => {
     });
 
     const indexed = cards.find((item) => item.key === "indexed");
-      const documents = cards.find((item) => item.key === "documents");
+    const documents = cards.find((item) => item.key === "documents");
 
     expect(indexed?.action?.labelI18nKey).toBe("knowledge.indexAll");
     expect(t(indexed?.action?.labelI18nKey ?? "")).toBe("Rebuild Index");
@@ -61,11 +61,11 @@ describe("knowledge quant cards view models", () => {
     indexed?.action?.onClick();
     expect(onRebuildIndex).toHaveBeenCalledTimes(1);
 
-      expect(documents?.action).toBeUndefined();
-      expect(cards).toHaveLength(9);
-      expect(onAddSource).not.toHaveBeenCalled();
-      expect(onBackfillHistory).not.toHaveBeenCalled();
-      expect(onRetryRemote).not.toHaveBeenCalled();
+    expect(documents?.action).toBeUndefined();
+    expect(cards).toHaveLength(9);
+    expect(onAddSource).not.toHaveBeenCalled();
+    expect(onBackfillHistory).not.toHaveBeenCalled();
+    expect(onRetryRemote).not.toHaveBeenCalled();
   });
 
   it("provides add-source action on empty sources metrics", () => {
@@ -88,10 +88,10 @@ describe("knowledge quant cards view models", () => {
       },
     });
 
-      const documentsCard = cards.find((item) => item.key === "documents");
-      expect(documentsCard?.action?.labelI18nKey).toBe("knowledge.addSource");
-      expect(t(documentsCard?.action?.labelI18nKey ?? "")).toBe("Add Source");
-      documentsCard?.action?.onClick();
+    const documentsCard = cards.find((item) => item.key === "documents");
+    expect(documentsCard?.action?.labelI18nKey).toBe("knowledge.addSource");
+    expect(t(documentsCard?.action?.labelI18nKey ?? "")).toBe("Add Source");
+    documentsCard?.action?.onClick();
     expect(onAddSource).toHaveBeenCalledTimes(1);
   });
 });

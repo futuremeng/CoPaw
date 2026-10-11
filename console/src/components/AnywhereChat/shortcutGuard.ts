@@ -7,7 +7,9 @@ export interface ShortcutTriggerInput {
   key: string;
 }
 
-export function shouldTriggerWhisperShortcut(input: ShortcutTriggerInput): boolean {
+export function shouldTriggerWhisperShortcut(
+  input: ShortcutTriggerInput,
+): boolean {
   if (!input.isWithinAnywhere) {
     return false;
   }

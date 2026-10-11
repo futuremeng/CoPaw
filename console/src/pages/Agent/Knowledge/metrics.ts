@@ -90,10 +90,16 @@ export interface RemoteRetrySummary {
   failedNames: string[];
 }
 
-function pickLatestMemifyTask(tasks: KnowledgeTaskProgress[]): KnowledgeTaskProgress | null {
+function pickLatestMemifyTask(
+  tasks: KnowledgeTaskProgress[],
+): KnowledgeTaskProgress | null {
   const memifyJobs = tasks
     .filter((task) => String(task.task_type || "") === "memify")
-    .sort((left, right) => String(right.updated_at || "").localeCompare(String(left.updated_at || "")));
+    .sort((left, right) =>
+      String(right.updated_at || "").localeCompare(
+        String(left.updated_at || ""),
+      ),
+    );
   return memifyJobs[0] || null;
 }
 
@@ -120,7 +126,9 @@ export function computeKnowledgeQuantMetrics(
   tasks: KnowledgeTaskProgress[] = [],
 ): KnowledgeQuantMetrics {
   const totalSources = sources.length;
-  const indexedSources = sources.filter((source) => source.status.indexed).length;
+  const indexedSources = sources.filter(
+    (source) => source.status.indexed,
+  ).length;
   const indexedRatio = totalSources > 0 ? indexedSources / totalSources : 0;
   const sourceDocuments = sources.reduce(
     (sum, source) => sum + Math.max(0, source.status.document_count || 0),
@@ -132,17 +140,27 @@ export function computeKnowledgeQuantMetrics(
   );
 
   const latestMemifyTask = pickLatestMemifyTask(tasks);
-  const enrichmentMetrics = (latestMemifyTask?.enrichment_metrics || {}) as Record<string, unknown>;
-  const memifyDocumentCount = toFiniteNumber(latestMemifyTask?.document_count, 0);
+  const enrichmentMetrics = (latestMemifyTask?.enrichment_metrics ||
+    {}) as Record<string, unknown>;
+  const memifyDocumentCount = toFiniteNumber(
+    latestMemifyTask?.document_count,
+    0,
+  );
   const memifyEntityCount = toFiniteNumber(latestMemifyTask?.node_count, 0);
-  const memifyRelationCount = toFiniteNumber(latestMemifyTask?.relation_count, 0);
+  const memifyRelationCount = toFiniteNumber(
+    latestMemifyTask?.relation_count,
+    0,
+  );
 
   const totalDocuments = Math.max(sourceDocuments, memifyDocumentCount);
   const totalChunks = sourceChunks;
   const totalEntities = memifyEntityCount;
   const totalRelations = memifyRelationCount;
 
-  const edgeCount = toFiniteNumber(enrichmentMetrics.edge_count, totalRelations);
+  const edgeCount = toFiniteNumber(
+    enrichmentMetrics.edge_count,
+    totalRelations,
+  );
   const nodeCount = toFiniteNumber(enrichmentMetrics.node_count, totalEntities);
   const relationNormalizedCount = toFiniteNumber(
     enrichmentMetrics.relation_normalized_count,
@@ -152,11 +170,23 @@ export function computeKnowledgeQuantMetrics(
     enrichmentMetrics.entity_canonicalized_count,
     0,
   );
-  const lowConfidenceEdges = toFiniteNumber(enrichmentMetrics.low_confidence_edges, 0);
-  const missingEvidenceEdges = toFiniteNumber(enrichmentMetrics.missing_evidence_edges, 0);
+  const lowConfidenceEdges = toFiniteNumber(
+    enrichmentMetrics.low_confidence_edges,
+    0,
+  );
+  const missingEvidenceEdges = toFiniteNumber(
+    enrichmentMetrics.missing_evidence_edges,
+    0,
+  );
 
-  const relationNormalizationCoverage = safeRatio(relationNormalizedCount, edgeCount);
-  const entityCanonicalCoverage = safeRatio(entityCanonicalizedCount, nodeCount);
+  const relationNormalizationCoverage = safeRatio(
+    relationNormalizedCount,
+    edgeCount,
+  );
+  const entityCanonicalCoverage = safeRatio(
+    entityCanonicalizedCount,
+    nodeCount,
+  );
   const lowConfidenceRatio = safeRatio(lowConfidenceEdges, edgeCount);
   const missingEvidenceRatio = safeRatio(missingEvidenceEdges, edgeCount);
 
@@ -284,16 +314,15 @@ export function getKnowledgeQuantReason(
     case "chunks":
     case "entities":
     case "relations": {
-      const value = key === "documents"
-        ? metrics.totalDocuments
-        : key === "chunks"
+      const value =
+        key === "documents"
+          ? metrics.totalDocuments
+          : key === "chunks"
           ? metrics.totalChunks
           : key === "entities"
-            ? metrics.totalEntities
-            : metrics.totalRelations;
-      return value > 0
-        ? { key: "activityPresent" }
-        : { key: "noActivity" };
+          ? metrics.totalEntities
+          : metrics.totalRelations;
+      return value > 0 ? { key: "activityPresent" } : { key: "noActivity" };
     }
     case "relationNormCoverage": {
       const percent = Math.round(metrics.relationNormalizationCoverage * 100);
@@ -352,7 +381,9 @@ export function summarizeRemoteRetryResults(
   sources: RemoteRetrySource[],
   settled: Array<PromiseSettledResult<unknown>>,
 ): RemoteRetrySummary {
-  const successCount = settled.filter((result) => result.status === "fulfilled").length;
+  const successCount = settled.filter(
+    (result) => result.status === "fulfilled",
+  ).length;
   const failedNames = settled
     .map((result, index) => ({ result, source: sources[index] }))
     .filter((item) => item.result.status === "rejected")

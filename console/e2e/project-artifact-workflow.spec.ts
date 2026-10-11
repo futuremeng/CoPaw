@@ -52,7 +52,9 @@ async function setupProjectOverviewFilterMocks(page: Page) {
         status: "stable",
         version: "v1",
         artifact_file_path: ".skills/quick_start.md",
-        version_history: [{ version: "v1", file_path: ".skills/quick_start.md" }],
+        version_history: [
+          { version: "v1", file_path: ".skills/quick_start.md" },
+        ],
         tags: ["skill"],
         derived_from_ids: [],
         distillation_note: "Skill note",
@@ -86,7 +88,9 @@ async function setupProjectOverviewFilterMocks(page: Page) {
         status: "active",
         version: "v1",
         artifact_file_path: "artifacts/flow/review.flow.json",
-        version_history: [{ version: "v1", file_path: "artifacts/flow/review.flow.json" }],
+        version_history: [
+          { version: "v1", file_path: "artifacts/flow/review.flow.json" },
+        ],
         tags: ["flow"],
         derived_from_ids: [],
         distillation_note: "Flow note",
@@ -103,7 +107,9 @@ async function setupProjectOverviewFilterMocks(page: Page) {
         status: "active",
         version: "v1",
         artifact_file_path: "artifacts/case/case_a.md",
-        version_history: [{ version: "v1", file_path: "artifacts/case/case_a.md" }],
+        version_history: [
+          { version: "v1", file_path: "artifacts/case/case_a.md" },
+        ],
         tags: ["case"],
         derived_from_ids: [],
         distillation_note: "Case note",
@@ -114,13 +120,48 @@ async function setupProjectOverviewFilterMocks(page: Page) {
   };
 
   const projectFiles = [
-    { filename: "brief.md", path: "original/brief.md", size: 123, modified_time: "2026-03-23T00:00:00Z" },
-    { filename: "quick_start.md", path: ".skills/quick_start.md", size: 123, modified_time: "2026-03-23T00:00:00Z" },
-    { filename: "cleanup.py", path: ".scripts/cleanup.py", size: 123, modified_time: "2026-03-23T00:00:00Z" },
-    { filename: "review.flow.json", path: "artifacts/flow/review.flow.json", size: 123, modified_time: "2026-03-23T00:00:00Z" },
-    { filename: "case_a.md", path: "artifacts/case/case_a.md", size: 123, modified_time: "2026-03-23T00:00:00Z" },
-    { filename: "design_notes.md", path: "notes/design_notes.md", size: 123, modified_time: "2026-03-23T00:00:00Z" },
-    { filename: "PROJECT.md", path: "PROJECT.md", size: 123, modified_time: "2026-03-23T00:00:00Z" },
+    {
+      filename: "brief.md",
+      path: "original/brief.md",
+      size: 123,
+      modified_time: "2026-03-23T00:00:00Z",
+    },
+    {
+      filename: "quick_start.md",
+      path: ".skills/quick_start.md",
+      size: 123,
+      modified_time: "2026-03-23T00:00:00Z",
+    },
+    {
+      filename: "cleanup.py",
+      path: ".scripts/cleanup.py",
+      size: 123,
+      modified_time: "2026-03-23T00:00:00Z",
+    },
+    {
+      filename: "review.flow.json",
+      path: "artifacts/flow/review.flow.json",
+      size: 123,
+      modified_time: "2026-03-23T00:00:00Z",
+    },
+    {
+      filename: "case_a.md",
+      path: "artifacts/case/case_a.md",
+      size: 123,
+      modified_time: "2026-03-23T00:00:00Z",
+    },
+    {
+      filename: "design_notes.md",
+      path: "notes/design_notes.md",
+      size: 123,
+      modified_time: "2026-03-23T00:00:00Z",
+    },
+    {
+      filename: "PROJECT.md",
+      path: "PROJECT.md",
+      size: 123,
+      modified_time: "2026-03-23T00:00:00Z",
+    },
   ];
 
   await page.route("**/api/**", async (route: Route) => {
@@ -181,7 +222,12 @@ async function setupProjectOverviewFilterMocks(page: Page) {
       await route.fulfill({
         status: 200,
         contentType: "application/json",
-        body: JSON.stringify({ messages: [], status: "idle", has_more: false, total: 0 }),
+        body: JSON.stringify({
+          messages: [],
+          status: "idle",
+          has_more: false,
+          total: 0,
+        }),
       });
       return;
     }
@@ -249,20 +295,26 @@ async function setupProjectOverviewFilterMocks(page: Page) {
 }
 
 function metricCard(page: Page, label: RegExp) {
-  return page.locator('[class*="metricFilterCard"]', { hasText: label }).first();
+  return page
+    .locator('[class*="metricFilterCard"]', { hasText: label })
+    .first();
 }
 
 function treeText(page: Page, text: string) {
   return page.getByRole("tree").getByText(text, { exact: true });
 }
 
-test("project overview: remove manage artifacts and filter workspace tree", async ({ page }) => {
+test("project overview: remove manage artifacts and filter workspace tree", async ({
+  page,
+}) => {
   test.setTimeout(90_000);
 
   await setupProjectOverviewFilterMocks(page);
   await page.goto("/projects/p1");
 
-  await expect(page.getByRole("button", { name: /Manage Artifacts|管理产物/i })).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: /Manage Artifacts|管理产物/i }),
+  ).toHaveCount(0);
 
   const skillsCard = metricCard(page, /Skills|技能/i);
   const scriptsCard = metricCard(page, /Scripts|脚本/i);
@@ -280,7 +332,9 @@ test("project overview: remove manage artifacts and filter workspace tree", asyn
   await expect(treeText(page, "quick_start.md")).toHaveCount(0);
 });
 
-test("project overview: original and derived filters are mutually exclusive", async ({ page }) => {
+test("project overview: original and derived filters are mutually exclusive", async ({
+  page,
+}) => {
   test.setTimeout(90_000);
 
   await setupProjectOverviewFilterMocks(page);
