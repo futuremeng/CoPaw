@@ -17,11 +17,11 @@ from typing import Any
 KnowledgeConfig = Any
 
 # ---------------------------------------------------------------------------
-# Authoritative HanLP pretrained model → download URL mapping.
-# Source: https://hanlp.hankcs.com/docs/api/hanlp/pretrained/
-# Only models hosted on file.hankcs.com or download.hanlp.com are listed.
-# Used by both the host-side artifact check and the sidecar bridge code to
-# resolve symbolic constant names without requiring hanlp.pretrained at runtime.
+# Authoritative HanLP pretrained model → download URL mapping. Source:
+# https://hanlp.hankcs.com/docs/api/hanlp/pretrained/ Only models hosted
+# on file.hankcs.com or download.hanlp.com are listed. Used by both
+# the host-side artifact check and the sidecar bridge code to resolve
+# symbolic constant names without requiring hanlp.pretrained at runtime.
 # ---------------------------------------------------------------------------
 _HANLP_PRETRAINED_URLS: dict[str, str] = {
     # --- mtl ---

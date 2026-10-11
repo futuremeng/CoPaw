@@ -1071,7 +1071,8 @@ def auto_install_hanlp_sidecar() -> dict:
         }
 
     # Strategy:
-    # 1) If main runtime is Python 3.10, install hanlp[full] directly in main env.
+    # 1) If main runtime is Python 3.10, install hanlp[full] directly in
+    # main env.
     # 2) Otherwise, provision sidecar as fallback isolation path.
     main_python = Path(sys.executable).expanduser().resolve()
     if _is_python_310(str(main_python)):

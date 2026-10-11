@@ -1762,7 +1762,8 @@ Agent gate review is mandatory before automatic continuation.
         for record in records:
             source_id = str(record.get("source_id") or "").strip()
             if not source_id:
-                # Unknown source cannot be safely scoped when project filter is requested.
+                # Unknown source cannot be safely scoped when project filter
+                # is requested.
                 continue
             source_project_id = source_project_map.get(source_id, "")
             in_scope = source_project_id in scope_set

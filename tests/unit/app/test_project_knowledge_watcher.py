@@ -878,7 +878,8 @@ async def test_project_knowledge_watcher_triggers_on_processing_config_change(
     initial = watcher._collect_snapshots()
     watcher._snapshots = initial
 
-    # Keep file snapshot unchanged; trigger should come from processing config check.
+    # Keep file snapshot unchanged; trigger should come from processing
+    # config check.
     current = watcher._collect_snapshots()
     await watcher._handle_snapshot_changes(current)
 

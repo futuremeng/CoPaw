@@ -668,7 +668,8 @@ class KnowledgeManager:
                 "stats_updated_at": stats.get("stats_updated_at"),
             }
         else:
-            # 未生成 interlinear-manifest.json，若 stats.json 有 raw_document_count/bytes，needs_reindex=True，否则 False
+            # 未生成 interlinear-manifest.json，若 stats.json 有
+            # raw_document_count/bytes，needs_reindex=True，否则 False
             needs_reindex = bool(raw_document_count)
             status = {
                 "indexed": False,
@@ -4273,8 +4274,9 @@ class KnowledgeManager:
                     start = int(item[1] or -1)
                     end = int(item[2] or -1)
                 elif len(item) >= 4:
-                    # HanLP NER 4-tuple uses token indices instead of char offsets.
-                    # Fall back to text search below to recover character spans.
+                    # HanLP NER 4-tuple uses token indices instead of char
+                    # offsets. Fall back to text search below to recover
+                    # character spans.
                     start = -1
                     end = -1
             else:
@@ -4336,7 +4338,8 @@ class KnowledgeManager:
                 return [], invalid_state
             return mentions, state
 
-        # HanLP NER not available, return empty mentions instead of falling back to semantic tokens
+        # HanLP NER not available, return empty mentions instead of falling
+        # back to semantic tokens
         return [], state
 
     @staticmethod
@@ -7788,8 +7791,9 @@ class KnowledgeManager:
                     fetched_text = self._normalize_text(doc.get("text", ""))
                     if len(fetched_text) < max(0, min_content_chars):
                         continue
-                # Capture surrounding text context from the conversation message
-                # so title generation can use it without fetching the URL.
+                # Capture surrounding text context from the conversation
+                # message so title generation can use it without fetching
+                # the URL.
                 context_snippet = self._extract_url_context(
                     text,
                     url,
@@ -8527,7 +8531,8 @@ class KnowledgeManager:
             config=config,
         )
 
-        # Keep deterministic priority for subjects: summary > content > index/title.
+        # Keep deterministic priority for subjects: summary > content
+        # > index/title.
         for candidate in candidates:
             subject = self._extract_subject_from_text(candidate, config=config)
             if subject:

@@ -342,7 +342,8 @@ def _build_internal_graph(
                 elif not existing.get("source_file"):
                     existing["source_file"] = rel_path
 
-            # Co-occurrence inside one line is treated as a lightweight relation.
+            # Co-occurrence inside one line is treated as a
+            # lightweight relation.
             for left, right in combinations(sorted(set(line_terms)), 2):
                 edge_weights[(left, right)] += 1
 

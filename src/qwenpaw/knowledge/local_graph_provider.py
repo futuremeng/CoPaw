@@ -697,7 +697,8 @@ def _collect_ranked_entities(
         if _is_high_signal_entity(raw):
             ranked[normalized] += max(heading_counter.get(normalized, 0), 1)
 
-    # Return all ranked entities without limit (let all valid candidates through)
+    # Return all ranked entities without limit (let all valid
+    # candidates through)
     return ranked.most_common()
 
 

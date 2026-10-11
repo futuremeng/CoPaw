@@ -586,8 +586,9 @@ def _parse_pipeline_template_doc(
     if not template_id or not name:
         return None
 
-    # Enforce canonical 7-step schema for the builtin project knowledge template,
-    # even if a project-local copy has drifted or still carries legacy nodes.
+    # Enforce canonical 7-step schema for the builtin project knowledge
+    # template, even if a project-local copy has drifted or still carries
+    # legacy nodes.
     if template_id == _PROJECT_KNOWLEDGE_PLATFORM_TEMPLATE_ID:
         try:
             canonical_doc = _default_project_knowledge_platform_template_doc()
@@ -623,7 +624,8 @@ def _parse_pipeline_template_doc(
             }
             name = str(raw.get("name") or template_id).strip()
         except Exception:
-            # Keep backward-compatible behavior when canonical doc cannot be loaded.
+            # Keep backward-compatible behavior when canonical doc cannot
+            # be loaded.
             pass
 
     steps: list[PipelineTemplateStep] = []
@@ -1515,7 +1517,8 @@ def _parse_pipeline_md_strict(
         ),
     )
 
-    # Description is parsed from body content after first level-1 title and before first step heading.
+    # Description is parsed from body content after first level-1 title and
+    # before first step heading.
     description_lines: list[str] = []
     found_title = False
     for raw_line in body.splitlines():
@@ -2226,7 +2229,8 @@ def _save_agent_pipeline_template_with_md(
 
     md_path = _pipeline_md_path(workspace_dir, template_id)
     if not md_path.exists():
-        # Bootstrap markdown workspace from payload only once when markdown does not exist.
+        # Bootstrap markdown workspace from payload only once when markdown
+        # does not exist.
         md_path.write_text(
             _pipeline_steps_to_md(base_template),
             encoding="utf-8",

@@ -578,7 +578,8 @@ def initialize_siamese_sidecar(config: Any) -> dict[str, Any]:
         getattr(nlp_cfg, "siamese_python_executable", "") or "",
     ).strip()
     if not target_python or _looks_like_hanlp_venv(target_python):
-        # Keep Siamese isolated from HanLP by pinning to its dedicated .venv-senta path.
+        # Keep Siamese isolated from HanLP by pinning to its dedicated
+        # .venv-senta path.
         target_python = _default_siamese_python_path()
         setattr(nlp_cfg, "siamese_python_executable", target_python)
         changed = True

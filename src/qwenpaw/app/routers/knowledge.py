@@ -1416,7 +1416,8 @@ async def put_knowledge_config(
     # Persist structural knowledge config in root config.
     config.knowledge = knowledge_config
 
-    # Runtime knowledge toggles belong to the current agent in multi-agent mode.
+    # Runtime knowledge toggles belong to the current agent in
+    # multi-agent mode.
     if hasattr(running_config, "knowledge_enabled"):
         running_config.knowledge_enabled = knowledge_config.enabled
     if hasattr(running_config, "knowledge_auto_collect_chat_files"):
@@ -1438,7 +1439,8 @@ async def put_knowledge_config(
     if hasattr(running_config, "knowledge_chunk_size"):
         running_config.knowledge_chunk_size = knowledge_config.index.chunk_size
 
-    # Keep deprecated root automation fields in sync for backward compatibility.
+    # Keep deprecated root automation fields in sync for
+    # backward compatibility.
     config.knowledge.enabled = bool(
         getattr(running_config, "knowledge_enabled", knowledge_config.enabled),
     )

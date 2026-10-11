@@ -318,7 +318,8 @@ class _TaskMatrixProbeRuntime(_FakeRuntime):
 class _FragmentedNerRuntime(_FakeRuntime):
     def run_ner(self, text: str, config):  # type: ignore[override]
         _ = config
-        # Simulate sidecar returning fragmented entities with reset local spans.
+        # Simulate sidecar returning fragmented entities with reset
+        # local spans.
         return [["北", "LOCATION", 0, 1], ["京", "LOCATION", 0, 1]], {
             "status": "ready",
             "reason_code": "HANLP_TASK_READY",

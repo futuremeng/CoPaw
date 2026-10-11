@@ -452,7 +452,8 @@ def test_create_project_knowledge_pipeline_run_triggers_sync_helper(
     project_dir = tmp_path / "projects" / project_id
     project_dir.mkdir(parents=True, exist_ok=True)
 
-    # Seed minimal knowledge artifacts so 7 canonical steps can collect outputs.
+    # Seed minimal knowledge artifacts so 7 canonical steps can
+    # collect outputs.
     for _step in (
         "snapshot_raw",
         "build_chunks",

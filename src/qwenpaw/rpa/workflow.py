@@ -122,8 +122,8 @@ def _extract_loop_from_inputs(
 
 
 def _normalize_pipeline_step_kind(rpa_kind: str) -> str:
-    # Existing pipeline markdown validation only accepts a fixed enum.
-    # RPA runtime-specific kinds are preserved in inputs and projected to "task".
+    # Existing pipeline markdown validation only accepts a fixed enum. RPA
+    # runtime-specific kinds are preserved in inputs and projected to "task".
     allowed = {
         "alignment",
         "analysis",

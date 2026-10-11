@@ -1394,7 +1394,8 @@ async def _run_hanlp_task_impl(
         raw_result = result
         normalized_result = _normalize_pos_result(result)
     elif normalized_task_key in _SUPPORTED_CLASSICAL_TASK_KEYS:
-        # For classical tasks, use the mapped task name (e.g., tok/fine instead of lzh_tok_fine)
+        # For classical tasks, use the mapped task name (e.g., tok/fine instead
+        # of lzh_tok_fine)
         actual_task_name = _get_actual_task_name_for_runtime(
             normalized_task_key,
         )

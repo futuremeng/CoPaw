@@ -74,10 +74,11 @@ def test_invasive_allow_list_is_a_ratchet() -> None:
     assert stale_refs == set()
 
 
-# ``import_module("<copaw…>")`` and lazy ``_EXPORTS`` tables reach copaw without
-# an import statement, so the regex above cannot see them.  Only strings that map
-# onto a real module file count; brand/log/entry-point names such as
-# ``copaw.dingtalk.stream`` and ``copaw.doctor`` resolve to nothing and are skipped.
+# ``import_module("<copaw…>")`` and lazy ``_EXPORTS`` tables reach copaw
+# without an import statement, so the regex above cannot see them.  Only
+# strings that map onto a real module file count; brand/log/entry-point names
+# such as ``copaw.dingtalk.stream`` and ``copaw.doctor`` resolve to nothing and
+# are skipped.
 _MODULE_STRING_RE = re.compile(r"""['"](copaw(?:\.\w+)+)['"]""")
 COPAW_SRC = REPO_ROOT / "src" / "copaw"
 
@@ -181,9 +182,9 @@ def test_copaw_app_entry_extends_qwenpaw_app_object() -> None:
 
 
 # WP-01 Gate(b): ``src/copaw`` has to be removable as a whole directory.  The
-# probe blocks every ``copaw*`` import instead of renaming the directory, so it
-# also catches lazy ``import_module`` calls, and it runs in a subprocess because
-# this test module already imported copaw.
+# probe blocks every ``copaw*`` import instead of renaming the directory, so
+# it also catches lazy ``import_module`` calls, and it runs in a subprocess
+# because this test module already imported copaw.
 _COPAW_ABSENT_SNIPPET = """
 import sys
 

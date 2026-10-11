@@ -61,9 +61,10 @@ def test_local_graph_filters_hidden_docs_and_noise_entities(tmp_path: Path):
     assert "merged_terms_v2.tsv.json" not in labels
     assert "project-rxpwrp" not in labels
     assert "normalized_term" not in labels
-    # Note: "template", "status", "completed", "true", "name", "description", "data",
-    # "当前", "说明" are now kept as entities after stop-word list optimization
-    # for better coverage (optimization in local_graph_provider.py)
+    # Note: "template", "status", "completed", "true", "name",
+    # "description", "data", "当前", "说明" are now kept as entities after
+    # stop-word list optimization for better coverage (optimization
+    # in local_graph_provider.py)
     assert "tooldispatcher" in labels
     assert "filesearch" in labels
 

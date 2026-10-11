@@ -442,7 +442,8 @@ def test_knowledge_workflow_quantization_stage_l2_runs_nlp_slice(
 
     assert result["processing_mode"] == "nlp"
     assert result["quantization_stage"] == "l2"
-    # nlp mode does NOT run graph ops; memify is agentic-only in the 7-step design.
+    # nlp mode does NOT run graph ops; memify is agentic-only in the
+    # 7-step design.
     assert result["memify"] == {}
     assert called["memify"] is False
 
@@ -578,7 +579,8 @@ def test_knowledge_workflow_rerun_tokenize_skips_snapshot_slice(
         },
     )
 
-    # Warm once to ensure index payload exists; rerun should then skip snapshot slice.
+    # Warm once to ensure index payload exists; rerun should then skip
+    # snapshot slice.
     orchestrator.run(
         config=config,
         running_config=running_config,
