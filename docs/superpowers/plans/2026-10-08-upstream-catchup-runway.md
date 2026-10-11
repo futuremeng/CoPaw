@@ -1847,3 +1847,110 @@ fork 品牌 ⇒ 三选一里"退生产行"会在阶段 B 落点存在之前剥�
 ③ 3 枚历史脏的 prettier 文件（判据 180 表里那 3 枚）。
 ④ 真浏览器 `copaw app` 一笔（8.13 段末已欠，混淆项 = `QwenPew Desktop.app` 会写 `~/.copaw/config.json`）；
 本笔动的是首屏 i18n 加载路径，这枚欠账的权重因此变高，但本笔**没**跑它。
+
+### 8.32 刀 105（2026-10-11）：项 ⑤ 那条 pre-commit 门禁——先证"上游在分叉点上是绿的"，再按 P1 账把机械改写收成两笔
+
+**对象**：授权清单第 ⑤ 项（"从没绿过的 pre-commit 门禁"）。
+
+**前提取证（这条门禁到底绿过没有）**：`gh run view 38039977636 --log --job 114178096778` 是 push 事件、
+提交 `2744a976b` = 我们的分叉点，`.github/workflows/pre-commit.yml` 与 `.pre-commit-config.yaml` 当时均与基线逐字节相同，
+八支钩子全 Passed（pragma / whitespace / Add trailing commas / mypy / black / flake8 / pylint / actionlint）。
+⇒ 我们现算的每一枚红都是 fork 侧的，不能用"门禁本来就有噪声"解释。
+第二个前提：**草稿 PR 的 job 不是证据**——workflow 在 draft 上直接打印"✅ Draft PR — pre-commit checks deferred"，
+一支钩子都没跑，日志里读不到任何 Passed/Failed。
+
+**离线复现配方**（无网机上可重放）：`pre-commit run --all-files` 整条不可用，它先给每支钩子建 env，
+actionlint 那支要 `go install ./...` 走网络而中断；可重放的最小形 = 逐支
+`/tmp/copaw312/bin/pre-commit run <id> --all-files`，且 `HOME` 必须是真 `~`
+（指到 `.k102home` 会判 `~/.cache/pre-commit` 缺失、强制重 clone ⇒ rc=3）。
+
+**改前基线**（`dc81580a6`，CI 序逐支现算，改写照常落工作树）：
+
+| 钩子 | 性质 | 读数 |
+|---|---|---|
+| `fix-encoding-pragma` | 改写 | 12 枚文件被改 |
+| `trailing-whitespace` | 改写 | 12 |
+| `add-trailing-comma` | 改写 | 85 |
+| `mypy` | 报告 | 64 处 / 22 枚 |
+| `black` | 改写 | 176 |
+| `flake8` | 报告 | 1,586 处 / 94 枚 |
+| `pylint` | 报告 | 1,606 处 / 153 枚 |
+
+**第一处非显然：comma 与 black 不可交换，CI 的绿点落在不动点上**。CI 每支钩子一趟只跑一次，
+而一趟 pass 的产物仍不满足另一支 ⇒ 提交"跑完一遍"的树下一轮还会 Failed。实测：一趟 comma→black 之后
+仍有 115 枚要 comma、107 枚要 black，迭代到第 2 轮两支同时归 0 才收敛。可提交的状态是**不动点**，不是"一趟的产物"。
+
+**第二处非显然：归属账决定这刀的价格**。对 186 枚逐枚 `git cat-file -e 2744a976b:<path>` 再与基线比字节 ⇒
+**169 枚 fork 自有（基线上不存在）+ 17 枚在册（上游自有、我们已改、已在 `scripts/p1_baseline.json`）+ 0 枚新冲突宿主**。
+存在性探测不能用 `git show BASE:<path> | md5 -q`：缺路径时它给的是空输入 md5，非空判据永不命中，
+会把 fork 自有文件成批误标成在册（判据 162 的三分法在 lint 刀上照用，只是探测要换 `cat-file -e`）。
+
+**第三处：全量 186 提交会把 P1 打红，代价必须现算，不能读成"格式无害"**。
+`check_p1_invariants.py --check` rc 0→1，`behavior_added 10,924 → 11,096`（**+172 行**），
+逐枚增长的恰好是 17 枚在册宿主里的 15 枚（另 2 枚 `.gitignore` 与 `app/routers/agent_scoped.py`
+本刀各只做了 1 增 1 删的原地替换，现算 `behavior_added` 停在 4 与 14 没涨，所以不进红名单）：
+`agents/skill_system/__init__.py` 20→25、
+`agents/utils/audio_transcription.py` 340→352、`file_handling.py` 5→7、`message_processing.py` 54→56、
+`app/_app.py` 43→47、`app/channels/dingtalk/channel.py` 76→79、`app/chats/session.py` 84→92、
+`app/migration.py` 230→233、`app/routers/agents.py` 3,796→3,872、`app/routers/skills.py` 709→743、
+`config/utils.py` 25→28、`tests/unit/app/crons/test_heartbeat.py` 321→323、
+`tests/unit/app/routers/test_tools_router.py` 199→206、`test_workspace_router.py` 107→117、
+`tests/unit/config/test_config_utils.py` 60→62。
+⇒ 裁法：**那 15 枚退回 `dc81580a6` 字节，只留 171 枚 fork 自有的**（两笔提交 `8b5cd63b3` + `a1f81d1be`）。
+理由不是"逗号不算侵入"——逗号行本身就是将来会冲突的行，P1 计它是对的；而是这 +172 行**买不到任何东西**：
+门禁仍红在三枝报告型钩子上（下段），抹平 15 枚上游文件不会让它转绿，却确定性地多 172 行冲突面。
+退回后 `--check` rc=0，`behavior_added 10,923`（比基线还少 1），在册宿主 116 枚 / `+11,132 −520` 不变。
+
+**改后读数**（`a1f81d1be`）：
+
+| 钩子 | 改前 | 改后 | 备注 |
+|---|---|---|---|
+| pragma | 12 | **0，Passed** | 结清 |
+| whitespace | 12 | **0，Passed** | 结清 |
+| add-trailing-comma | 85 | 15 | 残余集与那 15 枚在册宿主 `comm -12` 实测 **15/15 逐枚相同** |
+| black | 176 | 15 | 同上（临时 worktree 里迭代两轮，集不再变） |
+| mypy | 64 / 22 | 65 / 22 | 多 1 处，同文件同码集，black 拆行所致（判据 178 那族：计数随拆行涨） |
+| flake8 | 1,586 / 94 | 1,649 / 101 | 同一配方在 186 全量树现算 1,586/94 ⇒ 退回 15 枚的成本 = **+63 处 / +7 枚，全落 E501**（850→912） |
+| pylint | 1,606 / 153 | 1,607 / 153 | 在 186 全量树上现算；+1 处是行号位移，没出现新缺陷类 |
+
+**用例面**：CI 选择集 `tests/unit --ignore=tests/unit/channels`（186 全量树）= **15 failed / 15,771 passed /
+23 skipped / 4 xfailed / 779.33 s**，与 8.28 那条"15 failed / 15,707 passed"同枚数、收集面 +64 ⇒ 本刀没引入新红。
+CI 必过段 L1 五目录在 `a1f81d1be` 现算 = **1 failed / 1,335 passed / 1 skipped / 17.64 s**，那 1 枚是
+`tests/unit/security/tool_guard/test_safety_checks.py::TestIsCommandDestructive::test_b1_normalize_before_home_glob_match`
+= 授权清单第 ⑥ 项，与本刀无关，但它坐在必过段上 ⇒ 第 ⑥ 项的优先级由这条读数抬高，不是由文档叙述抬高。
+四枝离线门禁 + 品牌账册 + P1 全 rc=0（namespace boundaries / release-channel R1–R5 over 6 files /
+ci-command-targets 18 条 / locale-split 4,658 枚 gated keys / brand ledger 7 files 35 lines）。
+
+**门禁仍红，但剩余面第一次有了量**：改写型四枝被收成"两枝永久绿 + 两枝只剩 15 枚在册宿主"，
+剩下的红全在三枝报告型钩子上，机械改写吃不掉：flake8 1,649（E501 912 + W191 334 + E101 334 = 1,580，占 96%，
+后两码集中在少数 tab 缩进文件）、pylint 1,607 / 153 枚、mypy 65 / 22 枚。属下一批刀。
+
+**判据 182（"这条门禁从没绿过"是要取证的断言，不是背景）**：取法 = 在分叉点提交上找 **push/merge 事件**的 job 逐字读
+那八行结论，不要拿 PR 事件的日志替代——草稿 PR 会被 workflow 短路，日志里零钩子跑过，读起来"没有 Failed"像是绿的、
+"没有 Passed"又像是从没评估过，两头都推不出结论。有基线绿证之后，现算的每一枚红才能确定归 fork 侧。
+
+**判据 183（改写型钩子的可提交状态是不动点，不是"跑完一遍"）**：判据 = 一趟 comma→black 之后再跑一趟，
+两支同时报 0 才算收敛。CI 每支只跑一次，所以提交一趟产物会下一轮还红；本刀实测一趟差 115/107 枚、两轮才 0/0。
+
+**判据 184（机械改写刀的定价单位是 `behavior_added`，不是 diff 行数）**：逗号与拆行都会成为将来合并的冲突行，
+所以 P1 把它们计成侵入是对的，不要靠 `--write-baseline` 把它认下来。定价之后的正确动作是**按宿主所有权切两半**：
+fork 自有那批照提（零账），在册宿主那批当买不到门禁绿时退回原字节。本刀 = 171 枚入账、15 枚退回、P1 零增长。
+
+**判据 185（残红归属要用同一配方对拍两棵树，不要引用历史数字）**：同一
+`pre-commit run flake8 --all-files` 在 186 全量树得 1,586/94、在 171 树得 1,649/101 ⇒ 退回成本精确到码（+63 全在 E501）。
+若拿 8.29 那条 1,598 当分母，等于把判据 175（"改写流水线量的不是提交树"）已经结清的账重新搅开。
+
+**已闭环计数推到 105。**
+
+**本笔登记的未办（不裁，只登记落点与现算数）**：
+① **15 枚在册宿主仍带 comma/black 脏**（上表残余集，逐枚即那 15 条 `behavior grew` 名单）——本刀故意不修；
+下一刀若要修，得连带决定 P1 那 +172 行怎么入账，不能只跑钩子。
+② **三枝报告型钩子的手改面**：flake8 1,649 / pylint 1,607（153 枚）/ mypy 65（22 枚），逐枚归属未做。
+③ **pylint `E0611` 那 24 处的跨文件机制仍未结清**：只在整树批次里出现（单文件跑 pylint 是 10.00/10），
+构成 = 7 枚逐字节等于基线的宿主全报 `cannot import name ... from module 'mcp'`
+（`packages/qwenpawmail-mcp/*` 3 处、`drivers/handlers/mcp_stateful_client.py` 6 处、`mcp_streamable_http.py` 1 处、
+`tests/fixtures/mcp/*` 2 处、`tests/unit/drivers/handlers/test_mcp_stateful_client.py` 2 处）
++ 5 枚 fork 自有文件报 `qwenpaw.knowledge`/`qwenpaw.agents`/`copaw.knowledge`。
+基线宿主不能动，唯一免宿主的手段 = `pyproject.toml` 的 `[tool.pylint]`（该文件已在册），判为"配置吞债"，**只登记不用**。
+④ **L1 必过段那 1 枚**（`test_b1_normalize_before_home_glob_match`）= 授权清单第 ⑥ 项，现算在案。
+⑤ 8.31 末那四项照旧未办（overlay→渲染守卫、19 枚 tsc、3 枚历史脏 prettier、真浏览器 `copaw app`）。
