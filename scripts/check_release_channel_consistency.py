@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 """Guard CoPaw's release-channel fact source against its consumers.
 
-Five rules (design §8):
+Six rules (design §8):
 
 * R1 authority   -- ``pending`` is the only availability bit, and it can only
                     name declared channels; our own distribution names are
@@ -17,6 +17,10 @@ Five rules (design §8):
                     source byte for byte.
 * R5 version     -- ``__version__`` parses, and after stripping ``.postN`` /
                     ``.devN`` it equals ``upstream_version``.
+* R6 readers     -- ``[project] name`` and every registered reader of the
+                    installed distribution move in the same commit, and the
+                    registry is the whole table: a read point that is not
+                    registered is itself a red.
 
 Usage:
     python scripts/check_release_channel_consistency.py
@@ -31,6 +35,7 @@ import json
 import re
 import sys
 from pathlib import Path
+from typing import Optional
 
 from packaging.version import InvalidVersion, Version
 
@@ -69,6 +74,164 @@ UPSTREAM_MARKERS = (
 
 VERSION_RE = re.compile(r'^__version__\s*=\s*"([^"]+)"', re.MULTILINE)
 LOCAL_SUFFIX_RE = re.compile(r"(?:\.post\d+|\.dev\d+)+$")
+
+PYPROJECT_REL = "pyproject.toml"
+# The name upstream ships under.  Our channel may only be opened once the
+# declaration equals ``pypi_project``, so this is the single other name R6
+# tolerates -- ``copaw`` itself is upstream's pre-rename package on PyPI.
+PRE_RENAME_DECLARATION = "qwenpaw"
+
+# Every place that reads the installed distribution *by name* (not the import
+# package ``qwenpaw``, which stays).  ``{distribution}`` is the declared name.
+DISTRIBUTION_READERS = (
+    (PYPROJECT_REL, 'name = "{distribution}"'),
+    ("src/qwenpaw/cli/update_cmd.py", "pypi.org/pypi/{distribution}/json"),
+    (
+        "src/qwenpaw/cli/update_cmd.py",
+        'metadata.distribution("{distribution}")',
+    ),
+    ("src/qwenpaw/cli/update_cmd.py", '"{distribution}=={'),
+    ("scripts/pack/build_common.py", "{distribution}-*.whl"),
+    ("scripts/pack/build_macos.sh", "dist/{distribution}-"),
+    ("scripts/pack/build_macos.sh", "version('{distribution}')"),
+    ("scripts/pack/build_win.ps1", "{distribution}-$CurrentVersion"),
+    ("scripts/pack/build_win.ps1", "{distribution}-*.whl"),
+    ("scripts/pack/build_win.ps1", "version('{distribution}')"),
+)
+
+# Shapes that mean "this code keys on a distribution name".  A hit on one of
+# our tracked names must appear in DISTRIBUTION_READERS.
+READER_PATTERNS = (
+    re.compile(r"metadata\.distribution\(\s*[\"']([\w.\-]+)[\"']"),
+    re.compile(r"version\(\s*['\"]([\w.\-]+)['\"]\s*\)"),
+    re.compile(r"pypi\.org/pypi/([\w.\-]+)/json"),
+    re.compile(r"['\"]([\w.\-]+)==\{"),
+    re.compile(r"([\w.\-]+)-[\w$ {}\-*\"']{0,40}\.whl"),
+)
+READER_DIRS = ("src", "scripts", "plugins", "deploy", ".github/workflows")
+READER_SUFFIXES = (".py", ".sh", ".ps1", ".bat", ".yml", ".spec", ".nsi")
+PROJECT_NAME_RE = re.compile(r'^name\s*=\s*"([^"]+)"', re.MULTILINE)
+
+
+def _project_section(text: str) -> str:
+    """Return the ``[project]`` table, up to the next table header."""
+    marker = "\n[project]\n"
+    start = ("\n" + text).find(marker)
+    if start < 0:
+        return ""
+    rest = text[start:]
+    nxt = rest.find("\n[", len(marker) - 1)
+    return rest if nxt < 0 else rest[:nxt]
+
+
+def declared_distribution(repo_root: Path) -> Optional[str]:
+    """``[project] name`` -- the identity the wheel is built under."""
+    path = repo_root / PYPROJECT_REL
+    if not path.exists():
+        return None
+    match = PROJECT_NAME_RE.search(
+        _project_section(path.read_text(encoding="utf-8")),
+    )
+    return match.group(1) if match else None
+
+
+def _tracked_names(repo_root: Path) -> set:
+    """Identities R6 watches: the declaration plus both fact-source names."""
+    names = set()
+    declared = declared_distribution(repo_root)
+    if declared:
+        names.add(declared)
+    fact = repo_root / FACT_REL
+    if not fact.exists():
+        return names
+    try:
+        data = json.loads(fact.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return names
+    for key in ("pypi_project", "distribution"):
+        value = data.get(key)
+        if isinstance(value, str) and value:
+            names.add(value)
+    return names
+
+
+def scan_distribution_readers(repo_root: Path):
+    """``(rel, description)`` for every code read point naming our identities.
+
+    The declaration counts as a read point too, so the file carrying the name
+    has to be in the registry -- R6 compares this scan against
+    ``DISTRIBUTION_READERS`` instead of trusting someone to remember the list.
+    """
+    tracked = _tracked_names(repo_root)
+    declared = declared_distribution(repo_root)
+    hits = []
+    if declared is None:
+        return hits
+    hits.append((PYPROJECT_REL, f"declares name = {declared!r}"))
+    for rel_dir in READER_DIRS:
+        base = repo_root / rel_dir
+        if not base.is_dir():
+            continue
+        for path in sorted(base.rglob("*")):
+            if not path.is_file() or path.suffix not in READER_SUFFIXES:
+                continue
+            text = path.read_text(encoding="utf-8", errors="ignore")
+            for pattern in READER_PATTERNS:
+                for match in pattern.finditer(text):
+                    if match.group(1) not in tracked:
+                        continue
+                    lineno = text[: match.start()].count("\n") + 1
+                    hits.append(
+                        (
+                            str(path.relative_to(repo_root)),
+                            f"line {lineno}: {match.group(0).strip()!r}",
+                        ),
+                    )
+    return hits
+
+
+def rule_distribution(loader, data, repo_root):
+    errors = []
+    declared = declared_distribution(repo_root)
+    if declared is None:
+        return [
+            f"R6: {PYPROJECT_REL} has no [project] name to check readers "
+            "against",
+        ]
+    if loader.is_ready(data, "pypi"):
+        if declared != data["pypi_project"]:
+            errors.append(
+                f"R6: the pypi channel is no longer pending but "
+                f"{PYPROJECT_REL} declares {declared!r} instead of the fact "
+                f"source's {data['pypi_project']!r}",
+            )
+    elif declared not in (data["pypi_project"], PRE_RENAME_DECLARATION):
+        errors.append(
+            f"R6: {PYPROJECT_REL} declares {declared!r} while the pypi "
+            f"channel is pending; only the fact source's "
+            f"{data['pypi_project']!r} or the pre-rename "
+            f"{PRE_RENAME_DECLARATION!r} may be declared",
+        )
+
+    registered = {rel for rel, _ in DISTRIBUTION_READERS}
+    for rel, template in DISTRIBUTION_READERS:
+        path = repo_root / rel
+        if not path.exists():
+            errors.append(f"R6: registered reader {rel} is missing")
+            continue
+        literal = template.replace("{distribution}", declared)
+        if literal not in path.read_text(encoding="utf-8"):
+            errors.append(
+                f"R6: {rel} no longer reads {literal!r}; the distribution "
+                f"name moves in one commit with {PYPROJECT_REL}",
+            )
+    for rel, description in scan_distribution_readers(repo_root):
+        if rel not in registered:
+            errors.append(
+                f"R6: {rel} {description} reads a distribution name but is "
+                f"not registered in DISTRIBUTION_READERS",
+            )
+    return errors
 
 
 def _load_loader(repo_root: Path):
@@ -214,6 +377,7 @@ def main(argv=None):
     errors += rule_no_upstream(loader, data, repo_root)
     errors += rule_codegen(data, repo_root)
     errors += rule_version_line(data, repo_root)
+    errors += rule_distribution(loader, data, repo_root)
 
     if errors:
         for item in errors:
@@ -222,7 +386,8 @@ def main(argv=None):
 
     print(
         "Release channel consistency check passed "
-        f"(R1-R5 over {len(CHANNEL_FILES)} channel files)",
+        f"(R1-R6 over {len(CHANNEL_FILES)} channel files and "
+        f"{len(DISTRIBUTION_READERS)} distribution readers)",
     )
     return 0
 
