@@ -2156,9 +2156,11 @@ overlay→真渲染守卫、19 枚 tsc、3 枚 prettier、真浏览器 `copaw ap
 
 ### 8.36 刀 109-1（2026-10-11）：设计文档那句"全仓仅两处按分发名读版本"是错的 —— 修法不是把句子改对，是让这类句子跑红
 
-**一句话结论**：现扫得 **11 处 = 1 枚声明 + 10 处读点，分布在 5 个文件**（文档旧写 2 处，且其中一枚的行号已漂）；
-门禁 `scripts/check_release_channel_consistency.py` 因此加第 6 条规则 **R6**：登记表（10 条模板）与一次正则全扫做
-**集合相等**比对 —— 今后"只有 N 处"这类话不必靠人记住，漏登记即红。
+**一句话结论**：现扫得 **12 处 = 1 枚声明 + 11 处读点，分布在 5 个文件**（文档旧写 2 处，且其中一枚的行号已漂；
+本节的"10 处读点"同日被第二次纠正，见 §8.37）；
+门禁 `scripts/check_release_channel_consistency.py` 因此加第 6 条规则 **R6**：登记表（10 条模板 = 1 条声明 + 9 条读点）
+与一次正则全扫做**相等**比对（相等最初只做到文件级，同日补刀 §8.37 把行级也钉上）；
+今后"只有 N 处"这类话不必靠人记住，漏登记即红。
 
 **根因（不是笔误，是口径）**：旧断言只把 `importlib.metadata.version()` 当作"按分发名读取"的形状，
 漏了同一身份另外四类用法 —— 查 PyPI json（`update_cmd.py:33`）、`metadata.distribution()`（`:181`）、
@@ -2180,13 +2182,15 @@ overlay→真渲染守卫、19 枚 tsc、3 枚 prettier、真浏览器 `copaw ap
    这条把"改名前先把某处改了"挡在门外。
 2. 每条登记读点必须仍含 `template.replace("{distribution}", declared)` —— 半把落（改了读点没改声明，
    或反过来）红，消息直说"the distribution name moves in one commit with pyproject.toml"。
-3. 全扫（`READER_PATTERNS` 5 支 × `READER_DIRS` 5 目录 × 7 个后缀）命中的文件必须**都在登记表里** ——
-   新增读点不落登记即红，这条才是"清单不会再漏"的机制。
+3. 全扫（初版 `READER_PATTERNS` 5 支；本批后为 4 支静态 + 1 支按受盯身份动态构造的 wheel 模式 —— §8.37 ×
+   `READER_DIRS` 5 目录 × 7 个后缀）命中的**落点文件**必须**都在登记表里** ——
+   新增读点不落登记即红，这条才是"清单不会再漏"的机制。初版比的是文件级，行级由 §8.37 的守卫用例补上。
 
 **TDD 读数**：红 = `AttributeError: module ... has no attribute 'declared_distribution'`（**1 failed / 12 passed**）；
 终树 **22 passed**（既有 12 + 新 10），`tests/unit/scripts` 整目录 **158 passed in 18.58s**；
-现树门禁 **rc=0 / 2.26s**，串为
-`Release channel consistency check passed (R1-R6 over 6 channel files and 10 distribution readers)`。
+现树门禁 **rc=0 / 2.26s**，当时串为
+`Release channel consistency check passed (R1-R6 over 6 channel files and 10 distribution readers)`
+—— 这条消息里的写死数字同日被查出偏小（§8.37），现已由门禁自己从扫描结果算出。
 
 **变异检查（逐条摘，这一步查出两处真覆盖洞，不是走过场）**：
 
@@ -2245,3 +2249,76 @@ L1 必过五目录不受影响（本批未动 `src/`）。
 ④ 8.32 未办 ①–⑤ 照旧在册。
 
 **已闭环计数推到 108；109-1（分发名读点全表 + 门禁 R6）已落，109-2 待做。**
+
+---
+
+### 8.37 刀 109-1b（2026-10-11）：109-1 刚立的机器账自己少报了两行 —— 相等要比在"哪一行"，不是"哪些文件"
+
+**一句话结论**：上一节的"11 处 = 1 声明 + 10 读点"是错的，真表 **12 处 = 1 声明 + 11 读点**（5 个文件不变）；
+`DISTRIBUTION_READERS` 的 **10 是模板条数**（1 条声明 + 9 条读点模板，合计覆盖 11 行），我把它当成了读点条数。
+更硬的一条是机制洞：全扫的 wheel 模式在 `build_win.ps1` 上被同一行更早的宽匹配**非重叠吞掉**，
+`:36/:43` 两行从未被扫到 —— 而"命中的文件都在登记表里"这条相等判定**看不见这种漏**，因为那枚文件因别的行本来就在册。
+
+**根因（正则的匹配起点竞争，不是清单漏项）**：初版模式是 `([\w.\-]+)-[\w$ {}\-*\"']{0,40}\.whl`，名字侧允许任意 token。
+PowerShell 那两行是 `$wheelGlob = Join-Path $Dist "qwenpaw-$CurrentVersion-*.whl"`，
+`finditer` 从左往右走：在 `Join` 处起手的匹配能一路吃掉整条尾巴（`-Path $Dist "qwenpaw-$CurrentVersion-*.whl` 全落在尾巴字符集里），
+于是这一枚匹配一直吃到行尾，**真正的 `qwenpaw-…whl` 已不在剩余区间里**，`group(1)` 是 `'Join'` —— 不在受盯身份里 ⇒ 整行被丢。
+同一条模式在 `build_macos.sh` 上恰好抢不到（那里是 `${REPO_ROOT}/dist/qwenpaw-${CURRENT_VERSION}-"*.whl`，
+`REPO_ROOT` 与 `CURRENT_VERSION` 后面都紧跟 `}` 或 `/` 而非 `-`，起点只能落在 `qwenpaw` 上），
+`build_common.py` 那两行同理 ⇒ 现跑旧模式实测**六行 wheel 读点里只漏 `build_win.ps1` 的两行**。
+症状因此像"我数漏了"，实际是**扫了但没扫到**。
+
+**修法（两处，都在门禁侧）**：
+1. 名字侧锚到受盯身份：`wheel_reader_pattern(tracked)` 构造 `(?<![\w.\-])(copaw-community|qwenpaw|copaw)-<tail>`，
+   alternation 按名字长度倒序排（否则短名会先咬住长名的前缀），`tracked` 来自 `_tracked_names()`
+   （声明 + 事实源的 `pypi_project` / `distribution`）。
+   静态 `READER_PATTERNS` 因此从 5 支降到 4 支，第 5 支改为动态 ⇒ 全集 4 + 1。
+   尾巴字符集同时补了 `.`（wheel 文件名里的点号版本段是这一族的常态，如 `qwenpaw-1.1.11b1.post1-*.whl`），
+   现树实测含点与不含点两支模式命中同样 6 行 ⇒ 这一处是为将来的字面量放宽，不是本缺陷的必要修。
+2. 相等补到**行级**：新增第 23 枚用例 `test_the_live_sweep_pinpoints_every_registered_line`，
+   把登记表每条模板在现树展开成的 `(文件, 行)` 集合与全扫 `line N:` 命中的集合做 `==`。
+   原先的相等只做在文件级（门禁动作 3 问"这枚落点文件在不在册"、守卫用例问"每条模板的字面量还在不在文件里"），
+   正是这一级差让 `build_win.ps1` 的"文件在册、行漏扫"混过去。
+   行级放在用例而不是门禁里，是因为"少扫一行"只能由扫描器自身缺陷造出 —— fixture 造不出那样的红，
+   而按判据 193，没有可证红分支的规则等于没被钉的规则；这条用例与门禁同批在 CI 跑，强度一致。
+   通过消息里的数字也改成从扫描结果现算（`10 registered templates, 11 read points swept in 5 files`），
+   不再写死 —— 109-1 那句 `and 10 distribution readers` 就是把结论抄进字符串，它自己也会腐。
+
+**TDD 读数（先红，红得正是那两行）**：红 = `Extra items in the right set: ('scripts/pack/build_win.ps1', 43) / (…, 36)`；
+这两条一出现就把"漏扫"和"漏登记"分开了 —— 不是登记表缺条目，是扫描器没找到。
+终树 `tests/unit/scripts` + `tests/unit/copaw` **169 passed in 8.73s**（门禁文件 23 枚），
+现树门禁 **rc=0 / 1.50s**。
+
+**门禁当场咬了我自己一次**：为解释这个吞匹配，我在门禁文件里写了那条违规字面量的例子，
+扫描器立刻把 `scripts/check_release_channel_consistency.py:114` 报成**未登记读点**，3 枚用例红。
+修法是把注释里的字面量改写掉（并在注释里注明"写出来就成了一枚读点"），**不是给门禁加豁免目录** ——
+机制能扫到作者自己的注释，正说明它按设计在工作。
+
+**lint 侧的既有坑（不是本批造的）**：裸跑 `black` 用默认 88 列，会把一枚既有的隐式字符串拼接合成一行 ⇒ flake8 `E501`；
+`.pre-commit-config.yaml:62` 那枝 black 传的是 `--line-length=79`，与 `.flake8` 的 `max-line-length = 79` 是一对。
+照钩子参数重跑后 `black --check` 与 `flake8 --extend-ignore=E203` 在两枚文件上均 **rc=0**。
+
+**账（现算，非沿用）**：P1 `--check` rc=0，**117 文件 / +10,968 −521**（behavior 116 / +10,932 / −485，机械 1 枚 lockfile）
+—— 与 109-1 落的读数逐字相同 ⇒ 本批 5 枚文件（门禁 + 用例 + 三本 docs）**零增长**。
+四枝离线门禁同树 rc=0：namespace `PASSED`（`non_extension_copaw_only: 0`）· ci-command-targets `18 命令 / 4 包目录` ·
+locale split `4,658 + 59 + 7 + 1,459 + 23` · brand `7 files / 35 lines`。
+`src/` 未动 ⇒ L1 必过五目录不受影响（`tests/unit/security`、`tests/contract/security`、
+`tests/unit/agents/{hooks,memory,utils}` 全含在下面的 CI 选择集里，该集合只红两枚 acp）。
+CI 选择集（终树一趟，`tests/unit --ignore=tests/unit/channels`）：**2 failed / 15,802 passed / 23 skipped /
+4 xfailed in 931.49s** —— 与 109-1 的 2 / 15,801 差 1 枚，就是本批新增的那条行级用例；
+红的仍是 §8.35 登记的两枚 `test_acp_available_commands`（工作区耦合，未裁）⇒ **本批零新增红**。
+
+**判据 196（全扫模式必须锚在受盯身份上，相等必须做到行级）**：一次"机器数一遍"的可信度取决于模式的**起点**，
+不是它的覆盖面 —— 允许任意 token 作捕获组的名字侧，会被同行更早的更宽匹配非重叠吞掉，症状是**静默少报**而非报错。
+配套的两条：把名字侧钉成受盯身份的倒序 alternation（并在注释里说明为什么不能放宽），
+以及把相等门禁做到 `(文件, 行)` 级 —— 文件级相等会让"这枚文件因别的行在册"掩掉"这一行没扫到"。
+判据 194 是这条的上半（清单会变账），196 是下半（账本身的形状要能容纳最坏的错误）。
+
+**顺带更正的记录**：设计文档 §3 lead 句、§2 第 9 行、§8 规则 6、§10 阶段 2 条目与阶段 1 计划"阶段 2 接口"第 2 条
+里的读点数全部从 10 改为 **11**（模板仍 10 条），并把"集合相等 / 逐行比对"这类含混说法改成明确分工的写法
+（**门禁盯未登记的落点文件，守卫用例盯行级相等**）；§8.36 的三处旧串就地标注为"同日被第二次纠正，见本节"。
+
+**本笔登记的未办**：① 109-2 那把照旧在册（fork 自有 `copaw-release.yml` + `--check-artifacts` + `constants.test.ts` 自咬前置修）；
+② §8.36 未办 ①–④ 照旧在册（阶段 2 宿主二选一待报、2 枚 acp 工作区耦合、上游 `secret_store`、8.32 ①–⑤）。
+
+**已闭环计数推到 109（109-1 与其补刀 109-1b 同批闭环）；109-2 待做。**
