@@ -1350,10 +1350,182 @@ workspace 上产出的摘要文本没做人工复看，只有四枚用例断言�
 方法）。要么按裁决 2 跟着上游删、把 `agents.py` 的 import 翻到 `skill_system`，要么留我们那份并承认这是 fork
 自有能力。这需要产品侧一句话，不是合并能自动答的。
 
-相关账目：本节 = 已闭环 **101**（刀 94 = 8.9 那笔，裁决 (b) 的落地；刀 95 = 8.11 那笔，8.10 里唯一一枚生产侧；
+### 8.26 刀 102：合并本身落地（`24661da15`），并在新分叉点重立基线（`c7ee64a01`）
+
+8.23 末句"下一个动作只能是合并本身"就是本笔的范围。按裁决 ① 一次合到 `upstream/main` tip（不取 `v2.2.1`
+tag）；授权来自用户常设指示"尽快把这 1201 个提交追上"——`git fetch` 与上游合并在 push policy 里平时都要问，
+这一句把它们覆盖了。
+
+**合并事实**：`24661da15`（2026-10-11 08:47），父 `2bb510b85`（我们，刀 101 之后的第一笔）+ `2744a976b`（上游）。
+吸收 `ddd8408eb..2744a976b` 共 **16 枚提交**，tip 是 `fix(hub): respect administrator token capability overrides
+(#8169)`（2026-10-10）。`git diff --shortstat 24661da15^1 24661da15` = **99 files changed, +5,567 / −555**。
+合并后 `HEAD..upstream/main` = **0** ⇒ 上游 tip 已被完整吸收。旧基线 `ddd8408eb`（2026-10-09 那次合并的落点）
+经 `git merge-base --is-ancestor` 确证是 `2744a976b` 的祖先，所以这 16 枚是**直线补齐**、不是第二次大合并 ——
+这一点决定了下面的手解量。
+
+**手解的落点只有四枚，全在 `console/`**（Python 侧这次一枚手解都没有；重活是 8.1 那笔 117 枚冲突做的）。
+commit message 首句写"3 content conflicts resolved"、正文列四条，两个数不一致 ⇒ 本节按**手改文件枚数**记 4：
+- `console/src/utils/lazyWithRetry.ts`（册 **+38/−4**）：取上游的 recovery 重写
+  （`loadImport` / `recoverableLazy` / `lazyImportFailure`），再重放 fork 四处增量——`92a988ca1`
+  "prevent route-switch loading hangs" 那 12 s `IMPORT_TIMEOUT_MS` + `withImportTimeout`（上游那套机制救的是
+  **被 reject 的 import**、不救**挂住的** import，所以保留它不是冗余）、显式扩展名的 `pathToModuleKey`、
+  `pathFromGlobKey`、单文件 `.tsx`/`.ts` glob 解析链。
+- `console/src/utils/chunkRecovery.ts`（**+1/−1**）：`isChunkLoadError` 加 `|chunk import timed out`。
+  fork 原本把这条谓词扩在 `ChunkErrorBoundary` 的本地副本里，上游把谓词搬到了 `chunkRecovery` ⇒ 落点跟着搬。
+- `console/src/components/ChunkErrorBoundary.tsx`：**退回上游字节**（本地那份 `isChunkLoadError` 的归宿就是上一条）。
+- `console/src/pages/Settings/Agents/index.tsx`（**+47/−25**）：跟上游删 `PageHeader` 的 `parent` prop，
+  留 fork 的 tab 相关 `current` 标题。
+
+**三方对账（裁决 ④ 的落地）**——同一棵树、三个基线口径，全部 `check_p1_invariants.py --json` 现取：
+
+| 口径 | base → target | files / + / − | 行为 files / + / − |
+| --- | --- | --- | --- |
+| A 合并前树 vs 旧基线 | `ddd8408eb` → `2bb510b85` | 114 / +10,947 / −517 | 113 / +10,912 / −482 |
+| B 合并后树 vs **过期**旧基线 | `ddd8408eb` → `c7ee64a01` | 182 / +14,354 / −1,055 | 181 / +14,319 / −1,020 |
+| C 合并后树 vs 新基线（已提交） | `2744a976b` → `c7ee64a01` | 114 / +10,950 / −518 | 113 / +10,915 / −483 |
+
+于是两件事被分开量：这笔合并的**真实成本 = A→C，0 枚文件、+3 行、−1 行**（命名 1·7·35 与 mechanical 1 照旧），
+而 B 相对 C 多出的 **68 枚文件 / +3,404 / −537** 全是"基线过期"造出的幻影——那 68 枚是上游自己在这 16 枚提交里
+动的宿主，我们并没有改它们。**不重立基线，这笔合并会被读成"P1 债涨了 3,404 行"**，而 `chore(p1)` 那一笔
+（`c7ee64a01`，写 `base_ref: 2744a976b`）买的正是这一点（判据 61 那一族的又一次落地）。
+新基线的 `--check` 现读 rc=0：`P1 upstream-owned files modified: 114 (+10950/-518) … P1 invariants hold`。
+
+**验收读数**（`HEAD` = `c7ee64a01`、`git status --porcelain` 空；`HOME=/Users/futuremeng/.k102home`，判据 154；
+lint 两枚工具取 pre-commit 缓存里的**锁定版本**环境，判据 163；两态对照用的合并前 worktree =
+`/tmp/k102-pre` @ `2bb510b85`、**共享同一份 `console/node_modules`**；纯上游参照树 = `/tmp/k102-upmain` @
+`2744a976b`）：
+- **前端全量**：532 files / 4,948 cases，两轮 242.58 s / 265.86 s。**红 17 枚文件 = 12 枚收集错误 +
+  5 枚断言文件（分别 3 / 7 / 3 / 1 / 10 条 = 24 条红用例）**。同一依赖状态下合并前那棵树跑出**逐文件、
+  逐用例相同**的 17/24 ⇒ **本笔合并造红 0**（判据 166；§8.24 记的"前端基线 75 文件 / 482 用例"在这一版
+  依赖状态下已经不能用来判红）。
+  17 枚按根因分四族，四族都不是合并造出来的：
+  (a) 12 枚收集错误 = fork 自有 `console/vitest.config.ts` 的**前缀 alias** 把 `@agentscope-ai/design` 整族
+  吃掉，深路径（`/lib/i18n` 等）被改写进 mock，`deps.inline` 的正则又排除 icons/chat/design ⇒ 判据 165；
+  (b) `register.test.ts` 7 条 + `i18n.test.ts` 3 条 = overlay 注册打在替身上；
+  (c) `openExternalLink.test.ts` 10 条 = Tauri 命令 spy 一次没被调到
+  （`AssertionError: expected "vi.fn()" to be called with arguments: [ 'open_external_link', …(1) ] /
+  Number of calls: 0`，`:106`）；
+  (d) 两枚案例级分歧：`Chat/OptionsPanel/defaultConfig.test.ts` 3 条（用例期望 `/online.svg`，生产给
+  `/copaw-icon.svg`——那枚生产文件正是册里 7 枚"碰过的命名"文件之一，`naming: 1`、+2/−2）、
+  `ProviderConfigModal.test.tsx` 1 条（`TypeError: default.getAgentRunningConfig is not a function`，
+  栈指 `ProviderConfigModal.tsx:556`，fork 加的叫法，册 +236/−0）。
+- **`tsc -b --force`**：**19 = 19**，两态规范化错误清单逐条相同 ⇒ 合并造类型错 0。
+- **black（锁定 rev 23.3.0，钩子 `--line-length=79`，exclude 只有 `.*/skills/.*|^scripts/pack/|^e2e/`）**：
+  offender **180 = 180** 枚文件，两态一致 ⇒ 合并增量 0。构成：`src/qwenpaw` 84、`tests/unit` 54、`src/copaw` 20、
+  `scripts/` 15、其余（`tmp/` 与根目录散文件）7；按所有权分 = **册内上游自有 16 枚 / 册外 164 枚**
+  （那 16 枚就是"顺手格式化会给上游宿主加删除行"的那批，判据 22/129）。纯上游树 `2744a976b` 同一选择集
+  offender = **0** ⇒ 这 180 枚全是我们造成的形状。
+- **flake8（锁定 rev 6.1.0，`.flake8` 的 `exclude = scripts/*, src/agentscope/rpc/*` 生效）**：
+  **8,965 = 8,965** 处 ⇒ 合并增量 0。大头是 tab 缩进的 W191，集中在 `src/qwenpaw/knowledge/`
+  （`hanlp_nlp_runtime.py` 单文件 992 枚、`project_pipeline_projection.py` 909、`project_pipeline_manager.py` 572）。
+- **门禁按 CI 定义现枚举**（判据 92）全 rc=0：locale 串与 §8.24 逐字相同
+  （`4658 production gated keys / 59 template key families gated / 7 exempted / 1459 overlay keys en/zh /
+  23 upstream-owned keys exempted`）；namespace `shared 35 / copaw_only 6 / deltas 0 / PASSED`；
+  brand `ledger replayable: 7 files / 35 lines`；发布渠道 `R1-R5 over 6 channel files`；
+  channel contracts 18 渠道 OK；pipeline `templates_with_issues: 0`；
+  **`ci command targets` 从 §8.24 的 `16 run commands across 3 package dirs` 变成
+  `18 run commands across 4 package dirs`** —— 这是合并带进来的合法移动（上游新增一枚 package 目录），不是漂移。
+- **`pytest tests/unit` 全量（含 `tests/unit/channels`，`-q --tb=line -p no:randomly`）**：
+  **15 failed / 17,790 passed / 24 skipped / 4 xfailed / 1,026.08 s**。⚠ 这是"整个 `tests/unit`"口径，
+  与 §8.24 那条"CI 选择集（`--ignore=tests/unit/channels`）15 failed / 15,707 passed"**不是同一个集合**，
+  两个 15 是巧合同数、不是同一批。本笔这 15 枚 = `tests/unit/cli/test_cli_update.py` 11 枚 +
+  `test_cli_update_overlay.py` 3 枚 = 发布渠道那 14 枚 `pending` 欠条（等阶段 2 授权，账在
+  `project-copaw-release-channel`）+ `test_safety_checks.py::test_b1_normalize_before_home_glob_match`
+  1 枚（判据 160 那一枚，本笔把它的机制读得更细了，见 8.27 判据 168）。
+- **L1 must-pass 五目录**：**1,336 passed / 1 skipped / 19.80 s**，与 §8.20/§8.22/§8.24 同计数。
+- **分支拓扑**：`main` = `5d5c0d572`，`HEAD..main` = **0**、`main..HEAD` = **1,250** ⇒ `main` 可直接快进；
+  `HEAD..upstream/main` = **0**；`origin/sync/upstream-20261009` 落后本地 18 枚。
+
+**"追上那 1201 枚"的验收口径**：GitHub 那行"1121 ahead / 1201 behind"比的是**被展示分支**与
+`agentscope-ai/QwenPaw:main` 的祖先关系，**合并本身不改变它**（判据 167）——让 behind 归零的动作是把 `main`
+（以及同处 `5d5c0d572` 的 `wp/integration`）快进到本分支。这就是本笔最后那个推送。
+
+**两处自我更正**：
+1. 本笔早期我说过"tsc 从 19 降到 16"——**撤回**：两态都是 19，且规范化清单逐条相同（上面那条是复测读数）。
+2. §8.24 倒数第 8 行"CI 无跑 flake8 的 workflow（判据 73）"、以及判据 73 原文里"全仓**没有任何 workflow 跑
+   flake8/ruff/black**"这一句（`2026-10-01-conflict-surface-backlog.md:808`）**已作废**，证据与教训记在
+   8.27 判据 162；同一句里"`.flake8` 的 `exclude = scripts/*` ⇒ flake8 读不到 `scripts/`"仍成立，
+   但"`scripts/` 无格式化门禁覆盖"对 **black 是错的**（black 钩子只排 `scripts/pack/`，现数 `scripts/` 下
+   15 枚 offender）。§8.24 那条 flake8 三枚文件读数用的是未固定版本，按判据 163 属"不可比"，
+   好在"净 −6、新增 0"的方向在锁定版本下重取照旧成立。
+
+**没量什么**：CI 干净 HOME 下的实际读数（本机取不了）；`main` 快进之后的 CI 表现（快进是本笔之后的动作）；
+上面 (b)(c) 两族红的根因只到"报错文本 + 栈指哪一行"，没做单枚最小复现——它们不是合并造的红，排在待裁里；
+pre-commit 那道 workflow 的 pylint/mypy 逐枚清单没取（只取了 CI 给的汇总数）。
+
+### 8.27 本笔新增判据 162–168
+
+- **162（"仓里没有 X 门禁"这类否定判据必须由 CI 定义枚举支撑，而 `pre-commit` 那种两跳形态最容易被漏）**：
+  判据 73 / 126 断言"全仓没有任何 workflow 跑 flake8/ruff/black"，据此把 lint 轴判成"不是债轴"。实测相反：
+  `.pre-commit-config.yaml` 锁了 black 23.3.0 / flake8 6.1.0 / mypy v1.7.0 / pylint v3.0.2 / prettier v3.0.0 /
+  actionlint v1.7.7，`.github/workflows/pre-commit.yml` 在 `on: push` + PR 上装 `-e ".[dev]"`、
+  `pre-commit install`、`pre-commit run --all-files 2>&1 | tee pre-commit.log || true`，再用
+  `grep -q Failed pre-commit.log` 决定退出。`gh` 读 `Pre-commit Checks`：本分支连续 **≥8 次 push 全部
+  failure**（run 38097953005 @ `2bb510b85` 2026-10-11T00:18:02Z，以及 38074678871、38068118766、38067995705、
+  38038384516、38007321720、37966684134、37959972296；单次 12–18 min）。run 38097953005 的钩子判定：
+  **mypy Failed（Found 64 errors in 22 files，checked 2157 source files）、black Failed（183 行 "reformatted"）、
+  flake8 Failed、pylint Failed**；check-ast / check-yaml / check-xml / check-toml / check-docstring-first /
+  check-json 与 prettier Passed。⇒ **这个 fork 从来没有通过这道 workflow**，而它最容易被
+  "grep workflow 里的 `black|flake8|ruff`"漏掉：钩子名不在 `*.yml` 里，`*.yml` 只写 `pre-commit run`。
+  **否定判据的取证面要包含"外部工具自己的配置文件"，不能只有 workflow 文件。**
+- **163（本地 lint 读数只在版本与被门禁锁定的版本一致时才算数；而 pinned 环境已经躺在 pre-commit 缓存里）**：
+  同一棵树，随手装的 black 与门禁锁定的 **23.3.0** 给出的 offender 集合不同，两个数不可比。可复用的锁定环境
+  不用新建 venv、不用装包：`~/.cache/pre-commit/repoucwzvhwz/py_env-python3.12/bin/black`
+  （自报 `0.1.dev1+gbf7a16254`，CPython 3.12.11）、`~/.cache/pre-commit/reposrj6vl_p/py_env-python3.13/bin/flake8`。
+  判据 73 的读数要作废，一半原因就是它拿的是未固定版本的本地数。⚠ 脱离 `.pre-commit-config.yaml` 直接跑工具
+  会算错选择集：`--line-length=79` 与 `exclude: '(?x)(.*/skills/.*|^scripts/pack/|^e2e/)'` 都是钩子字段给的。
+- **164（CI 日志是"每个钩子过/没过"的证据，不是普查；判数量要用 pinned 工具现数）**：同一棵树同一钩子，
+  CI 的 flake8 段 **1,596** 行 findings，本地按 `.flake8` 的 exclude 取 CI 选择集是 **8,965** 处；
+  `src/qwenpaw/knowledge/hanlp_nlp_runtime.py` CI 报 **334** 枚 W191，而 `git show HEAD:` 那份现数 **992** 枚
+  tab；被 track、且不在任何 exclude 里的 `plugins/**`、`packages/**`（`motion_engine.py`、`mail_client.py`、
+  `live_operation_guidance.py`）在 CI 日志里 **0 命中**。`--log-failed` 复跑内容一致，没有 `.gitmodules`，
+  也没有能解释它的 gitignore 命中。**这条差异我没结清，留在册上当开放项**；它不影响本笔结论，因为两态对照
+  用的是同一个本地 pinned 工具（增量 0），而判"红/绿"用的是 CI。**⇒ 一份日志能支撑的断言类型，要看它的
+  收集面是不是和你要量的那个面一致。**
+- **165（fork 自有的前缀 alias 会静默杀掉一整族深路径导入；红要先按"收集错误 / 断言失败"分类再数）**：
+  `console/vitest.config.ts` 把 `@agentscope-ai/design` 整个**前缀**重写到 `src/test/design-mock.ts`，
+  于是 `@agentscope-ai/design/lib/i18n` 这类深路径也被改写进 mock，而 `deps.inline` 的正则
+  `[/@agentscope-ai\/(?!icons|chat|design)/]` 恰好把这三族排除在 inline 之外 ⇒ **12 枚测试文件在收集期就死，
+  一条用例都没跑**。它们在"红文件数"里和真正的断言失败长得一样，实际是**覆盖丢失**：本笔那 17 枚红里有 12 枚
+  根本没有用例。alias 只列 SDK 根 + 一枚 `types.js` 子路径，等于宣告"其余深子路径不可解析"。
+  **⇒ 判"套件覆盖了什么"之前，先把收集错误单独列一张表；它不是红，是"没测"。**
+- **166（全量红集合要和"同一 `node_modules` 的合并前 worktree"两态对照，不能对记忆里的基线串）**：
+  我原本拿 §8.24 记的"75 文件 / 482 用例"去判这次的 17 枚红 / 24 条，会得出"合并砍出 24 条红"并开一笔修复账。
+  在 `/tmp/k102-pre`（`2bb510b85`，**共享同一份 `console/node_modules`**）跑出与 HEAD **逐文件、逐用例相同**的
+  结果之后，结论翻成"合并造红 0，24 条是既有债"。代价是一次全量跑（本仓 4–5 min）。锁文件或依赖版本一变，
+  历史基线串立刻失效——它连自己量的是哪份依赖状态都不记得。同一手法在本笔还量出 tsc 19 = 19、
+  black 180 = 180、flake8 8,965 = 8,965；纯上游树 `/tmp/k102-upmain` @ `2744a976b` 用来回答
+  "这是上游自己的形状还是我们造成的"（同一选择集里上游 black offender = **0**）。
+- **167（"behind N commits" 是展示分支的祖先关系读数，不是合并的读数）**：合并让 `upstream/main` 被吸收
+  （`HEAD..upstream/main` = 0），但 GitHub 那行"1121 ahead / 1201 behind"比的是**报告分支**与
+  `agentscope-ai/QwenPaw:main`；`main..HEAD` = 1,250、`HEAD..main` = 0 ⇒ 只有把 `main` 快进过来那行才归零。
+  任何"追上上游了没有"的验收必须指明是哪条分支相对谁，否则一笔已完成的合并会因为报告分支没动而"看起来没做"
+  （判据 20 执行侧的第二例：验收口径要从被展示的那条分支倒推，不能从工作分支自证）。
+- **168（选址类"临时缓解"要按被测函数的判定维度给，不能按"看起来像真家目录"给）**：判据 160 教的是"为测试卫生
+  选隔离 HOME 时选 `/Users/…` 形状，别放 `/tmp` 下"。本笔在 `HOME=/Users/futuremeng/.k102home` 下那枚
+  `test_b1_normalize_before_home_glob_match` **照旧红**，机制读到字节：`safety_checks.py:344` 注释与 `:439-444`
+  写的是 `if top in _HOME_TOP_LEVEL: return len(parts) <= 3` —— 家目录树只在**深度 ≤3**（`/Users/<user>`）时被判
+  catastrophic，而 `../*` 从 `$HOME/project` 归一化到 `/Users/futuremeng/.k102home` 是 **4 段** ⇒ 判不出来。
+  也就是说 `/tmp` 形状（首段不在 `{home, users}`）与"更深的一层 HOME"（首段对但深度超）**两种选址各因一因**，
+  而只有 `HOME` 本身恰好是 `/Users/<单段>` 才满足这枚用例的假设。**⇒ 一条"换目录就好"的建议必须写成被测判据的
+  形式（这里 = 首段 ∈ {home,users} 且 len(parts) ≤ 3），否则它只是把红从一种成因换成另一种。**
+
+**待裁（刀 102 之后新增，都不在刀序里）**：(a) 那 12 枚被前缀 alias 杀掉的收集错误要不要修
+`console/vitest.config.ts` 的 alias 形状（候选改法：按子路径逐条 alias，或把 `@agentscope-ai/design` 从 alias
+里摘掉改走真实包）—— 它买回的是 12 枚文件的覆盖，不是"多几条绿"；(b) 8.26 (b)(c)(d) 三族共 12 条断言红的
+逐枚归因；(c) 判据 164 那条"CI 日志 vs 本地选择集"的差异要不要结清；(d) 判据 162 之后 lint 轴**是**门禁了
+（black 180 枚 / mypy 64 错 / flake8 8,965 处 / pylint 亦红），要不要排刀。本笔的处置是**不排**，理由与实测都记在
+这里：180 枚里 164 枚在册外、16 枚是上游宿主，格式化那 16 枚会给上游文件加删除行（判据 22），而只修几枚
+fork 自有文件也不会让这道 workflow 转绿（它还红在 mypy / flake8 / pylint 上）——已实测一次
+`pre-commit run black` 就地改写了 3 枚 tracked 文件（`agents/skill_system/__init__.py`、`app/_app.py`、
+`app/routers/skills.py`，196 行 diff 存 `/tmp/k102_black_diff.txt`），确认树原本干净且 diff 全是 black 的换行后
+用 `git checkout --` 撤销。**这笔账的形状是"一条从未绿过的全仓门禁"，它要的是单独一次裁决，不是顺手修。**
+
+相关账目：本节 = 已闭环 **102**（刀 94 = 8.9 那笔，裁决 (b) 的落地；刀 95 = 8.11 那笔，8.10 里唯一一枚生产侧；
 刀 96 = 8.14 那笔，8.10 里其余 14 枚测试侧；刀 97 = 8.16 那笔，8.14 待办 ① 那枚生产侧签名；
 刀 98 = 8.18 那笔，8.14 待办 ① 剩下的 2 枚测试侧红；刀 99 = 8.20 那笔，8.18 末句登记的那 6 枚 migration 红；
-刀 100 = 8.22 那笔，8.20 验收读数里剩下的 14 枚散枚红；刀 101 = 8.24 那笔，8.22 待裁 ② 那 4 枚自 skip 的用例）；
+刀 100 = 8.22 那笔，8.20 验收读数里剩下的 14 枚散枚红；刀 101 = 8.24 那笔，8.22 待裁 ② 那 4 枚自 skip 的用例；
+刀 102 = 8.26 那笔，8.23 末句"下一个动作只能是合并本身"落地（16 枚提交 + 4 枚手解宿主）+ 新分叉点重立基线）；
 判据 113–128 原文在本节 8.7、129–136 在 8.12、137–141 在 8.15、142–143 在 8.17、144–147 在 8.19、148–151 在 8.21、
-152–156 在 8.23、157–161 在 8.25（§1–§6 引用的 84–86、101–112 仍是
+152–156 在 8.23、157–161 在 8.25、162–168 在 8.27（§1–§6 引用的 84–86、101–112 仍是
 `2026-10-07-trial-merge-conflict-table.md` 与本文前七节的口径）。
