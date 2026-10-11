@@ -1,7 +1,8 @@
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
 import i18n from "../../i18n";
+import { loadTestLocales } from "../../test/loadTestLocales";
 
 const LANGS = ["en", "ru", "zh", "ja", "pt-BR", "id"] as const;
 
@@ -78,6 +79,12 @@ describe("upstream locale files stay free of copaw-owned keys", () => {
 });
 
 describe("copaw overlay registers into the upstream translation namespace", () => {
+  // The overlay only *adds* to a language bundle; the upstream base json
+  // arrives through i18n.ts `localeBackend`.  Asserting against the store as
+  // left by module import would pass even if the registration silently
+  // prevented the base load, so drive a real load of all six languages first.
+  beforeAll(() => loadTestLocales());
+
   it.each(LANGS)("%s registers exactly the pre-move merged bundle", (lng) => {
     expect(i18n.getResourceBundle(lng, "translation")).toEqual(
       expectedBundle(lng),

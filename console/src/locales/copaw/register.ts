@@ -76,7 +76,7 @@ function buildOverlay(...parts: TranslationMap[]): TranslationMap {
   );
 }
 
-const copawOverlays: Record<string, TranslationMap> = {
+export const copawOverlays: Record<string, TranslationMap> = {
   // The knife-72 groups are en/zh deliverables: the other four languages reach
   // them through i18n.ts `fallbackLng`.  The knowledge group is en/zh too,
   // except for the `knowledge.quantReason` family, for which conflict-surface
@@ -118,9 +118,24 @@ const copawOverlays: Record<string, TranslationMap> = {
 };
 
 export function registerCopawTranslations(
-  instance: Pick<typeof i18n, "addResourceBundle">,
+  instance: Pick<typeof i18n, "addResourceBundle" | "on">,
 ): void {
-  for (const [lng, translation] of Object.entries(copawOverlays)) {
-    instance.addResourceBundle(lng, "translation", translation, true, true);
-  }
+  // i18next fetches a language only while the store still has no bundle for it
+  // (`BackendConnector.queueLoad` checks `store.hasResourceBundle`), so adding
+  // every overlay up front marks all six `translation` bundles as loaded and
+  // the upstream base dictionaries never load.  Merge per language once its
+  // base bundle has arrived instead.
+  //
+  // Upstream tests that `vi.mock("i18next")` hand back a `{ t, use, init }`
+  // stand-in with no event API, and their `t` never consults the store, so
+  // there is nothing here to overlay.
+  if (typeof instance.on !== "function") return;
+  instance.on("loaded", (loaded: Record<string, Record<string, boolean>>) => {
+    for (const lng of Object.keys(loaded)) {
+      const translation = copawOverlays[lng];
+      if (translation) {
+        instance.addResourceBundle(lng, "translation", translation, true, true);
+      }
+    }
+  });
 }

@@ -1,6 +1,7 @@
-import { describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
 import type { TFunction } from "i18next";
 import i18n from "../../../../i18n";
+import { loadTestLocales } from "../../../../test/loadTestLocales";
 import {
   getProcessingStatusLabel,
   getProjectKnowledgePipelineAlertDescription,
@@ -70,6 +71,11 @@ const PIPELINE_STAGES = [
     label: "L3 · Agentic",
   },
 ] as const;
+
+// i18next fetches a language on demand, and the fork overlay merges in on the
+// resulting `loaded` event, so `t(key, { lng })` only resolves after the load has
+// been driven and awaited.
+beforeAll(() => loadTestLocales());
 
 describe("projectKnowledgePipelineUi semantic helpers", () => {
   it("maps processing modes to quantization stages", () => {

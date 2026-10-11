@@ -241,6 +241,10 @@ vi.mock("../hooks/useProjectRealtimeController", () => ({
 }));
 
 vi.mock("../components/ProjectAutomationPanel", () => ({ default: () => <div /> }));
+// The editor panel pulls in monaco, which needs `document.queryCommandSupported`
+// at import time — jsdom does not implement it, so the whole file fails to
+// collect.  No case in this file asserts on the editor.
+vi.mock("../components/ProjectEditorPanel", () => ({ default: () => <div /> }));
 vi.mock("../components/ProjectKnowledgePanel", () => ({ default: () => <div /> }));
 vi.mock("../components/ProjectKnowledgeOutputsPanel", () => ({ default: () => <div /> }));
 vi.mock("../components/ProjectKnowledgeProcessingPanel", () => ({ default: () => <div /> }));

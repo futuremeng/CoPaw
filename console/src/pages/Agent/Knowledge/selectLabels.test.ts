@@ -1,7 +1,8 @@
 import { readFileSync } from "node:fs";
-import { describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
 import type { TFunction } from "i18next";
 import i18n from "../../../i18n";
+import { loadTestLocales } from "../../../test/loadTestLocales";
 import {
   graphSortFieldOptions,
   graphSortOrderOptions,
@@ -75,6 +76,11 @@ const EXPECTED: Record<
     },
   },
 };
+
+// i18next fetches a language on demand, and the fork overlay merges in on the
+// resulting `loaded` event, so `t(key, { lng })` only resolves after the load has
+// been driven and awaited.
+beforeAll(() => loadTestLocales());
 
 describe.each(["en", "zh"] as const)("%s select labels", (lng) => {
   const t = translateIn(lng);

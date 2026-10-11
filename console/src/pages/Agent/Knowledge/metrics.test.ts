@@ -1,5 +1,6 @@
-import { describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
 import i18n from "../../../i18n";
+import { loadTestLocales } from "../../../test/loadTestLocales";
 import { t } from "../Projects/tests/enLocaleTranslate";
 import type {
   KnowledgeHistoryBackfillStatus,
@@ -69,6 +70,11 @@ function createMemifyTask(overrides: Partial<KnowledgeTaskProgress>): KnowledgeT
     ...overrides,
   } as KnowledgeTaskProgress;
 }
+
+// i18next fetches a language on demand, and the fork overlay merges in on the
+// resulting `loaded` event, so `t(key, { lng })` only resolves after the load has
+// been driven and awaited.
+beforeAll(() => loadTestLocales(["en", "zh", "ja", "ru"]));
 
 describe("knowledge metrics", () => {
   it("aggregates base and enrichment quality metrics", () => {
