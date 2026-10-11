@@ -455,7 +455,9 @@ def test_search_interlinear_hit_includes_line_index_references(tmp_path: Path):
             "artifacts": [
                 {
                     "path": "interlinear/search-interlinear.txt",
-                    "line_index_path": "interlinear/search-interlinear.line-index.jsonl",
+                    "line_index_path": (
+                        "interlinear/search-interlinear.line-index.jsonl"
+                    ),
                     "document_path": "search.md",
                     "title": "Search",
                     "line_count": 2,
@@ -601,11 +603,13 @@ def test_search_skips_unregistered_project_workspace_source(tmp_path: Path):
     project_dir = tmp_path / "projects" / "project-demo"
     project_dir.mkdir(parents=True, exist_ok=True)
     (project_dir / "PROJECT.md").write_text(
-        "---\n"
-        "id: project-demo\n"
-        "name: Project Demo\n"
-        "project_agent_knowledge_registered: false\n"
-        "---\n",
+        (
+            "---\n"
+            "id: project-demo\n"
+            "name: Project Demo\n"
+            "project_agent_knowledge_registered: false\n"
+            "---\n"
+        ),
         encoding="utf-8",
     )
 
@@ -657,11 +661,13 @@ def test_search_skips_unregistered_project_workspace_source(tmp_path: Path):
     )
 
     (project_dir / "PROJECT.md").write_text(
-        "---\n"
-        "id: project-demo\n"
-        "name: Project Demo\n"
-        "project_agent_knowledge_registered: true\n"
-        "---\n",
+        (
+            "---\n"
+            "id: project-demo\n"
+            "name: Project Demo\n"
+            "project_agent_knowledge_registered: true\n"
+            "---\n"
+        ),
         encoding="utf-8",
     )
 
@@ -830,21 +836,25 @@ def test_index_source_defers_semantic_artifacts_when_engine_ready(
         "reason_code": "HANLP_READY",
         "reason": "HanLP semantic engine is ready.",
     }
-    with patch.object(
-        manager._semantic_runtime,
-        "probe",
-        return_value=ready_state,
-    ), patch.object(
-        manager._semantic_runtime,
-        "tokenize",
-        return_value=(
-            ["AgentRunner", "ToolDispatcher"],
-            ready_state,
+    with (
+        patch.object(
+            manager._semantic_runtime,
+            "probe",
+            return_value=ready_state,
         ),
-    ), patch.object(
-        manager,
-        "_resolve_chunk_interlinear_path",
-        return_value="",
+        patch.object(
+            manager._semantic_runtime,
+            "tokenize",
+            return_value=(
+                ["AgentRunner", "ToolDispatcher"],
+                ready_state,
+            ),
+        ),
+        patch.object(
+            manager,
+            "_resolve_chunk_interlinear_path",
+            return_value="",
+        ),
     ):
         manager.index_source(source, config, include_semantic_artifacts=False)
 
@@ -857,8 +867,9 @@ def test_index_source_defers_semantic_artifacts_when_engine_ready(
     assert chunk["ner_entity_count"] == 0
     assert chunk["ner_input_mode"] == ""
     assert chunk["ner_reason_code"] == "INDEXING_DEFERRED"
-    assert chunk["ner_reason"] == (
-        "Semantic artifact generation is deferred to graphifying stage."
+    assert (
+        chunk["ner_reason"]
+        == "Semantic artifact generation is deferred to graphifying stage."
     )
     assert chunk["ner_format_version"] == "1.1"
     assert "ner_path" not in chunk
@@ -899,33 +910,37 @@ def test_index_source_writes_pos_files_when_pos_batch_ready(tmp_path: Path):
         "reason_code": "HANLP_READY",
         "reason": "HanLP semantic engine is ready.",
     }
-    with patch.object(
-        manager._semantic_runtime,
-        "tokenize",
-        side_effect=lambda text, _config=None: (
-            [token for token in text.split() if token],
-            ready_state,
+    with (
+        patch.object(
+            manager._semantic_runtime,
+            "tokenize",
+            side_effect=lambda text, _config=None: (
+                [token for token in text.split() if token],
+                ready_state,
+            ),
         ),
-    ), patch.object(
-        manager._semantic_runtime,
-        "run_task_tokenized_batch",
-        return_value=(
-            [
+        patch.object(
+            manager._semantic_runtime,
+            "run_task_tokenized_batch",
+            return_value=(
                 [
-                    {"token": "Alpha", "pos": "NN"},
-                    {"token": "Beta", "pos": "VV"},
+                    [
+                        {"token": "Alpha", "pos": "NN"},
+                        {"token": "Beta", "pos": "VV"},
+                    ],
+                    [
+                        {"token": "Gamma", "pos": "NN"},
+                        {"token": "Delta", "pos": "NN"},
+                    ],
                 ],
-                [
-                    {"token": "Gamma", "pos": "NN"},
-                    {"token": "Delta", "pos": "NN"},
-                ],
-            ],
-            ready_state,
+                ready_state,
+            ),
         ),
-    ), patch.object(
-        manager._semantic_runtime,
-        "run_task",
-        return_value=([], ready_state),
+        patch.object(
+            manager._semantic_runtime,
+            "run_task",
+            return_value=([], ready_state),
+        ),
     ):
         manager.index_source(source, config, include_semantic_artifacts=False)
         manager.materialize_semantic_artifacts_for_source(
@@ -989,21 +1004,25 @@ def test_index_source_directory_ner_requires_interlinear_without_fallback(
         "reason_code": "HANLP_READY",
         "reason": "HanLP semantic engine is ready.",
     }
-    with patch.object(
-        manager._semantic_runtime,
-        "probe",
-        return_value=ready_state,
-    ), patch.object(
-        manager._semantic_runtime,
-        "tokenize",
-        return_value=(
-            ["AgentRunner", "ToolDispatcher"],
-            ready_state,
+    with (
+        patch.object(
+            manager._semantic_runtime,
+            "probe",
+            return_value=ready_state,
         ),
-    ), patch.object(
-        manager,
-        "_resolve_chunk_interlinear_path",
-        return_value="",
+        patch.object(
+            manager._semantic_runtime,
+            "tokenize",
+            return_value=(
+                ["AgentRunner", "ToolDispatcher"],
+                ready_state,
+            ),
+        ),
+        patch.object(
+            manager,
+            "_resolve_chunk_interlinear_path",
+            return_value="",
+        ),
     ):
         manager.index_source(source, config)
 
@@ -1074,21 +1093,25 @@ def test_index_source_project_directory_uses_chunks_input_mode(tmp_path: Path):
         "reason_code": "HANLP_READY",
         "reason": "HanLP semantic engine is ready.",
     }
-    with patch.object(
-        manager._semantic_runtime,
-        "probe",
-        return_value=ready_state,
-    ), patch.object(
-        manager._semantic_runtime,
-        "tokenize",
-        return_value=(
-            ["AgentRunner", "ToolDispatcher"],
-            ready_state,
+    with (
+        patch.object(
+            manager._semantic_runtime,
+            "probe",
+            return_value=ready_state,
         ),
-    ), patch.object(
-        manager,
-        "_resolve_chunk_interlinear_path",
-        return_value="",
+        patch.object(
+            manager._semantic_runtime,
+            "tokenize",
+            return_value=(
+                ["AgentRunner", "ToolDispatcher"],
+                ready_state,
+            ),
+        ),
+        patch.object(
+            manager,
+            "_resolve_chunk_interlinear_path",
+            return_value="",
+        ),
     ):
         manager.index_source(source, config)
 
@@ -1184,25 +1207,29 @@ def test_index_source_prefers_hanlp_ner_task_mentions_when_available(
         "reason_code": "HANLP_TASK_READY",
         "reason": "HanLP task is ready.",
     }
-    with patch.object(
-        manager._semantic_runtime,
-        "probe",
-        return_value=ready_state,
-    ), patch.object(
-        manager._semantic_runtime,
-        "run_ner",
-        return_value=(
-            [
-                {"text": "微软", "label": "ORG", "span": [0, 2]},
-                {"text": "北京", "label": "GPE", "span": [3, 5]},
-            ],
-            ready_state,
+    with (
+        patch.object(
+            manager._semantic_runtime,
+            "probe",
+            return_value=ready_state,
         ),
-    ), patch.object(
-        manager._semantic_runtime,
-        "tokenize",
-        side_effect=AssertionError(
-            "tokenize should not be used when HanLP NER task succeeds",
+        patch.object(
+            manager._semantic_runtime,
+            "run_ner",
+            return_value=(
+                [
+                    {"text": "微软", "label": "ORG", "span": [0, 2]},
+                    {"text": "北京", "label": "GPE", "span": [3, 5]},
+                ],
+                ready_state,
+            ),
+        ),
+        patch.object(
+            manager._semantic_runtime,
+            "tokenize",
+            side_effect=AssertionError(
+                "tokenize should not be used when HanLP NER task succeeds",
+            ),
         ),
     ):
         manager.index_source(source, config)
@@ -1279,27 +1306,34 @@ def test_index_source_accepts_wrapped_hanlp_ner_mentions_payload(
         "reason_code": "HANLP_TASK_READY",
         "reason": "HanLP task is ready.",
     }
-    with patch.object(
-        manager._semantic_runtime,
-        "probe",
-        return_value=ready_state,
-    ), patch.object(
-        manager._semantic_runtime,
-        "run_ner",
-        return_value=(
-            {
-                "mentions": [
-                    {"text": "微软", "label": "ORG", "span": [0, 2]},
-                    {"text": "北京", "label": "LOC", "span": [3, 5]},
-                ],
-            },
-            ready_state,
+    with (
+        patch.object(
+            manager._semantic_runtime,
+            "probe",
+            return_value=ready_state,
         ),
-    ), patch.object(
-        manager._semantic_runtime,
-        "tokenize",
-        side_effect=AssertionError(
-            "tokenize should not be used when wrapped HanLP NER payload succeeds",
+        patch.object(
+            manager._semantic_runtime,
+            "run_ner",
+            return_value=(
+                {
+                    "mentions": [
+                        {"text": "微软", "label": "ORG", "span": [0, 2]},
+                        {"text": "北京", "label": "LOC", "span": [3, 5]},
+                    ],
+                },
+                ready_state,
+            ),
+        ),
+        patch.object(
+            manager._semantic_runtime,
+            "tokenize",
+            side_effect=AssertionError(
+                (
+                    "tokenize should not be used when wrapped HanLP NER"
+                    " payload succeeds"
+                ),
+            ),
         ),
     ):
         manager.index_source(source, config)
@@ -1347,25 +1381,32 @@ def test_index_source_accepts_label_keyed_hanlp_ner_payload(tmp_path: Path):
         "reason_code": "HANLP_TASK_READY",
         "reason": "HanLP task is ready.",
     }
-    with patch.object(
-        manager._semantic_runtime,
-        "probe",
-        return_value=ready_state,
-    ), patch.object(
-        manager._semantic_runtime,
-        "run_ner",
-        return_value=(
-            {
-                "ORG": [["微软", 0, 2]],
-                "LOC": [["北京", 3, 5]],
-            },
-            ready_state,
+    with (
+        patch.object(
+            manager._semantic_runtime,
+            "probe",
+            return_value=ready_state,
         ),
-    ), patch.object(
-        manager._semantic_runtime,
-        "tokenize",
-        side_effect=AssertionError(
-            "tokenize should not be used when label-keyed HanLP payload succeeds",
+        patch.object(
+            manager._semantic_runtime,
+            "run_ner",
+            return_value=(
+                {
+                    "ORG": [["微软", 0, 2]],
+                    "LOC": [["北京", 3, 5]],
+                },
+                ready_state,
+            ),
+        ),
+        patch.object(
+            manager._semantic_runtime,
+            "tokenize",
+            side_effect=AssertionError(
+                (
+                    "tokenize should not be used when label-keyed HanLP"
+                    " payload succeeds"
+                ),
+            ),
         ),
     ):
         manager.index_source(source, config)
@@ -1422,19 +1463,26 @@ def test_index_source_does_not_fallback_to_semantic_tokens_when_hanlp_ready_but_
         "reason_code": "HANLP_TASK_READY",
         "reason": "HanLP task is ready.",
     }
-    with patch.object(
-        manager._semantic_runtime,
-        "probe",
-        return_value=ready_state,
-    ), patch.object(
-        manager._semantic_runtime,
-        "run_task",
-        return_value=([], ready_state),
-    ), patch.object(
-        manager._semantic_runtime,
-        "tokenize",
-        side_effect=AssertionError(
-            "tokenize should not be used when HanLP NER task is ready but empty",
+    with (
+        patch.object(
+            manager._semantic_runtime,
+            "probe",
+            return_value=ready_state,
+        ),
+        patch.object(
+            manager._semantic_runtime,
+            "run_task",
+            return_value=([], ready_state),
+        ),
+        patch.object(
+            manager._semantic_runtime,
+            "tokenize",
+            side_effect=AssertionError(
+                (
+                    "tokenize should not be used when HanLP NER task is ready"
+                    " but empty"
+                ),
+            ),
         ),
     ):
         manager.index_source(source, config)
@@ -1520,37 +1568,43 @@ def test_index_source_populates_hanlp_syntax_tasks_when_available(
             }, ready_state
         raise AssertionError(f"unexpected task key: {task_key}")
 
-    with patch.object(
-        manager._semantic_runtime,
-        "probe",
-        return_value=ready_state,
-    ), patch.object(
-        manager._semantic_runtime,
-        "run_task",
-        side_effect=fake_run_task,
-    ), patch.object(
-        manager._semantic_runtime,
-        "run_ner",
-        return_value=(
-            [
-                {"text": "微软", "label": "ORG", "span": [0, 2]},
-                {"text": "北京", "label": "GPE", "span": [3, 5]},
-            ],
-            ready_state,
+    with (
+        patch.object(
+            manager._semantic_runtime,
+            "probe",
+            return_value=ready_state,
         ),
-    ), patch.object(
-        manager._semantic_runtime,
-        "run_dep",
-        side_effect=lambda text, current_config: fake_run_task(
-            "dep",
-            text,
-            current_config,
+        patch.object(
+            manager._semantic_runtime,
+            "run_task",
+            side_effect=fake_run_task,
         ),
-    ), patch.object(
-        manager._semantic_runtime,
-        "tokenize",
-        side_effect=AssertionError(
-            "tokenize should not be used when HanLP NER task succeeds",
+        patch.object(
+            manager._semantic_runtime,
+            "run_ner",
+            return_value=(
+                [
+                    {"text": "微软", "label": "ORG", "span": [0, 2]},
+                    {"text": "北京", "label": "GPE", "span": [3, 5]},
+                ],
+                ready_state,
+            ),
+        ),
+        patch.object(
+            manager._semantic_runtime,
+            "run_dep",
+            side_effect=lambda text, current_config: fake_run_task(
+                "dep",
+                text,
+                current_config,
+            ),
+        ),
+        patch.object(
+            manager._semantic_runtime,
+            "tokenize",
+            side_effect=AssertionError(
+                "tokenize should not be used when HanLP NER task succeeds",
+            ),
         ),
     ):
         manager.index_source(source, config)
@@ -1663,37 +1717,46 @@ def test_index_source_runs_cor_after_ner_and_syntax_uses_original_text(
             return {"tree": "(S (NP 我姐) (VP 喜欢 (NP 她的猫)))"}, ready_state
         raise AssertionError(f"unexpected task key: {task_key}")
 
-    with patch.object(
-        manager._semantic_runtime,
-        "probe",
-        return_value=ready_state,
-    ), patch.object(
-        manager._semantic_runtime,
-        "run_task",
-        side_effect=fake_run_task,
-    ), patch.object(
-        manager._semantic_runtime,
-        "run_ner",
-        side_effect=lambda text, current_config: (
-            [
-                {"text": "我姐", "label": "PER", "span": [0, 2]},
-                {"text": "她的猫", "label": "PET", "span": [4, 7]},
-            ],
-            ready_state,
+    with (
+        patch.object(
+            manager._semantic_runtime,
+            "probe",
+            return_value=ready_state,
         ),
-    ), patch.object(
-        manager._semantic_runtime,
-        "run_dep",
-        side_effect=lambda text, current_config: fake_run_task(
-            "dep",
-            text,
-            current_config,
+        patch.object(
+            manager._semantic_runtime,
+            "run_task",
+            side_effect=fake_run_task,
         ),
-    ), patch.object(
-        manager._semantic_runtime,
-        "tokenize",
-        side_effect=AssertionError(
-            "tokenize should not be used when HanLP task chain is available",
+        patch.object(
+            manager._semantic_runtime,
+            "run_ner",
+            side_effect=lambda text, current_config: (
+                [
+                    {"text": "我姐", "label": "PER", "span": [0, 2]},
+                    {"text": "她的猫", "label": "PET", "span": [4, 7]},
+                ],
+                ready_state,
+            ),
+        ),
+        patch.object(
+            manager._semantic_runtime,
+            "run_dep",
+            side_effect=lambda text, current_config: fake_run_task(
+                "dep",
+                text,
+                current_config,
+            ),
+        ),
+        patch.object(
+            manager._semantic_runtime,
+            "tokenize",
+            side_effect=AssertionError(
+                (
+                    "tokenize should not be used when HanLP task chain is"
+                    " available"
+                ),
+            ),
         ),
     ):
         manager.index_source(source, config)
@@ -1906,16 +1969,19 @@ def test_delete_index_removes_ner_files(tmp_path: Path):
         "reason_code": "HANLP_READY",
         "reason": "HanLP semantic engine is ready.",
     }
-    with patch.object(
-        manager._semantic_runtime,
-        "probe",
-        return_value=ready_state,
-    ), patch.object(
-        manager._semantic_runtime,
-        "tokenize",
-        return_value=(
-            ["AgentRunner", "ToolDispatcher"],
-            ready_state,
+    with (
+        patch.object(
+            manager._semantic_runtime,
+            "probe",
+            return_value=ready_state,
+        ),
+        patch.object(
+            manager._semantic_runtime,
+            "tokenize",
+            return_value=(
+                ["AgentRunner", "ToolDispatcher"],
+                ready_state,
+            ),
         ),
     ):
         manager.index_source(source, config)
@@ -1978,16 +2044,19 @@ def test_get_source_chunk_documents_exposes_syntax_artifacts(tmp_path: Path):
         "reason_code": "HANLP_READY",
         "reason": "HanLP semantic engine is ready.",
     }
-    with patch.object(
-        manager._semantic_runtime,
-        "probe",
-        return_value=ready_state,
-    ), patch.object(
-        manager._semantic_runtime,
-        "tokenize",
-        return_value=(
-            ["AgentRunner", "ToolDispatcher"],
-            ready_state,
+    with (
+        patch.object(
+            manager._semantic_runtime,
+            "probe",
+            return_value=ready_state,
+        ),
+        patch.object(
+            manager._semantic_runtime,
+            "tokenize",
+            return_value=(
+                ["AgentRunner", "ToolDispatcher"],
+                ready_state,
+            ),
         ),
     ):
         manager.index_source(source, config)
@@ -2376,7 +2445,9 @@ def test_semantic_engine_state_reports_tokenize_runtime_failure(
                 "engine": "hanlp",
                 "status": "error",
                 "reason_code": "HANLP_TOKENIZE_FAILED",
-                "reason": "HanLP semantic tokenization failed via tok: RuntimeError.",
+                "reason": (
+                    "HanLP semantic tokenization failed via tok: RuntimeError."
+                ),
             },
         ),
     ):

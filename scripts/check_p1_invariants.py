@@ -250,19 +250,25 @@ def main() -> int:
 
     if not args.json:
         print(
-            f"P1 upstream-owned files modified: {totals['files']} "
-            f"(+{totals['added']}/-{totals['removed']})",
+            (
+                f"P1 upstream-owned files modified: {totals['files']} "
+                f"(+{totals['added']}/-{totals['removed']})"
+            ),
         )
         print(
-            f"  P1-命名: {totals['naming_files']} pure / "
-            f"{totals['naming_touched_files']} touched / "
-            f"{totals['naming_lines']} lines (admitted, replayable)",
+            (
+                f"  P1-命名: {totals['naming_files']} pure / "
+                f"{totals['naming_touched_files']} touched / "
+                f"{totals['naming_lines']} lines (admitted, replayable)"
+            ),
         )
         print(
-            f"  P1-行为: {totals['behavior_files']} files / "
-            f"+{totals['behavior_added']} invasive / "
-            f"-{totals['behavior_removed']} upstream lines deleted "
-            "(target: 0, decreasing)",
+            (
+                f"  P1-行为: {totals['behavior_files']} files / "
+                f"+{totals['behavior_added']} invasive / "
+                f"-{totals['behavior_removed']} upstream lines deleted "
+                "(target: 0, decreasing)"
+            ),
         )
         print(
             f"  mechanical: {totals['mechanical_files']} files (lockfiles)",
@@ -294,8 +300,10 @@ def main() -> int:
             problems.append(f"{key} grew: {prev_totals[key]} -> {totals[key]}")
     if totals["naming_lines"] > prev_totals["naming_lines"]:
         problems.append(
-            f"naming_lines grew: {prev_totals['naming_lines']} -> "
-            f"{totals['naming_lines']} (naming is capped by the ledger)",
+            (
+                f"naming_lines grew: {prev_totals['naming_lines']} -> "
+                f"{totals['naming_lines']} (naming is capped by the ledger)"
+            ),
         )
     prev_files = prev["files"]
     for path, entry in sorted(entries.items()):

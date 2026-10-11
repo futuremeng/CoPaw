@@ -103,7 +103,10 @@ class FlowEngineService:
         allowed = self._allowed_target_statuses(run.status)
         if target_status not in allowed:
             raise FlowTransitionNotAllowedError(
-                f"flow run transition not allowed: {run.status} -> {target_status}",
+                (
+                    f"flow run transition not allowed: {run.status} ->"
+                    f" {target_status}"
+                ),
             )
 
     def _append_transition_failure_event(
@@ -294,8 +297,11 @@ class FlowEngineService:
                 },
             )
             raise FlowTransitionConflictError(
-                "flow run transition conflicted due to concurrent status change: "
-                f"expected {current.status}, actual {latest.status}, target {status}",
+                (
+                    "flow run transition conflicted due to concurrent status"
+                    f" change: expected {current.status}, actual"
+                    f" {latest.status}, target {status}"
+                ),
             )
         self.repo.append_event(
             FlowEventRecord(

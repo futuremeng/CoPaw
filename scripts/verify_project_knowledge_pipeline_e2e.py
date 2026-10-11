@@ -110,8 +110,10 @@ def _ensure_minimal_input(project_dir: Path, relative_path: str) -> str | None:
 
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(
-        "# Project Knowledge Input\n\n"
-        "This is a minimal source file for Project Knowledge Pipeline end-to-end verification.\n",
+        (
+            "# Project Knowledge Input\n\nThis is a minimal source file for"
+            " Project Knowledge Pipeline end-to-end verification.\n"
+        ),
         encoding="utf-8",
     )
     return target.relative_to(project_dir).as_posix()
@@ -211,7 +213,9 @@ def run_verification(args: argparse.Namespace) -> VerificationResult:
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description="Verify Project Knowledge Pipeline end-to-end on one raw file.",
+        description=(
+            "Verify Project Knowledge Pipeline end-to-end on one raw file."
+        ),
     )
     parser.add_argument("--workspace", default=".", help="Workspace root path")
     parser.add_argument(
@@ -289,7 +293,10 @@ def main() -> int:
     )
 
     print(
-        f"[verify] project={result.project_id} status={result.status} ok={result.ok}",
+        (
+            "[verify]"
+            f" project={result.project_id} status={result.status} ok={result.ok}"
+        ),
     )
     if result.created_input_file:
         print(f"[verify] created input: {result.created_input_file}")

@@ -53,7 +53,11 @@ async def triplet_focus_search(
             content=[
                 TextBlock(
                     type="text",
-                    text="Error: at least one of subject/predicate/object_text/query_text is required.",
+                    text=(
+                        "Error: at least one of"
+                        " subject/predicate/object_text/query_text is"
+                        " required."
+                    ),
                 ),
             ],
         )
@@ -73,7 +77,10 @@ async def triplet_focus_search(
             content=[
                 TextBlock(
                     type="text",
-                    text="Error: knowledge is disabled in agent runtime configuration.",
+                    text=(
+                        "Error: knowledge is disabled in agent runtime"
+                        " configuration."
+                    ),
                 ),
             ],
         )
@@ -82,7 +89,10 @@ async def triplet_focus_search(
             content=[
                 TextBlock(
                     type="text",
-                    text="Error: triplet-focused search is disabled in configuration.",
+                    text=(
+                        "Error: triplet-focused search is disabled in"
+                        " configuration."
+                    ),
                 ),
             ],
         )
@@ -141,7 +151,8 @@ async def triplet_focus_search(
             "evidence": evidence,
             "scores": scores,
             "context_summary": (
-                f"Found {len(triplets)} triplets (expand_hops={max(1, int(expand_hops))})."
+                f"Found {len(triplets)} triplets"
+                f" (expand_hops={max(1, int(expand_hops))})."
             ),
             "warnings": base.warnings,
         }

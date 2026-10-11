@@ -179,9 +179,11 @@ def queue_or_start_locked(
             "current_stage": stage,
             "stage": stage,
             "progress": 0,
-            "last_started_at": now.isoformat()
-            if scheduled_for is None
-            else state.get("last_started_at"),
+            "last_started_at": (
+                now.isoformat()
+                if scheduled_for is None
+                else state.get("last_started_at")
+            ),
             "last_error": "",
             "updated_at": now.isoformat(),
             "latest_source_id": source.id,
@@ -190,14 +192,20 @@ def queue_or_start_locked(
             "quantization_stage": quantization_stage,
             "execution_context": dict(execution_context or {}),
             "semantic_engine": manager._capture_semantic_engine_state(config),
-            "scheduled_for": scheduled_for.isoformat()
-            if scheduled_for is not None
-            else None,
-            "stage_message": manager._merge_stage_message_with_semantic_summary(
-                "Project pipeline queued"
+            "scheduled_for": (
+                scheduled_for.isoformat()
                 if scheduled_for is not None
-                else "Project pipeline pending",
-                manager._build_semantic_engine_state(state),
+                else None
+            ),
+            "stage_message": (
+                manager._merge_stage_message_with_semantic_summary(
+                    (
+                        "Project pipeline queued"
+                        if scheduled_for is not None
+                        else "Project pipeline pending"
+                    ),
+                    manager._build_semantic_engine_state(state),
+                )
             ),
             "changed_files": _build_changed_files_list(
                 list(state.get("changed_paths") or []),
@@ -259,7 +267,9 @@ def _build_changed_files_list(
             "trigger_mode": trigger_mode,
             "processing_status": processing_status,
             "detected_at": now,
-            "scope": "original",  # Default scope; can be refined based on path patterns later
+            "scope": (
+                "original"
+            ),  # Default scope; can be refined based on path patterns later
         }
         for path in merged_paths
     ]

@@ -225,7 +225,9 @@ class SiameseUniNLURuntime:
             return {
                 "status": "unavailable",
                 "reason_code": "SIAMESE_PYTHON_NOT_FOUND",
-                "reason": f"Siamese python executable not found: {target_python}",
+                "reason": (
+                    f"Siamese python executable not found: {target_python}"
+                ),
                 "model_id": cls._model_id(config),
             }
 
@@ -233,10 +235,12 @@ class SiameseUniNLURuntime:
             probe_cmd = [
                 target_python,
                 "-c",
-                "import importlib;"
-                "importlib.import_module('torch');"
-                "importlib.import_module('modelscope.pipelines');"
-                "importlib.import_module('modelscope.utils.constant')",
+                (
+                    "import importlib;"
+                    "importlib.import_module('torch');"
+                    "importlib.import_module('modelscope.pipelines');"
+                    "importlib.import_module('modelscope.utils.constant')"
+                ),
             ]
             probe_res = subprocess.run(
                 probe_cmd,
@@ -272,7 +276,10 @@ class SiameseUniNLURuntime:
         return {
             "status": "ready",
             "reason_code": "SIAMESE_MODEL_READY",
-            "reason": "Siamese UniNLU dependencies available in dedicated environment.",
+            "reason": (
+                "Siamese UniNLU dependencies available in dedicated"
+                " environment."
+            ),
             "model_id": cls._model_id(config),
         }
 
@@ -610,7 +617,11 @@ def initialize_siamese_sidecar(config: Any) -> dict[str, Any]:
 
     if not success:
         manual_steps.append(
-            "Siamese sidecar probe failed. Ensure `modelscope` is installed and network access is available for model download.",
+            (
+                "Siamese sidecar probe failed. Ensure `modelscope` is"
+                " installed and network access is available for model"
+                " download."
+            ),
         )
 
     return {

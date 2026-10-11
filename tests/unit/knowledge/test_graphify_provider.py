@@ -307,7 +307,10 @@ def test_graphify_memify_internal_success(tmp_path):
     corpus = tmp_path / "corpus"
     corpus.mkdir(parents=True, exist_ok=True)
     (corpus / "sample.py").write_text(
-        "AgentRunner calls ToolDispatcher and FileSearch.\nToolDispatcher builds graph output.",
+        (
+            "AgentRunner calls ToolDispatcher and FileSearch.\nToolDispatcher"
+            " builds graph output."
+        ),
         encoding="utf-8",
     )
     cfg = GraphifyConfig(dataset_dir=str(corpus))

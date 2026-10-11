@@ -1545,9 +1545,9 @@ class KnowledgeManager:
                             "evidence_id": evidence_id,
                             "scope_type": source_scope_type,
                             "scope_id": source_scope_id,
-                            "scope_priority": 100
-                            if source_scope_type == "agent"
-                            else 50,
+                            "scope_priority": (
+                                100 if source_scope_type == "agent" else 50
+                            ),
                             "score": score,
                             "snippet": self._build_snippet(text, terms),
                         },
@@ -1601,9 +1601,9 @@ class KnowledgeManager:
                         "evidence_id": evidence_id,
                         "scope_type": source_scope_type,
                         "scope_id": source_scope_id,
-                        "scope_priority": 100
-                        if source_scope_type == "agent"
-                        else 50,
+                        "scope_priority": (
+                            100 if source_scope_type == "agent" else 50
+                        ),
                         "score": score,
                         "snippet": self._build_snippet(text, terms),
                     },
@@ -4002,9 +4002,15 @@ class KnowledgeManager:
             f"document_path={chunk.get('document_path') or ''}",
             f"chunk_id={chunk.get('chunk_id') or ''}",
             f"version_id={self._chunk_version_id(chunk)}",
-            f"resolution_mode={structured_payload.get('resolution_mode') or 'identity_fallback'}",
-            f"cluster_count={_safe_count_int(structured_payload.get('cluster_count') or 0)}",
-            f"replacement_count={_safe_count_int(structured_payload.get('replacement_count') or 0)}",
+            (
+                f"resolution_mode={structured_payload.get('resolution_mode') or 'identity_fallback'}"
+            ),
+            (
+                f"cluster_count={_safe_count_int(structured_payload.get('cluster_count') or 0)}"
+            ),
+            (
+                f"replacement_count={_safe_count_int(structured_payload.get('replacement_count') or 0)}"
+            ),
             "",
             "[Original Text]",
             str(structured_payload.get("source_text") or ""),
@@ -4023,13 +4029,34 @@ class KnowledgeManager:
             "---",
             "artifact: cor_annotated",
             f"format_version: {_COR_FORMAT_VERSION}",
-            f"document_path: {json.dumps(str(chunk.get('document_path') or ''), ensure_ascii=False)}",
-            f"chunk_id: {json.dumps(str(chunk.get('chunk_id') or ''), ensure_ascii=False)}",
-            f"version_id: {json.dumps(self._chunk_version_id(chunk), ensure_ascii=False)}",
-            f"snapshot_at: {json.dumps(str(chunk.get('snapshot_at') or ''), ensure_ascii=False)}",
-            f"cluster_count: {_safe_count_int(structured_payload.get('cluster_count') or 0)}",
-            f"replacement_count: {_safe_count_int(structured_payload.get('replacement_count') or 0)}",
-            f"structured_ref: {json.dumps(str(chunk.get('cor_structured_path') or ''), ensure_ascii=False)}",
+            (
+                "document_path:"
+                f" {json.dumps(str(chunk.get('document_path') or ''), ensure_ascii=False)}"
+            ),
+            (
+                "chunk_id:"
+                f" {json.dumps(str(chunk.get('chunk_id') or ''), ensure_ascii=False)}"
+            ),
+            (
+                "version_id:"
+                f" {json.dumps(self._chunk_version_id(chunk), ensure_ascii=False)}"
+            ),
+            (
+                "snapshot_at:"
+                f" {json.dumps(str(chunk.get('snapshot_at') or ''), ensure_ascii=False)}"
+            ),
+            (
+                "cluster_count:"
+                f" {_safe_count_int(structured_payload.get('cluster_count') or 0)}"
+            ),
+            (
+                "replacement_count:"
+                f" {_safe_count_int(structured_payload.get('replacement_count') or 0)}"
+            ),
+            (
+                "structured_ref:"
+                f" {json.dumps(str(chunk.get('cor_structured_path') or ''), ensure_ascii=False)}"
+            ),
             "---",
             "",
             "# Coreference Annotated",
@@ -4044,7 +4071,10 @@ class KnowledgeManager:
             "",
             "## Replacement Index",
             "",
-            "| cluster | mention | canonical | source | replacement | start | end |",
+            (
+                "| cluster | mention | canonical | source | replacement |"
+                " start | end |"
+            ),
             "| --- | --- | --- | --- | --- | ---: | ---: |",
         ]
         for item in structured_payload.get("replacements") or []:
@@ -4058,9 +4088,13 @@ class KnowledgeManager:
                 item.get("replacement_surface") or "",
             ).replace("|", "\\|")
             lines.append(
-                "| "
-                f"{item.get('cluster_id') or ''} | {item.get('mention_id') or ''} | {item.get('canonical_mention_id') or ''} | "
-                f"{source_surface} | {replacement_surface} | {item.get('start') or 0} | {item.get('end') or 0} |",
+                (
+                    f"| {item.get('cluster_id') or ''} |"
+                    f" {item.get('mention_id') or ''} |"
+                    f" {item.get('canonical_mention_id') or ''} |"
+                    f" {source_surface} | {replacement_surface} |"
+                    f" {item.get('start') or 0} | {item.get('end') or 0} |"
+                ),
             )
         return "\n".join(lines)
 
@@ -4295,9 +4329,10 @@ class KnowledgeManager:
                 invalid_state = dict(state)
                 invalid_state["status"] = "unavailable"
                 invalid_state["reason_code"] = "HANLP_NER_LABEL_INVALID"
-                invalid_state[
-                    "reason"
-                ] = "HanLP NER returned invalid labels (only fallback-like labels were detected)."
+                invalid_state["reason"] = (
+                    "HanLP NER returned invalid labels (only fallback-like"
+                    " labels were detected)."
+                )
                 return [], invalid_state
             return mentions, state
 
@@ -4599,12 +4634,14 @@ class KnowledgeManager:
             parts.append(text[cursor:start])
             surface = str(mention.get("surface") or text[start:end])
             parts.append(
-                "[["
-                f"{surface}|label={mention.get('label') or 'semantic_token'}"
-                f"|id={mention.get('entity_id') or ''}"
-                f"|norm={mention.get('normalized') or ''}"
-                f"|score={float(mention.get('confidence') or 0.0):.2f}"
-                "]]",
+                (
+                    "[["
+                    f"{surface}|label={mention.get('label') or 'semantic_token'}"
+                    f"|id={mention.get('entity_id') or ''}"
+                    f"|norm={mention.get('normalized') or ''}"
+                    f"|score={float(mention.get('confidence') or 0.0):.2f}"
+                    "]]"
+                ),
             )
             cursor = end
         parts.append(text[cursor:])
@@ -4623,12 +4660,27 @@ class KnowledgeManager:
             "---",
             "artifact: ner_annotated",
             f"format_version: {_NER_FORMAT_VERSION}",
-            f"document_path: {json.dumps(str(chunk.get('document_path') or ''), ensure_ascii=False)}",
-            f"chunk_id: {json.dumps(str(chunk.get('chunk_id') or ''), ensure_ascii=False)}",
-            f"version_id: {json.dumps(self._chunk_version_id(chunk), ensure_ascii=False)}",
-            f"snapshot_at: {json.dumps(str(chunk.get('snapshot_at') or ''), ensure_ascii=False)}",
+            (
+                "document_path:"
+                f" {json.dumps(str(chunk.get('document_path') or ''), ensure_ascii=False)}"
+            ),
+            (
+                "chunk_id:"
+                f" {json.dumps(str(chunk.get('chunk_id') or ''), ensure_ascii=False)}"
+            ),
+            (
+                "version_id:"
+                f" {json.dumps(self._chunk_version_id(chunk), ensure_ascii=False)}"
+            ),
+            (
+                "snapshot_at:"
+                f" {json.dumps(str(chunk.get('snapshot_at') or ''), ensure_ascii=False)}"
+            ),
             f"entity_count: {len(mentions)}",
-            f"structured_ref: {json.dumps(structured_relative_path.as_posix(), ensure_ascii=False)}",
+            (
+                "structured_ref:"
+                f" {json.dumps(structured_relative_path.as_posix(), ensure_ascii=False)}"
+            ),
             "---",
             "",
             "# NER Annotated",
@@ -4647,8 +4699,12 @@ class KnowledgeManager:
                 "\\|",
             )
             lines.append(
-                "| "
-                f"{mention.get('entity_id') or ''} | {surface} | {mention.get('label') or 'semantic_token'} | {mention.get('start') or 0} | {mention.get('end') or 0} |",
+                (
+                    f"| {mention.get('entity_id') or ''} | {surface} |"
+                    f" {mention.get('label') or 'semantic_token'} |"
+                    f" {mention.get('start') or 0} |"
+                    f" {mention.get('end') or 0} |"
+                ),
             )
         return "\n".join(lines)
 
@@ -4752,16 +4808,20 @@ class KnowledgeManager:
                         "normalized": str(mention.get("normalized") or ""),
                         "start": mention_start,
                         "end": mention_end,
-                        "token_start": int(
-                            overlapping_tokens[0].get("token_index") or 0,
-                        )
-                        if overlapping_tokens
-                        else 0,
-                        "token_end": int(
-                            overlapping_tokens[-1].get("token_index") or 0,
-                        )
-                        if overlapping_tokens
-                        else 0,
+                        "token_start": (
+                            int(
+                                overlapping_tokens[0].get("token_index") or 0,
+                            )
+                            if overlapping_tokens
+                            else 0
+                        ),
+                        "token_end": (
+                            int(
+                                overlapping_tokens[-1].get("token_index") or 0,
+                            )
+                            if overlapping_tokens
+                            else 0
+                        ),
                     },
                 )
 
@@ -4863,7 +4923,10 @@ class KnowledgeManager:
                 raw_result,
             ):
                 logger.warning(
-                    "Skipped invalid HanLP DEP payload in sentence syntax collection",
+                    (
+                        "Skipped invalid HanLP DEP payload in sentence syntax"
+                        " collection"
+                    ),
                 )
                 continue
             task_name = str(
@@ -4887,7 +4950,10 @@ class KnowledgeManager:
                     )
                 except Exception:
                     logger.warning(
-                        "Failed to normalize HanLP dependency payload: task=%s",
+                        (
+                            "Failed to normalize HanLP dependency payload:"
+                            " task=%s"
+                        ),
                         task_key,
                         exc_info=True,
                     )
@@ -5184,9 +5250,11 @@ class KnowledgeManager:
             "head_index": head_index,
             "relation": relation,
             "dependent": dependent,
-            "head": self._token_text_at(tokens, head_index)
-            if head_index > 0
-            else "ROOT",
+            "head": (
+                self._token_text_at(tokens, head_index)
+                if head_index > 0
+                else "ROOT"
+            ),
             "start": start,
             "end": end,
         }
@@ -5290,23 +5358,36 @@ class KnowledgeManager:
             f"document_path={chunk.get('document_path') or ''}",
             f"chunk_id={chunk.get('chunk_id') or ''}",
             f"version_id={self._chunk_version_id(chunk)}",
-            f"parse_mode={structured_payload.get('parse_mode') or 'tokenized_only'}",
+            (
+                f"parse_mode={structured_payload.get('parse_mode') or 'tokenized_only'}"
+            ),
             f"sentence_count={structured_payload.get('sentence_count') or 0}",
             f"token_count={structured_payload.get('token_count') or 0}",
             f"pos_count={structured_payload.get('pos_count') or 0}",
-            f"pos_tag_type_count={structured_payload.get('pos_tag_type_count') or 0}",
+            (
+                f"pos_tag_type_count={structured_payload.get('pos_tag_type_count') or 0}"
+            ),
             f"relation_count={structured_payload.get('relation_count') or 0}",
             f"task_keys={'|'.join(structured_payload.get('task_keys') or [])}",
-            f"entity_alignment_source={chunk.get('ner_structured_path') or ''}",
-            f"cor_alignment_source={structured_payload.get('cor_structured_path') or ''}",
-            f"cor_resolution_mode={structured_payload.get('cor_resolution_mode') or 'identity_fallback'}",
+            (
+                f"entity_alignment_source={chunk.get('ner_structured_path') or ''}"
+            ),
+            (
+                f"cor_alignment_source={structured_payload.get('cor_structured_path') or ''}"
+            ),
+            (
+                f"cor_resolution_mode={structured_payload.get('cor_resolution_mode') or 'identity_fallback'}"
+            ),
         ]
         for sentence in structured_payload.get("sentences") or []:
             if not isinstance(sentence, dict):
                 continue
             lines.append("")
             lines.append(
-                f"[Sentence {sentence.get('sentence_index') or 0}] {sentence.get('sentence_text') or ''}",
+                (
+                    f"[Sentence {sentence.get('sentence_index') or 0}]"
+                    f" {sentence.get('sentence_text') or ''}"
+                ),
             )
             token_labels = [
                 f"{token.get('token_index') or 0}:{token.get('text') or ''}"
@@ -5345,19 +5426,58 @@ class KnowledgeManager:
             "---",
             "artifact: syntax_annotated",
             f"format_version: {_SYNTAX_FORMAT_VERSION}",
-            f"document_path: {json.dumps(str(chunk.get('document_path') or ''), ensure_ascii=False)}",
-            f"chunk_id: {json.dumps(str(chunk.get('chunk_id') or ''), ensure_ascii=False)}",
-            f"version_id: {json.dumps(self._chunk_version_id(chunk), ensure_ascii=False)}",
-            f"snapshot_at: {json.dumps(str(chunk.get('snapshot_at') or ''), ensure_ascii=False)}",
-            f"sentence_count: {_safe_count_int(structured_payload.get('sentence_count') or 0)}",
-            f"token_count: {_safe_count_int(structured_payload.get('token_count') or 0)}",
-            f"pos_count: {_safe_count_int(structured_payload.get('pos_count') or 0)}",
-            f"pos_tag_type_count: {_safe_count_int(structured_payload.get('pos_tag_type_count') or 0)}",
-            f"relation_count: {_safe_count_int(structured_payload.get('relation_count') or 0)}",
-            f"structured_ref: {json.dumps(str(chunk.get('syntax_structured_path') or ''), ensure_ascii=False)}",
-            f"ner_structured_ref: {json.dumps(str(chunk.get('ner_structured_path') or ''), ensure_ascii=False)}",
-            f"cor_structured_ref: {json.dumps(str(structured_payload.get('cor_structured_path') or ''), ensure_ascii=False)}",
-            f"cor_resolution_mode: {json.dumps(str(structured_payload.get('cor_resolution_mode') or 'identity_fallback'), ensure_ascii=False)}",
+            (
+                "document_path:"
+                f" {json.dumps(str(chunk.get('document_path') or ''), ensure_ascii=False)}"
+            ),
+            (
+                "chunk_id:"
+                f" {json.dumps(str(chunk.get('chunk_id') or ''), ensure_ascii=False)}"
+            ),
+            (
+                "version_id:"
+                f" {json.dumps(self._chunk_version_id(chunk), ensure_ascii=False)}"
+            ),
+            (
+                "snapshot_at:"
+                f" {json.dumps(str(chunk.get('snapshot_at') or ''), ensure_ascii=False)}"
+            ),
+            (
+                "sentence_count:"
+                f" {_safe_count_int(structured_payload.get('sentence_count') or 0)}"
+            ),
+            (
+                "token_count:"
+                f" {_safe_count_int(structured_payload.get('token_count') or 0)}"
+            ),
+            (
+                "pos_count:"
+                f" {_safe_count_int(structured_payload.get('pos_count') or 0)}"
+            ),
+            (
+                "pos_tag_type_count:"
+                f" {_safe_count_int(structured_payload.get('pos_tag_type_count') or 0)}"
+            ),
+            (
+                "relation_count:"
+                f" {_safe_count_int(structured_payload.get('relation_count') or 0)}"
+            ),
+            (
+                "structured_ref:"
+                f" {json.dumps(str(chunk.get('syntax_structured_path') or ''), ensure_ascii=False)}"
+            ),
+            (
+                "ner_structured_ref:"
+                f" {json.dumps(str(chunk.get('ner_structured_path') or ''), ensure_ascii=False)}"
+            ),
+            (
+                "cor_structured_ref:"
+                f" {json.dumps(str(structured_payload.get('cor_structured_path') or ''), ensure_ascii=False)}"
+            ),
+            (
+                "cor_resolution_mode:"
+                f" {json.dumps(str(structured_payload.get('cor_resolution_mode') or 'identity_fallback'), ensure_ascii=False)}"
+            ),
             "---",
             "",
             "# Syntax Annotated",
@@ -5381,7 +5501,11 @@ class KnowledgeManager:
                     continue
                 token_text = str(token.get("text") or "").replace("|", "\\|")
                 lines.append(
-                    f"| {token.get('token_index') or 0} | {token_text} | {token.get('start') or 0} | {token.get('end') or 0} |",
+                    (
+                        f"| {token.get('token_index') or 0} | {token_text} |"
+                        f" {token.get('start') or 0} |"
+                        f" {token.get('end') or 0} |"
+                    ),
                 )
             pos_tags = [
                 item
@@ -5402,7 +5526,10 @@ class KnowledgeManager:
                     pos_text = str(pos.get("text") or "").replace("|", "\\|")
                     pos_label = str(pos.get("pos") or "").replace("|", "\\|")
                     lines.append(
-                        f"| {pos.get('token_index') or 0} | {pos_text} | {pos_label} |",
+                        (
+                            f"| {pos.get('token_index') or 0} | {pos_text} |"
+                            f" {pos_label} |"
+                        ),
                     )
             lines.extend(
                 [
@@ -5418,7 +5545,12 @@ class KnowledgeManager:
                     continue
                 surface = str(entity.get("surface") or "").replace("|", "\\|")
                 lines.append(
-                    f"| {entity.get('entity_id') or ''} | {surface} | {entity.get('label') or 'semantic_token'} | {entity.get('token_start') or 0} | {entity.get('token_end') or 0} |",
+                    (
+                        f"| {entity.get('entity_id') or ''} | {surface} |"
+                        f" {entity.get('label') or 'semantic_token'} |"
+                        f" {entity.get('token_start') or 0} |"
+                        f" {entity.get('token_end') or 0} |"
+                    ),
                 )
             dependencies = [
                 item
@@ -5446,7 +5578,10 @@ class KnowledgeManager:
                         "\\|",
                     )
                     lines.append(
-                        f"| {dep.get('task_key') or ''} | {dependent} | {head} | {relation} |",
+                        (
+                            f"| {dep.get('task_key') or ''} | {dependent} |"
+                            f" {head} | {relation} |"
+                        ),
                     )
             constituency = sentence.get("constituency")
             if (
@@ -6054,9 +6189,10 @@ class KnowledgeManager:
                 chunk["cor_replacement_count"] = 0
                 chunk["cor_resolution_mode"] = "identity_fallback"
                 chunk["cor_reason_code"] = "INDEXING_DEFERRED"
-                chunk[
-                    "cor_reason"
-                ] = "Semantic artifact generation is deferred to graphifying stage."
+                chunk["cor_reason"] = (
+                    "Semantic artifact generation is deferred to graphifying"
+                    " stage."
+                )
                 chunk.pop("cor_path", None)
                 chunk.pop("cor_structured_path", None)
                 chunk.pop("cor_annotated_path", None)
@@ -6065,9 +6201,10 @@ class KnowledgeManager:
                 chunk["ner_entity_count"] = 0
                 chunk["ner_format_version"] = _NER_FORMAT_VERSION
                 chunk["ner_reason_code"] = "INDEXING_DEFERRED"
-                chunk[
-                    "ner_reason"
-                ] = "Semantic artifact generation is deferred to graphifying stage."
+                chunk["ner_reason"] = (
+                    "Semantic artifact generation is deferred to graphifying"
+                    " stage."
+                )
                 chunk["ner_input_mode"] = ""
                 chunk.pop("ner_path", None)
                 chunk.pop("ner_structured_path", None)
@@ -6751,14 +6888,18 @@ class KnowledgeManager:
         # Glob fallback: any file ending with the sanitized session_id
         safe_sid = _sanitize_filename(session_id)
         candidates.extend(
-            sessions_dir.glob(f"*_{safe_sid}.json")
-            if sessions_dir.exists()
-            else [],
+            (
+                sessions_dir.glob(f"*_{safe_sid}.json")
+                if sessions_dir.exists()
+                else []
+            ),
         )
         candidates.extend(
-            sessions_dir.glob(f"{safe_sid}.json")
-            if sessions_dir.exists()
-            else [],
+            (
+                sessions_dir.glob(f"{safe_sid}.json")
+                if sessions_dir.exists()
+                else []
+            ),
         )
 
         session_path: Path | None = None
@@ -7278,15 +7419,24 @@ class KnowledgeManager:
         source_kind = self.classify_source_path(file_path.as_posix())
         if source_kind == "ignored":
             raise ValueError(
-                f"Knowledge file is excluded from processing scope: {file_path}",
+                (
+                    "Knowledge file is excluded from processing scope:"
+                    f" {file_path}"
+                ),
             )
         if file_path.suffix.lower() in _STRUCTURED_FILE_EXTENSIONS:
             raise ValueError(
-                f"Knowledge file is structured data and is not part of document knowledge: {file_path}",
+                (
+                    "Knowledge file is structured data and is not part of"
+                    f" document knowledge: {file_path}"
+                ),
             )
         if file_path.suffix.lower() in _IMAGE_FILE_EXTENSIONS:
             raise ValueError(
-                f"Knowledge file is image data and is not part of document knowledge: {file_path}",
+                (
+                    "Knowledge file is image data and is not part of document"
+                    f" knowledge: {file_path}"
+                ),
             )
         if file_path.stat().st_size > config.index.max_file_size:
             raise ValueError(f"Knowledge file exceeds max size: {file_path}")
@@ -8645,7 +8795,10 @@ class KnowledgeManager:
         self._remember_semantic_engine_state(state)
         if state.get("status") != "ready":
             logger.info(
-                "NLP semantic engine is unavailable; semantic tokenization is skipped (%s)",
+                (
+                    "NLP semantic engine is unavailable; semantic tokenization"
+                    " is skipped (%s)"
+                ),
                 state.get("reason_code"),
             )
             return []

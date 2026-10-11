@@ -81,8 +81,10 @@ def cmd_export(args: argparse.Namespace) -> int:
         json.dumps(payload, indent=2, ensure_ascii=False) + "\n",
     )
     print(
-        f"wrote {args.ledger}: {payload['files']} files / "
-        f"{payload['lines']} rename lines",
+        (
+            f"wrote {args.ledger}: {payload['files']} files / "
+            f"{payload['lines']} rename lines"
+        ),
     )
     return 0
 
@@ -154,8 +156,10 @@ def cmd_verify(args: argparse.Namespace) -> int:
         return 1
     entries = _load_ledger(Path(args.ledger))
     print(
-        f"ledger replayable: {len(entries)} files / "
-        f"{sum(len(e['pairs']) for e in entries)} lines",
+        (
+            f"ledger replayable: {len(entries)} files / "
+            f"{sum(len(e['pairs']) for e in entries)} lines"
+        ),
     )
     return 0
 

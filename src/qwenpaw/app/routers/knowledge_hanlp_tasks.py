@@ -28,16 +28,23 @@ class HanLPTaskRunRequest(BaseModel):
     texts: list[str] | None = Field(
         default=None,
         max_length=5,
-        description="Optional batch input texts. Maximum 5 entries per request.",
+        description=(
+            "Optional batch input texts. Maximum 5 entries per request."
+        ),
     )
     tokens: list[str] | None = Field(
         default=None,
-        description="Optional tokenized sentence input for tasks that support token-level execution.",
+        description=(
+            "Optional tokenized sentence input for tasks that support"
+            " token-level execution."
+        ),
     )
     tokens_batch: list[list[str]] | None = Field(
         default=None,
         max_length=5,
-        description="Optional batch tokenized inputs. Maximum 5 entries per request.",
+        description=(
+            "Optional batch tokenized inputs. Maximum 5 entries per request."
+        ),
     )
     request_id: str | None = Field(
         default=None,
@@ -386,9 +393,11 @@ def _normalize_ner_result(
                 "label": label,
                 "start": start,
                 "end": end,
-                "score": item.get("score")
-                if isinstance(item.get("score"), (int, float))
-                else None,
+                "score": (
+                    item.get("score")
+                    if isinstance(item.get("score"), (int, float))
+                    else None
+                ),
             },
         )
     text = str(source_text or "")
@@ -763,7 +772,9 @@ async def _await_runtime_call(
         return [], {
             "status": "degraded",
             "reason_code": "HANLP_ROUTE_TIMEOUT",
-            "reason": f"HanLP task exceeded HTTP guard timeout ({timeout_sec:.3f}s).",
+            "reason": (
+                f"HanLP task exceeded HTTP guard timeout ({timeout_sec:.3f}s)."
+            ),
             "timeout_sec": timeout_sec,
             "sidecar_execution_path": "route-guard",
             "sidecar_execution_detail": f"route_timeout={timeout_sec:.3f}s",
@@ -1658,7 +1669,10 @@ async def _run_hanlp_task_batch_impl(
     else:
         status = "degraded"
         reason_code = "HANLP_BATCH_PARTIAL_DEGRADED"
-        reason = f"HanLP batch task partially degraded ({failed_count}/{len(items)} failed)."
+        reason = (
+            "HanLP batch task partially degraded"
+            f" ({failed_count}/{len(items)} failed)."
+        )
 
     return HanLPTaskRunResponse(
         task_key=normalized_task_key,
@@ -1685,7 +1699,9 @@ async def _run_hanlp_task_batch_impl(
             state.get("sidecar_trace_elapsed_ms") or 0,
         ),
         sidecar_execution_path="batch-route",
-        sidecar_execution_detail=f"batch_size={len(items)};failed={failed_count}",
+        sidecar_execution_detail=(
+            f"batch_size={len(items)};failed={failed_count}"
+        ),
         sidecar_trace_stage_ms=dict(state.get("sidecar_trace_stage_ms") or {}),
     )
 
@@ -1738,7 +1754,10 @@ async def _run_hanlp_task(
                 request_id=request_id,
                 started=started,
                 timeout_sec=route_deadline_sec,
-                reason=f"HanLP route exceeded interactive deadline ({route_deadline_sec:.3f}s).",
+                reason=(
+                    "HanLP route exceeded interactive deadline"
+                    f" ({route_deadline_sec:.3f}s)."
+                ),
             )
 
     texts = _request_texts(request)
@@ -1771,7 +1790,10 @@ async def _run_hanlp_task(
             request_id=request_id,
             started=started,
             timeout_sec=route_deadline_sec,
-            reason=f"HanLP route exceeded interactive deadline ({route_deadline_sec:.3f}s).",
+            reason=(
+                "HanLP route exceeded interactive deadline"
+                f" ({route_deadline_sec:.3f}s)."
+            ),
         )
 
 

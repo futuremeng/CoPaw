@@ -87,8 +87,8 @@ def load_project_context_blocks(
             {
                 "role": "system",
                 "content": (
-                    f"=== PROJECT CONTEXT: {filename} (Project: {project_id}) ===\n"
-                    f"{content}"
+                    f"=== PROJECT CONTEXT: {filename} (Project: {project_id})"
+                    f" ===\n{content}"
                 ),
             },
         )

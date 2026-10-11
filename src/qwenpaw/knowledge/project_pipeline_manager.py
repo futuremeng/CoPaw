@@ -92,7 +92,9 @@ def build_project_source_spec(
             "scope:project",
             "visibility:sync-only",
         ],
-        summary=f"Project-scoped knowledge source for {project_name or project_id}",
+        summary=(
+            f"Project-scoped knowledge source for {project_name or project_id}"
+        ),
     )
 
 
@@ -471,8 +473,13 @@ class ProjectKnowledgePipelineManager:
                 "engine": "hanlp",
                 "status": "idle",
                 "reason_code": "SOURCE_NOT_READY",
-                "reason": "Project source has not been prepared for semantic extraction yet.",
-                "summary": "Semantic engine waiting for project source preparation.",
+                "reason": (
+                    "Project source has not been prepared for semantic"
+                    " extraction yet."
+                ),
+                "summary": (
+                    "Semantic engine waiting for project source preparation."
+                ),
                 "updated_at": None,
             },
         }

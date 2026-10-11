@@ -396,7 +396,10 @@ def _transition_run_status(current: str, next_status: str) -> str:
         return target_status
     if target_status not in allowed.get(current_status, set()):
         raise ValueError(
-            f"Invalid pipeline run status transition: {current_status} -> {target_status}",
+            (
+                f"Invalid pipeline run status transition: {current_status} ->"
+                f" {target_status}"
+            ),
         )
     return target_status
 
@@ -416,7 +419,10 @@ def _transition_step_status(current: str, next_status: str) -> str:
         return target_status
     if target_status not in allowed.get(current_status, set()):
         raise ValueError(
-            f"Invalid pipeline step status transition: {current_status} -> {target_status}",
+            (
+                f"Invalid pipeline step status transition: {current_status} ->"
+                f" {target_status}"
+            ),
         )
     return target_status
 
@@ -444,63 +450,113 @@ def _default_pipeline_template_doc() -> dict[str, Any]:
         "id": "books-alignment-v1",
         "name": "Multi-Book Processing v1",
         "version": "0.2.0",
-        "description": "Full pipeline for multi-book ingestion, alignment, concept extraction, and report generation.",
+        "description": (
+            "Full pipeline for multi-book ingestion, alignment, concept"
+            " extraction, and report generation."
+        ),
         "steps": [
             {
                 "id": "ingest",
                 "name": "Ingest Books",
                 "kind": "ingest",
-                "description": "Discover and load all source markdown books into the processing corpus.",
-                "prompt": "Collect markdown sources, validate readability, and emit a normalized source manifest.",
+                "description": (
+                    "Discover and load all source markdown books into the"
+                    " processing corpus."
+                ),
+                "prompt": (
+                    "Collect markdown sources, validate readability, and emit"
+                    " a normalized source manifest."
+                ),
             },
             {
                 "id": "normalize",
                 "name": "Normalize Structure",
                 "kind": "transform",
-                "description": "Apply heading and structure normalization across all books.",
-                "prompt": "Normalize heading hierarchy and document structure to a canonical schema.",
+                "description": (
+                    "Apply heading and structure normalization across all"
+                    " books."
+                ),
+                "prompt": (
+                    "Normalize heading hierarchy and document structure to a"
+                    " canonical schema."
+                ),
             },
             {
                 "id": "extract",
                 "name": "Extract Entities",
                 "kind": "transform",
-                "description": "Extract named entities, terms, and citations from each book.",
-                "prompt": "Extract entities, terms, and citations with stable offsets and confidence metadata.",
+                "description": (
+                    "Extract named entities, terms, and citations from each"
+                    " book."
+                ),
+                "prompt": (
+                    "Extract entities, terms, and citations with stable"
+                    " offsets and confidence metadata."
+                ),
             },
             {
                 "id": "align",
                 "name": "Cross-Book Alignment",
                 "kind": "alignment",
-                "description": "Perform sentence/chapter alignment across the entire book corpus.",
-                "prompt": "Align semantically equivalent sections across books and output alignment pairs.",
+                "description": (
+                    "Perform sentence/chapter alignment across the entire book"
+                    " corpus."
+                ),
+                "prompt": (
+                    "Align semantically equivalent sections across books and"
+                    " output alignment pairs."
+                ),
             },
             {
                 "id": "build_concept_tree",
                 "name": "Build Concept Tree",
                 "kind": "analysis",
-                "description": "Construct a hierarchical concept tree from the aligned and extracted content.",
-                "prompt": "Build a hierarchical concept taxonomy from aligned entities and relations.",
+                "description": (
+                    "Construct a hierarchical concept tree from the aligned"
+                    " and extracted content."
+                ),
+                "prompt": (
+                    "Build a hierarchical concept taxonomy from aligned"
+                    " entities and relations."
+                ),
             },
             {
                 "id": "build_relation_matrix",
                 "name": "Build Relation Matrix",
                 "kind": "analysis",
-                "description": "Compute cross-book relation and co-occurrence matrix.",
-                "prompt": "Compute relation/co-occurrence matrix with pairwise evidence and aggregate metrics.",
+                "description": (
+                    "Compute cross-book relation and co-occurrence matrix."
+                ),
+                "prompt": (
+                    "Compute relation/co-occurrence matrix with pairwise"
+                    " evidence and aggregate metrics."
+                ),
             },
             {
                 "id": "review_pack",
                 "name": "Review Pack",
                 "kind": "validation",
-                "description": "Generate review package: diffs, conflicts, and quality metrics.",
-                "prompt": "Evaluate quality gates, summarize conflicts, and produce a reviewer-ready validation pack.",
+                "description": (
+                    "Generate review package: diffs, conflicts, and quality"
+                    " metrics."
+                ),
+                "prompt": (
+                    "Evaluate quality gates, summarize conflicts, and produce"
+                    " a reviewer-ready validation pack."
+                ),
             },
             {
                 "id": "report",
                 "name": "Generate Report",
                 "kind": "publish",
-                "description": "Emit final manifests, reports, and artifacts for downstream use.",
-                "prompt": "Publish final manifest, report, and artifact index for downstream consumers.",
+                "description": (
+                    "Emit final manifests, reports, and artifacts for"
+                    " downstream use."
+                ),
+                "prompt": (
+                    "Publish final manifest, report, and artifact index for"
+                    " downstream consumers."
+                ),
             },
         ],
     }
@@ -547,18 +603,22 @@ def _parse_pipeline_template_doc(
                     or "",
                 ).strip(),
                 "steps": canonical_doc.get("steps") or [],
-                "builtin_kind": str(
-                    canonical_doc.get("builtin_kind")
-                    or raw.get("builtin_kind")
-                    or "",
-                ).strip()
-                or None,
-                "entrypoint": str(
-                    canonical_doc.get("entrypoint")
-                    or raw.get("entrypoint")
-                    or "",
-                ).strip()
-                or None,
+                "builtin_kind": (
+                    str(
+                        canonical_doc.get("builtin_kind")
+                        or raw.get("builtin_kind")
+                        or "",
+                    ).strip()
+                    or None
+                ),
+                "entrypoint": (
+                    str(
+                        canonical_doc.get("entrypoint")
+                        or raw.get("entrypoint")
+                        or "",
+                    ).strip()
+                    or None
+                ),
                 "system_owned": True,
             }
             name = str(raw.get("name") or template_id).strip()
@@ -609,9 +669,11 @@ def _parse_pipeline_template_doc(
                     if isinstance(raw_input_bindings, dict)
                     else {}
                 ),
-                retry_policy=raw_retry_policy
-                if isinstance(raw_retry_policy, dict)
-                else {},
+                retry_policy=(
+                    raw_retry_policy
+                    if isinstance(raw_retry_policy, dict)
+                    else {}
+                ),
                 artifact_schema_ref=str(
                     node.get("artifact_schema_ref") or "",
                 ).strip(),
@@ -661,7 +723,10 @@ def _parse_pipeline_template_doc(
                     step_id=step.id,
                     expected="^[a-z][a-z0-9_-]{0,63}$",
                     actual=step.id,
-                    suggestion="Use lowercase letters, digits, '_' or '-'; start with a letter.",
+                    suggestion=(
+                        "Use lowercase letters, digits, '_' or '-'; start with"
+                        " a letter."
+                    ),
                 ),
             )
         if not step.name.strip():
@@ -794,8 +859,9 @@ def _default_agent_knowledge_aggregation_template_doc() -> dict[str, Any]:
         "name": "Agent Knowledge Aggregation Pipeline",
         "version": "0.1.0",
         "description": (
-            "Draft agent-level pipeline for cross-project knowledge aggregation, "
-            "conflict arbitration, and publish-ready knowledge snapshots."
+            "Draft agent-level pipeline for cross-project knowledge"
+            " aggregation, conflict arbitration, and publish-ready knowledge"
+            " snapshots."
         ),
         "builtin_kind": "agent-knowledge-aggregation",
         "system_owned": True,
@@ -806,9 +872,13 @@ def _default_agent_knowledge_aggregation_template_doc() -> dict[str, Any]:
                 "name": "Collect Project Snapshots",
                 "kind": "ingest",
                 "description": (
-                    "Collect eligible project-level knowledge snapshots as input sets for aggregation."
+                    "Collect eligible project-level knowledge snapshots as"
+                    " input sets for aggregation."
                 ),
-                "prompt": "Collect project snapshot references according to policy and emit snapshot manifest.",
+                "prompt": (
+                    "Collect project snapshot references according to policy"
+                    " and emit snapshot manifest."
+                ),
                 "inputs": {
                     "projects": "list[str]",
                     "snapshot_policy": "latest_or_pinned",
@@ -824,12 +894,18 @@ def _default_agent_knowledge_aggregation_template_doc() -> dict[str, Any]:
                 "name": "Normalize Entities and Terms",
                 "kind": "transform",
                 "description": (
-                    "Normalize terms/entities across sources to a canonical namespace before merging."
+                    "Normalize terms/entities across sources to a canonical"
+                    " namespace before merging."
                 ),
-                "prompt": "Normalize entities and terms to canonical identifiers and output normalization report.",
+                "prompt": (
+                    "Normalize entities and terms to canonical identifiers and"
+                    " output normalization report."
+                ),
                 "depends_on": ["collect_project_snapshots"],
                 "inputs": {
-                    "snapshot_refs": "$collect_project_snapshots.snapshot_refs",
+                    "snapshot_refs": (
+                        "$collect_project_snapshots.snapshot_refs"
+                    ),
                 },
                 "outputs": {
                     "normalized_records": "list[dict]",
@@ -842,12 +918,18 @@ def _default_agent_knowledge_aggregation_template_doc() -> dict[str, Any]:
                 "name": "Resolve Cross-Project Conflicts",
                 "kind": "analysis",
                 "description": (
-                    "Apply conflict arbitration rules to competing facts and terminology across projects."
+                    "Apply conflict arbitration rules to competing facts and"
+                    " terminology across projects."
                 ),
-                "prompt": "Resolve cross-project conflicts using arbitration policy and emit resolved graph.",
+                "prompt": (
+                    "Resolve cross-project conflicts using arbitration policy"
+                    " and emit resolved graph."
+                ),
                 "depends_on": ["normalize_entities_and_terms"],
                 "inputs": {
-                    "records": "$normalize_entities_and_terms.normalized_records",
+                    "records": (
+                        "$normalize_entities_and_terms.normalized_records"
+                    ),
                     "arbitration_policy": "priority+confidence",
                 },
                 "outputs": {
@@ -861,9 +943,13 @@ def _default_agent_knowledge_aggregation_template_doc() -> dict[str, Any]:
                 "name": "Quality Gate",
                 "kind": "review",
                 "description": (
-                    "Run quality checks and emit observability metrics for aggregation readiness."
+                    "Run quality checks and emit observability metrics for"
+                    " aggregation readiness."
                 ),
-                "prompt": "Evaluate coverage and consistency thresholds, then emit quality report and metrics.",
+                "prompt": (
+                    "Evaluate coverage and consistency thresholds, then emit"
+                    " quality report and metrics."
+                ),
                 "depends_on": ["resolve_conflicts"],
                 "inputs": {
                     "resolved_graph": "$resolve_conflicts.resolved_graph",
@@ -883,9 +969,13 @@ def _default_agent_knowledge_aggregation_template_doc() -> dict[str, Any]:
                 "name": "Publish Agent Snapshot",
                 "kind": "publish",
                 "description": (
-                    "Publish the aggregated agent-level knowledge snapshot and associated provenance artifacts."
+                    "Publish the aggregated agent-level knowledge snapshot and"
+                    " associated provenance artifacts."
                 ),
-                "prompt": "Publish agent-level snapshot artifacts and lineage manifest for downstream consumption.",
+                "prompt": (
+                    "Publish agent-level snapshot artifacts and lineage"
+                    " manifest for downstream consumption."
+                ),
                 "depends_on": ["quality_gate"],
                 "inputs": {
                     "quality_report": "$quality_gate.quality_report",
@@ -1067,34 +1157,64 @@ def _pipeline_steps_to_md(template: PipelineTemplateInfo) -> str:
             lines.append(step.description.strip())
             lines.append("")
         lines.append(
-            f"- contract_inputs: {json.dumps(step.inputs or {}, ensure_ascii=False)}",
+            (
+                "- contract_inputs:"
+                f" {json.dumps(step.inputs or {}, ensure_ascii=False)}"
+            ),
         )
         lines.append(
-            f"- contract_prompt: {json.dumps((step.prompt or '').strip(), ensure_ascii=False)}",
+            (
+                "- contract_prompt:"
+                f" {json.dumps((step.prompt or '').strip(), ensure_ascii=False)}"
+            ),
         )
         lines.append(
-            f"- contract_script: {json.dumps((step.script or '').strip(), ensure_ascii=False)}",
+            (
+                "- contract_script:"
+                f" {json.dumps((step.script or '').strip(), ensure_ascii=False)}"
+            ),
         )
         lines.append(
-            f"- contract_executor: {json.dumps((step.executor or '').strip(), ensure_ascii=False)}",
+            (
+                "- contract_executor:"
+                f" {json.dumps((step.executor or '').strip(), ensure_ascii=False)}"
+            ),
         )
         lines.append(
-            f"- contract_outputs: {json.dumps(step.outputs or {}, ensure_ascii=False)}",
+            (
+                "- contract_outputs:"
+                f" {json.dumps(step.outputs or {}, ensure_ascii=False)}"
+            ),
         )
         lines.append(
-            f"- contract_depends_on: {json.dumps(step.depends_on or [], ensure_ascii=False)}",
+            (
+                "- contract_depends_on:"
+                f" {json.dumps(step.depends_on or [], ensure_ascii=False)}"
+            ),
         )
         lines.append(
-            f"- contract_input_bindings: {json.dumps(step.input_bindings or {}, ensure_ascii=False)}",
+            (
+                "- contract_input_bindings:"
+                f" {json.dumps(step.input_bindings or {}, ensure_ascii=False)}"
+            ),
         )
         lines.append(
-            f"- contract_retry_policy: {json.dumps(step.retry_policy or {}, ensure_ascii=False)}",
+            (
+                "- contract_retry_policy:"
+                f" {json.dumps(step.retry_policy or {}, ensure_ascii=False)}"
+            ),
         )
         lines.append(
-            f"- contract_artifact_schema_ref: {json.dumps((step.artifact_schema_ref or '').strip(), ensure_ascii=False)}",
+            (
+                "- contract_artifact_schema_ref:"
+                f" {json.dumps((step.artifact_schema_ref or '').strip(), ensure_ascii=False)}"
+            ),
         )
         lines.append(
-            f"- contract_error_contract: {json.dumps(step.error_contract or [], ensure_ascii=False)}",
+            (
+                "- contract_error_contract:"
+                f" {json.dumps(step.error_contract or [], ensure_ascii=False)}"
+            ),
         )
         lines.append("")
     return "\n".join(lines)
@@ -1321,7 +1441,10 @@ def _validate_pipeline_template_meta(
                 field_path="id",
                 expected="^[a-z][a-z0-9_-]{0,63}$",
                 actual=template_id,
-                suggestion="Use lowercase letters, digits, '_' or '-'; start with a letter.",
+                suggestion=(
+                    "Use lowercase letters, digits, '_' or '-'; start with a"
+                    " letter."
+                ),
             ),
         )
 
@@ -1372,7 +1495,9 @@ def _parse_pipeline_md_strict(
                 field_path="frontmatter.pipeline_id",
                 expected=template_id,
                 actual=parsed_id,
-                suggestion="Keep frontmatter pipeline_id equal to the template id.",
+                suggestion=(
+                    "Keep frontmatter pipeline_id equal to the template id."
+                ),
             ),
         )
 
@@ -1416,9 +1541,15 @@ def _parse_pipeline_md_strict(
                 error_code="steps_empty",
                 message="No valid pipeline steps found in markdown.",
                 field_path="steps",
-                expected="At least one step heading in format: ## <name> [<id>] (<kind>)",
+                expected=(
+                    "At least one step heading in format: ## <name> [<id>]"
+                    " (<kind>)"
+                ),
                 actual="0 step",
-                suggestion="Add at least one step heading and a description paragraph.",
+                suggestion=(
+                    "Add at least one step heading and a description"
+                    " paragraph."
+                ),
             ),
         )
 
@@ -1431,7 +1562,9 @@ def _parse_pipeline_md_strict(
                     error_code="step_id_missing",
                     message="Step id is required.",
                     field_path=f"{step_path}.id",
-                    suggestion="Use a stable id in heading brackets: [step-id].",
+                    suggestion=(
+                        "Use a stable id in heading brackets: [step-id]."
+                    ),
                 ),
             )
         if not step.name.strip():
@@ -1451,9 +1584,14 @@ def _parse_pipeline_md_strict(
                     message="Step kind format is invalid.",
                     field_path=f"{step_path}.kind",
                     step_id=step.id,
-                    expected="lowercase kebab/snake style token, e.g. ingest/transform/validation",
+                    expected=(
+                        "lowercase kebab/snake style token, e.g."
+                        " ingest/transform/validation"
+                    ),
                     actual=step.kind,
-                    suggestion="Change kind to lowercase letters, digits, '_' or '-'.",
+                    suggestion=(
+                        "Change kind to lowercase letters, digits, '_' or '-'."
+                    ),
                 ),
             )
         if step.id in seen_step_ids:
@@ -1464,7 +1602,9 @@ def _parse_pipeline_md_strict(
                     field_path=f"{step_path}.id",
                     step_id=step.id,
                     actual=step.id,
-                    suggestion="Use unique step ids across the whole pipeline.",
+                    suggestion=(
+                        "Use unique step ids across the whole pipeline."
+                    ),
                 ),
             )
         seen_step_ids.add(step.id)
@@ -2210,12 +2350,17 @@ def _validate_pipeline_step(
         errors.append(
             PipelineValidationError(
                 error_code="invalid_step_id_format",
-                message="Step id must be lowercase alphanumeric with hyphens/underscores, start with letter",
+                message=(
+                    "Step id must be lowercase alphanumeric with"
+                    " hyphens/underscores, start with letter"
+                ),
                 field_path="id",
                 step_id=step_id,
                 expected="^[a-z][a-z0-9_-]{0,63}$",
                 actual=step_id,
-                suggestion="Use lowercase letters, numbers, hyphens, underscores",
+                suggestion=(
+                    "Use lowercase letters, numbers, hyphens, underscores"
+                ),
             ),
         )
 
@@ -2243,7 +2388,10 @@ def _validate_pipeline_step(
                 message="Step kind is required",
                 field_path="kind",
                 step_id=step_id,
-                expected="one of: input, analysis, transform, review, validation, publish, task, output",
+                expected=(
+                    "one of: input, analysis, transform, review, validation,"
+                    " publish, task, output"
+                ),
                 actual="",
                 suggestion="Choose a valid step kind",
             ),
@@ -2257,7 +2405,9 @@ def _validate_pipeline_step(
                 step_id=step_id,
                 expected=", ".join(sorted(VALID_STEP_KINDS)),
                 actual=step_kind,
-                suggestion=f"Use one of: {', '.join(sorted(VALID_STEP_KINDS))}",
+                suggestion=(
+                    f"Use one of: {', '.join(sorted(VALID_STEP_KINDS))}"
+                ),
             ),
         )
 
@@ -2271,7 +2421,9 @@ def _validate_pipeline_step(
                 step_id=step_id,
                 expected="object/dict",
                 actual=type(step.inputs).__name__,
-                suggestion="Set inputs as a JSON object with declared input contract.",
+                suggestion=(
+                    "Set inputs as a JSON object with declared input contract."
+                ),
             ),
         )
 
@@ -2284,7 +2436,10 @@ def _validate_pipeline_step(
                 step_id=step_id,
                 expected="object/dict",
                 actual=type(step.outputs).__name__,
-                suggestion="Set outputs as a JSON object with declared output contract.",
+                suggestion=(
+                    "Set outputs as a JSON object with declared output"
+                    " contract."
+                ),
             ),
         )
 
@@ -2310,7 +2465,10 @@ def _validate_pipeline_step(
                 step_id=step_id,
                 expected="object/dict",
                 actual=type(step.input_bindings).__name__,
-                suggestion="Set input_bindings as a JSON object like {'input': 'upstream.output'}.",
+                suggestion=(
+                    "Set input_bindings as a JSON object like {'input':"
+                    " 'upstream.output'}."
+                ),
             ),
         )
 
@@ -2323,7 +2481,9 @@ def _validate_pipeline_step(
                 step_id=step_id,
                 expected="object/dict",
                 actual=type(step.retry_policy).__name__,
-                suggestion="Set retry_policy as an object like {'max_attempts': 2}.",
+                suggestion=(
+                    "Set retry_policy as an object like {'max_attempts': 2}."
+                ),
             ),
         )
 
@@ -2340,12 +2500,18 @@ def _validate_pipeline_step(
             errors.append(
                 PipelineValidationError(
                     error_code="invalid_step_retry_max_attempts",
-                    message="retry_policy.max_attempts must be an integer between 0 and 10.",
+                    message=(
+                        "retry_policy.max_attempts must be an integer between"
+                        " 0 and 10."
+                    ),
                     field_path="retry_policy.max_attempts",
                     step_id=step_id,
                     expected="integer in [0, 10]",
                     actual=str(max_attempts),
-                    suggestion="Set retry_policy.max_attempts to a small integer such as 1 or 2.",
+                    suggestion=(
+                        "Set retry_policy.max_attempts to a small integer such"
+                        " as 1 or 2."
+                    ),
                 ),
             )
 
@@ -2360,9 +2526,14 @@ def _validate_pipeline_step(
                 message="Step artifact_schema_ref format is invalid.",
                 field_path="artifact_schema_ref",
                 step_id=step_id,
-                expected="lowercase path-like token, e.g. knowledge/snapshot-manifest.v1",
+                expected=(
+                    "lowercase path-like token, e.g."
+                    " knowledge/snapshot-manifest.v1"
+                ),
                 actual=schema_ref,
-                suggestion="Use lowercase letters, digits, '.', '_', '-', '/'.",
+                suggestion=(
+                    "Use lowercase letters, digits, '.', '_', '-', '/'."
+                ),
             ),
         )
 
@@ -2376,7 +2547,9 @@ def _validate_pipeline_step(
                     step_id=step_id,
                     expected="UPPER_SNAKE_CASE token",
                     actual=str(error_code),
-                    suggestion="Use UPPER_SNAKE_CASE, e.g. SNAPSHOT_MANIFEST_MISSING.",
+                    suggestion=(
+                        "Use UPPER_SNAKE_CASE, e.g. SNAPSHOT_MANIFEST_MISSING."
+                    ),
                 ),
             )
 
@@ -2389,7 +2562,10 @@ def _validate_pipeline_step(
                 step_id=step_id,
                 expected="string",
                 actual=type(step.executor).__name__,
-                suggestion="Use a string identifier such as builtin:knowledge.snapshot_raw.",
+                suggestion=(
+                    "Use a string identifier such as"
+                    " builtin:knowledge.snapshot_raw."
+                ),
             ),
         )
 
@@ -2409,12 +2585,18 @@ def _validate_pipeline_step(
         errors.append(
             PipelineValidationError(
                 error_code="missing_step_execution_contract",
-                message="Step requires prompt or script to define execution contract.",
+                message=(
+                    "Step requires prompt or script to define execution"
+                    " contract."
+                ),
                 field_path="prompt|script",
                 step_id=step_id,
                 expected="non-empty prompt or script",
                 actual="",
-                suggestion="Provide prompt, script, or both for executable step kinds.",
+                suggestion=(
+                    "Provide prompt, script, or both for executable step"
+                    " kinds."
+                ),
             ),
         )
 
@@ -2451,12 +2633,17 @@ def _validate_pipeline_dependency_graph(
                 errors.append(
                     PipelineValidationError(
                         error_code="step_dependency_not_found",
-                        message="Dependency step id not found in this pipeline.",
+                        message=(
+                            "Dependency step id not found in this pipeline."
+                        ),
                         field_path=step_path,
                         step_id=step.id,
                         expected="existing step id",
                         actual=dep_id,
-                        suggestion="Add the missing upstream step or fix the dependency id.",
+                        suggestion=(
+                            "Add the missing upstream step or fix the"
+                            " dependency id."
+                        ),
                     ),
                 )
 
@@ -2482,7 +2669,10 @@ def _validate_pipeline_dependency_graph(
                     step_id=node,
                     expected="acyclic dependency graph",
                     actual=cycle,
-                    suggestion="Break the cycle by removing at least one dependency edge.",
+                    suggestion=(
+                        "Break the cycle by removing at least one dependency"
+                        " edge."
+                    ),
                 ),
             )
             return
@@ -2542,11 +2732,16 @@ def _validate_pipeline_input_references(
                         PipelineValidationError(
                             error_code="step_input_reference_invalid_format",
                             message="Input reference format is invalid.",
-                            field_path=f"steps[{idx}].{field_name}.{input_key}",
+                            field_path=(
+                                f"steps[{idx}].{field_name}.{input_key}"
+                            ),
                             step_id=step.id,
                             expected="$upstream_step.output_key",
                             actual=raw_value,
-                            suggestion="Use $step_id.output_name format for upstream output references.",
+                            suggestion=(
+                                "Use $step_id.output_name format for upstream"
+                                " output references."
+                            ),
                         ),
                     )
                     continue
@@ -2556,33 +2751,58 @@ def _validate_pipeline_input_references(
                 if upstream_step is None:
                     errors.append(
                         PipelineValidationError(
-                            error_code="step_input_reference_upstream_not_found",
+                            error_code=(
+                                "step_input_reference_upstream_not_found"
+                            ),
                             message="Input reference upstream step not found.",
-                            field_path=f"steps[{idx}].{field_name}.{input_key}",
+                            field_path=(
+                                f"steps[{idx}].{field_name}.{input_key}"
+                            ),
                             step_id=step.id,
                             expected="existing upstream step id",
                             actual=upstream_step_id,
-                            suggestion="Fix reference step id or add the missing upstream step.",
+                            suggestion=(
+                                "Fix reference step id or add the missing"
+                                " upstream step."
+                            ),
                         ),
                     )
                     continue
                 if upstream_output_key not in (upstream_step.outputs or {}):
                     errors.append(
                         PipelineValidationError(
-                            error_code="step_input_reference_output_not_declared",
-                            message="Referenced upstream output key is not declared.",
-                            field_path=f"steps[{idx}].{field_name}.{input_key}",
+                            error_code=(
+                                "step_input_reference_output_not_declared"
+                            ),
+                            message=(
+                                "Referenced upstream output key is not"
+                                " declared."
+                            ),
+                            field_path=(
+                                f"steps[{idx}].{field_name}.{input_key}"
+                            ),
                             step_id=step.id,
-                            expected=f"one of {sorted((upstream_step.outputs or {}).keys())}",
+                            expected=(
+                                "one of"
+                                f" {sorted((upstream_step.outputs or {}).keys())}"
+                            ),
                             actual=upstream_output_key,
-                            suggestion="Declare output on upstream step or fix the referenced output key.",
+                            suggestion=(
+                                "Declare output on upstream step or fix the"
+                                " referenced output key."
+                            ),
                         ),
                     )
                 if upstream_step_id not in (step.depends_on or []):
                     errors.append(
                         PipelineValidationError(
-                            error_code="step_input_reference_missing_dependency",
-                            message="Input reference requires explicit depends_on edge.",
+                            error_code=(
+                                "step_input_reference_missing_dependency"
+                            ),
+                            message=(
+                                "Input reference requires explicit depends_on"
+                                " edge."
+                            ),
                             field_path=f"steps[{idx}].depends_on",
                             step_id=step.id,
                             expected=f"includes '{upstream_step_id}'",
@@ -2590,7 +2810,10 @@ def _validate_pipeline_input_references(
                                 step.depends_on or [],
                                 ensure_ascii=False,
                             ),
-                            suggestion="Add upstream step id to depends_on to make execution order explicit.",
+                            suggestion=(
+                                "Add upstream step id to depends_on to make"
+                                " execution order explicit."
+                            ),
                         ),
                     )
 
@@ -3595,10 +3818,16 @@ def _enrich_run_with_guidance(
             PipelineRunNextAction(
                 id="wait_for_completion",
                 title="Wait for pipeline completion",
-                description="The run is still in progress. Keep polling run detail until all steps settle.",
+                description=(
+                    "The run is still in progress. Keep polling run detail"
+                    " until all steps settle."
+                ),
                 severity="info",
                 status="active",
-                suggested_prompt="Continue this run and notify me when all steps are complete.",
+                suggested_prompt=(
+                    "Continue this run and notify me when all steps are"
+                    " complete."
+                ),
             ),
         )
     if failed_steps:
@@ -3606,11 +3835,17 @@ def _enrich_run_with_guidance(
             PipelineRunNextAction(
                 id="handle_failed_steps",
                 title="Fix failed step inputs and rerun",
-                description=f"Failed steps: {', '.join(failed_steps)}. Inspect step evidence and source data before rerun.",
+                description=(
+                    f"Failed steps: {', '.join(failed_steps)}. Inspect step"
+                    " evidence and source data before rerun."
+                ),
                 severity="high",
                 status="pending",
                 target_step_id=failed_steps[0],
-                suggested_prompt="Summarize why this step failed and provide a rerun-ready fix checklist.",
+                suggested_prompt=(
+                    "Summarize why this step failed and provide a rerun-ready"
+                    " fix checklist."
+                ),
             ),
         )
     if missing_steps:
@@ -3618,11 +3853,17 @@ def _enrich_run_with_guidance(
             PipelineRunNextAction(
                 id="validate_template_contract",
                 title="Validate template-step contract",
-                description="Run detail is missing template step records. Verify template revision and run manifest consistency.",
+                description=(
+                    "Run detail is missing template step records. Verify"
+                    " template revision and run manifest consistency."
+                ),
                 severity="high",
                 status="pending",
                 target_step_id=missing_steps[0],
-                suggested_prompt="Check pipeline template and run manifest mismatch, then propose repair actions.",
+                suggested_prompt=(
+                    "Check pipeline template and run manifest mismatch, then"
+                    " propose repair actions."
+                ),
             ),
         )
     if not has_term_workbench:
@@ -3630,11 +3871,17 @@ def _enrich_run_with_guidance(
             PipelineRunNextAction(
                 id="complete_term_extraction",
                 title="Complete term extraction outputs",
-                description="Expected terms.reviewed artifacts are missing. Recheck ingest/normalize/extract inputs.",
+                description=(
+                    "Expected terms.reviewed artifacts are missing. Recheck"
+                    " ingest/normalize/extract inputs."
+                ),
                 severity="medium",
                 status="pending",
                 target_step_id="extract",
-                suggested_prompt="Guide me to complete term-workbench reviewed outputs for all books.",
+                suggested_prompt=(
+                    "Guide me to complete term-workbench reviewed outputs for"
+                    " all books."
+                ),
             ),
         )
     if not has_alignment:
@@ -3642,11 +3889,17 @@ def _enrich_run_with_guidance(
             PipelineRunNextAction(
                 id="complete_alignment",
                 title="Complete cross-book alignment",
-                description="Contrast or concept-alignment outputs are missing. Continue align/build_concept_tree steps.",
+                description=(
+                    "Contrast or concept-alignment outputs are missing."
+                    " Continue align/build_concept_tree steps."
+                ),
                 severity="medium",
                 status="pending",
                 target_step_id="align",
-                suggested_prompt="Generate missing cross-book alignment outputs and explain data gaps.",
+                suggested_prompt=(
+                    "Generate missing cross-book alignment outputs and explain"
+                    " data gaps."
+                ),
             ),
         )
     if not has_relation_matrix:
@@ -3654,11 +3907,17 @@ def _enrich_run_with_guidance(
             PipelineRunNextAction(
                 id="build_relation_matrix",
                 title="Build relation matrix",
-                description="book-relation-matrix outputs are missing. Execute relation matrix stage and verify dependencies.",
+                description=(
+                    "book-relation-matrix outputs are missing. Execute"
+                    " relation matrix stage and verify dependencies."
+                ),
                 severity="medium",
                 status="pending",
                 target_step_id="build_relation_matrix",
-                suggested_prompt="Build relation matrix and report pairwise differences for all book pairs.",
+                suggested_prompt=(
+                    "Build relation matrix and report pairwise differences for"
+                    " all book pairs."
+                ),
             ),
         )
     if not has_review_pack:
@@ -3666,11 +3925,17 @@ def _enrich_run_with_guidance(
             PipelineRunNextAction(
                 id="finish_review_pack",
                 title="Finish quality gate and review pack",
-                description="review.dashboard or review.ui-payload outputs are missing. Execute review_pack/report for closure.",
+                description=(
+                    "review.dashboard or review.ui-payload outputs are"
+                    " missing. Execute review_pack/report for closure."
+                ),
                 severity="high",
                 status="pending",
                 target_step_id="review_pack",
-                suggested_prompt="Run quality gate and output final review package with acceptance summary.",
+                suggested_prompt=(
+                    "Run quality gate and output final review package with"
+                    " acceptance summary."
+                ),
             ),
         )
     if run_status == "succeeded" and passed_checks == total_checks:
@@ -3678,10 +3943,16 @@ def _enrich_run_with_guidance(
             PipelineRunNextAction(
                 id="start_improvement_iteration",
                 title="Start next optimization iteration",
-                description="Closed-loop run completed. Start a comparison run to improve terminology consistency and costs.",
+                description=(
+                    "Closed-loop run completed. Start a comparison run to"
+                    " improve terminology consistency and costs."
+                ),
                 severity="info",
                 status="suggested",
-                suggested_prompt="Create a follow-up run plan that improves quality metrics while keeping reproducibility.",
+                suggested_prompt=(
+                    "Create a follow-up run plan that improves quality metrics"
+                    " while keeping reproducibility."
+                ),
             ),
         )
 
@@ -3798,10 +4069,16 @@ def _enrich_knowledge_run_with_guidance(
             PipelineRunNextAction(
                 id="wait_for_knowledge_workflow",
                 title="Wait for knowledge workflow completion",
-                description="The knowledge processing workflow is still running. Keep polling run detail until all steps settle.",
+                description=(
+                    "The knowledge processing workflow is still running. Keep"
+                    " polling run detail until all steps settle."
+                ),
                 severity="info",
                 status="active",
-                suggested_prompt="Continue monitoring this knowledge processing workflow and summarize each stage when it completes.",
+                suggested_prompt=(
+                    "Continue monitoring this knowledge processing workflow"
+                    " and summarize each stage when it completes."
+                ),
             ),
         )
     if failed_steps:
@@ -3809,11 +4086,18 @@ def _enrich_knowledge_run_with_guidance(
             PipelineRunNextAction(
                 id="repair_failed_knowledge_step",
                 title="Repair failed knowledge step",
-                description=f"Failed steps: {', '.join(failed_steps)}. Inspect evidence and rerun after fixing input or provider issues.",
+                description=(
+                    f"Failed steps: {', '.join(failed_steps)}. Inspect"
+                    " evidence and rerun after fixing input or provider"
+                    " issues."
+                ),
                 severity="high",
                 status="pending",
                 target_step_id=failed_steps[0],
-                suggested_prompt="Summarize why this knowledge workflow step failed and provide a rerun-ready fix checklist.",
+                suggested_prompt=(
+                    "Summarize why this knowledge workflow step failed and"
+                    " provide a rerun-ready fix checklist."
+                ),
             ),
         )
     if not has_index:
@@ -3821,11 +4105,17 @@ def _enrich_knowledge_run_with_guidance(
             PipelineRunNextAction(
                 id="rebuild_knowledge_index",
                 title="Rebuild project knowledge index",
-                description="The project-scoped knowledge index was not produced. Verify source registration and file analysis outputs.",
+                description=(
+                    "The project-scoped knowledge index was not produced."
+                    " Verify source registration and file analysis outputs."
+                ),
                 severity="high",
                 status="pending",
                 target_step_id="build_chunks",
-                suggested_prompt="Check why the knowledge index was not produced and propose the minimal fix.",
+                suggested_prompt=(
+                    "Check why the knowledge index was not produced and"
+                    " propose the minimal fix."
+                ),
             ),
         )
     if has_index and not has_graph:
@@ -3833,11 +4123,18 @@ def _enrich_knowledge_run_with_guidance(
             PipelineRunNextAction(
                 id="rebuild_knowledge_graph",
                 title="Rebuild knowledge graph",
-                description="The knowledge index exists, but graph artifacts are missing. Re-run the graph build stage and inspect memify output.",
+                description=(
+                    "The knowledge index exists, but graph artifacts are"
+                    " missing. Re-run the graph build stage and inspect memify"
+                    " output."
+                ),
                 severity="medium",
                 status="pending",
                 target_step_id="syntax_parse",
-                suggested_prompt="Rebuild the project knowledge graph and explain any missing graph output.",
+                suggested_prompt=(
+                    "Rebuild the project knowledge graph and explain any"
+                    " missing graph output."
+                ),
             ),
         )
     if has_graph and not has_quality_report:
@@ -3845,11 +4142,18 @@ def _enrich_knowledge_run_with_guidance(
             PipelineRunNextAction(
                 id="complete_semantic_role_labeling",
                 title="Complete semantic role labeling",
-                description="Syntax artifacts exist, but semantic role labeling output is missing. Re-run the SRL stage and inspect output quality.",
+                description=(
+                    "Syntax artifacts exist, but semantic role labeling output"
+                    " is missing. Re-run the SRL stage and inspect output"
+                    " quality."
+                ),
                 severity="medium",
                 status="pending",
                 target_step_id="semantic_role_labeling",
-                suggested_prompt="Complete semantic role labeling and summarize remaining risks.",
+                suggested_prompt=(
+                    "Complete semantic role labeling and summarize remaining"
+                    " risks."
+                ),
             ),
         )
     if run_status == "succeeded" and has_quality_report:
@@ -3857,10 +4161,16 @@ def _enrich_knowledge_run_with_guidance(
             PipelineRunNextAction(
                 id="consume_knowledge_outputs",
                 title="Use the refreshed knowledge outputs",
-                description="Knowledge processing completed. You can now query the project-scoped index and graph with refreshed data.",
+                description=(
+                    "Knowledge processing completed. You can now query the"
+                    " project-scoped index and graph with refreshed data."
+                ),
                 severity="info",
                 status="suggested",
-                suggested_prompt="Summarize the refreshed project knowledge graph and suggest the next downstream automation step.",
+                suggested_prompt=(
+                    "Summarize the refreshed project knowledge graph and"
+                    " suggest the next downstream automation step."
+                ),
             ),
         )
 
@@ -4134,7 +4444,9 @@ def _persist_project_pipeline_run(
         "pipeline_version": template.version,
         "flow_version": run.flow_version or template.version,
         "source_platform_template_id": run.source_platform_template_id,
-        "source_platform_template_version": run.source_platform_template_version,
+        "source_platform_template_version": (
+            run.source_platform_template_version
+        ),
         "spec_version": "0.1.0",
         "status": _normalize_run_status(run.status),
         "started_at": run.created_at,
@@ -4232,9 +4544,11 @@ def _build_pipeline_artifact_records(
                     logical_key=logical_key,
                     published_path=published_path,
                     name=Path(output_path).name,
-                    kind="final"
-                    if step_id == terminal_step_id
-                    else "intermediate",
+                    kind=(
+                        "final"
+                        if step_id == terminal_step_id
+                        else "intermediate"
+                    ),
                     format=str(
                         output.get("format")
                         or _infer_output_format(output_path),
@@ -4349,11 +4663,13 @@ def _execute_project_pipeline_run(
             status="running",
             message=f"Step {step.id} progress update",
             metrics={
-                "progress_pct": int(
-                    round((completed_steps / len(run.steps)) * 100),
-                )
-                if run.steps
-                else 0,
+                "progress_pct": (
+                    int(
+                        round((completed_steps / len(run.steps)) * 100),
+                    )
+                    if run.steps
+                    else 0
+                ),
                 "completed_steps": completed_steps,
                 "total_steps": len(run.steps),
                 "phase": "start",
@@ -4420,11 +4736,13 @@ def _execute_project_pipeline_run(
                 status="succeeded",
                 message=f"Step {step.id} progress update",
                 metrics={
-                    "progress_pct": int(
-                        round((completed_steps / len(run.steps)) * 100),
-                    )
-                    if run.steps
-                    else 100,
+                    "progress_pct": (
+                        int(
+                            round((completed_steps / len(run.steps)) * 100),
+                        )
+                        if run.steps
+                        else 100
+                    ),
                     "completed_steps": completed_steps,
                     "total_steps": len(run.steps),
                     "phase": "finish",
@@ -4470,11 +4788,13 @@ def _execute_project_pipeline_run(
                 status="failed",
                 message=f"Step {step.id} progress update",
                 metrics={
-                    "progress_pct": int(
-                        round((completed_steps / len(run.steps)) * 100),
-                    )
-                    if run.steps
-                    else 0,
+                    "progress_pct": (
+                        int(
+                            round((completed_steps / len(run.steps)) * 100),
+                        )
+                        if run.steps
+                        else 0
+                    ),
                     "completed_steps": completed_steps,
                     "total_steps": len(run.steps),
                     "phase": "failed",
@@ -4927,14 +5247,18 @@ def _create_project_pipeline_run(
                         or "",
                     ).strip(),
                     "progress": int(pipeline_state.get("progress") or 0),
-                    "updated_at": str(
-                        pipeline_state.get("updated_at") or "",
-                    ).strip()
-                    or None,
-                    "last_error": str(
-                        pipeline_state.get("last_error") or "",
-                    ).strip()
-                    or None,
+                    "updated_at": (
+                        str(
+                            pipeline_state.get("updated_at") or "",
+                        ).strip()
+                        or None
+                    ),
+                    "last_error": (
+                        str(
+                            pipeline_state.get("last_error") or "",
+                        ).strip()
+                        or None
+                    ),
                 }
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -5019,7 +5343,10 @@ def _build_continuation_run(
     if target_step_id not in step_ids:
         raise HTTPException(
             status_code=400,
-            detail=f"Target step '{target_step_id}' not found in template '{template.id}'",
+            detail=(
+                f"Target step '{target_step_id}' not found in template"
+                f" '{template.id}'"
+            ),
         )
 
     now = _pipeline_now_iso()
@@ -5089,9 +5416,11 @@ def _build_continuation_run(
                     "continued_from_run_id": source_run.id,
                     "continued_from_step_id": target_step_id,
                 },
-                evidence=[f"continued-from:{source_run.id}"]
-                if idx == target_index
-                else [],
+                evidence=(
+                    [f"continued-from:{source_run.id}"]
+                    if idx == target_index
+                    else []
+                ),
             ),
         )
 
@@ -5138,7 +5467,10 @@ def _build_continuation_run(
         "run.restarted",
         step_id=target_step_id,
         status="running",
-        message=f"Continuation run created from {source_run.id} at step {target_step_id}",
+        message=(
+            f"Continuation run created from {source_run.id} at step"
+            f" {target_step_id}"
+        ),
         metrics={"source_run_id": source_run.id},
     )
     return run

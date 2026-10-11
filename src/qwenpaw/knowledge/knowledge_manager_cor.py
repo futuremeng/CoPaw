@@ -140,14 +140,16 @@ def write_chunk_cor_artifacts(
                 chunk["cor_interlinear_path"] = str(interlinear_path or "")
                 if cor_input_mode == "chunks_required":
                     chunk["cor_reason_code"] = "CHUNKS_REQUIRED"
-                    chunk[
-                        "cor_reason"
-                    ] = "COR requires chunk text input and fallback is disabled."
+                    chunk["cor_reason"] = (
+                        "COR requires chunk text input and fallback is"
+                        " disabled."
+                    )
                 else:
                     chunk["cor_reason_code"] = "INTERLINEAR_REQUIRED"
-                    chunk[
-                        "cor_reason"
-                    ] = "COR requires interlinear input and fallback is disabled."
+                    chunk["cor_reason"] = (
+                        "COR requires interlinear input and fallback is"
+                        " disabled."
+                    )
             if progress_callback is not None:
                 progress_callback(
                     {
@@ -169,9 +171,10 @@ def write_chunk_cor_artifacts(
             # HanLP coreference is intentionally disabled in CoPaw runtime.
             for chunk in group:
                 chunk["cor_reason_code"] = "HANLP_COREF_NOT_OPEN_SOURCE"
-                chunk[
-                    "cor_reason"
-                ] = "HanLP coreference_resolution is not open-source and is disabled in CoPaw runtime."
+                chunk["cor_reason"] = (
+                    "HanLP coreference_resolution is not open-source and is"
+                    " disabled in CoPaw runtime."
+                )
 
         cor_relative_path = manager._build_cor_relative_path(
             str(representative.get("chunk_path") or ""),

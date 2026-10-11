@@ -318,7 +318,9 @@ def build_ebook_screenshot_template(
         RpaVariableSpec(
             name="wait_after_flip_ms",
             kind="integer",
-            description="Delay after clicking next before checking the next page.",
+            description=(
+                "Delay after clicking next before checking the next page."
+            ),
             default=250,
             required=False,
             example=250,
@@ -338,7 +340,9 @@ def build_ebook_screenshot_template(
         actions=[
             {
                 "kind": "browser.screenshot",
-                "path": "{{screenshot_dir}}/{{page_prefix}}-{{page_index:03d}}.png",
+                "path": (
+                    "{{screenshot_dir}}/{{page_prefix}}-{{page_index:03d}}.png"
+                ),
                 "full_page": True,
             },
             {
@@ -370,7 +374,10 @@ def build_ebook_screenshot_template(
             id="capture_pages",
             name="Capture Pages",
             kind="flow.loop",
-            description="Capture every page as a screenshot while stepping through the book.",
+            description=(
+                "Capture every page as a screenshot while stepping through the"
+                " book."
+            ),
             inputs={
                 "page_number_selector": "{{page_number_selector}}",
                 "next_button_selector": "{{next_button_selector}}",
@@ -406,8 +413,14 @@ def build_ebook_screenshot_template(
         variables=variables,
         steps=steps,
         notes=[
-            "The loop step is intentionally declarative so the runtime can decide how to wait for page transitions.",
-            "Selectors are kept as variables so the same template can be reused across same-structure magazines.",
+            (
+                "The loop step is intentionally declarative so the runtime can"
+                " decide how to wait for page transitions."
+            ),
+            (
+                "Selectors are kept as variables so the same template can be"
+                " reused across same-structure magazines."
+            ),
         ],
     )
 

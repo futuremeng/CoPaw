@@ -320,14 +320,20 @@ def _print_assessment_table(payload: dict[str, Any]) -> None:
         f"density.entity_per_chunk: {density.get('entity_per_chunk', 0):.4f}",
     )
     click.echo(
-        f"density.relation_per_token: {density.get('relation_per_token', 0):.4f}",
+        (
+            "density.relation_per_token:"
+            f" {density.get('relation_per_token', 0):.4f}"
+        ),
     )
     raw_degrade_flags = score.get("degrade_flags")
     degrade_flags = (
         raw_degrade_flags if isinstance(raw_degrade_flags, list) else []
     )
     click.echo(
-        f"degrade_flags: {', '.join(degrade_flags) if degrade_flags else '(none)'}",
+        (
+            "degrade_flags:"
+            f" {', '.join(degrade_flags) if degrade_flags else '(none)'}"
+        ),
     )
 
     probes = _as_dict(payload.get("probes"))
@@ -357,7 +363,10 @@ def _print_assessment_table(payload: dict[str, Any]) -> None:
             else []
         )
         click.echo(
-            f"risk_labels: {', '.join(str(x) for x in labels) if labels else '(none)'}",
+            (
+                "risk_labels:"
+                f" {', '.join(str(x) for x in labels) if labels else '(none)'}"
+            ),
         )
         reasons = (
             grade.get("reasons")
@@ -414,7 +423,10 @@ def _print_batch_assessment_table(payload: dict[str, Any]) -> None:
         source = _as_dict(item.get("source"))
         source_status = str(source.get("status") or "")
         click.echo(
-            f"{project_id:<20} {grade_value:<5}   {score_value:0.4f}   {risk_value:0.4f}  {source_status}",
+            (
+                f"{project_id:<20} {grade_value:<5}   {score_value:0.4f}  "
+                f" {risk_value:0.4f}  {source_status}"
+            ),
         )
 
 
@@ -466,7 +478,10 @@ def run_cmd(
 @click.option(
     "--knowledge-dirname",
     default=None,
-    help="Knowledge directory relative to WORKING_DIR (default: projects/<project_id>/.knowledge).",
+    help=(
+        "Knowledge directory relative to WORKING_DIR (default:"
+        " projects/<project_id>/.knowledge)."
+    ),
 )
 @click.option(
     "--state-file",
@@ -504,7 +519,10 @@ def run_cmd(
 @click.option(
     "--allow-empty",
     is_flag=True,
-    help="In --all-projects mode, return empty result instead of error when no state files found.",
+    help=(
+        "In --all-projects mode, return empty result instead of error when no"
+        " state files found."
+    ),
 )
 @click.option(
     "--project-limit",
@@ -594,7 +612,10 @@ def assess_l2_cmd(
         raise click.ClickException(str(exc)) from exc
     if all_projects and (project_id or state_file or probe_only):
         raise click.ClickException(
-            "--all-projects cannot be combined with --project-id/--state-file/--probe-only.",
+            (
+                "--all-projects cannot be combined with"
+                " --project-id/--state-file/--probe-only."
+            ),
         )
 
     if all_projects:
@@ -602,7 +623,10 @@ def assess_l2_cmd(
         if not discovered:
             if not allow_empty:
                 raise click.ClickException(
-                    "No project-pipeline-state.json found under WORKING_DIR/projects.",
+                    (
+                        "No project-pipeline-state.json found under"
+                        " WORKING_DIR/projects."
+                    ),
                 )
             payload = {
                 "mode": "all-projects",
@@ -665,9 +689,11 @@ def assess_l2_cmd(
                 "state_file": str(path),
                 "scorecard": scorecard,
                 "source": {
-                    "status": "invalid_state_json"
-                    if state_error
-                    else str(state.get("status") or ""),
+                    "status": (
+                        "invalid_state_json"
+                        if state_error
+                        else str(state.get("status") or "")
+                    ),
                     "stage": str(state.get("stage") or ""),
                     "updated_at": str(
                         state.get("updated_at")

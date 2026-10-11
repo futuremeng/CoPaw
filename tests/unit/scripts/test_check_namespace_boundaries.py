@@ -21,7 +21,10 @@ def _load_module():
 
 def test_is_thin_copaw_shim_accepts_qwenpaw_reexport_with_noqa():
     mod = _load_module()
-    content = "# -*- coding: utf-8 -*-\n\nfrom qwenpaw.knowledge.manager import *  # noqa: F401,F403\n"
+    content = (
+        "# -*- coding: utf-8 -*-\n\nfrom qwenpaw.knowledge.manager import *  #"
+        " noqa: F401,F403\n"
+    )
     assert mod._is_thin_copaw_shim(content) is True
 
 

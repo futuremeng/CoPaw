@@ -54,9 +54,11 @@ def _load_project_watch_leases(project_dir: Path) -> dict[str, Any]:
         return {"updated_at": None, "leases": {}}
     return {
         "updated_at": payload.get("updated_at"),
-        "leases": payload.get("leases")
-        if isinstance(payload.get("leases"), dict)
-        else {},
+        "leases": (
+            payload.get("leases")
+            if isinstance(payload.get("leases"), dict)
+            else {}
+        ),
     }
 
 

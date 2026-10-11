@@ -190,8 +190,10 @@ def _read_frontmatter_safe_from_path(
         )
     except Exception as e:
         logger.warning(
-            "Failed to read SKILL frontmatter for '%s' at %s: %s. "
-            "Using fallback values.",
+            (
+                "Failed to read SKILL frontmatter for '%s' at %s: %s. "
+                "Using fallback values."
+            ),
             skill_name,
             skill_md_path,
             e,
@@ -475,8 +477,10 @@ def _read_frontmatter_safe(
         return _read_frontmatter(skill_dir)
     except Exception as e:
         logger.warning(
-            f"Failed to read SKILL.md frontmatter for '{skill_name}' "
-            f"at {skill_dir}: {e}. Using fallback values.",
+            (
+                f"Failed to read SKILL.md frontmatter for '{skill_name}' "
+                f"at {skill_dir}: {e}. Using fallback values."
+            ),
         )
         # Return minimal valid frontmatter
         return {"name": skill_name, "description": ""}
@@ -794,8 +798,10 @@ def _extract_requirements(post: dict[str, Any]) -> SkillRequirements:
         )
     except Exception as e:
         logger.warning(
-            "Failed to parse skill requirements: %s. "
-            "Falling back to empty requirements.",
+            (
+                "Failed to parse skill requirements: %s. "
+                "Falling back to empty requirements."
+            ),
             e,
         )
         return SkillRequirements()
@@ -848,8 +854,7 @@ def _build_skill_config_env_overrides(
     for env_name in normalized_required_envs:
         if env_name not in overrides:
             logger.warning(
-                "Skill '%s' requires env '%s' but config does "
-                "not provide it",
+                "Skill '%s' requires env '%s' but config does not provide it",
                 skill_name,
                 env_name,
             )
@@ -1164,12 +1169,12 @@ def _build_builtin_import_candidate(
     }
     return {
         "name": canonical_name,
-        "description": preferred_variant.description
-        if preferred_variant
-        else "",
-        "version_text": preferred_variant.version_text
-        if preferred_variant
-        else "",
+        "description": (
+            preferred_variant.description if preferred_variant else ""
+        ),
+        "version_text": (
+            preferred_variant.version_text if preferred_variant else ""
+        ),
         "current_version_text": current_version_text,
         "current_source": current_source,
         "current_language": current_language,
@@ -2302,9 +2307,11 @@ class SkillService:
             entry = manifest.get("skills", {}).get(skill_name, {})
             skill = _read_skill_from_dir(
                 skill_root / skill_name,
-                "builtin"
-                if entry.get("source", "customized") == "builtin"
-                else "customized",
+                (
+                    "builtin"
+                    if entry.get("source", "customized") == "builtin"
+                    else "customized"
+                ),
             )
             if skill is not None:
                 skills.append(skill)
@@ -3618,9 +3625,11 @@ class SkillPoolService:
             metadata = _build_skill_metadata(
                 final_name,
                 target_dir,
-                source="builtin"
-                if entry.get("source") == "builtin"
-                else "customized",
+                source=(
+                    "builtin"
+                    if entry.get("source") == "builtin"
+                    else "customized"
+                ),
                 protected=False,
             )
             ws_entry: dict[str, Any] = {

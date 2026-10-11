@@ -246,11 +246,14 @@ def _record_project_pipeline_runtime_event(
         "deduplicated": bool(deduplicated),
         "last_action": action,
         "flow_run_id": str(flow_run_id or existing_flow_run_id),
-        "recent_control_command": normalized_control_command
-        or existing_control_command,
-        "control_updated_at": now_iso
-        if normalized_control_command
-        else existing_control_updated_at,
+        "recent_control_command": (
+            normalized_control_command or existing_control_command
+        ),
+        "control_updated_at": (
+            now_iso
+            if normalized_control_command
+            else existing_control_updated_at
+        ),
         "recent_error_code": normalized_recent_error_code,
         "recent_error_source": normalized_recent_error_source,
         "updated_at": now_iso,
@@ -302,7 +305,10 @@ def _project_pipeline_command_error_detail(
     recovery_hint = (
         "Check flow run id/state and retry the command."
         if error_code == _PROJECT_PIPELINE_FLOW_RUN_NOT_FOUND
-        else "Check flow command transition/state, then retry with a valid command sequence."
+        else (
+            "Check flow command transition/state, then retry with a valid"
+            " command sequence."
+        )
     )
     return {
         "error_code": error_code,
@@ -2286,7 +2292,9 @@ async def run_knowledge_nlp_task(
     except Exception as exc:  # pragma: no cover - compatibility guard
         raise HTTPException(
             status_code=501,
-            detail="NLP task demo runtime is unavailable in current deployment.",
+            detail=(
+                "NLP task demo runtime is unavailable in current deployment."
+            ),
         ) from exc
 
     return await _run_hanlp_task(
@@ -3014,8 +3022,12 @@ async def command_project_pipeline(
         _record_project_pipeline_runtime_event(
             workspace_dir=workspace_dir,
             project_id=project_id,
-            operation_id=f"manual-flow-{normalized_command}-error:{project_id}",
-            idempotency_key=f"manual-flow-{normalized_command}-error:{project_id}",
+            operation_id=(
+                f"manual-flow-{normalized_command}-error:{project_id}"
+            ),
+            idempotency_key=(
+                f"manual-flow-{normalized_command}-error:{project_id}"
+            ),
             deduplicated=False,
             action=f"flow_{normalized_command}_failed",
             recent_error_code=_PROJECT_PIPELINE_FLOW_RUN_NOT_FOUND,
@@ -3059,8 +3071,12 @@ async def command_project_pipeline(
         _record_project_pipeline_runtime_event(
             workspace_dir=workspace_dir,
             project_id=project_id,
-            operation_id=f"manual-flow-{normalized_command}-error:{project_id}",
-            idempotency_key=f"manual-flow-{normalized_command}-error:{flow_run_id}",
+            operation_id=(
+                f"manual-flow-{normalized_command}-error:{project_id}"
+            ),
+            idempotency_key=(
+                f"manual-flow-{normalized_command}-error:{flow_run_id}"
+            ),
             deduplicated=False,
             action=f"flow_{normalized_command}_failed",
             flow_run_id=flow_run_id,
@@ -3081,8 +3097,12 @@ async def command_project_pipeline(
         _record_project_pipeline_runtime_event(
             workspace_dir=workspace_dir,
             project_id=project_id,
-            operation_id=f"manual-flow-{normalized_command}-error:{project_id}",
-            idempotency_key=f"manual-flow-{normalized_command}-error:{flow_run_id}",
+            operation_id=(
+                f"manual-flow-{normalized_command}-error:{project_id}"
+            ),
+            idempotency_key=(
+                f"manual-flow-{normalized_command}-error:{flow_run_id}"
+            ),
             deduplicated=False,
             action=f"flow_{normalized_command}_failed",
             flow_run_id=flow_run_id,
@@ -3351,7 +3371,9 @@ async def restore_knowledge_backup(
     }:
         raise HTTPException(
             status_code=400,
-            detail=f"Expected a zip file, got content-type: {file.content_type}",
+            detail=(
+                f"Expected a zip file, got content-type: {file.content_type}"
+            ),
         )
 
     data = await file.read()

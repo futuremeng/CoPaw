@@ -113,7 +113,10 @@ def rerun_project_ner(project_id: str):
             # 检查是否有 semantic_token
             if "semantic_token" in entity_types:
                 print(
-                    f"\n⚠️  警告: 发现 {entity_types['semantic_token']} 个 semantic_token 类型的实体",
+                    (
+                        f"\n⚠️  警告: 发现 {entity_types['semantic_token']} 个"
+                        " semantic_token 类型的实体"
+                    ),
                 )
                 print(f"   这表明 HanLP NER 可能未正确工作")
             else:
@@ -138,7 +141,10 @@ def rerun_project_ner(project_id: str):
 
                 for mention in ner_data.get("entity_mentions", [])[:5]:
                     print(
-                        f"   - {mention.get('surface', '')} [{mention.get('label', 'unknown')}]",
+                        (
+                            "   -"
+                            f" {mention.get('surface', '')} [{mention.get('label', 'unknown')}]"
+                        ),
                     )
                     example_count += 1
                     if example_count >= 5:

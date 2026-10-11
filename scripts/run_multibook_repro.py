@@ -124,7 +124,10 @@ def _save_json(path: Path, payload: dict[str, Any]) -> None:
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Start and monitor one project pipeline run for multibook reproducibility.",
+        description=(
+            "Start and monitor one project pipeline run for multibook"
+            " reproducibility."
+        ),
     )
     parser.add_argument(
         "--base-url",
@@ -169,7 +172,10 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--output",
         default="",
-        help="Output path for final run detail JSON (default: logs/multibook-run-<run_id>.json)",
+        help=(
+            "Output path for final run detail JSON (default:"
+            " logs/multibook-run-<run_id>.json)"
+        ),
     )
     return parser.parse_args()
 
@@ -194,7 +200,10 @@ def main() -> int:
         }
         if args.template_id not in template_ids:
             print(
-                f"[error] Template '{args.template_id}' not found. Available: {sorted(template_ids)}",
+                (
+                    f"[error] Template '{args.template_id}' not found."
+                    f" Available: {sorted(template_ids)}"
+                ),
                 file=sys.stderr,
             )
             return 2

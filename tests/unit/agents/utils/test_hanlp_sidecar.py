@@ -54,9 +54,11 @@ def test_build_status_includes_task_matrix_states(monkeypatch):
         def task_status(self, task_key, _knowledge):
             return {
                 "status": "ready" if task_key == "ner_msra" else "unavailable",
-                "reason_code": "HANLP_TASK_READY"
-                if task_key == "ner_msra"
-                else "HANLP_TASK_LOAD_FAILED",
+                "reason_code": (
+                    "HANLP_TASK_READY"
+                    if task_key == "ner_msra"
+                    else "HANLP_TASK_LOAD_FAILED"
+                ),
                 "reason": "ok" if task_key == "ner_msra" else "failed",
             }
 
@@ -94,9 +96,11 @@ def test_ensure_hanlp_model_aggregates_task_results(monkeypatch):
         def task_status(self, task_key, _knowledge):
             return {
                 "status": "ready" if task_key == "ner_msra" else "unavailable",
-                "reason_code": "HANLP_TASK_READY"
-                if task_key == "ner_msra"
-                else "HANLP_TASK_LOAD_FAILED",
+                "reason_code": (
+                    "HANLP_TASK_READY"
+                    if task_key == "ner_msra"
+                    else "HANLP_TASK_LOAD_FAILED"
+                ),
                 "reason": "ok" if task_key == "ner_msra" else "failed",
             }
 
@@ -130,7 +134,10 @@ def test_ensure_hanlp_model_aggregates_task_results(monkeypatch):
     assert result["task_results"]["ner_msra"]["status"] == "ready"
     assert result["task_results"]["dep"]["status"] == "unavailable"
     assert result["manual_steps"] == [
-        "Verify the configured HanLP task matrix models are available in HANLP_HOME, then retry task verification.",
+        (
+            "Verify the configured HanLP task matrix models are available in"
+            " HANLP_HOME, then retry task verification."
+        ),
     ]
 
 
@@ -265,7 +272,10 @@ def test_auto_install_hanlp_sidecar_uses_python_fallback(
             "name": "create-venv",
             "attempted": True,
             "installer": "python",
-            "command": f"/usr/bin/python3.9 -m venv {tmp_path / 'hanlp_sidecar' / 'venv'}",
+            "command": (
+                "/usr/bin/python3.9 -m venv"
+                f" {tmp_path / 'hanlp_sidecar' / 'venv'}"
+            ),
             "ok": True,
             "output": "created",
             "returncode": 0,
@@ -320,8 +330,14 @@ def test_auto_install_hanlp_sidecar_reports_missing_bootstrap_prereqs(
 
     assert result["success"] is False
     assert result["manual_steps"] == [
-        "Automatic HanLP bootstrap could not find or install uv, and no compatible Python 3.6-3.10 interpreter was found.",
-        "Install uv or provide a Python 3.10 executable, then retry HanLP sidecar setup.",
+        (
+            "Automatic HanLP bootstrap could not find or install uv, and no"
+            " compatible Python 3.6-3.10 interpreter was found."
+        ),
+        (
+            "Install uv or provide a Python 3.10 executable, then retry HanLP"
+            " sidecar setup."
+        ),
     ]
     assert result["operations"] == []
 

@@ -353,8 +353,10 @@ def test_rule_six_rejects_an_unregistered_reader(fixture_root, capsys):
     mod = _module()
     path = fixture_root / "src/copaw/sidecar_reader.py"
     path.write_text(
-        "from importlib.metadata import version\n\n"
-        "INSTALLED = version('qwenpaw')\n",
+        (
+            "from importlib.metadata import version\n\n"
+            "INSTALLED = version('qwenpaw')\n"
+        ),
         encoding="utf-8",
     )
     assert run(mod, fixture_root) == 1

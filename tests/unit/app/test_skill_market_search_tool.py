@@ -32,7 +32,9 @@ async def test_skill_market_search_filters_by_query_and_tags(
                     name="Proofread Single",
                     description="Single file proofreading skill",
                     version="1.0.0",
-                    source_url="https://github.com/futuremeng/editor-skills.git",
+                    source_url=(
+                        "https://github.com/futuremeng/editor-skills.git"
+                    ),
                     install_url="https://github.com/futuremeng/editor-skills/tree/main/skills/proofread-single",
                     tags=["proofread", "editor"],
                 ),
@@ -42,7 +44,9 @@ async def test_skill_market_search_filters_by_query_and_tags(
                     name="Numeric Unit Consistency",
                     description="Check numeric unit consistency",
                     version="1.0.0",
-                    source_url="https://github.com/futuremeng/editor-skills.git",
+                    source_url=(
+                        "https://github.com/futuremeng/editor-skills.git"
+                    ),
                     install_url="https://github.com/futuremeng/editor-skills/tree/main/skills/numeric-unit-consistency",
                     tags=["consistency", "numbers"],
                 ),

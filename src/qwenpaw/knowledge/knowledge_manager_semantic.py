@@ -191,7 +191,9 @@ def write_chunk_tokenize_artifacts(
                         "done_chunks": index,
                         "total_chunks": total_documents,
                         "metrics": {
-                            "tokenize_ready_chunk_count": tokenize_ready_so_far,
+                            "tokenize_ready_chunk_count": (
+                                tokenize_ready_so_far
+                            ),
                             "tokenize_line_count": tokenize_line_so_far,
                             "tokenize_token_count": tokenize_token_so_far,
                             **tokenize_progress,
@@ -231,7 +233,10 @@ def write_chunk_tokenize_artifacts(
             or not str(resolved_text or "").strip()
         ):
             raise RuntimeError(
-                "Tokenize stage requires non-empty aligned chunk/interlinear input text.",
+                (
+                    "Tokenize stage requires non-empty aligned"
+                    " chunk/interlinear input text."
+                ),
             )
 
         resolved_lines = str(resolved_text or "").splitlines()
@@ -282,7 +287,10 @@ def write_chunk_tokenize_artifacts(
                     or "HanLP sidecar tokenization failed.",
                 ).strip()
                 raise RuntimeError(
-                    f"Tokenize stage failed at line {line_index}: {reason_code} {reason}",
+                    (
+                        f"Tokenize stage failed at line {line_index}:"
+                        f" {reason_code} {reason}"
+                    ),
                 )
             tokens = manager._flatten_tokenize_items(raw_tokens)
             offsets = manager._token_offsets_from_text(line_text, tokens)
@@ -330,7 +338,9 @@ def write_chunk_tokenize_artifacts(
                         "done_chunks": max(0, index - 1),
                         "total_chunks": total_documents,
                         "metrics": {
-                            "tokenize_ready_chunk_count": tokenize_ready_so_far,
+                            "tokenize_ready_chunk_count": (
+                                tokenize_ready_so_far
+                            ),
                             "tokenize_line_count": tokenize_line_so_far,
                             "tokenize_token_count": tokenize_token_so_far,
                             **tokenize_progress,

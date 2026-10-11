@@ -72,7 +72,10 @@ def load_project_template_text(
                 f"Project template not found: {relative_path}",
             )
         logger.warning(
-            "Project template missing from package and source tree; using builtin fallback: %s",
+            (
+                "Project template missing from package and source tree; using"
+                " builtin fallback: %s"
+            ),
             relative_path,
         )
 
@@ -104,8 +107,10 @@ def scaffold_project_governance_files(
     plan_md = agent_config_dir / "PLAN.md"
     if not plan_md.exists():
         plan_md.write_text(
-            "# Project Plan\n\n"
-            "Track milestones, risks, and next actions here.\n",
+            (
+                "# Project Plan\n\n"
+                "Track milestones, risks, and next actions here.\n"
+            ),
             encoding="utf-8",
         )
 

@@ -37,13 +37,15 @@ def test_a_workflow_calling_a_dropped_script_fails(tmp_path, capsys):
     mod = _load_module()
     _write_workflow(
         tmp_path,
-        "jobs:\n"
-        "  vitest:\n"
-        "    defaults:\n"
-        "      run:\n"
-        "        working-directory: console\n"
-        "    steps:\n"
-        "      - run: npm run test:run\n",
+        (
+            "jobs:\n"
+            "  vitest:\n"
+            "    defaults:\n"
+            "      run:\n"
+            "        working-directory: console\n"
+            "    steps:\n"
+            "      - run: npm run test:run\n"
+        ),
     )
     _write_package(tmp_path, "console", ["test"])
 
@@ -57,14 +59,16 @@ def test_inline_cd_selects_the_package_it_runners_in(tmp_path):
     mod = _load_module()
     _write_workflow(
         tmp_path,
-        "jobs:\n"
-        "  site:\n"
-        "    defaults:\n"
-        "      run:\n"
-        "        working-directory: console\n"
-        "    steps:\n"
-        "      - run: cd website && pnpm run build\n"
-        "      - run: npm run build\n",
+        (
+            "jobs:\n"
+            "  site:\n"
+            "    defaults:\n"
+            "      run:\n"
+            "        working-directory: console\n"
+            "    steps:\n"
+            "      - run: cd website && pnpm run build\n"
+            "      - run: npm run build\n"
+        ),
     )
     _write_package(tmp_path, "console", ["build"])
     _write_package(tmp_path, "website", ["build"])
@@ -80,11 +84,13 @@ def test_missing_package_json_is_an_error(tmp_path, capsys):
     mod = _load_module()
     _write_workflow(
         tmp_path,
-        "jobs:\n"
-        "  e2e:\n"
-        "    steps:\n"
-        "      - run: npm run smoke\n"
-        "        working-directory: e2e\n",
+        (
+            "jobs:\n"
+            "  e2e:\n"
+            "    steps:\n"
+            "      - run: npm run smoke\n"
+            "        working-directory: e2e\n"
+        ),
     )
 
     assert mod.main(["--repo-root", str(tmp_path)]) == 1

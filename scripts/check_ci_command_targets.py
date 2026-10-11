@@ -112,16 +112,20 @@ def main(argv: list[str] | None = None) -> int:
             package_json = repo_root / directory / "package.json"
             if not package_json.exists():
                 errors.append(
-                    f"{location} runs '{script_name}' in {directory}, "
-                    f"which has no package.json",
+                    (
+                        f"{location} runs '{script_name}' in {directory}, "
+                        "which has no package.json"
+                    ),
                 )
                 continue
             packages[directory] = load_scripts(package_json)
         available = packages.get(directory, {})
         if script_name not in available:
             errors.append(
-                f"{location} runs 'npm run {script_name}' in {directory}, "
-                f"but {directory}/package.json has no such script",
+                (
+                    f"{location} runs 'npm run {script_name}' in {directory}, "
+                    f"but {directory}/package.json has no such script"
+                ),
             )
 
     if errors:
@@ -130,8 +134,10 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     print(
-        f"CI command target check passed ({checked} run commands across "
-        f"{len(packages)} package dirs)",
+        (
+            f"CI command target check passed ({checked} run commands across "
+            f"{len(packages)} package dirs)"
+        ),
     )
     return 0
 

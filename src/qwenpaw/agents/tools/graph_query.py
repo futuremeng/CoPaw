@@ -83,7 +83,10 @@ async def graph_query(
             content=[
                 TextBlock(
                     type="text",
-                    text="Error: output_mode must be 'fast', 'nlp', or 'agentic'.",
+                    text=(
+                        "Error: output_mode must be 'fast', 'nlp', or"
+                        " 'agentic'."
+                    ),
                 ),
             ],
         )
@@ -103,7 +106,10 @@ async def graph_query(
             content=[
                 TextBlock(
                     type="text",
-                    text="Error: knowledge is disabled in agent runtime configuration.",
+                    text=(
+                        "Error: knowledge is disabled in agent runtime"
+                        " configuration."
+                    ),
                 ),
             ],
         )
@@ -123,7 +129,9 @@ async def graph_query(
             content=[
                 TextBlock(
                     type="text",
-                    text="Error: cypher query is not allowed by configuration.",
+                    text=(
+                        "Error: cypher query is not allowed by configuration."
+                    ),
                 ),
             ],
         )

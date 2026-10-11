@@ -810,9 +810,11 @@ def test_upload_project_file_does_not_auto_sync_chunks(
             "run_status": "succeeded",
             "template_id": "builtin-knowledge-processing-v1",
             "processing_mode": kwargs.get("processing_mode") or "agentic",
-            "processing_fingerprint": self.knowledge_manager.compute_processing_fingerprint(
-                kwargs["config"],
-                kwargs.get("running_config"),
+            "processing_fingerprint": (
+                self.knowledge_manager.compute_processing_fingerprint(
+                    kwargs["config"],
+                    kwargs.get("running_config"),
+                )
             ),
             "latest_job_id": "",
             "index": self.knowledge_manager.index_source(
@@ -1385,12 +1387,12 @@ def test_distill_draft_uses_conversation_evidence_mode(
     )
     runs_dir.mkdir(parents=True, exist_ok=True)
     (runs_dir / "run_manifest.json").write_text(
-        "{\n"
-        '  "run_id": "run-demo-1",\n'
-        '  "collaboration_events": [\n'
-        '    {"event": "step.completed", "step_id": "collect-context", "message": "Summarize repeated troubleshooting operation into reusable skill."}\n'
-        "  ]\n"
-        "}\n",
+        (
+            '{\n  "run_id": "run-demo-1",\n  "collaboration_events": [\n   '
+            ' {"event": "step.completed", "step_id": "collect-context",'
+            ' "message": "Summarize repeated troubleshooting operation into'
+            ' reusable skill."}\n  ]\n}\n'
+        ),
         encoding="utf-8",
     )
     updated = client.put(
@@ -1435,12 +1437,11 @@ def test_distill_draft_can_target_specific_run_id(
     )
     run_a_dir.mkdir(parents=True, exist_ok=True)
     (run_a_dir / "run_manifest.json").write_text(
-        "{\n"
-        '  "run_id": "run-a",\n'
-        '  "collaboration_events": [\n'
-        '    {"event": "step.completed", "step_id": "step-a", "message": "Summarize A."}\n'
-        "  ]\n"
-        "}\n",
+        (
+            '{\n  "run_id": "run-a",\n  "collaboration_events": [\n   '
+            ' {"event": "step.completed", "step_id": "step-a", "message":'
+            ' "Summarize A."}\n  ]\n}\n'
+        ),
         encoding="utf-8",
     )
 
@@ -1454,12 +1455,11 @@ def test_distill_draft_can_target_specific_run_id(
     )
     run_b_dir.mkdir(parents=True, exist_ok=True)
     (run_b_dir / "run_manifest.json").write_text(
-        "{\n"
-        '  "run_id": "run-b",\n'
-        '  "collaboration_events": [\n'
-        '    {"event": "step.completed", "step_id": "step-b", "message": "Summarize B."}\n'
-        "  ]\n"
-        "}\n",
+        (
+            '{\n  "run_id": "run-b",\n  "collaboration_events": [\n   '
+            ' {"event": "step.completed", "step_id": "step-b", "message":'
+            ' "Summarize B."}\n  ]\n}\n'
+        ),
         encoding="utf-8",
     )
 

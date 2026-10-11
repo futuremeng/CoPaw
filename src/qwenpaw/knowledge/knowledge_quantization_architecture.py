@@ -352,9 +352,9 @@ class QuantizationArchitectureManager:
                 {
                     "stage": stage,
                     "available": result is not None,
-                    "metrics": (result or {})
-                    .get("stats", {})
-                    .get("metrics", {}),
+                    "metrics": (
+                        (result or {}).get("stats", {}).get("metrics", {})
+                    ),
                 },
             )
         return {
@@ -494,7 +494,10 @@ class QuantizationArchitectureManager:
                 )
             ):
                 raise RuntimeError(
-                    f"Dependency not met: {previous_stage} must complete before {normalized_stage}.",
+                    (
+                        f"Dependency not met: {previous_stage} must complete"
+                        f" before {normalized_stage}."
+                    ),
                 )
 
         return self.write_stage_result(

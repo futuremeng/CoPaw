@@ -61,7 +61,9 @@ def _render_pos_text(
         f"line_count={structured_payload.get('line_count') or 0}",
         f"token_count={structured_payload.get('token_count') or 0}",
         f"pos_count={structured_payload.get('pos_count') or 0}",
-        f"pos_tag_type_count={structured_payload.get('pos_tag_type_count') or 0}",
+        (
+            f"pos_tag_type_count={structured_payload.get('pos_tag_type_count') or 0}"
+        ),
     ]
     for line in structured_payload.get("lines") or []:
         if not isinstance(line, dict):
@@ -389,14 +391,18 @@ def write_chunk_pos_artifacts(
                     "snapshot_at": str(
                         representative.get("snapshot_at") or "",
                     ),
-                    "source_text": str(
-                        tokenize_payload.get("source_text") or "",
-                    )
-                    if isinstance(tokenize_payload, dict)
-                    else "",
-                    "input_text": str(tokenize_payload.get("input_text") or "")
-                    if isinstance(tokenize_payload, dict)
-                    else "",
+                    "source_text": (
+                        str(
+                            tokenize_payload.get("source_text") or "",
+                        )
+                        if isinstance(tokenize_payload, dict)
+                        else ""
+                    ),
+                    "input_text": (
+                        str(tokenize_payload.get("input_text") or "")
+                        if isinstance(tokenize_payload, dict)
+                        else ""
+                    ),
                     "tokenize_structured_path": tokenize_relative_path,
                     "pos_input_mode": "tokenized_only",
                     "line_count": pos_line_count,
@@ -427,14 +433,18 @@ def write_chunk_pos_artifacts(
                     "snapshot_at": str(
                         representative.get("snapshot_at") or "",
                     ),
-                    "source_text": str(
-                        tokenize_payload.get("source_text") or "",
-                    )
-                    if isinstance(tokenize_payload, dict)
-                    else "",
-                    "input_text": str(tokenize_payload.get("input_text") or "")
-                    if isinstance(tokenize_payload, dict)
-                    else "",
+                    "source_text": (
+                        str(
+                            tokenize_payload.get("source_text") or "",
+                        )
+                        if isinstance(tokenize_payload, dict)
+                        else ""
+                    ),
+                    "input_text": (
+                        str(tokenize_payload.get("input_text") or "")
+                        if isinstance(tokenize_payload, dict)
+                        else ""
+                    ),
                     "tokenize_structured_path": tokenize_relative_path,
                     "pos_input_mode": "tokenized_only",
                     "line_count": pos_line_count,

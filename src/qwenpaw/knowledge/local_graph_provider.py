@@ -1372,14 +1372,16 @@ def _build_project_graph_payload_from_documents(
         else 0.0
     )
     logger.info(
-        f"Entity extraction stats: "
-        f"documents={len(document_payloads)}, "
-        f"sentences={sentence_count_total}, "
-        f"entities={total_entities}, "
-        f"coverage_ratio={entity_coverage_ratio:.2f}%, "
-        f"relations={total_relations}, "
-        f"entity_mentions={entity_mentions_count}, "
-        f"avg_mentions_per_sent={avg_mentions_per_sentence:.2f}",
+        (
+            "Entity extraction stats: "
+            f"documents={len(document_payloads)}, "
+            f"sentences={sentence_count_total}, "
+            f"entities={total_entities}, "
+            f"coverage_ratio={entity_coverage_ratio:.2f}%, "
+            f"relations={total_relations}, "
+            f"entity_mentions={entity_mentions_count}, "
+            f"avg_mentions_per_sent={avg_mentions_per_sentence:.2f}"
+        ),
     )
 
     return {
@@ -1484,14 +1486,14 @@ def persist_local_graph(
     return {
         "status": "succeeded",
         "error": None,
-        "warnings": []
-        if stats.get("relation_count", 0) > 0
-        else ["LOCAL_GRAPH_EMPTY"],
+        "warnings": (
+            [] if stats.get("relation_count", 0) > 0 else ["LOCAL_GRAPH_EMPTY"]
+        ),
         "graph_path": str(graph_path),
         "document_graph_dir": str(graphify_dir),
-        "document_graph_manifest_path": str(manifest_path)
-        if document_payloads
-        else "",
+        "document_graph_manifest_path": (
+            str(manifest_path) if document_payloads else ""
+        ),
         "document_graph_count": len(document_payloads),
         "document_count": int(stats.get("document_count") or 0),
         "node_count": int(stats.get("node_count") or 0),

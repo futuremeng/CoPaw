@@ -203,9 +203,15 @@ def build_semantic_engine_summary(
             "HanLP tokenization",
         )
     if status == "error":
-        return f"Semantic engine error: {reason or 'Unknown semantic engine error.'}"
+        return (
+            "Semantic engine error:"
+            f" {reason or 'Unknown semantic engine error.'}"
+        )
     if status == "unavailable":
-        return f"Semantic engine unavailable: {reason or 'Semantic engine is unavailable.'}"
+        return (
+            "Semantic engine unavailable:"
+            f" {reason or 'Semantic engine is unavailable.'}"
+        )
     if status == "ready":
         return "Semantic engine ready."
     return "Semantic engine waiting for project source preparation."
@@ -253,7 +259,10 @@ def build_semantic_engine_state(
         payload.setdefault("reason_code", "SOURCE_NOT_READY")
         payload.setdefault(
             "reason",
-            "Project source has not been prepared for semantic extraction yet.",
+            (
+                "Project source has not been prepared for semantic extraction"
+                " yet."
+            ),
         )
         payload.setdefault("updated_at", state.get("updated_at"))
         payload["summary"] = build_semantic_engine_summary(manager, payload)
@@ -974,9 +983,11 @@ def build_processing_modes(
         "status": "ready" if fast_ready else "queued",
         "available": fast_ready,
         "summary": "L1 ready" if fast_ready else "L1 pending",
-        "stage": "Indexed preview ready"
-        if fast_ready
-        else "Waiting for source indexing",
+        "stage": (
+            "Indexed preview ready"
+            if fast_ready
+            else "Waiting for source indexing"
+        ),
         "document_count": _safe_int(index_result.get("document_count")),
         "chunk_count": _safe_int(index_result.get("chunk_count")),
     }
@@ -993,9 +1004,11 @@ def build_processing_modes(
         "mode": "nlp",
         "status": "ready" if required_ready else "queued",
         "available": required_ready,
-        "summary": "NLP ready"
-        if required_ready
-        else "Waiting for required NLP stages",
+        "summary": (
+            "NLP ready"
+            if required_ready
+            else "Waiting for required NLP stages"
+        ),
         "stage": "NLP extraction ready",
         "entity_count": _safe_int(l2_metrics.get("ner_entity_count")),
         "relation_count": _safe_int(l2_metrics.get("syntax_relation_count")),

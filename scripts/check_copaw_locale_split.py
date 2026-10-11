@@ -53,11 +53,17 @@ for lang in LANGS:
     base = load_json(base_path)
     if "pipelines" in base:
         errors.append(
-            f"base locale still contains top-level pipelines block: {base_path.relative_to(REPO_ROOT)}",
+            (
+                "base locale still contains top-level pipelines block:"
+                f" {base_path.relative_to(REPO_ROOT)}"
+            ),
         )
     if "copaw" in base:
         errors.append(
-            f"base locale should not contain top-level copaw block: {base_path.relative_to(REPO_ROOT)}",
+            (
+                "base locale should not contain top-level copaw block:"
+                f" {base_path.relative_to(REPO_ROOT)}"
+            ),
         )
 
     projects_path = CONSOLE_LOCALES / "copaw" / "projects" / f"{lang}.json"
@@ -78,14 +84,21 @@ for lang in LANGS:
             # wearing a hat.
             if lang in ("en", "zh"):
                 errors.append(
-                    f"missing split locale: {split_path.relative_to(REPO_ROOT)}",
+                    (
+                        "missing split locale:"
+                        f" {split_path.relative_to(REPO_ROOT)}"
+                    ),
                 )
             continue
         payload = load_json(split_path)
         node = nested_get(payload, *pointer)
         if not isinstance(node, dict) or not node:
             errors.append(
-                f"split locale node is empty: {split_path.relative_to(REPO_ROOT)} -> {'.'.join(pointer)}",
+                (
+                    "split locale node is empty:"
+                    f" {split_path.relative_to(REPO_ROOT)} ->"
+                    f" {'.'.join(pointer)}"
+                ),
             )
 
 switcher_keys: set[str] = set()
@@ -106,7 +119,10 @@ else:
 for lang in LANGS:
     if lang not in switcher_keys:
         errors.append(
-            f"locale bundle {lang}.json ships but has no entry in the language switcher",
+            (
+                f"locale bundle {lang}.json ships but has no entry in the"
+                " language switcher"
+            ),
         )
 
 # `projects`, `pipelines`, `rpa`, `workbench` are copaw-prefixed groups; the
@@ -158,29 +174,68 @@ LITERAL_KEY_RE = re.compile(
 # Re-derive this list from the ref on the next sync; an entry whose line moves
 # into fork-authored code must become an error again.
 UPSTREAM_OWNED_KEYS = {
-    "approval.alwaysAllowDisabledHint": "read from upstream's own line in components/ApprovalCard/ApprovalCard.tsx",
-    "chat.backgroundTasks.cancelFailed": "read from upstream's own line in hooks/useBackgroundTaskWatcher.ts",
-    "chat.fileReference.codeSnippet": "read from upstream's own line in pages/Chat/RichFileReferenceInput.tsx",
-    "common.next": "read from upstream's own line in pages/Settings/Market/MarketPanel.tsx",
+    "approval.alwaysAllowDisabledHint": (
+        "read from upstream's own line in"
+        " components/ApprovalCard/ApprovalCard.tsx"
+    ),
+    "chat.backgroundTasks.cancelFailed": (
+        "read from upstream's own line in hooks/useBackgroundTaskWatcher.ts"
+    ),
+    "chat.fileReference.codeSnippet": (
+        "read from upstream's own line in"
+        " pages/Chat/RichFileReferenceInput.tsx"
+    ),
+    "common.next": (
+        "read from upstream's own line in"
+        " pages/Settings/Market/MarketPanel.tsx"
+    ),
     "common.noData": "read from upstream's own line in os/Launcher.tsx",
     "common.restore": "read from upstream's own line in os/WindowFrame.tsx",
-    "common.saveFailed": "read from upstream's own line in pages/Chat/components/ChatHeaderTitle/index.tsx",
-    "common.selectAll": "read from upstream's own line in pages/Settings/Backups/restore/RestoreAgentTable.tsx",
+    "common.saveFailed": (
+        "read from upstream's own line in"
+        " pages/Chat/components/ChatHeaderTitle/index.tsx"
+    ),
+    "common.selectAll": (
+        "read from upstream's own line in"
+        " pages/Settings/Backups/restore/RestoreAgentTable.tsx"
+    ),
     "common.all": "read from upstream's own line in pages/Agent/ACP/index.tsx",
-    "common.operationFailed": "read from upstream's own line in pages/Inbox/index.tsx",
+    "common.operationFailed": (
+        "read from upstream's own line in pages/Inbox/index.tsx"
+    ),
     "common.unknown": "read from upstream's own lines (chat surfaces)",
-    "hub.errors.loadFailed": "read from upstream's own line in pages/Hub/index.tsx",
-    "hub.governance.models.memberCount": "read from upstream's own line in pages/Hub/governance/ManagedModelTable.tsx",
-    "hub.governance.users.count": "read from upstream's own line in pages/Hub/governance/UserManagement.tsx",
-    "nav.pawapps": "read from upstream's own line in pages/Settings/PawApps/index.tsx",
+    "hub.errors.loadFailed": (
+        "read from upstream's own line in pages/Hub/index.tsx"
+    ),
+    "hub.governance.models.memberCount": (
+        "read from upstream's own line in"
+        " pages/Hub/governance/ManagedModelTable.tsx"
+    ),
+    "hub.governance.users.count": (
+        "read from upstream's own line in"
+        " pages/Hub/governance/UserManagement.tsx"
+    ),
+    "nav.pawapps": (
+        "read from upstream's own line in pages/Settings/PawApps/index.tsx"
+    ),
     "os.dock": "read from upstream's own line in os/Dock.tsx",
     "os.minimize": "read from upstream's own line in os/WindowFrame.tsx",
     "os.zoom": "read from upstream's own line in os/WindowFrame.tsx",
-    "pawapps.noApps": "read from upstream's own line in pages/Settings/PawApps/index.tsx",
-    "pawapps.noUI": "read from upstream's own line in pages/Settings/PawApps/index.tsx",
-    "pawapps.openInNewTab": "read from upstream's own line in pages/Settings/PawApps/index.tsx",
-    "pawapps.selectApp": "read from upstream's own line in pages/Settings/PawApps/index.tsx",
-    "skills.examples": "read only from a line upstream deleted in v2 (sync debt)",
+    "pawapps.noApps": (
+        "read from upstream's own line in pages/Settings/PawApps/index.tsx"
+    ),
+    "pawapps.noUI": (
+        "read from upstream's own line in pages/Settings/PawApps/index.tsx"
+    ),
+    "pawapps.openInNewTab": (
+        "read from upstream's own line in pages/Settings/PawApps/index.tsx"
+    ),
+    "pawapps.selectApp": (
+        "read from upstream's own line in pages/Settings/PawApps/index.tsx"
+    ),
+    "skills.examples": (
+        "read only from a line upstream deleted in v2 (sync debt)"
+    ),
     "voiceTranscription.loadFailed": "read from upstream's own settings line",
 }
 
@@ -219,14 +274,16 @@ TEMPLATE_ROOT_EXEMPTIONS = {
         "read from upstream's own line in pages/Control/CronJobs/index.tsx"
     ),
     "files.conflict": (
-        "read from upstream's own line in features/files-workspace/FilesNavigator.tsx"
+        "read from upstream's own line in"
+        " features/files-workspace/FilesNavigator.tsx"
     ),
     "inbox.batch": (
         "read from upstream's own line in "
         "pages/Inbox/components/MailAccessControlDrawer.tsx"
     ),
     "inbox.mailProcessingReason_": (
-        "read from upstream's own line in pages/Inbox/components/MailProcessingPauses.tsx"
+        "read from upstream's own line in"
+        " pages/Inbox/components/MailProcessingPauses.tsx"
     ),
     "login.hubDisclaimerPoint": (
         "read from upstream's own line in pages/Login/index.tsx"
@@ -381,8 +438,10 @@ for lang in ("en", "zh"):
         if key not in available:
             sites = ", ".join(sorted(set(call_sites[key])))
             errors.append(
-                f"translation key {key} is read by production code but missing from the "
-                f"{lang} bundle (sites: {sites})",
+                (
+                    f"translation key {key} is read by production code but"
+                    f" missing from the {lang} bundle (sites: {sites})"
+                ),
             )
 
 en_overlay = overlay_keys("en")
@@ -397,8 +456,10 @@ for lang in ("en", "zh"):
         if not any(key.startswith(prefix) for key in available):
             sites = ", ".join(sorted(set(template_families[root])))
             errors.append(
-                f"template key family {root}.* is read by production code but has no "
-                f"leaf in the {lang} bundle (sites: {sites})",
+                (
+                    f"template key family {root}.* is read by production code"
+                    f" but has no leaf in the {lang} bundle (sites: {sites})"
+                ),
             )
 for key in sorted(en_overlay - zh_overlay):
     errors.append(f"copaw overlay key exists in en but not zh: {key}")
@@ -439,8 +500,11 @@ for group in OVERLAY_GROUPS:
     for lang in SECONDARY_LANGS:
         for key in sorted(group_keys(group, lang) - english):
             errors.append(
-                f"copaw overlay group {group} ships {key} in {lang} but en has no such "
-                f"leaf; a key the en overlay does not carry is unreachable copy",
+                (
+                    f"copaw overlay group {group} ships {key} in {lang} but en"
+                    " has no such leaf; a key the en overlay does not carry"
+                    " is unreachable copy"
+                ),
             )
 
 # Same blindness, other direction: a leaf whose text byte-equals the en leaf is
@@ -455,8 +519,11 @@ for group in OVERLAY_GROUPS:
         for key, value in sorted(group_leaves(group, lang).items()):
             if isinstance(value, str) and english.get(key) == value:
                 errors.append(
-                    f"copaw overlay group {group} ships {key} in {lang} as a verbatim "
-                    f"copy of the en leaf; secondary-language copy must be translated",
+                    (
+                        f"copaw overlay group {group} ships {key} in {lang} as"
+                        " a verbatim copy of the en leaf; secondary-language"
+                        " copy must be translated"
+                    ),
                 )
 
 
@@ -483,8 +550,11 @@ for lang in ("en", "zh"):
     shadowed = bare_overlay_keys(lang) & flatten(load_json(base_path))
     for key in sorted(shadowed):
         errors.append(
-            f"copaw overlay key {key} shadows the same path in the upstream base locale "
-            f"({lang}.json); overlay copy must stay additive",
+            (
+                f"copaw overlay key {key} shadows the same path in the"
+                f" upstream base locale ({lang}.json); overlay copy must stay"
+                " additive"
+            ),
         )
 
 if errors:
@@ -497,9 +567,11 @@ gated_families = sorted(
 )
 
 print(
-    "CoPaw locale split check passed "
-    f"({len(gated)} production gated keys, {len(gated_families)} template key families gated, "
-    f"{len(template_families) - len(gated_families)} template families exempted, "
-    f"{len(en_overlay)} overlay keys en/zh, "
-    f"{len(exempted)} upstream-owned keys exempted)",
+    (
+        f"CoPaw locale split check passed ({len(gated)} production gated keys,"
+        f" {len(gated_families)} template key families gated,"
+        f" {len(template_families) - len(gated_families)} template families"
+        f" exempted, {len(en_overlay)} overlay keys en/zh,"
+        f" {len(exempted)} upstream-owned keys exempted)"
+    ),
 )

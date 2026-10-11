@@ -277,12 +277,16 @@ def test_project_pipeline_start_captures_task_aware_semantic_engine_state(
             "engine": "hanlp",
             "task_key": task_key,
             "status": "ready" if task_key == "tokenize" else "unavailable",
-            "reason_code": "HANLP_TASK_READY"
-            if task_key == "tokenize"
-            else "HANLP_TASK_UNAVAILABLE",
-            "reason": "tokenize ready"
-            if task_key == "tokenize"
-            else "NER model is unavailable.",
+            "reason_code": (
+                "HANLP_TASK_READY"
+                if task_key == "tokenize"
+                else "HANLP_TASK_UNAVAILABLE"
+            ),
+            "reason": (
+                "tokenize ready"
+                if task_key == "tokenize"
+                else "NER model is unavailable."
+            ),
         },
     )
 

@@ -98,7 +98,12 @@ def build_cases() -> dict[str, dict[str, Any]]:
     return {
         "named_entity_recognition": {
             "payload": {
-                "text": "北京九录科技有限公司推出产品 Copaw。Copaw 是公司面向知识生产和加工场景打造的产品，致力于以智能化技术推动知识服务领域的全流程数字化转型，并持续支持多个开源项目。",
+                "text": (
+                    "北京九录科技有限公司推出产品 Copaw。Copaw"
+                    " 是公司面向知识生产和加工场景打造的产品，"
+                    "致力于以智能化技术推动知识服务领域的全流程数字化转型，"
+                    "并持续支持多个开源项目。"
+                ),
                 "schema": {
                     "人物": None,
                     "地理位置": None,
@@ -120,7 +125,12 @@ def build_cases() -> dict[str, dict[str, Any]]:
             "payload": {
                 "text": "2026年5月，九录科技在北京发布 Copaw 2.0，吸引多家机构参与试点。",
                 "schema": {
-                    "发布": {"时间": None, "地点": None, "发布方": None, "产品": None},
+                    "发布": {
+                        "时间": None,
+                        "地点": None,
+                        "发布方": None,
+                        "产品": None,
+                    },
                 },
             },
             "goal": "抽取出事件及至少一个论元",
@@ -141,7 +151,7 @@ def build_cases() -> dict[str, dict[str, Any]]:
         "coreference_resolution": {
             "payload": {
                 "text": "是的,不是|孟繁永创立了北京九录科技有限公司。他希望它能够持续服务知识生产。",
-                "schema": {"在下面的描述中，代词“它”指代的是“北京九录科技有限公司”吗？": None},
+                "schema": {"在下面的描述中，代词“它”指代的是“北京九录科技有限公司”吗？": (None)},
             },
             "goal": "输出是的/不是之一",
         },
@@ -182,7 +192,7 @@ def build_cases() -> dict[str, dict[str, Any]]:
         "reading_comprehension_choice": {
             "payload": {
                 "question": "谁推出了 Copaw？",
-                "context": "北京九录科技有限公司推出产品 Copaw，用于知识生产和加工。",
+                "context": ("北京九录科技有限公司推出产品 Copaw，用于知识生产和加工。"),
                 "choices": ["北京九录科技有限公司", "张三", "李四", "王五"],
                 "labels": ["A", "B", "C", "D"],
                 "schema": {"谁推出了 Copaw？": None},

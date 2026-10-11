@@ -162,8 +162,10 @@ def check_artifacts(dist_dir: Path, data: dict[str, Any]) -> int:
     foreign = [name for name in names if not name.startswith(prefixes)]
     if foreign:
         print(
-            f"ERROR: these artifacts are not built under "
-            f"{data['pypi_project']!r}:",
+            (
+                "ERROR: these artifacts are not built under "
+                f"{data['pypi_project']!r}:"
+            ),
         )
         for name in foreign:
             print(f"  {name}")

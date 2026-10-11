@@ -204,21 +204,25 @@ def run_sync_loop(
         if not isinstance(pipeline_run, dict):
             pipeline_run = {
                 "run_id": str(normalized_result.get("run_id") or ""),
-                "status": str(
-                    normalized_result.get("run_status")
-                    or normalized_result.get("status")
-                    or "",
-                )
-                .strip()
-                .lower(),
-                "mode": str(
-                    normalized_result.get("processing_mode")
-                    or processing_mode
-                    or "agentic",
-                )
-                .strip()
-                .lower()
-                or "agentic",
+                "status": (
+                    str(
+                        normalized_result.get("run_status")
+                        or normalized_result.get("status")
+                        or "",
+                    )
+                    .strip()
+                    .lower()
+                ),
+                "mode": (
+                    str(
+                        normalized_result.get("processing_mode")
+                        or processing_mode
+                        or "agentic",
+                    )
+                    .strip()
+                    .lower()
+                    or "agentic"
+                ),
                 "template_id": str(normalized_result.get("template_id") or ""),
                 "processing_fingerprint": str(
                     normalized_result.get("processing_fingerprint") or "",
@@ -321,10 +325,12 @@ def run_sync_loop(
                     "status": "failed",
                     "current_stage": "failed",
                     "stage": "failed",
-                    "failed_stage": str(
-                        state.get("current_stage") or "pending",
-                    )
-                    or "pending",
+                    "failed_stage": (
+                        str(
+                            state.get("current_stage") or "pending",
+                        )
+                        or "pending"
+                    ),
                     "last_error": str(exc),
                     "recent_error_code": reason_code,
                     "recent_error_source": error_source,

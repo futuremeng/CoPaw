@@ -588,7 +588,9 @@ def test_project_pipeline_state_recovers_document_graphify_artifacts_from_graph_
                         "document_path": str(
                             tmp_path / "projects" / project_id / "chapter.md",
                         ),
-                        "payload_relative_path": "graphify/chapter.graphify.json",
+                        "payload_relative_path": (
+                            "graphify/chapter.graphify.json"
+                        ),
                     },
                 ],
             },
@@ -880,8 +882,12 @@ def test_project_pipeline_tokenize_line_evidence_prefers_interlinear_path(
                     "document_path": f"/workspace/{project_id}/doc.md",
                     "tokenize_line_count": 10,
                     "tokenize_token_count": 42,
-                    "tokenize_interlinear_path": f"interlinear/{project_id}.txt",
-                    "tokenize_structured_path": f"tokenize/{project_id}.tokenize.json",
+                    "tokenize_interlinear_path": (
+                        f"interlinear/{project_id}.txt"
+                    ),
+                    "tokenize_structured_path": (
+                        f"tokenize/{project_id}.tokenize.json"
+                    ),
                     "tokenize_path": f"tokenize/{project_id}.tokenize.txt",
                     "snapshot_path": f"/workspace/{project_id}/.knowledge/raw/doc.snapshot.md",
                 },
@@ -954,7 +960,9 @@ def test_project_pipeline_tokenize_token_evidence_prefers_structured_path(
                     "document_path": f"/workspace/{project_id}/doc.md",
                     "tokenize_line_count": 10,
                     "tokenize_token_count": 100,
-                    "tokenize_structured_path": f"tokenize/{project_id}.md.0.tokenize.line-stats.json",
+                    "tokenize_structured_path": (
+                        f"tokenize/{project_id}.md.0.tokenize.line-stats.json"
+                    ),
                     "tokenize_path": f"tokenize/{project_id}.tokenize.txt",
                     "snapshot_path": f"/workspace/{project_id}/.knowledge/raw/doc.snapshot.md",
                 },
@@ -1019,7 +1027,9 @@ def test_project_pipeline_state_mirrors_semantic_engine_after_source_selected(
             "engine": "hanlp",
             "status": "error",
             "reason_code": "HANLP_TOKENIZE_FAILED",
-            "reason": "HanLP semantic tokenization failed via tok: RuntimeError.",
+            "reason": (
+                "HanLP semantic tokenization failed via tok: RuntimeError."
+            ),
         },
     )
 
@@ -1069,8 +1079,10 @@ def test_project_pipeline_stage_message_merges_semantic_summary(
 
     hydrated = manager.get_state(project_id)
 
-    assert hydrated["stage_message"] == (
-        "Project pipeline pending · Semantic engine unavailable: HanLP module is not installed"
+    assert (
+        hydrated["stage_message"]
+        == "Project pipeline pending · Semantic engine unavailable: HanLP"
+        " module is not installed"
     )
 
 
@@ -1396,7 +1408,10 @@ def test_project_pipeline_nlp_ready_when_required_stages_complete_even_if_cor_un
             "syntax_relation_count": 42,
             "cor_ready_chunk_count": 0,
             "cor_reason_code": "HANLP_COREF_NOT_OPEN_SOURCE",
-            "cor_reason": "HanLP coreference_resolution is not open-source and is disabled in CoPaw runtime.",
+            "cor_reason": (
+                "HanLP coreference_resolution is not open-source and is"
+                " disabled in CoPaw runtime."
+            ),
         },
         "memify": {"node_count": 12, "relation_count": 20},
     }

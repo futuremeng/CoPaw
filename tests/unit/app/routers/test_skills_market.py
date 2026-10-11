@@ -199,8 +199,9 @@ def test_extract_market_items_builds_install_url_with_branch_and_path() -> (
 
     assert errors == []
     assert len(items) == 1
-    assert items[0].install_url == (
-        "https://github.com/example/skills/tree/dev/skills/python-dev"
+    assert (
+        items[0].install_url
+        == "https://github.com/example/skills/tree/dev/skills/python-dev"
     )
     assert items[0].description == "Python 开发技能"
 
@@ -335,14 +336,16 @@ def test_generate_market_index_from_directory_scans_skill_folders(
     skill_dir = skills_dir / "weather"
     skill_dir.mkdir(parents=True)
     (skill_dir / "SKILL.md").write_text(
-        "---\n"
-        "name: Weather Assistant\n"
-        "description: 查询天气\n"
-        "tags:\n"
-        "  - weather\n"
-        "  - tools\n"
-        "---\n\n"
-        "skill body\n",
+        (
+            "---\n"
+            "name: Weather Assistant\n"
+            "description: 查询天气\n"
+            "tags:\n"
+            "  - weather\n"
+            "  - tools\n"
+            "---\n\n"
+            "skill body\n"
+        ),
         encoding="utf-8",
     )
     market = SkillMarketSpec(

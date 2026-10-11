@@ -53,14 +53,18 @@ def build_l1_metrics(
         "char_count": _safe_int(source_status.get("char_count")),
         "token_count": _safe_int(source_status.get("token_count")),
         "raw_total_bytes": _safe_int(source_status.get("raw_total_bytes")),
-        "raw_last_ingested_at": str(
-            source_status.get("raw_last_ingested_at") or "",
-        ).strip()
-        or None,
-        "source_stats_updated_at": str(
-            source_status.get("stats_updated_at") or "",
-        ).strip()
-        or None,
+        "raw_last_ingested_at": (
+            str(
+                source_status.get("raw_last_ingested_at") or "",
+            ).strip()
+            or None
+        ),
+        "source_stats_updated_at": (
+            str(
+                source_status.get("stats_updated_at") or "",
+            ).strip()
+            or None
+        ),
     }
 
 
@@ -107,10 +111,12 @@ def build_l2_metrics(
     )
     return {
         "metrics_source": "project_pipeline_l2_nlp",
-        "metrics_updated_at": str(
-            state.get("updated_at") or state.get("last_finished_at") or "",
-        ).strip()
-        or None,
+        "metrics_updated_at": (
+            str(
+                state.get("updated_at") or state.get("last_finished_at") or "",
+            ).strip()
+            or None
+        ),
         "total_chunks": total_chunks,
         "tokenize_done_chunks": max(
             _safe_int(l2_progress.get("tokenize_done_chunks")),
@@ -219,13 +225,18 @@ def build_l2_metrics(
 def build_l3_metrics(state: dict[str, Any]) -> dict[str, Any]:
     return {
         "metrics_source": "project_pipeline_l3_placeholder",
-        "metrics_updated_at": str(
-            state.get("updated_at") or state.get("last_finished_at") or "",
-        ).strip()
-        or None,
+        "metrics_updated_at": (
+            str(
+                state.get("updated_at") or state.get("last_finished_at") or "",
+            ).strip()
+            or None
+        ),
         "status": "empty",
         "reason_code": "L3_NOT_READY",
-        "reason": "L3 agentic metrics are intentionally empty until independent outputs are ready.",
+        "reason": (
+            "L3 agentic metrics are intentionally empty until independent"
+            " outputs are ready."
+        ),
         "entity_count": 0,
         "relation_count": 0,
         "quality_score": None,
@@ -294,12 +305,14 @@ def build_nlp_progress(
         "status": mode_status,
         "stage": str(nlp_mode.get("stage") or "").strip(),
         "summary": str(nlp_mode.get("summary") or "").strip(),
-        "updated_at": str(
-            l2_metrics.get("metrics_updated_at")
-            or nlp_mode.get("last_updated_at")
-            or "",
-        ).strip()
-        or None,
+        "updated_at": (
+            str(
+                l2_metrics.get("metrics_updated_at")
+                or nlp_mode.get("last_updated_at")
+                or "",
+            ).strip()
+            or None
+        ),
         "total_chunks": total_chunks,
         "entity_count": _safe_int(l2_metrics.get("ner_entity_count")),
         "relation_count": _safe_int(l2_metrics.get("syntax_relation_count")),
@@ -384,7 +397,9 @@ def build_nlp_progress(
                 "done_chunks": 0,
                 "ready_chunks": 0,
                 "reason_code": "PHRASE_LAYER_NOT_IMPLEMENTED",
-                "reason": "Phrase-layer extraction is reserved for a later release.",
+                "reason": (
+                    "Phrase-layer extraction is reserved for a later release."
+                ),
             },
             "cor": {
                 "key": "cor",

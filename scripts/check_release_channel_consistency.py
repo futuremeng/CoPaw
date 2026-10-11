@@ -213,22 +213,28 @@ def rule_distribution(loader, data, repo_root):
     declared = declared_distribution(repo_root)
     if declared is None:
         return [
-            f"R6: {PYPROJECT_REL} has no [project] name to check readers "
-            "against",
+            (
+                f"R6: {PYPROJECT_REL} has no [project] name to check readers "
+                "against"
+            ),
         ]
     if loader.is_ready(data, "pypi"):
         if declared != data["pypi_project"]:
             errors.append(
-                f"R6: the pypi channel is no longer pending but "
-                f"{PYPROJECT_REL} declares {declared!r} instead of the fact "
-                f"source's {data['pypi_project']!r}",
+                (
+                    "R6: the pypi channel is no longer pending but"
+                    f" {PYPROJECT_REL} declares {declared!r} instead of the"
+                    f" fact source's {data['pypi_project']!r}"
+                ),
             )
     elif declared not in (data["pypi_project"], PRE_RENAME_DECLARATION):
         errors.append(
-            f"R6: {PYPROJECT_REL} declares {declared!r} while the pypi "
-            f"channel is pending; only the fact source's "
-            f"{data['pypi_project']!r} or the pre-rename "
-            f"{PRE_RENAME_DECLARATION!r} may be declared",
+            (
+                f"R6: {PYPROJECT_REL} declares {declared!r} while the pypi "
+                "channel is pending; only the fact source's "
+                f"{data['pypi_project']!r} or the pre-rename "
+                f"{PRE_RENAME_DECLARATION!r} may be declared"
+            ),
         )
 
     registered = {rel for rel, _ in DISTRIBUTION_READERS}
@@ -240,14 +246,18 @@ def rule_distribution(loader, data, repo_root):
         literal = template.replace("{distribution}", declared)
         if literal not in path.read_text(encoding="utf-8"):
             errors.append(
-                f"R6: {rel} no longer reads {literal!r}; the distribution "
-                f"name moves in one commit with {PYPROJECT_REL}",
+                (
+                    f"R6: {rel} no longer reads {literal!r}; the distribution "
+                    f"name moves in one commit with {PYPROJECT_REL}"
+                ),
             )
     for rel, description in scan_distribution_readers(repo_root):
         if rel not in registered:
             errors.append(
-                f"R6: {rel} {description} reads a distribution name but is "
-                f"not registered in DISTRIBUTION_READERS",
+                (
+                    f"R6: {rel} {description} reads a distribution name but is"
+                    " not registered in DISTRIBUTION_READERS"
+                ),
             )
     return errors
 
@@ -270,15 +280,19 @@ def rule_authority(loader, data):
     unknown = [name for name in pending if name not in loader.CHANNELS]
     if unknown:
         errors.append(
-            f"R1: pending names unknown channels {unknown}; "
-            f"declared channels are {list(loader.CHANNELS)}",
+            (
+                f"R1: pending names unknown channels {unknown}; "
+                f"declared channels are {list(loader.CHANNELS)}"
+            ),
         )
     for key in ("distribution", "pypi_project"):
         value = data.get(key)
         if not isinstance(value, str) or not value:
             errors.append(
-                f"R1: {key} must name our own distribution even while its "
-                "channel is still pending",
+                (
+                    f"R1: {key} must name our own distribution even while its "
+                    "channel is still pending"
+                ),
             )
     return errors
 
@@ -338,8 +352,10 @@ def rule_codegen(data, repo_root):
         return [f"R4: {rel} is missing"]
     if path.read_text(encoding="utf-8") != render_ts(data):
         return [
-            f"R4: {rel} is stale; re-run "
-            "scripts/release_channel.py --write-ts",
+            (
+                f"R4: {rel} is stale; re-run "
+                "scripts/release_channel.py --write-ts"
+            ),
         ]
     return []
 
@@ -361,9 +377,11 @@ def rule_version_line(data, repo_root):
     base = LOCAL_SUFFIX_RE.sub("", number)
     if base != data["upstream_version"]:
         return [
-            f"R5: {VERSION_REL} reports {number!r} (upstream part {base!r}) "
-            f"but the fact source says upstream_version="
-            f"{data['upstream_version']!r}",
+            (
+                f"R5: {VERSION_REL} reports {number!r} (upstream part"
+                f" {base!r}) but the fact source says"
+                f" upstream_version={data['upstream_version']!r}"
+            ),
         ]
     return []
 
@@ -407,11 +425,13 @@ def main(argv=None):
         1 for _, description in hits if description.startswith("line ")
     )
     print(
-        "Release channel consistency check passed "
-        f"(R1-R6 over {len(CHANNEL_FILES)} channel files; "
-        f"{len(DISTRIBUTION_READERS)} registered templates, "
-        f"{read_points} read points swept in "
-        f"{len({rel for rel, _ in hits})} files)",
+        (
+            "Release channel consistency check passed "
+            f"(R1-R6 over {len(CHANNEL_FILES)} channel files; "
+            f"{len(DISTRIBUTION_READERS)} registered templates, "
+            f"{read_points} read points swept in "
+            f"{len({rel for rel, _ in hits})} files)"
+        ),
     )
     return 0
 

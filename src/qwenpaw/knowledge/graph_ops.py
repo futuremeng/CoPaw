@@ -194,14 +194,21 @@ class GraphOpsManager:
             entity_count=entity_count,
         )
         pass_flags = {
-            "relation_normalization": relation_normalization_coverage
-            >= thresholds["relation_normalization_threshold"],
-            "entity_canonical": entity_canonical_coverage
-            >= thresholds["entity_canonical_threshold"],
-            "low_confidence": low_confidence_ratio
-            <= thresholds["low_confidence_threshold"],
-            "missing_evidence": missing_evidence_ratio
-            <= thresholds["missing_evidence_threshold"],
+            "relation_normalization": (
+                relation_normalization_coverage
+                >= thresholds["relation_normalization_threshold"]
+            ),
+            "entity_canonical": (
+                entity_canonical_coverage
+                >= thresholds["entity_canonical_threshold"]
+            ),
+            "low_confidence": (
+                low_confidence_ratio <= thresholds["low_confidence_threshold"]
+            ),
+            "missing_evidence": (
+                missing_evidence_ratio
+                <= thresholds["missing_evidence_threshold"]
+            ),
         }
 
         normalized_scores = [
@@ -381,11 +388,20 @@ class GraphOpsManager:
                     f"### Round {round_no}",
                     f"- status: {round_item.get('status')}",
                     f"- delta: {round_item.get('delta')}",
-                    f"- agent_gate_status: {(round_item.get('agent_gate') or {}).get('status')}",
+                    (
+                        "- agent_gate_status:"
+                        f" {(round_item.get('agent_gate') or {}).get('status')}"
+                    ),
                     f"- continue: {summary.get('continue')}",
                     f"- reason: {summary.get('stop_or_continue_reason')}",
-                    f"- hypotheses: {', '.join(summary.get('problem_hypotheses') or [])}",
-                    f"- next_plan: {', '.join(summary.get('next_round_plan') or [])}",
+                    (
+                        "- hypotheses:"
+                        f" {', '.join(summary.get('problem_hypotheses') or [])}"
+                    ),
+                    (
+                        "- next_plan:"
+                        f" {', '.join(summary.get('next_round_plan') or [])}"
+                    ),
                     "",
                 ],
             )
@@ -466,7 +482,9 @@ Agent gate review is mandatory before automatic continuation.
             return {
                 "status": "review_required",
                 "reason": "MISSING_ACTION_PLAN",
-                "summary": "No executable actions were produced for the next round.",
+                "summary": (
+                    "No executable actions were produced for the next round."
+                ),
                 "next_round_hints": {},
             }
 
@@ -502,8 +520,9 @@ Agent gate review is mandatory before automatic continuation.
             "status": "accepted",
             "reason": "OK",
             "summary": (
-                f"Round {round_no} reviewed with {len(action_names)} action(s); "
-                f"delta={delta:.4f}, continue={str(should_continue).lower()}"
+                f"Round {round_no} reviewed with"
+                f" {len(action_names)} action(s); delta={delta:.4f},"
+                f" continue={str(should_continue).lower()}"
             ),
             "next_round_hints": next_round_hints,
         }
@@ -624,9 +643,11 @@ Agent gate review is mandatory before automatic continuation.
                 continue
             job_scope = set(
                 self._normalize_dataset_scope(
-                    job.get("dataset_scope")
-                    if isinstance(job.get("dataset_scope"), list)
-                    else [],
+                    (
+                        job.get("dataset_scope")
+                        if isinstance(job.get("dataset_scope"), list)
+                        else []
+                    ),
                 ),
             )
             if (
@@ -721,7 +742,9 @@ Agent gate review is mandatory before automatic continuation.
                 return {
                     "accepted": False,
                     "job_id": str(active.get("job_id") or ""),
-                    "status_url": f"/knowledge/quality-loop/jobs/{active.get('job_id')}",
+                    "status_url": (
+                        f"/knowledge/quality-loop/jobs/{active.get('job_id')}"
+                    ),
                     "reason": "QUALITY_LOOP_ALREADY_RUNNING",
                 }
 
@@ -747,9 +770,11 @@ Agent gate review is mandatory before automatic continuation.
                 "dry_run": bool(dry_run),
                 "dataset_scope": dataset_scope or [],
                 "project_id": str(project_id or ""),
-                "baseline_result": baseline_payload
-                if isinstance(baseline_payload, dict)
-                else None,
+                "baseline_result": (
+                    baseline_payload
+                    if isinstance(baseline_payload, dict)
+                    else None
+                ),
                 "rounds": [],
                 "score_before": None,
                 "score_after": None,
@@ -899,8 +924,10 @@ Agent gate review is mandatory before automatic continuation.
                             "after": before_snapshot,
                             "delta": 0.0,
                             "status": "failed",
-                            "error": execution_result.get("error")
-                            or "MEMIFY_EXECUTION_FAILED",
+                            "error": (
+                                execution_result.get("error")
+                                or "MEMIFY_EXECUTION_FAILED"
+                            ),
                         },
                     )
                     break
@@ -1010,17 +1037,25 @@ Agent gate review is mandatory before automatic continuation.
             self._normalize_quality_loop_patch(
                 {
                     "status": final_status,
-                    "stage": "completed"
-                    if final_status == "succeeded"
-                    else "failed",
-                    "stage_message": "Quality loop finished"
-                    if final_status == "succeeded"
-                    else "Quality loop failed",
+                    "stage": (
+                        "completed"
+                        if final_status == "succeeded"
+                        else "failed"
+                    ),
+                    "stage_message": (
+                        "Quality loop finished"
+                        if final_status == "succeeded"
+                        else "Quality loop failed"
+                    ),
                     "current": len(rounds),
                     "total": max_rounds,
-                    "progress": 100
-                    if final_status == "succeeded"
-                    else max(0, min(95, int(len(rounds) * 100 / max_rounds))),
+                    "progress": (
+                        100
+                        if final_status == "succeeded"
+                        else max(
+                            0, min(95, int(len(rounds) * 100 / max_rounds)),
+                        )
+                    ),
                     "rounds": rounds,
                     "score_before": score_before,
                     "score_after": score_after,
@@ -1207,13 +1242,15 @@ Agent gate review is mandatory before automatic continuation.
             "stage": stage,
             "progress": percent,
             "percent": percent,
-            "current": int(current)
-            if isinstance(current, (int, float))
-            else 0,
+            "current": (
+                int(current) if isinstance(current, (int, float)) else 0
+            ),
             "total": int(total) if isinstance(total, (int, float)) else 0,
-            "eta_seconds": int(eta_seconds)
-            if isinstance(eta_seconds, (int, float))
-            else None,
+            "eta_seconds": (
+                int(eta_seconds)
+                if isinstance(eta_seconds, (int, float))
+                else None
+            ),
             "stage_message": stage_message,
         }
         return normalized
@@ -1318,10 +1355,12 @@ Agent gate review is mandatory before automatic continuation.
             snippet = (hit.get("snippet") or "").strip()
             records.append(
                 {
-                    "subject": hit.get("document_title")
-                    or hit.get("source_name")
-                    or hit.get("source_id")
-                    or "unknown",
+                    "subject": (
+                        hit.get("document_title")
+                        or hit.get("source_name")
+                        or hit.get("source_id")
+                        or "unknown"
+                    ),
                     "predicate": "preview_match",
                     "object": snippet
                     or str(hit.get("document_path") or "preview"),
@@ -1379,7 +1418,10 @@ Agent gate review is mandatory before automatic continuation.
                 )
             except Exception:
                 warnings.append("AGENTIC_QUALITY_REPORT_UNREADABLE")
-        result.summary = f"{result.summary} Agentic workflow semantics applied.{quality_summary}".strip()
+        result.summary = (
+            f"{result.summary} Agentic workflow semantics"
+            f" applied.{quality_summary}".strip()
+        )
         result.provenance["semantic_profile"] = "agentic"
         result.warnings = warnings
         return result
@@ -1413,7 +1455,10 @@ Agent gate review is mandatory before automatic continuation.
             translated = self._translate_cypher_query_text(query_text)
             if not translated:
                 raise ValueError(
-                    "Cypher query is empty or unsupported for MVP translation.",
+                    (
+                        "Cypher query is empty or unsupported for MVP"
+                        " translation."
+                    ),
                 )
             effective_query_text = translated
             warnings.append("CYPHER_MVP_TRANSLATED")
@@ -1471,11 +1516,15 @@ Agent gate review is mandatory before automatic continuation.
                     warnings.append("NO_GRAPH_RECORDS")
                 return GraphOpsResult(
                     records=self._enrich_graph_records(records, config=config),
-                    summary=f"Returned {len(records)} graph-like records via Graphify.",
+                    summary=(
+                        f"Returned {len(records)} graph-like records via"
+                        " Graphify."
+                    ),
                     provenance={
                         "scope_filter_applied": bool(scope_type or scope_id),
-                        "scope_type": str(scope_type or "").strip().lower()
-                        or None,
+                        "scope_type": (
+                            str(scope_type or "").strip().lower() or None
+                        ),
                         "scope_id": str(scope_id or "").strip() or None,
                         "engine": engine,
                         "layer": graph_layer,
@@ -1484,8 +1533,10 @@ Agent gate review is mandatory before automatic continuation.
                         "project_scope": project_scope or [],
                         "include_global": include_global,
                         "query_mode": query_mode,
-                        "output_mode": str(preferred_output_mode or "").strip()
-                        or resolved_mode,
+                        "output_mode": (
+                            str(preferred_output_mode or "").strip()
+                            or resolved_mode
+                        ),
                         "resolved_output_mode": resolved_mode,
                     },
                     warnings=warnings,
@@ -1557,13 +1608,17 @@ Agent gate review is mandatory before automatic continuation.
                             local_graph_records,
                             config=config,
                         ),
-                        summary=f"Returned {len(local_graph_records)} graph relations via local graph.",
+                        summary=(
+                            f"Returned {len(local_graph_records)} graph"
+                            " relations via local graph."
+                        ),
                         provenance={
                             "scope_filter_applied": bool(
                                 scope_type or scope_id,
                             ),
-                            "scope_type": str(scope_type or "").strip().lower()
-                            or None,
+                            "scope_type": (
+                                str(scope_type or "").strip().lower() or None
+                            ),
                             "scope_id": str(scope_id or "").strip() or None,
                             "engine": "local_graph",
                             "layer": graph_layer,
@@ -1572,10 +1627,12 @@ Agent gate review is mandatory before automatic continuation.
                             "project_scope": project_scope or [],
                             "include_global": include_global,
                             "query_mode": query_mode,
-                            "output_mode": str(
-                                preferred_output_mode or "",
-                            ).strip()
-                            or resolved_mode,
+                            "output_mode": (
+                                str(
+                                    preferred_output_mode or "",
+                                ).strip()
+                                or resolved_mode
+                            ),
                             "resolved_output_mode": resolved_mode,
                         },
                         warnings=warnings,
@@ -1777,7 +1834,9 @@ Agent gate review is mandatory before automatic continuation.
                     return {
                         "accepted": False,
                         "job_id": existing["job_id"],
-                        "status_url": f"/knowledge/memify/jobs/{existing['job_id']}",
+                        "status_url": (
+                            f"/knowledge/memify/jobs/{existing['job_id']}"
+                        ),
                         "reason": "IDEMPOTENT_REUSE",
                     }
 
@@ -1867,15 +1926,24 @@ Agent gate review is mandatory before automatic continuation.
             self._normalize_progress_patch(
                 {
                     "status": str(memify_result.get("status") or "failed"),
-                    "progress": 100
-                    if str(memify_result.get("status") or "") == "succeeded"
-                    else 0,
-                    "stage": "completed"
-                    if str(memify_result.get("status") or "") == "succeeded"
-                    else "failed",
-                    "stage_message": "Memify completed"
-                    if str(memify_result.get("status") or "") == "succeeded"
-                    else "Memify failed",
+                    "progress": (
+                        100
+                        if str(memify_result.get("status") or "")
+                        == "succeeded"
+                        else 0
+                    ),
+                    "stage": (
+                        "completed"
+                        if str(memify_result.get("status") or "")
+                        == "succeeded"
+                        else "failed"
+                    ),
+                    "stage_message": (
+                        "Memify completed"
+                        if str(memify_result.get("status") or "")
+                        == "succeeded"
+                        else "Memify failed"
+                    ),
                     "current": memify_result.get("current") or 0,
                     "total": memify_result.get("total") or 0,
                     "eta_seconds": 0,
@@ -2037,11 +2105,13 @@ Agent gate review is mandatory before automatic continuation.
                             )
                             or "system-knowledge-enrichment-v1",
                         ),
-                        quality_policy=(quality_hints or {}).get(
-                            "quality_policy",
-                        )
-                        if isinstance(quality_hints, dict)
-                        else None,
+                        quality_policy=(
+                            (quality_hints or {}).get(
+                                "quality_policy",
+                            )
+                            if isinstance(quality_hints, dict)
+                            else None
+                        ),
                     )
                     warnings.extend(enrichment_result.warnings)
                     response.update(
@@ -2049,8 +2119,12 @@ Agent gate review is mandatory before automatic continuation.
                             "warnings": warnings,
                             "enrichment_status": enrichment_result.status,
                             "enrichment_warnings": enrichment_result.warnings,
-                            "enriched_graph_path": enrichment_result.enriched_graph_path,
-                            "enrichment_quality_report_path": enrichment_result.quality_report_path,
+                            "enriched_graph_path": (
+                                enrichment_result.enriched_graph_path
+                            ),
+                            "enrichment_quality_report_path": (
+                                enrichment_result.quality_report_path
+                            ),
                             "enrichment_metrics": enrichment_result.metrics,
                         },
                     )

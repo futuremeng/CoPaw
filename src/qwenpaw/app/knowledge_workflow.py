@@ -130,8 +130,8 @@ def build_knowledge_workflow_template() -> PipelineTemplateInfo:
             name=KNOWLEDGE_WORKFLOW_TEMPLATE_NAME,
             version=KNOWLEDGE_WORKFLOW_TEMPLATE_VERSION,
             description=(
-                "Builtin project-scoped workflow for knowledge indexing, NLP enrichment, "
-                "and quality review."
+                "Builtin project-scoped workflow for knowledge indexing, NLP"
+                " enrichment, and quality review."
             ),
             steps=_knowledge_workflow_steps(),
         )
@@ -410,7 +410,10 @@ class KnowledgeWorkflowOrchestrator:
             actual_executor = str(step.executor or "").strip()
             if expected_executor is None:
                 raise RuntimeError(
-                    f"Unsupported knowledge workflow step '{step.id}' in template",
+                    (
+                        f"Unsupported knowledge workflow step '{step.id}' in"
+                        " template"
+                    ),
                 )
             if not actual_executor:
                 raise RuntimeError(
@@ -418,8 +421,11 @@ class KnowledgeWorkflowOrchestrator:
                 )
             if actual_executor != expected_executor:
                 raise RuntimeError(
-                    f"Knowledge workflow step '{step.id}' executor mismatch: "
-                    f"expected '{expected_executor}', got '{actual_executor}'",
+                    (
+                        f"Knowledge workflow step '{step.id}' executor"
+                        f" mismatch: expected '{expected_executor}', got"
+                        f" '{actual_executor}'"
+                    ),
                 )
             seen_step_ids.add(step.id)
         missing_step_ids = [
@@ -649,8 +655,11 @@ class KnowledgeWorkflowOrchestrator:
             actual_executor = str(step.executor or "").strip()
             if actual_executor != expected_executor:
                 raise RuntimeError(
-                    f"Workflow run step '{step.id}' executor mismatch: "
-                    f"expected '{expected_executor}', got '{actual_executor}'",
+                    (
+                        f"Workflow run step '{step.id}' executor mismatch:"
+                        f" expected '{expected_executor}', got"
+                        f" '{actual_executor}'"
+                    ),
                 )
             if step_id == "snapshot_raw":
                 return self._execute_snapshot_raw(
@@ -1037,9 +1046,11 @@ class KnowledgeWorkflowOrchestrator:
                     "progress": max(40, min(85, percent)),
                     "current": 3,
                     "total": 7,
-                    "eta_seconds": payload.get("eta_seconds")
-                    if isinstance(payload.get("eta_seconds"), (int, float))
-                    else None,
+                    "eta_seconds": (
+                        payload.get("eta_seconds")
+                        if isinstance(payload.get("eta_seconds"), (int, float))
+                        else None
+                    ),
                     "l2_progress": l2_progress,
                     "l2_metrics": l2_metrics,
                     **_lane_overrides(
@@ -2063,7 +2074,9 @@ class KnowledgeWorkflowOrchestrator:
             "result": {
                 "status": "unavailable",
                 "reason_code": "SRL_NOT_IMPLEMENTED",
-                "reason": "Semantic role labeling is reserved for a future release.",
+                "reason": (
+                    "Semantic role labeling is reserved for a future release."
+                ),
                 "outputs": outputs,
             },
             "outputs": outputs,

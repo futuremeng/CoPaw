@@ -129,7 +129,9 @@ def agents_square_api_client(
                         id="agency-agents",
                         name="agency-agents",
                         provider="agency_markdown_repo",
-                        url="https://github.com/msitarzewski/agency-agents.git",
+                        url=(
+                            "https://github.com/msitarzewski/agency-agents.git"
+                        ),
                         branch="main",
                         path=".",
                         enabled=True,

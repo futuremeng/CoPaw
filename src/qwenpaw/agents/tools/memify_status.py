@@ -58,7 +58,10 @@ async def memify_status(job_id: str) -> ToolResponse:
             content=[
                 TextBlock(
                     type="text",
-                    text="Error: knowledge is disabled in agent runtime configuration.",
+                    text=(
+                        "Error: knowledge is disabled in agent runtime"
+                        " configuration."
+                    ),
                 ),
             ],
         )

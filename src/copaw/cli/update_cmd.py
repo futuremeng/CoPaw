@@ -44,9 +44,11 @@ def overlay_update_callback(ctx: click.Context, **options: Any) -> None:
 
     click.echo(f"CoPaw {__version__}")
     click.echo(
-        "CoPaw is not published to PyPI yet, so this command installs "
-        "nothing: the upstream updater would pip-install qwenpaw and "
-        "replace this CoPaw install.",
+        (
+            "CoPaw is not published to PyPI yet, so this command installs "
+            "nothing: the upstream updater would pip-install qwenpaw and "
+            "replace this CoPaw install."
+        ),
     )
     click.echo(f"Releases: {_releases_url(_load_fact_source())}")
     raise SystemExit(1)

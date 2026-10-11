@@ -52,8 +52,10 @@ def _build_quality_loop_recommended_actions(
     actions: list[str] = []
     if status in _QUALITY_LOOP_ACTIVE_STATUSES:
         actions.append(
-            f"- {project_name}: observe active quality loop and wait for the"
-            " current round to finish before planning follow-up.",
+            (
+                f"- {project_name}: observe active quality loop and wait for"
+                " the current round to finish before planning follow-up."
+            ),
         )
         return actions
 
@@ -67,15 +69,19 @@ def _build_quality_loop_recommended_actions(
 
     if stop_reason == "REVIEW_REQUIRED":
         actions.append(
-            f"- {project_name}: review the latest quality-loop evidence,"
-            " explain why the gate rejected continuation, and update the"
-            " next-step plan before any rerun.",
+            (
+                f"- {project_name}: review the latest quality-loop evidence,"
+                " explain why the gate rejected continuation, and update the"
+                " next-step plan before any rerun."
+            ),
         )
     elif stop_reason in _QUALITY_LOOP_ACTIONABLE_STOP_REASONS:
         actions.append(
-            f"- {project_name}: inspect the latest round evidence and decide"
-            " whether to revise skills/params before scheduling another"
-            " quality-loop round.",
+            (
+                f"- {project_name}: inspect the latest round evidence and"
+                " decide whether to revise skills/params before scheduling"
+                " another quality-loop round."
+            ),
         )
 
     if lessons_path or params_path or rounds_dir:
@@ -163,8 +169,10 @@ def _collect_project_quality_loop_digest(
             )
         elif stop_reason in _QUALITY_LOOP_REVIEW_STOP_REASONS:
             review_lines.append(
-                f"- {project_dir.name}: stop_reason={stop_reason},"
-                f" score_after={latest.get('score_after')}",
+                (
+                    f"- {project_dir.name}: stop_reason={stop_reason},"
+                    f" score_after={latest.get('score_after')}"
+                ),
             )
         action_lines.extend(
             _build_quality_loop_recommended_actions(

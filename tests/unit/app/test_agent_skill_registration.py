@@ -17,7 +17,11 @@ class _FakeToolkit:
 
 @pytest.mark.xfail(
     strict=True,
-    reason="P1-BEHAVIOR-LOST: builtin knowledge skill 注册补丁随上游 rebrand 同步丢失；react_agent 已改用 skill_system，无 get_working_skills_dir/list_available_skills",
+    reason=(
+        "P1-BEHAVIOR-LOST: builtin knowledge skill 注册补丁随上游 rebrand"
+        " 同步丢失；react_agent 已改用 skill_system，无"
+        " get_working_skills_dir/list_available_skills"
+    ),
 )
 def test_register_skills_includes_builtin_knowledge_skill_when_enabled(
     monkeypatch,

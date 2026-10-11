@@ -126,14 +126,16 @@ def write_chunk_ner_artifacts(
                 chunk["ner_input_mode"] = ner_input_mode
                 if ner_input_mode == "chunks_required":
                     chunk["ner_reason_code"] = "CHUNKS_REQUIRED"
-                    chunk[
-                        "ner_reason"
-                    ] = "NER requires chunk text input and fallback is disabled."
+                    chunk["ner_reason"] = (
+                        "NER requires chunk text input and fallback is"
+                        " disabled."
+                    )
                 else:
                     chunk["ner_reason_code"] = "INTERLINEAR_REQUIRED"
-                    chunk[
-                        "ner_reason"
-                    ] = "NER requires interlinear input and fallback is disabled."
+                    chunk["ner_reason"] = (
+                        "NER requires interlinear input and fallback is"
+                        " disabled."
+                    )
             if progress_callback is not None:
                 progress_callback(
                     {
@@ -316,18 +318,16 @@ def write_chunk_ner_artifacts(
                     if line.strip()
                 ],
             ),
-            "avg_entities_per_sentence": (
-                float(len(catalog))
-                / max(
-                    1,
-                    len(
-                        [
-                            line
-                            for line in str(resolved_text or "").splitlines()
-                            if line.strip()
-                        ],
-                    ),
-                )
+            "avg_entities_per_sentence": float(len(catalog))
+            / max(
+                1,
+                len(
+                    [
+                        line
+                        for line in str(resolved_text or "").splitlines()
+                        if line.strip()
+                    ],
+                ),
             ),
             "updated_at": datetime.now(UTC).isoformat(),
         }

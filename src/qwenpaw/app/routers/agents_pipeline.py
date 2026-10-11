@@ -167,7 +167,10 @@ async def list_platform_flow_templates(
     "/{agentId}/pipelines/rpa/templates/ebook-screenshot/package",
     response_model=dict[str, Any],
     summary="Get builtin ebook RPA template package",
-    description="Return a built-in RPA package for electronic magazine page screenshot workflows",
+    description=(
+        "Return a built-in RPA package for electronic magazine page screenshot"
+        " workflows"
+    ),
 )
 async def get_builtin_ebook_rpa_template_package(
     request: Request,
@@ -198,7 +201,9 @@ async def get_builtin_ebook_rpa_template_package(
     "/{agentId}/pipelines/rpa/import",
     response_model=PipelineTemplateInfo,
     summary="Import RPA package into pipeline templates",
-    description="Load an RPA package and save it as one agent-level pipeline template",
+    description=(
+        "Load an RPA package and save it as one agent-level pipeline template"
+    ),
 )
 async def import_rpa_template(
     request: Request,
@@ -260,7 +265,9 @@ async def import_rpa_template(
     "/{agentId}/pipelines/templates/{templateId}/rpa/package",
     response_model=dict[str, Any],
     summary="Export pipeline template as RPA package",
-    description="Convert one agent-level pipeline template into an RPA package payload",
+    description=(
+        "Convert one agent-level pipeline template into an RPA package payload"
+    ),
 )
 async def export_pipeline_template_as_rpa_package(
     request: Request,
@@ -385,7 +392,10 @@ async def save_agent_pipeline_template(
 @router.post(
     "/{agentId}/pipelines/templates/{templateId}/save/stream",
     summary="Save pipeline template with SSE progress",
-    description="Save template from markdown source-of-truth and stream validation/save stages",
+    description=(
+        "Save template from markdown source-of-truth and stream"
+        " validation/save stages"
+    ),
 )
 async def save_agent_pipeline_template_stream(
     request: Request,
@@ -436,9 +446,11 @@ async def save_agent_pipeline_template_stream(
             yield _event("done", {"ok": True})
         except HTTPException as exc:
             yield _event(
-                "validation_failed"
-                if exc.status_code == 422
-                else "save_failed",
+                (
+                    "validation_failed"
+                    if exc.status_code == 422
+                    else "save_failed"
+                ),
                 {
                     "ok": False,
                     "status_code": exc.status_code,
@@ -471,7 +483,10 @@ async def save_agent_pipeline_template_stream(
     "/{agentId}/pipelines/templates/{templateId}/draft",
     response_model=PipelineDraftInfo,
     summary="Get pipeline draft from markdown workspace",
-    description="Read the agent-editable markdown file and return parsed pipeline steps",
+    description=(
+        "Read the agent-editable markdown file and return parsed pipeline"
+        " steps"
+    ),
 )
 async def get_agent_pipeline_draft(
     request: Request,
@@ -510,7 +525,10 @@ async def get_agent_pipeline_draft(
     "/{agentId}/pipelines/templates/{templateId}/draft/ensure",
     response_model=PipelineDraftInfo,
     summary="Ensure pipeline markdown draft workspace",
-    description="Create the markdown workspace and flow memory for pipeline editing when missing",
+    description=(
+        "Create the markdown workspace and flow memory for pipeline editing"
+        " when missing"
+    ),
 )
 async def ensure_agent_pipeline_draft(
     request: Request,
@@ -770,7 +788,9 @@ async def create_project_pipeline_run(
     "/{agentId}/projects/{projectId}/pipelines/runs/{runId}/retry",
     response_model=PipelineRunDetail,
     summary="Retry or continue one project pipeline run",
-    description="Create a continuation run from a target step of an existing run",
+    description=(
+        "Create a continuation run from a target step of an existing run"
+    ),
 )
 async def retry_project_pipeline_run(
     request: Request,
@@ -808,7 +828,9 @@ async def retry_project_pipeline_run(
     "/{agentId}/pipelines/templates/{templateId}/steps",
     response_model=PipelineTemplateInfo,
     summary="Add or update a pipeline step",
-    description="Add a new step or update an existing step in a pipeline template",
+    description=(
+        "Add a new step or update an existing step in a pipeline template"
+    ),
 )
 async def add_or_update_pipeline_step(
     request: Request,

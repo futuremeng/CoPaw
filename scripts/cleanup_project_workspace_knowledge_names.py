@@ -42,7 +42,10 @@ def rename_prefixed_files(root: Path, *, dry_run: bool) -> tuple[int, int]:
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description="Rename legacy project workspace knowledge files to unprefixed names.",
+        description=(
+            "Rename legacy project workspace knowledge files to unprefixed"
+            " names."
+        ),
     )
     parser.add_argument(
         "root",

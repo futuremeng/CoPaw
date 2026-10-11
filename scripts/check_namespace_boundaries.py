@@ -252,7 +252,10 @@ def main() -> int:
     parser.add_argument(
         "--upstream-ref",
         default="",
-        help="Optional git ref for baseline comparison, for example agentscope-ai/main.",
+        help=(
+            "Optional git ref for baseline comparison, for example"
+            " agentscope-ai/main."
+        ),
     )
     args = parser.parse_args()
 
@@ -264,7 +267,10 @@ def main() -> int:
         baseline = compute_ref_report(args.upstream_ref.strip())
         if baseline is None:
             print(
-                f"\nwarning: failed to read baseline ref {args.upstream_ref!r}",
+                (
+                    "\nwarning: failed to read baseline ref"
+                    f" {args.upstream_ref!r}"
+                ),
             )
         else:
             _print_report(f"baseline:{args.upstream_ref}", baseline)

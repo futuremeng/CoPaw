@@ -39,19 +39,28 @@ class SQLiteFlowEngineRepository:
         run_columns = cls._table_columns(conn, "flow_runs")
         if "agent_id" not in run_columns:
             conn.execute(
-                "ALTER TABLE flow_runs ADD COLUMN agent_id TEXT NOT NULL DEFAULT ''",
+                (
+                    "ALTER TABLE flow_runs ADD COLUMN agent_id TEXT NOT NULL"
+                    " DEFAULT ''"
+                ),
             )
 
         event_columns = cls._table_columns(conn, "flow_events")
         if "agent_id" not in event_columns:
             conn.execute(
-                "ALTER TABLE flow_events ADD COLUMN agent_id TEXT NOT NULL DEFAULT ''",
+                (
+                    "ALTER TABLE flow_events ADD COLUMN agent_id TEXT NOT NULL"
+                    " DEFAULT ''"
+                ),
             )
 
         command_columns = cls._table_columns(conn, "flow_commands")
         if "agent_id" not in command_columns:
             conn.execute(
-                "ALTER TABLE flow_commands ADD COLUMN agent_id TEXT NOT NULL DEFAULT ''",
+                (
+                    "ALTER TABLE flow_commands ADD COLUMN agent_id TEXT NOT"
+                    " NULL DEFAULT ''"
+                ),
             )
 
     @staticmethod
@@ -154,7 +163,10 @@ class SQLiteFlowEngineRepository:
         self.ensure_schema()
         with self._connect() as conn:
             row = conn.execute(
-                "SELECT meta_value FROM flow_meta WHERE meta_key = 'schema_version'",
+                (
+                    "SELECT meta_value FROM flow_meta WHERE meta_key ="
+                    " 'schema_version'"
+                ),
             ).fetchone()
         return int(
             str(row["meta_value"]) if row else FLOW_ENGINE_SCHEMA_VERSION,
@@ -239,9 +251,9 @@ class SQLiteFlowEngineRepository:
                         "name": row["name"],
                         "version": row["version"],
                         "description": row["description"],
-                        "steps": steps_raw
-                        if isinstance(steps_raw, list)
-                        else [],
+                        "steps": (
+                            steps_raw if isinstance(steps_raw, list) else []
+                        ),
                         "tags": tags_raw if isinstance(tags_raw, list) else [],
                         "system_owned": bool(row["system_owned"]),
                         "created_at": row["created_at"],

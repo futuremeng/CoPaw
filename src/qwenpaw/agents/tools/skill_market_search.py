@@ -55,7 +55,7 @@ async def skill_market_search(
         cfg = _load_current_market_config()
         items, errors, meta = _aggregate_marketplace(cfg, refresh=refresh)
         market_trust = {
-            market.id: (market.trust or "custom")
+            market.id: market.trust or "custom"
             for market in (cfg.markets or [])
         }
 
@@ -85,7 +85,10 @@ async def skill_market_search(
         capped = filtered[: max(1, min(int(limit), 50))]
 
         lines = [
-            f"Skill marketplace search candidates: {len(capped)} (matched={len(filtered)})",
+            (
+                "Skill marketplace search candidates:"
+                f" {len(capped)} (matched={len(filtered)})"
+            ),
             (
                 "filters: "
                 f"query={query_text or '(none)'}, "
@@ -112,17 +115,22 @@ async def skill_market_search(
         else:
             for idx, item in enumerate(capped, start=1):
                 lines.append(
-                    f"[{idx}] {item.name} ({item.skill_id}) "
-                    f"market={item.market_id} "
-                    f"trust={market_trust.get(item.market_id, 'custom')} "
-                    f"version={item.version or 'n/a'}",
+                    (
+                        f"[{idx}] {item.name} ({item.skill_id}) "
+                        f"market={item.market_id} "
+                        f"trust={market_trust.get(item.market_id, 'custom')} "
+                        f"version={item.version or 'n/a'}"
+                    ),
                 )
                 if item.tags:
                     lines.append(f"tags: {', '.join(item.tags)}")
                 if item.description:
                     lines.append(f"description: {item.description}")
                 lines.append(
-                    f"install_ref: market_id={item.market_id} skill_id={item.skill_id}",
+                    (
+                        "install_ref:"
+                        f" market_id={item.market_id} skill_id={item.skill_id}"
+                    ),
                 )
                 lines.append("")
 

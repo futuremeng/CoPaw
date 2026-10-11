@@ -265,11 +265,17 @@ def grade_l2_quantization_assessment(
         )
     if quality_proxy < 0.55:
         recommendations.append(
-            "Improve entity/relation density quality controls and extraction prompts.",
+            (
+                "Improve entity/relation density quality controls and"
+                " extraction prompts."
+            ),
         )
     if has_probe_metrics and probe_success < 0.75:
         recommendations.append(
-            "Investigate NLP task availability/timeouts (sidecar/model cache/runtime).",
+            (
+                "Investigate NLP task availability/timeouts (sidecar/model"
+                " cache/runtime)."
+            ),
         )
     if has_probe_metrics and probe_p95 >= 5000:
         recommendations.append(
@@ -281,7 +287,10 @@ def grade_l2_quantization_assessment(
         )
     if degrade_flags:
         recommendations.append(
-            "Make degradation visible in L2 metrics and add fallback diagnostics.",
+            (
+                "Make degradation visible in L2 metrics and add fallback"
+                " diagnostics."
+            ),
         )
     if not recommendations:
         recommendations.append(

@@ -43,18 +43,26 @@ def check_hanlp_sidecar(cfg) -> tuple[bool, str, list[str]]:
     if not NLPRuntime._sidecar_enabled(hanlp_cfg):
         if sys.version_info[:2] == (3, 10):
             notes.append(
-                "Main runtime is Python 3.10. Install directly with: "
-                "python -m pip install 'hanlp[full]', then set nlp.sidecar_enabled=true.",
+                (
+                    "Main runtime is Python 3.10. Install directly with:"
+                    " python -m pip install 'hanlp[full]', then set"
+                    " nlp.sidecar_enabled=true."
+                ),
             )
         else:
             notes.append(
-                "Enable HanLP sidecar with COPAW_HANLP_SIDECAR_ENABLED=1 and "
-                "set COPAW_HANLP_SIDECAR_PYTHON to a Python 3.6-3.10 interpreter.",
+                (
+                    "Enable HanLP sidecar with COPAW_HANLP_SIDECAR_ENABLED=1"
+                    " and set COPAW_HANLP_SIDECAR_PYTHON to a Python 3.6-3.10"
+                    " interpreter."
+                ),
             )
     elif not str(hanlp_cfg.python_executable or "").strip():
         notes.append(
-            "Set COPAW_HANLP_SIDECAR_PYTHON or nlp.python_executable "
-            "to the dedicated Python 3.6-3.10 sidecar interpreter.",
+            (
+                "Set COPAW_HANLP_SIDECAR_PYTHON or nlp.python_executable "
+                "to the dedicated Python 3.6-3.10 sidecar interpreter."
+            ),
         )
     else:
         notes.append(
@@ -68,23 +76,34 @@ def check_hanlp_sidecar(cfg) -> tuple[bool, str, list[str]]:
         notes.append(f"HANLP_HOME: {model_home}")
     else:
         notes.append(
-            "Optional: set COPAW_HANLP_HOME when using preloaded offline model caches.",
+            (
+                "Optional: set COPAW_HANLP_HOME when using preloaded offline"
+                " model caches."
+            ),
         )
 
     if status == "ready":
         return True, reason, notes
     if reason_code == "HANLP_IMPORT_UNAVAILABLE":
         notes.append(
-            "Install HanLP in the sidecar environment, for example: "
-            "<sidecar-python> -m pip install 'hanlp[full]'",
+            (
+                "Install HanLP in the sidecar environment, for example: "
+                "<sidecar-python> -m pip install 'hanlp[full]'"
+            ),
         )
     elif reason_code == "HANLP_FULL_INSTALL_REQUIRED":
         notes.append(
-            "Install full dependencies in sidecar: <sidecar-python> -m pip install 'hanlp[full]'.",
+            (
+                "Install full dependencies in sidecar: <sidecar-python> -m pip"
+                " install 'hanlp[full]'."
+            ),
         )
     elif reason_code == "HANLP_SIDECAR_PYTHON_INCOMPATIBLE":
         notes.append(
-            "HanLP 2.x local runtime should use Python 3.6-3.10 according to the upstream install guide.",
+            (
+                "HanLP 2.x local runtime should use Python 3.6-3.10 according"
+                " to the upstream install guide."
+            ),
         )
     return False, reason, notes
 

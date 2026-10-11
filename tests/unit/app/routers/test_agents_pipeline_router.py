@@ -124,13 +124,15 @@ def test_stream_save_pipeline_emits_validation_failed_event(
 
     md_path = _pipeline_md_path(tmp_path, "stream-pipeline")
     md_path.write_text(
-        "---\n"
-        "pipeline_id: stream-pipeline\n"
-        "name: Broken\n"
-        "version: 0.1.0\n"
-        "---\n\n"
-        "# Broken\n\n"
-        "No valid step headings.\n",
+        (
+            "---\n"
+            "pipeline_id: stream-pipeline\n"
+            "name: Broken\n"
+            "version: 0.1.0\n"
+            "---\n\n"
+            "# Broken\n\n"
+            "No valid step headings.\n"
+        ),
         encoding="utf-8",
     )
 

@@ -507,7 +507,10 @@ def test_copaw_hanlp_ner_unavailable_hides_result_payload(monkeypatch):
     with TestClient(app) as client:
         response = client.post(
             "/api/nlp/tasks/ner/run",
-            json={"text": "微软发布新模型", "request_id": "req-ner-unavailable"},
+            json={
+                "text": "微软发布新模型",
+                "request_id": "req-ner-unavailable",
+            },
         )
 
     assert response.status_code == 200
@@ -528,7 +531,10 @@ def test_copaw_hanlp_dep_unavailable_hides_result_payload(monkeypatch):
     with TestClient(app) as client:
         response = client.post(
             "/api/nlp/tasks/dep/run",
-            json={"text": "微软发布新模型", "request_id": "req-dep-unavailable"},
+            json={
+                "text": "微软发布新模型",
+                "request_id": "req-dep-unavailable",
+            },
         )
 
     assert response.status_code == 200
@@ -575,7 +581,10 @@ def test_copaw_hanlp_auto_route_modern_text_uses_default_model(monkeypatch):
     with TestClient(app) as client:
         response = client.post(
             "/api/nlp/tasks/ner/run",
-            json={"text": "我们正在测试模型自动选择能力", "request_id": "req-ner-modern"},
+            json={
+                "text": "我们正在测试模型自动选择能力",
+                "request_id": "req-ner-modern",
+            },
         )
 
     assert response.status_code == 200
@@ -795,7 +804,10 @@ def test_copaw_hanlp_ner_merges_adjacent_fragments_and_repairs_span(
     with TestClient(app) as client:
         response = client.post(
             "/api/nlp/tasks/ner/run",
-            json={"text": "微软在北京发布Copaw。", "request_id": "req-ner-fragment"},
+            json={
+                "text": "微软在北京发布Copaw。",
+                "request_id": "req-ner-fragment",
+            },
         )
 
     assert response.status_code == 200
@@ -833,7 +845,10 @@ def test_copaw_hanlp_ner_nested_list_result_is_normalized(monkeypatch):
     with TestClient(app) as client:
         response = client.post(
             "/api/nlp/tasks/ner/run",
-            json={"text": "微软发布新模型", "request_id": "req-ner-nested-list"},
+            json={
+                "text": "微软发布新模型",
+                "request_id": "req-ner-nested-list",
+            },
         )
 
     assert response.status_code == 200
@@ -930,7 +945,10 @@ def test_copaw_hanlp_tokenize_run_slash_endpoint_degrades_on_route_timeout(
     with TestClient(app) as client:
         response = client.post(
             "/api/nlp/tasks/tokenize/run",
-            json={"text": "微软 发布 新模型", "request_id": "req-tokenize-timeout"},
+            json={
+                "text": "微软 发布 新模型",
+                "request_id": "req-tokenize-timeout",
+            },
         )
 
     assert response.status_code == 200
@@ -1009,7 +1027,10 @@ def test_copaw_hanlp_colon_run_endpoint_is_not_supported(monkeypatch):
     with TestClient(app) as client:
         response = client.post(
             "/api/nlp/tasks/tokenize:run",
-            json={"text": "微软 发布 新模型", "request_id": "req-tokenize-colon"},
+            json={
+                "text": "微软 发布 新模型",
+                "request_id": "req-tokenize-colon",
+            },
         )
 
     # Starlette only answers 405 when the path still matches a route; the colon

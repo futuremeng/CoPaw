@@ -92,8 +92,10 @@ def _load_graph_json(graph_path: str) -> Any:
     path = Path(graph_path)
     if not path.is_file():
         raise GraphifyLoadError(
-            f"graph.json not found at '{graph_path}'. "
-            "Run 'graphify <dataset_dir>' to build it first.",
+            (
+                f"graph.json not found at '{graph_path}'. "
+                "Run 'graphify <dataset_dir>' to build it first."
+            ),
         )
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
@@ -201,9 +203,9 @@ def _subgraph_to_records(
                 "source_id": source_file,
                 "source_type": d.get("file_type") or "graph",
                 "document_path": source_file,
-                "document_title": f"{label} @ {source_loc}"
-                if source_loc
-                else label,
+                "document_title": (
+                    f"{label} @ {source_loc}" if source_loc else label
+                ),
             },
         )
     return records
@@ -494,7 +496,10 @@ def _graphify_query_remote(
         except httpx.HTTPStatusError as exc:
             detail = (exc.response.text or "")[:300]
             raise GraphifyRemoteError(
-                f"Graphify remote query failed ({exc.response.status_code}): {detail}",
+                (
+                    "Graphify remote query failed"
+                    f" ({exc.response.status_code}): {detail}"
+                ),
             ) from exc
         except httpx.HTTPError as exc:
             last_error = exc
@@ -574,7 +579,10 @@ def _graphify_memify_remote(
             detail = (exc.response.text or "")[:300]
             return {
                 "status": "failed",
-                "error": f"Graphify remote memify failed ({exc.response.status_code}): {detail}",
+                "error": (
+                    "Graphify remote memify failed"
+                    f" ({exc.response.status_code}): {detail}"
+                ),
                 "warnings": ["GRAPHIFY_REMOTE_MEMIFY_HTTP_ERROR"],
             }
         except httpx.HTTPError as exc:
@@ -583,7 +591,9 @@ def _graphify_memify_remote(
         except ValueError:
             return {
                 "status": "failed",
-                "error": "Graphify remote memify returned invalid JSON payload.",
+                "error": (
+                    "Graphify remote memify returned invalid JSON payload."
+                ),
                 "warnings": ["GRAPHIFY_REMOTE_MEMIFY_BAD_JSON"],
             }
 
@@ -626,9 +636,11 @@ def graphify_query(
 
     if not config.graph_path:
         raise GraphifyNotConfiguredError(
-            "GraphifyConfig.graph_path is empty. "
-            "Set it to the path of your graphify-out/graph.json file, "
-            "or set COPAW_GRAPHIFY_GRAPH_PATH environment variable.",
+            (
+                "GraphifyConfig.graph_path is empty. "
+                "Set it to the path of your graphify-out/graph.json file, "
+                "or set COPAW_GRAPHIFY_GRAPH_PATH environment variable."
+            ),
         )
 
     G = _load_graph_json(config.graph_path)
@@ -692,9 +704,11 @@ def graphify_memify(
 
     if not config.dataset_dir:
         raise GraphifyNotConfiguredError(
-            "GraphifyConfig.dataset_dir is empty. "
-            "Set it to the directory you want graphify to index, "
-            "or set COPAW_GRAPHIFY_DATASET_DIR environment variable.",
+            (
+                "GraphifyConfig.dataset_dir is empty. "
+                "Set it to the directory you want graphify to index, "
+                "or set COPAW_GRAPHIFY_DATASET_DIR environment variable."
+            ),
         )
 
     dataset_path = Path(config.dataset_dir)

@@ -196,9 +196,12 @@ def test_probe_uses_sidecar_bridge_json() -> None:
         },
     }
 
-    with patch("pathlib.Path.exists", return_value=True), patch(
-        "subprocess.Popen",
-        return_value=_FakePopen(mode_payloads),
+    with (
+        patch("pathlib.Path.exists", return_value=True),
+        patch(
+            "subprocess.Popen",
+            return_value=_FakePopen(mode_payloads),
+        ),
     ):
         state = runtime.probe(config)
 
@@ -222,9 +225,12 @@ def test_probe_ignores_legacy_nlp_enabled_when_sidecar_is_configured() -> None:
         },
     }
 
-    with patch("pathlib.Path.exists", return_value=True), patch(
-        "subprocess.Popen",
-        return_value=_FakePopen(mode_payloads),
+    with (
+        patch("pathlib.Path.exists", return_value=True),
+        patch(
+            "subprocess.Popen",
+            return_value=_FakePopen(mode_payloads),
+        ),
     ):
         state = runtime.probe(config)
 
@@ -244,9 +250,12 @@ def test_start_worker_injects_repo_src_into_pythonpath() -> None:
         captured_kwargs.update(kwargs)
         return _FakePopen({})
 
-    with patch("pathlib.Path.exists", return_value=True), patch(
-        "subprocess.Popen",
-        side_effect=_fake_popen,
+    with (
+        patch("pathlib.Path.exists", return_value=True),
+        patch(
+            "subprocess.Popen",
+            side_effect=_fake_popen,
+        ),
     ):
         runtime._start_worker_locked(
             Path("/bin/python3"),
@@ -340,9 +349,12 @@ def test_tokenize_returns_tokens_from_sidecar() -> None:
         },
     }
 
-    with patch("pathlib.Path.exists", return_value=True), patch(
-        "subprocess.Popen",
-        return_value=_FakePopen(mode_payloads),
+    with (
+        patch("pathlib.Path.exists", return_value=True),
+        patch(
+            "subprocess.Popen",
+            return_value=_FakePopen(mode_payloads),
+        ),
     ):
         tokens, state = runtime.tokenize("Agent 关系抽取", config)
 
@@ -371,9 +383,12 @@ def test_model_status_returns_ready_when_sidecar_reports_model_ready() -> None:
         },
     }
 
-    with patch("pathlib.Path.exists", return_value=True), patch(
-        "subprocess.Popen",
-        return_value=_FakePopen(mode_payloads),
+    with (
+        patch("pathlib.Path.exists", return_value=True),
+        patch(
+            "subprocess.Popen",
+            return_value=_FakePopen(mode_payloads),
+        ),
     ):
         state = runtime.model_status(config)
 
@@ -402,9 +417,12 @@ def test_local_models_status_alias_returns_model_status() -> None:
         },
     }
 
-    with patch("pathlib.Path.exists", return_value=True), patch(
-        "subprocess.Popen",
-        return_value=_FakePopen(mode_payloads),
+    with (
+        patch("pathlib.Path.exists", return_value=True),
+        patch(
+            "subprocess.Popen",
+            return_value=_FakePopen(mode_payloads),
+        ),
     ):
         state = runtime.local_models_status(config)
 
@@ -435,9 +453,12 @@ def test_ensure_model_returns_unavailable_when_sidecar_reports_model_failure() -
         },
     }
 
-    with patch("pathlib.Path.exists", return_value=True), patch(
-        "subprocess.Popen",
-        return_value=_FakePopen(mode_payloads),
+    with (
+        patch("pathlib.Path.exists", return_value=True),
+        patch(
+            "subprocess.Popen",
+            return_value=_FakePopen(mode_payloads),
+        ),
     ):
         state = runtime.ensure_model(config)
 
@@ -478,9 +499,12 @@ def test_task_status_returns_ready_when_sidecar_reports_task_ready() -> None:
         },
     }
 
-    with patch("pathlib.Path.exists", return_value=True), patch(
-        "subprocess.Popen",
-        return_value=_FakePopen(mode_payloads),
+    with (
+        patch("pathlib.Path.exists", return_value=True),
+        patch(
+            "subprocess.Popen",
+            return_value=_FakePopen(mode_payloads),
+        ),
     ):
         state = runtime.task_status("ner_msra", config)
 
@@ -510,9 +534,12 @@ def test_run_task_returns_structured_result_from_sidecar() -> None:
         },
     }
 
-    with patch("pathlib.Path.exists", return_value=True), patch(
-        "subprocess.Popen",
-        return_value=_FakePopen(mode_payloads),
+    with (
+        patch("pathlib.Path.exists", return_value=True),
+        patch(
+            "subprocess.Popen",
+            return_value=_FakePopen(mode_payloads),
+        ),
     ):
         result, state = runtime.run_task("ner_msra", "微软发布新模型", config)
 
@@ -744,9 +771,12 @@ def test_run_ner_returns_structured_result_from_sidecar() -> None:
         },
     }
 
-    with patch("pathlib.Path.exists", return_value=True), patch(
-        "subprocess.Popen",
-        return_value=_FakePopen(mode_payloads),
+    with (
+        patch("pathlib.Path.exists", return_value=True),
+        patch(
+            "subprocess.Popen",
+            return_value=_FakePopen(mode_payloads),
+        ),
     ):
         result, state = runtime.run_ner("微软发布新模型", config)
 
@@ -779,9 +809,12 @@ def test_run_dep_returns_structured_result_from_sidecar() -> None:
         },
     }
 
-    with patch("pathlib.Path.exists", return_value=True), patch(
-        "subprocess.Popen",
-        return_value=_FakePopen(mode_payloads),
+    with (
+        patch("pathlib.Path.exists", return_value=True),
+        patch(
+            "subprocess.Popen",
+            return_value=_FakePopen(mode_payloads),
+        ),
     ):
         result, state = runtime.run_dep("微软发布新模型", config)
 
@@ -1135,9 +1168,12 @@ def test_persistent_worker_reuses_same_pid_between_calls() -> None:
         },
     }
 
-    with patch("pathlib.Path.exists", return_value=True), patch(
-        "subprocess.Popen",
-        return_value=_FakePopen(mode_payloads),
+    with (
+        patch("pathlib.Path.exists", return_value=True),
+        patch(
+            "subprocess.Popen",
+            return_value=_FakePopen(mode_payloads),
+        ),
     ):
         probe_state = runtime.probe(config)
         _, first_state = runtime.tokenize("微软发布", config)
@@ -1182,9 +1218,12 @@ def test_persistent_worker_restarts_on_channel_failure() -> None:
     runtime._worker_process = _BrokenPopen()
     runtime._worker_cache_key = cache_key
 
-    with patch("pathlib.Path.exists", return_value=True), patch(
-        "subprocess.Popen",
-        return_value=_FakePopen(mode_payloads),
+    with (
+        patch("pathlib.Path.exists", return_value=True),
+        patch(
+            "subprocess.Popen",
+            return_value=_FakePopen(mode_payloads),
+        ),
     ):
         tokens, state = runtime.tokenize("微软发布", config)
 
@@ -1216,12 +1255,15 @@ def test_persistent_worker_restarts_when_config_cache_key_changes() -> None:
         },
     }
 
-    with patch("pathlib.Path.exists", return_value=True), patch(
-        "subprocess.Popen",
-        side_effect=[
-            _FakePopen(mode_payloads, pid=50101),
-            _FakePopen(mode_payloads, pid=50202),
-        ],
+    with (
+        patch("pathlib.Path.exists", return_value=True),
+        patch(
+            "subprocess.Popen",
+            side_effect=[
+                _FakePopen(mode_payloads, pid=50101),
+                _FakePopen(mode_payloads, pid=50202),
+            ],
+        ),
     ):
         probe_state = runtime.probe(config)
         _, first_state = runtime.tokenize("微软发布", config)

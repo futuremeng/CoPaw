@@ -233,9 +233,11 @@ def _build_local_models_payload(config) -> dict[str, Any]:
     return {
         "engine": "hanlp",
         "status": "ready" if all_local else "unavailable",
-        "reason_code": "HANLP_LOCAL_MODELS_READY"
-        if all_local
-        else "HANLP_MODEL_NOT_LOCAL",
+        "reason_code": (
+            "HANLP_LOCAL_MODELS_READY"
+            if all_local
+            else "HANLP_MODEL_NOT_LOCAL"
+        ),
         "reason": (
             "All required HanLP models are present in local cache."
             if all_local
@@ -580,7 +582,10 @@ async def get_sidecar_nlp_local_models() -> dict:
             "engine": provider,
             "status": "ready",
             "reason_code": "NLP_LOCAL_MODELS_NOT_REQUIRED",
-            "reason": "Local model cache probing is currently only required for HanLP.",
+            "reason": (
+                "Local model cache probing is currently only required for"
+                " HanLP."
+            ),
             "require_local_models": False,
             "model_cache_path": str(getattr(nlp_cfg, "model_home", "") or ""),
             "items": [],
@@ -694,7 +699,10 @@ async def download_missing_local_models() -> dict:
 @router.get(
     "/nlp-methods/catalog",
     summary="List NLP methods by provider",
-    description="Return method catalogs for HanLP and SiameseUniNLU provider-specific routes.",
+    description=(
+        "Return method catalogs for HanLP and SiameseUniNLU provider-specific"
+        " routes."
+    ),
 )
 async def get_sidecar_nlp_methods_catalog() -> dict[str, Any]:
     """Return provider-scoped NLP method catalog used by the settings UI."""

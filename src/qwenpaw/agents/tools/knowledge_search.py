@@ -82,7 +82,10 @@ async def knowledge_search(
                 content=[
                     TextBlock(
                         type="text",
-                        text="Knowledge is disabled in agent runtime configuration.",
+                        text=(
+                            "Knowledge is disabled in agent runtime"
+                            " configuration."
+                        ),
                     ),
                 ],
             )
@@ -93,7 +96,10 @@ async def knowledge_search(
                 content=[
                     TextBlock(
                         type="text",
-                        text="Knowledge retrieval is disabled in agent runtime configuration.",
+                        text=(
+                            "Knowledge retrieval is disabled in agent runtime"
+                            " configuration."
+                        ),
                     ),
                 ],
             )

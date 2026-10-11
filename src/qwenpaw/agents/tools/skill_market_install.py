@@ -85,8 +85,7 @@ async def skill_market_install(
             "error": {
                 "code": "CONFIRMATION_REQUIRED",
                 "message": (
-                    "Set confirm=true and "
-                    "confirmation_token=INSTALL_CONFIRMED"
+                    "Set confirm=true and confirmation_token=INSTALL_CONFIRMED"
                 ),
             },
             "required_confirmation_token": _CONFIRM_TOKEN,
@@ -97,7 +96,8 @@ async def skill_market_install(
                     type="text",
                     text=(
                         "Installation requires explicit confirmation. "
-                        "Set confirm=true and confirmation_token=INSTALL_CONFIRMED.\n"
+                        "Set confirm=true and"
+                        " confirmation_token=INSTALL_CONFIRMED.\n"
                         "JSON_RESULT_START\n"
                         f"{json.dumps(payload, ensure_ascii=False)}\n"
                         "JSON_RESULT_END"
@@ -110,7 +110,7 @@ async def skill_market_install(
         cfg = _load_current_market_config()
         items, _errors, _meta = _aggregate_marketplace(cfg, refresh=True)
         market_trust = {
-            market.id: (market.trust or "custom")
+            market.id: market.trust or "custom"
             for market in (cfg.markets or [])
         }
         selected = next(
@@ -200,7 +200,8 @@ async def skill_market_install(
                     type="text",
                     text=(
                         "Skill installed successfully. "
-                        f"name={result.name}, enabled={str(result.enabled).lower()}, "
+                        f"name={result.name},"
+                        f" enabled={str(result.enabled).lower()}, "
                         f"market_id={market_key}, skill_id={skill_key}, "
                         f"trust={trust_level}, "
                         f"workspace_dir={workspace_dir}\n"
@@ -226,7 +227,8 @@ async def skill_market_install(
                 TextBlock(
                     type="text",
                     text=(
-                        "Error: skill installation blocked by security scanner. "
+                        "Error: skill installation blocked by security"
+                        " scanner. "
                         f"{exc}\n"
                         "JSON_RESULT_START\n"
                         f"{json.dumps(payload, ensure_ascii=False)}\n"

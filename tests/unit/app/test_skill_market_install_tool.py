@@ -63,7 +63,11 @@ async def test_skill_market_install_returns_not_found(monkeypatch) -> None:
 
 @pytest.mark.xfail(
     strict=True,
-    reason="P1-BEHAVIOR-LOST: skill_market_install 的 overwrite 已成死参（hub.install_skill_from_hub 无 overwrite 形参），转发补丁随同步丢失",
+    reason=(
+        "P1-BEHAVIOR-LOST: skill_market_install 的 overwrite"
+        " 已成死参（hub.install_skill_from_hub 无 overwrite 形参），"
+        "转发补丁随同步丢失"
+    ),
 )
 async def test_skill_market_install_succeeds(monkeypatch, tmp_path) -> None:
     module = importlib.import_module(
@@ -89,7 +93,9 @@ async def test_skill_market_install_succeeds(monkeypatch, tmp_path) -> None:
                     name="Proofread Single",
                     description="",
                     version="1.0.0",
-                    source_url="https://github.com/futuremeng/editor-skills.git",
+                    source_url=(
+                        "https://github.com/futuremeng/editor-skills.git"
+                    ),
                     install_url="https://github.com/futuremeng/editor-skills/tree/main/skills/proofread-single",
                     tags=["proofread"],
                 ),
@@ -175,7 +181,9 @@ async def test_skill_market_install_blocks_untrusted_market_by_default(
                     name="Proofread Single",
                     description="",
                     version="1.0.0",
-                    source_url="https://github.com/futuremeng/editor-skills.git",
+                    source_url=(
+                        "https://github.com/futuremeng/editor-skills.git"
+                    ),
                     install_url="https://github.com/futuremeng/editor-skills/tree/main/skills/proofread-single",
                     tags=["proofread"],
                 ),
@@ -226,7 +234,9 @@ async def test_skill_market_install_allows_untrusted_market_with_override(
                     name="Proofread Single",
                     description="",
                     version="1.0.0",
-                    source_url="https://github.com/futuremeng/editor-skills.git",
+                    source_url=(
+                        "https://github.com/futuremeng/editor-skills.git"
+                    ),
                     install_url="https://github.com/futuremeng/editor-skills/tree/main/skills/proofread-single",
                     tags=["proofread"],
                 ),

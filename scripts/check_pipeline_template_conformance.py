@@ -112,7 +112,9 @@ def scan_templates(scan_root: Path) -> dict[str, Any]:
                     **entry,
                     "severity": "error",
                     "category": "template_parse",
-                    "message": "Template cannot be parsed to PipelineTemplateInfo.",
+                    "message": (
+                        "Template cannot be parsed to PipelineTemplateInfo."
+                    ),
                 },
             )
             continue
@@ -176,15 +178,19 @@ def _print_text_report(report: dict[str, Any]) -> None:
     print("\nIssues:")
     for item in report["issues"]:
         print(
-            f"- [{item.get('severity', 'error')}] {item['category']} "
-            f"{item['path']} ({item.get('template_id', '-')})",
+            (
+                f"- [{item.get('severity', 'error')}] {item['category']} "
+                f"{item['path']} ({item.get('template_id', '-')})"
+            ),
         )
         print(f"  message: {item['message']}")
         for detail in item.get("errors", []):
             print(
-                "  - "
-                f"{detail['error_code']} @ {detail['field_path']} "
-                f"(step={detail.get('step_id') or '-'})",
+                (
+                    "  - "
+                    f"{detail['error_code']} @ {detail['field_path']} "
+                    f"(step={detail.get('step_id') or '-'})"
+                ),
             )
             print(f"    {detail['message']}")
 

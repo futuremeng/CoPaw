@@ -137,7 +137,10 @@ def _python_version_supported(python_executable: str) -> bool:
         [
             python_executable,
             "-c",
-            "import sys; print(f'{sys.version_info[0]}.{sys.version_info[1]}')",
+            (
+                "import sys;"
+                " print(f'{sys.version_info[0]}.{sys.version_info[1]}')"
+            ),
         ],
     )
     if not result["ok"]:
@@ -153,7 +156,10 @@ def _python_version(python_executable: str) -> tuple[int, int] | None:
         [
             python_executable,
             "-c",
-            "import sys; print(f'{sys.version_info[0]}.{sys.version_info[1]}')",
+            (
+                "import sys;"
+                " print(f'{sys.version_info[0]}.{sys.version_info[1]}')"
+            ),
         ],
     )
     if not result["ok"]:
@@ -252,7 +258,10 @@ def _ensure_uv_available(operations: list[dict]) -> str:
                 command=[
                     sh_executable,
                     "-c",
-                    f"{curl_executable} -LsSf https://astral.sh/uv/install.sh | sh",
+                    (
+                        f"{curl_executable} -LsSf"
+                        " https://astral.sh/uv/install.sh | sh"
+                    ),
                 ],
             )
             uv_executable = _find_uv_executable()
@@ -594,9 +603,11 @@ def _run_hanlp_preload(force: bool = False) -> None:
         "reason": str(
             model_state.get("reason") or "HanLP model preload failed.",
         ),
-        "model_id": str(getattr(nlp_cfg, "model_id", "") or "").strip()
-        if nlp_cfg is not None
-        else "",
+        "model_id": (
+            str(getattr(nlp_cfg, "model_id", "") or "").strip()
+            if nlp_cfg is not None
+            else ""
+        ),
     }
     default_model_id = (
         str(getattr(nlp_cfg, "model_id", "") or "").strip()
@@ -698,9 +709,11 @@ def _run_hanlp_preload(force: bool = False) -> None:
         enabled=enabled,
         scope=scope,
         status="ready" if model_ready else "failed",
-        reason="HanLP preload completed."
-        if model_ready
-        else "HanLP preload completed with failures.",
+        reason=(
+            "HanLP preload completed."
+            if model_ready
+            else "HanLP preload completed with failures."
+        ),
         finished_at=time.time(),
         current_task_key=None,
         current_task_index=total_tasks,
@@ -762,10 +775,12 @@ def _build_task_status(runtime: NLPRuntime, config) -> dict[str, dict]:
             task_entry.update(
                 {
                     "status": state.get("status") or "unavailable",
-                    "reason_code": state.get("reason_code")
-                    or "HANLP_TASK_LOAD_FAILED",
-                    "reason": state.get("reason")
-                    or "HanLP task is unavailable.",
+                    "reason_code": (
+                        state.get("reason_code") or "HANLP_TASK_LOAD_FAILED"
+                    ),
+                    "reason": (
+                        state.get("reason") or "HanLP task is unavailable."
+                    ),
                 },
             )
         task_states[task_key] = task_entry
@@ -819,7 +834,10 @@ def _build_task_status_snapshot(
                 {
                     "status": "unavailable",
                     "reason_code": "HANLP_COREF_NOT_OPEN_SOURCE",
-                    "reason": "HanLP coreference_resolution is not open-source and is disabled in CoPaw runtime.",
+                    "reason": (
+                        "HanLP coreference_resolution is not open-source and"
+                        " is disabled in CoPaw runtime."
+                    ),
                 },
             )
         elif not sidecar_ready:
@@ -855,7 +873,10 @@ def _build_task_status_snapshot(
                 {
                     "status": "ready",
                     "reason_code": "HANLP_TASK_READY_UNVERIFIED",
-                    "reason": "HanLP task is configured. Run task demo to verify model availability.",
+                    "reason": (
+                        "HanLP task is configured. Run task demo to verify"
+                        " model availability."
+                    ),
                 },
             )
         task_states[task_key] = task_entry
@@ -910,10 +931,12 @@ def _build_status(config, *, include_task_status: bool = True) -> dict:
     return {
         "sidecar": {
             "status": probe_state.get("status") or "unavailable",
-            "reason_code": probe_state.get("reason_code")
-            or "HANLP_SIDECAR_UNCONFIGURED",
-            "reason": probe_state.get("reason")
-            or "HanLP sidecar is not configured.",
+            "reason_code": (
+                probe_state.get("reason_code") or "HANLP_SIDECAR_UNCONFIGURED"
+            ),
+            "reason": (
+                probe_state.get("reason") or "HanLP sidecar is not configured."
+            ),
             "enabled": sidecar_enabled,
             "provider": str(
                 getattr(nlp_cfg, "provider", "hanlp") or "hanlp",
@@ -930,10 +953,13 @@ def _build_status(config, *, include_task_status: bool = True) -> dict:
         },
         "model": {
             "status": model_state.get("status") or "unavailable",
-            "reason_code": model_state.get("reason_code")
-            or "HANLP_MODEL_LOAD_FAILED",
-            "reason": model_state.get("reason")
-            or "HanLP tokenizer model is unavailable.",
+            "reason_code": (
+                model_state.get("reason_code") or "HANLP_MODEL_LOAD_FAILED"
+            ),
+            "reason": (
+                model_state.get("reason")
+                or "HanLP tokenizer model is unavailable."
+            ),
             "model_id": str(getattr(nlp_cfg, "model_id", "") or "").strip(),
         },
         "tasks": task_states,
@@ -1057,10 +1083,16 @@ def auto_install_hanlp_sidecar() -> dict:
             preserve_qwenpaw_runtime=True,
         ):
             manual_steps.append(
-                "Main Python is 3.10, but hanlp[full] installation failed in the current environment.",
+                (
+                    "Main Python is 3.10, but hanlp[full] installation failed"
+                    " in the current environment."
+                ),
             )
             manual_steps.append(
-                "Retry with: python -m pip install 'hanlp[full]' and verify network access.",
+                (
+                    "Retry with: python -m pip install 'hanlp[full]' and"
+                    " verify network access."
+                ),
             )
             return _failure_result(
                 config=config,
@@ -1072,15 +1104,21 @@ def auto_install_hanlp_sidecar() -> dict:
         _persist_hanlp_runtime_config(
             config,
             python_executable=main_python,
-            model_home=Path(_normalized_model_home(config))
-            if _normalized_model_home(config).strip()
-            else None,
+            model_home=(
+                Path(_normalized_model_home(config))
+                if _normalized_model_home(config).strip()
+                else None
+            ),
         )
         _invalidate_cache()
         status_after = get_hanlp_sidecar_status(force_refresh=True)
         if status_after["sidecar"]["status"] != "ready":
             manual_steps.append(
-                "HanLP was installed in main Python 3.10, but runtime probe still failed. Verify import hanlp/torch in current environment.",
+                (
+                    "HanLP was installed in main Python 3.10, but runtime"
+                    " probe still failed. Verify import hanlp/torch in current"
+                    " environment."
+                ),
             )
         return {
             "success": status_after["sidecar"]["status"] == "ready",
@@ -1102,10 +1140,16 @@ def auto_install_hanlp_sidecar() -> dict:
     fallback_python = _find_supported_python_executable()
     if not uv_executable and not fallback_python:
         manual_steps.append(
-            "Automatic HanLP bootstrap could not find or install uv, and no compatible Python 3.6-3.10 interpreter was found.",
+            (
+                "Automatic HanLP bootstrap could not find or install uv, and"
+                " no compatible Python 3.6-3.10 interpreter was found."
+            ),
         )
         manual_steps.append(
-            "Install uv or provide a Python 3.10 executable, then retry HanLP sidecar setup.",
+            (
+                "Install uv or provide a Python 3.10 executable, then retry"
+                " HanLP sidecar setup."
+            ),
         )
         return _failure_result(
             config=config,
@@ -1122,7 +1166,11 @@ def auto_install_hanlp_sidecar() -> dict:
     )
     if not created_by or not python_path.is_file():
         manual_steps.append(
-            "HanLP sidecar environment creation failed. Ensure network access is available for uv, or install Python 3.10 locally and retry.",
+            (
+                "HanLP sidecar environment creation failed. Ensure network"
+                " access is available for uv, or install Python 3.10 locally"
+                " and retry."
+            ),
         )
         return _failure_result(
             config=config,
@@ -1137,7 +1185,10 @@ def auto_install_hanlp_sidecar() -> dict:
         operations=operations,
     ):
         manual_steps.append(
-            "HanLP full package installation failed in the managed sidecar environment.",
+            (
+                "HanLP full package installation failed in the managed sidecar"
+                " environment."
+            ),
         )
         return _failure_result(
             config=config,
@@ -1155,7 +1206,11 @@ def auto_install_hanlp_sidecar() -> dict:
     status_after = get_hanlp_sidecar_status(force_refresh=True)
     if status_after["sidecar"]["status"] != "ready":
         manual_steps.append(
-            "HanLP was installed, but the sidecar probe still failed. Review the operation log and verify the managed Python can import hanlp and torch.",
+            (
+                "HanLP was installed, but the sidecar probe still failed."
+                " Review the operation log and verify the managed Python can"
+                " import hanlp and torch."
+            ),
         )
     return {
         "success": status_after["sidecar"]["status"] == "ready",
@@ -1200,8 +1255,9 @@ def ensure_hanlp_model() -> dict:
         all_enabled_tasks_ready = all_enabled_tasks_ready and task_ready
         task_results[task_key] = {
             "status": task_state.get("status") or "unavailable",
-            "reason_code": task_state.get("reason_code")
-            or "HANLP_TASK_LOAD_FAILED",
+            "reason_code": (
+                task_state.get("reason_code") or "HANLP_TASK_LOAD_FAILED"
+            ),
             "reason": task_state.get("reason") or "HanLP task is unavailable.",
             "task_name": str(
                 getattr(task_cfg, "task_name", task_key) or task_key,
@@ -1219,23 +1275,33 @@ def ensure_hanlp_model() -> dict:
     manual_steps: list[str] = []
     if model_state.get("status") != "ready":
         manual_steps.append(
-            "Verify network access or pre-populate HANLP_HOME, then retry model download.",
+            (
+                "Verify network access or pre-populate HANLP_HOME, then retry"
+                " model download."
+            ),
         )
     if not all_enabled_tasks_ready:
         manual_steps.append(
-            "Verify the configured HanLP task matrix models are available in HANLP_HOME, then retry task verification.",
+            (
+                "Verify the configured HanLP task matrix models are available"
+                " in HANLP_HOME, then retry task verification."
+            ),
         )
     return {
-        "success": model_state.get("status") == "ready"
-        and all_enabled_tasks_ready,
+        "success": (
+            model_state.get("status") == "ready" and all_enabled_tasks_ready
+        ),
         "status_before": status_before,
         "status_after": status_after,
         "model_result": {
             "status": model_state.get("status") or "unavailable",
-            "reason_code": model_state.get("reason_code")
-            or "HANLP_MODEL_LOAD_FAILED",
-            "reason": model_state.get("reason")
-            or "HanLP tokenizer model is unavailable.",
+            "reason_code": (
+                model_state.get("reason_code") or "HANLP_MODEL_LOAD_FAILED"
+            ),
+            "reason": (
+                model_state.get("reason")
+                or "HanLP tokenizer model is unavailable."
+            ),
             "model_id": str(
                 getattr(_nlp_config(config), "model_id", "") or "",
             ).strip(),

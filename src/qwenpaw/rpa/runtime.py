@@ -397,7 +397,9 @@ def execute_rpa_script_step(
                     if on_failure in {"continue", "ignore"}:
                         stop_failures += 1
                         evidence.append(
-                            f"flow.loop:stop_condition_failed:{on_failure}:{reason or 'condition_mismatch'}",
+                            (
+                                f"flow.loop:stop_condition_failed:{on_failure}:{reason or 'condition_mismatch'}"
+                            ),
                         )
                     else:
                         raise RuntimeError(

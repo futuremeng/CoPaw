@@ -177,7 +177,10 @@ def _validate_depth(
 
     if max_depth < min_depth:
         failures.append(
-            f"Concept tree depth too shallow: max_depth={max_depth}, required>={min_depth}",
+            (
+                f"Concept tree depth too shallow: max_depth={max_depth},"
+                f" required>={min_depth}"
+            ),
         )
 
     return failures, max_depth
@@ -258,7 +261,10 @@ def main() -> int:
         else:
             if not (args.agent_id and args.project_id and args.run_id):
                 print(
-                    "[error] Use --run-detail or provide --agent-id --project-id --run-id",
+                    (
+                        "[error] Use --run-detail or provide --agent-id"
+                        " --project-id --run-id"
+                    ),
                     file=sys.stderr,
                 )
                 return 2
@@ -287,8 +293,10 @@ def main() -> int:
     print(f"[info] contrast_json_count={pairwise_count}")
     if pairwise_count < args.require_pairwise_count:
         failures.append(
-            "Pairwise contrast count too low: "
-            f"found={pairwise_count}, required>={args.require_pairwise_count}",
+            (
+                f"Pairwise contrast count too low: found={pairwise_count},"
+                f" required>={args.require_pairwise_count}"
+            ),
         )
 
     max_depth = 0
@@ -301,7 +309,10 @@ def main() -> int:
         print(f"[info] concept_tree_max_depth={max_depth}")
     else:
         print(
-            "[warn] --project-dir not provided, skipped concept tree depth validation",
+            (
+                "[warn] --project-dir not provided, skipped concept tree depth"
+                " validation"
+            ),
         )
 
     if failures:

@@ -24,7 +24,9 @@ class ProjectPipelineRuntimeMetaPayload(BaseModel):
 
     operation_id: str = Field(
         default="",
-        description="Latest operation id recorded for project pipeline runtime events.",
+        description=(
+            "Latest operation id recorded for project pipeline runtime events."
+        ),
     )
     idempotency_key: str = Field(
         default="",
@@ -32,15 +34,22 @@ class ProjectPipelineRuntimeMetaPayload(BaseModel):
     )
     last_action: str = Field(
         default="",
-        description="Latest runtime action label, for example start_sync or flow_resume.",
+        description=(
+            "Latest runtime action label, for example start_sync or"
+            " flow_resume."
+        ),
     )
     recent_control_command: str = Field(
         default="",
-        description="Latest explicit control command, for example pause/resume/cancel.",
+        description=(
+            "Latest explicit control command, for example pause/resume/cancel."
+        ),
     )
     control_updated_at: str = Field(
         default="",
-        description="UTC timestamp when recent_control_command was last updated.",
+        description=(
+            "UTC timestamp when recent_control_command was last updated."
+        ),
     )
     flow_run_id: str = Field(
         default="",
@@ -278,17 +287,24 @@ class ProjectPipelineSourcesResponse(BaseModel):
         size_bytes: int = Field(default=0, description="File size in bytes.")
         modified_time: str = Field(
             default="",
-            description="File modified timestamp in ISO format when available.",
+            description=(
+                "File modified timestamp in ISO format when available."
+            ),
         )
 
     project_id: str = Field(default="", description="Target project id.")
     manual_source_paths: list[str] = Field(
         default_factory=list,
-        description="Manually curated source file paths used by project knowledge processing.",
+        description=(
+            "Manually curated source file paths used by project knowledge"
+            " processing."
+        ),
     )
     manual_sources: list[SourceItem] = Field(
         default_factory=list,
-        description="Manual sources with normalized category and file metadata.",
+        description=(
+            "Manual sources with normalized category and file metadata."
+        ),
     )
 
 
@@ -339,11 +355,16 @@ class ProjectPipelineSourceCandidatesResponse(BaseModel):
         size_bytes: int = Field(default=0, description="File size in bytes.")
         modified_time: str = Field(
             default="",
-            description="File modified timestamp in ISO format when available.",
+            description=(
+                "File modified timestamp in ISO format when available."
+            ),
         )
 
     project_id: str = Field(default="", description="Target project id.")
     candidates: list[CandidateItem] = Field(
         default_factory=list,
-        description="Auto-discovered candidate source file metadata for manual selection.",
+        description=(
+            "Auto-discovered candidate source file metadata for manual"
+            " selection."
+        ),
     )

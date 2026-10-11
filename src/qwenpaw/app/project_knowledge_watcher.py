@@ -293,7 +293,10 @@ class ProjectKnowledgeWatcher:
             )
             if event.accepted:
                 logger.info(
-                    "ProjectKnowledgeWatcher resumed sync for %s (%s, op=%s, key=%s, dedup=%s)",
+                    (
+                        "ProjectKnowledgeWatcher resumed sync for %s (%s,"
+                        " op=%s, key=%s, dedup=%s)"
+                    ),
                     project_id,
                     str(event.reason or "resumed"),
                     event.operation_id,
@@ -412,12 +415,19 @@ class ProjectKnowledgeWatcher:
             )
             if event.accepted:
                 logger.info(
-                    "ProjectKnowledgeWatcher triggered sync for %s (%s, %s paths, op=%s, key=%s, dedup=%s)",
+                    (
+                        "ProjectKnowledgeWatcher triggered sync for %s (%s, %s"
+                        " paths, op=%s, key=%s, dedup=%s)"
+                    ),
                     project_id,
-                    "bootstrap"
-                    if should_bootstrap
-                    else (
-                        "config-change" if should_config_reindex else "change"
+                    (
+                        "bootstrap"
+                        if should_bootstrap
+                        else (
+                            "config-change"
+                            if should_config_reindex
+                            else "change"
+                        )
                     ),
                     len(changed_paths),
                     event.operation_id,

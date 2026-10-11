@@ -230,15 +230,21 @@ def _build_nlp_strategy_payload(nlp_cfg) -> dict:
             getattr(strategy_cfg, "task_overrides", {}) or {},
         ),
         "auto_classical_chinese": {
-            "enabled": bool(getattr(auto_cfg, "enabled", False))
-            if auto_cfg is not None
-            else False,
-            "threshold": float(getattr(auto_cfg, "threshold", 0.22) or 0.22)
-            if auto_cfg is not None
-            else 0.22,
-            "model_id": str(getattr(auto_cfg, "model_id", "") or "")
-            if auto_cfg is not None
-            else "",
+            "enabled": (
+                bool(getattr(auto_cfg, "enabled", False))
+                if auto_cfg is not None
+                else False
+            ),
+            "threshold": (
+                float(getattr(auto_cfg, "threshold", 0.22) or 0.22)
+                if auto_cfg is not None
+                else 0.22
+            ),
+            "model_id": (
+                str(getattr(auto_cfg, "model_id", "") or "")
+                if auto_cfg is not None
+                else ""
+            ),
         },
     }
 
@@ -280,9 +286,9 @@ def _build_hanlp_api_snapshot(payload: dict) -> dict:
         "python_version": str(sidecar.get("python_version") or ""),
         "hanlp_version": "",
         "has_coreference_resolution": _task_ready("cor"),
-        "has_parse": _task_ready("dep")
-        or _task_ready("sdp")
-        or _task_ready("con"),
+        "has_parse": (
+            _task_ready("dep") or _task_ready("sdp") or _task_ready("con")
+        ),
         "has_pipeline": status == "ready",
         "has_load": status == "ready",
         "pretrained_categories": [],
@@ -305,7 +311,10 @@ def _detect_python_version(python_executable: str) -> str:
             [
                 executable,
                 "-c",
-                "import sys; print(f'{sys.version_info[0]}.{sys.version_info[1]}')",
+                (
+                    "import sys;"
+                    " print(f'{sys.version_info[0]}.{sys.version_info[1]}')"
+                ),
             ],
             capture_output=True,
             text=True,
@@ -787,7 +796,9 @@ async def post_local_whisper_install() -> dict:
 @router.put(
     "/nlp-preload",
     summary="Update NLP preload settings",
-    description="Update HanLP startup preload settings in top-level nlp config.",
+    description=(
+        "Update HanLP startup preload settings in top-level nlp config."
+    ),
 )
 async def put_nlp_preload(
     body: NLPPreloadUpdateBody = Body(
@@ -822,7 +833,10 @@ async def put_nlp_preload(
 @router.post(
     "/nlp-preload",
     summary="Trigger NLP preload",
-    description="Start HanLP preload in the background using the current preload settings.",
+    description=(
+        "Start HanLP preload in the background using the current preload"
+        " settings."
+    ),
 )
 async def post_nlp_preload(
     body: NLPPreloadTriggerBody = Body(
@@ -843,7 +857,10 @@ async def post_nlp_preload(
 @router.put(
     "/nlp-strategy",
     summary="Update NLP routing strategy",
-    description="Update request-scoped NLP model routing strategy in global knowledge config.",
+    description=(
+        "Update request-scoped NLP model routing strategy in global knowledge"
+        " config."
+    ),
 )
 async def put_nlp_strategy(
     body: NLPStrategyUpdateBody = Body(
@@ -878,7 +895,10 @@ async def put_nlp_strategy(
 @router.post(
     "/nlp-strategy/dry-run",
     summary="Preview NLP strategy decision",
-    description="Return request-level model routing decision metadata without executing NLP runtime.",
+    description=(
+        "Return request-level model routing decision metadata without"
+        " executing NLP runtime."
+    ),
 )
 async def post_nlp_strategy_dry_run(
     body: NLPStrategyDryRunBody = Body(
@@ -997,7 +1017,7 @@ async def get_transcription_providers() -> dict:
 
     return {
         "providers": list_transcription_providers(),
-        "configured_provider_id": (get_configured_transcription_provider_id()),
+        "configured_provider_id": get_configured_transcription_provider_id(),
     }
 
 

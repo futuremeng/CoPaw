@@ -50,8 +50,11 @@ class DuckDBKnowledgeCatalog:
             return duckdb
         except ImportError as exc:
             raise RuntimeError(
-                "duckdb is required for DuckDBKnowledgeCatalog. "
-                "Install dependencies with `pip install duckdb` or project extras.",
+                (
+                    "duckdb is required for DuckDBKnowledgeCatalog. Install"
+                    " dependencies with `pip install duckdb` or project"
+                    " extras."
+                ),
             ) from exc
 
     def ensure_layout(self) -> dict[str, str]:

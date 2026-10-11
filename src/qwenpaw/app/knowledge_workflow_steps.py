@@ -21,7 +21,10 @@ def _load_builtin_pipeline_doc() -> dict:
     """Load and return the authoritative builtin pipeline JSON document."""
     if not _BUILTIN_PIPELINE_JSON_PATH.exists():
         raise RuntimeError(
-            f"Authoritative pipeline definition not found: {_BUILTIN_PIPELINE_JSON_PATH}",
+            (
+                "Authoritative pipeline definition not found:"
+                f" {_BUILTIN_PIPELINE_JSON_PATH}"
+            ),
         )
     return json.loads(_BUILTIN_PIPELINE_JSON_PATH.read_text(encoding="utf-8"))
 

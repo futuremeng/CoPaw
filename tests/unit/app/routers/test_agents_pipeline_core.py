@@ -119,13 +119,15 @@ def test_save_template_validation_failure_keeps_previous_json(tmp_path: Path):
 
     md_path = _pipeline_md_path(tmp_path, initial.id)
     md_path.write_text(
-        "---\n"
-        f"pipeline_id: {initial.id}\n"
-        "name: Broken\n"
-        "version: 0.1.0\n"
-        "---\n\n"
-        "# Broken\n\n"
-        "No step headings here.\n",
+        (
+            "---\n"
+            f"pipeline_id: {initial.id}\n"
+            "name: Broken\n"
+            "version: 0.1.0\n"
+            "---\n\n"
+            "# Broken\n\n"
+            "No step headings here.\n"
+        ),
         encoding="utf-8",
     )
 

@@ -20,9 +20,13 @@ def test_local_graph_filters_hidden_docs_and_noise_entities(tmp_path: Path):
         encoding="utf-8",
     )
     (project_root / "PROJECT.md").write_text(
-        "术语发现 preferred_workspace_chat_id adf21727-eaa0-4c8f-91ec-2d4e379bb569\n"
-        "ToolDispatcher 协同 FileSearch 处理术语冲突。\n"
-        "merged_terms_v2.tsv.json project-rxpwrp normalized_term template status completed true name description data 当前 说明",
+        (
+            "术语发现 preferred_workspace_chat_id"
+            " adf21727-eaa0-4c8f-91ec-2d4e379bb569\nToolDispatcher 协同"
+            " FileSearch 处理术语冲突。\nmerged_terms_v2.tsv.json"
+            " project-rxpwrp normalized_term template status completed true"
+            " name description data 当前 说明"
+        ),
         encoding="utf-8",
     )
 
@@ -68,15 +72,17 @@ def test_local_graph_strips_frontmatter_and_key_value_noise(tmp_path: Path):
     project_root = tmp_path / "project"
     project_root.mkdir(parents=True, exist_ok=True)
     (project_root / "PROJECT.md").write_text(
-        "---\n"
-        "name: Example Project\n"
-        "status: completed\n"
-        "tags: [demo, review]\n"
-        "---\n\n"
-        "# 核心功能\n\n"
-        "- description: 多书术语评审与冲突修复\n"
-        "- metadata: should not become an entity\n"
-        "ToolDispatcher 协同 FileSearch 处理术语冲突。\n",
+        (
+            "---\n"
+            "name: Example Project\n"
+            "status: completed\n"
+            "tags: [demo, review]\n"
+            "---\n\n"
+            "# 核心功能\n\n"
+            "- description: 多书术语评审与冲突修复\n"
+            "- metadata: should not become an entity\n"
+            "ToolDispatcher 协同 FileSearch 处理术语冲突。\n"
+        ),
         encoding="utf-8",
     )
 
@@ -238,7 +244,7 @@ def test_local_graph_filters_worklog_explanatory_terms(tmp_path: Path):
     project_root = tmp_path / "project"
     project_root.mkdir(parents=True, exist_ok=True)
     (project_root / "WORKING.md").write_text(
-        "## 项目状态\n" "生成报告，包含路径与大小信息，统一使用分隔符。\n" "现代液压气动 与 金属材料 术语对齐完成。\n",
+        ("## 项目状态\n" "生成报告，包含路径与大小信息，统一使用分隔符。\n" "现代液压气动 与 金属材料 术语对齐完成。\n"),
         encoding="utf-8",
     )
 
@@ -332,8 +338,10 @@ def test_local_graph_emits_sentence_entity_stats(tmp_path: Path):
     project_root = tmp_path / "project"
     project_root.mkdir(parents=True, exist_ok=True)
     (project_root / "stats.md").write_text(
-        "ToolDispatcher 调用 FileSearch。\n"
-        "FileSearch 处理 KnowledgeGraph 与 ToolDispatcher。\n",
+        (
+            "ToolDispatcher 调用 FileSearch。\n"
+            "FileSearch 处理 KnowledgeGraph 与 ToolDispatcher。\n"
+        ),
         encoding="utf-8",
     )
 
@@ -375,7 +383,7 @@ def test_local_graph_emits_relation_candidates_from_syntax(tmp_path: Path):
     project_root = tmp_path / "project"
     project_root.mkdir(parents=True, exist_ok=True)
     (project_root / "relations.md").write_text(
-        "ToolDispatcher 调用 FileSearch。\n" "FileSearch 处理 KnowledgeGraph。\n",
+        "ToolDispatcher 调用 FileSearch。\nFileSearch 处理 KnowledgeGraph。\n",
         encoding="utf-8",
     )
 
@@ -421,9 +429,11 @@ def test_local_graph_emits_document_level_graphify_before_project_graph(
     project_root = tmp_path / "project"
     project_root.mkdir(parents=True, exist_ok=True)
     (project_root / "chapter.md").write_text(
-        "ToolDispatcher 调用 FileSearch。\n"
-        "FileSearch 处理 KnowledgeGraph。\n"
-        "ToolDispatcher 继续协调 FileSearch 与 KnowledgeGraph。\n",
+        (
+            "ToolDispatcher 调用 FileSearch。\n"
+            "FileSearch 处理 KnowledgeGraph。\n"
+            "ToolDispatcher 继续协调 FileSearch 与 KnowledgeGraph。\n"
+        ),
         encoding="utf-8",
     )
 
@@ -485,9 +495,11 @@ def test_local_graph_all_records_query_returns_full_relation_set(
     project_root = tmp_path / "project"
     project_root.mkdir(parents=True, exist_ok=True)
     (project_root / "chapter.md").write_text(
-        "ToolDispatcher 调用 FileSearch。\n"
-        "FileSearch 处理 KnowledgeGraph。\n"
-        "ToolDispatcher 继续协调 FileSearch 与 KnowledgeGraph。\n",
+        (
+            "ToolDispatcher 调用 FileSearch。\n"
+            "FileSearch 处理 KnowledgeGraph。\n"
+            "ToolDispatcher 继续协调 FileSearch 与 KnowledgeGraph。\n"
+        ),
         encoding="utf-8",
     )
 

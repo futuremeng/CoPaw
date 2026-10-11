@@ -58,7 +58,10 @@ def _await_terminal_memify_status(
     if last_job is None:
         raise AssertionError(f"memify job {job_id} not found")
     raise AssertionError(
-        f"memify job {job_id} did not reach terminal status, got {last_job.get('status')}",
+        (
+            f"memify job {job_id} did not reach terminal status, got"
+            f" {last_job.get('status')}"
+        ),
     )
 
 
@@ -79,7 +82,10 @@ def _await_terminal_quality_status(
     if last_job is None:
         raise AssertionError(f"quality job {job_id} not found")
     raise AssertionError(
-        f"quality job {job_id} did not reach terminal status, got {last_job.get('status')}",
+        (
+            f"quality job {job_id} did not reach terminal status, got"
+            f" {last_job.get('status')}"
+        ),
     )
 
 
@@ -410,16 +416,19 @@ def test_local_memify_emits_path_time_and_version_relations_from_chunk_ner(
         "reason_code": "HANLP_READY",
         "reason": "HanLP semantic engine is ready.",
     }
-    with patch.object(
-        manager._semantic_runtime,
-        "probe",
-        return_value=ready_state,
-    ), patch.object(
-        manager._semantic_runtime,
-        "tokenize",
-        return_value=(
-            ["AgentRunner", "ToolDispatcher"],
-            ready_state,
+    with (
+        patch.object(
+            manager._semantic_runtime,
+            "probe",
+            return_value=ready_state,
+        ),
+        patch.object(
+            manager._semantic_runtime,
+            "tokenize",
+            return_value=(
+                ["AgentRunner", "ToolDispatcher"],
+                ready_state,
+            ),
         ),
     ):
         manager.index_source(
@@ -493,16 +502,19 @@ def test_local_graph_query_supports_path_time_filter_sort_and_aggregate(
         "reason_code": "HANLP_READY",
         "reason": "HanLP semantic engine is ready.",
     }
-    with patch.object(
-        manager._semantic_runtime,
-        "probe",
-        return_value=ready_state,
-    ), patch.object(
-        manager._semantic_runtime,
-        "tokenize",
-        return_value=(
-            ["AgentRunner", "ToolDispatcher", "KnowledgeGraph"],
-            ready_state,
+    with (
+        patch.object(
+            manager._semantic_runtime,
+            "probe",
+            return_value=ready_state,
+        ),
+        patch.object(
+            manager._semantic_runtime,
+            "tokenize",
+            return_value=(
+                ["AgentRunner", "ToolDispatcher", "KnowledgeGraph"],
+                ready_state,
+            ),
         ),
     ):
         manager.index_source(
@@ -561,7 +573,10 @@ def test_local_graph_query_supports_path_time_filter_sort_and_aggregate(
     latest_only = graph_ops.graph_query(
         config=knowledge_config,
         query_mode="template",
-        query_text=f"note path:docs/note.md at:{latest_snapshot_at} version:{latest_version_id}",
+        query_text=(
+            "note path:docs/note.md"
+            f" at:{latest_snapshot_at} version:{latest_version_id}"
+        ),
         dataset_scope=[source.id],
         project_scope=None,
         include_global=True,
@@ -632,16 +647,19 @@ def test_local_graph_query_filters_latest_version_and_sorts_by_time(tmp_path):
         "reason_code": "HANLP_READY",
         "reason": "HanLP semantic engine is ready.",
     }
-    with patch.object(
-        manager._semantic_runtime,
-        "probe",
-        return_value=ready_state,
-    ), patch.object(
-        manager._semantic_runtime,
-        "tokenize",
-        return_value=(
-            ["AgentRunner", "ToolDispatcher", "FileSearch"],
-            ready_state,
+    with (
+        patch.object(
+            manager._semantic_runtime,
+            "probe",
+            return_value=ready_state,
+        ),
+        patch.object(
+            manager._semantic_runtime,
+            "tokenize",
+            return_value=(
+                ["AgentRunner", "ToolDispatcher", "FileSearch"],
+                ready_state,
+            ),
         ),
     ):
         manager.index_source(
@@ -1280,35 +1298,38 @@ def test_quality_loop_stops_when_agent_gate_requires_review(tmp_path):
         },
     )
 
-    with patch.object(
-        graph_ops,
-        "execute_memify_once",
-        return_value={
-            "status": "succeeded",
-            "relation_count": 24,
-            "node_count": 12,
-            "document_count": 4,
-            "enrichment_metrics": {
-                "edge_count": 24,
+    with (
+        patch.object(
+            graph_ops,
+            "execute_memify_once",
+            return_value={
+                "status": "succeeded",
+                "relation_count": 24,
                 "node_count": 12,
-                "relation_normalized_count": 1,
-                "entity_canonicalized_count": 1,
-                "low_confidence_edges": 8,
-                "missing_evidence_edges": 0,
+                "document_count": 4,
+                "enrichment_metrics": {
+                    "edge_count": 24,
+                    "node_count": 12,
+                    "relation_normalized_count": 1,
+                    "entity_canonicalized_count": 1,
+                    "low_confidence_edges": 8,
+                    "missing_evidence_edges": 0,
+                },
+                "warnings": [],
+                "error": None,
+                "engine": "local_graph",
             },
-            "warnings": [],
-            "error": None,
-            "engine": "local_graph",
-        },
-    ), patch.object(
-        graph_ops,
-        "_run_quality_agent_gate",
-        return_value={
-            "status": "review_required",
-            "reason": "MISSING_ACTION_PLAN",
-            "summary": "missing",
-            "next_round_hints": {},
-        },
+        ),
+        patch.object(
+            graph_ops,
+            "_run_quality_agent_gate",
+            return_value={
+                "status": "review_required",
+                "reason": "MISSING_ACTION_PLAN",
+                "summary": "missing",
+                "next_round_hints": {},
+            },
+        ),
     ):
         response = graph_ops.run_quality_self_drive(
             config=knowledge_config,

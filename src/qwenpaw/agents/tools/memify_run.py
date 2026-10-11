@@ -70,7 +70,10 @@ async def memify_run(
             content=[
                 TextBlock(
                     type="text",
-                    text="Error: knowledge is disabled in agent runtime configuration.",
+                    text=(
+                        "Error: knowledge is disabled in agent runtime"
+                        " configuration."
+                    ),
                 ),
             ],
         )

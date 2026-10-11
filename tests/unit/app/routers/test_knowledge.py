@@ -70,7 +70,10 @@ def test_upsert_source_auto_generates_summary_when_empty(
             "id": "text-auto-summary",
             "name": "Manual Name",
             "type": "text",
-            "content": "Quarterly planning checklist and milestone review for the release train.",
+            "content": (
+                "Quarterly planning checklist and milestone review for the"
+                " release train."
+            ),
             "enabled": True,
             "recursive": False,
             "tags": [],
@@ -117,7 +120,10 @@ def test_upsert_source_subject_prefers_summary_over_content(
             "id": "text-subject-from-summary",
             "name": "Manual Name",
             "type": "text",
-            "content": "Very long internal content that should not be the direct subject source.",
+            "content": (
+                "Very long internal content that should not be the direct"
+                " subject source."
+            ),
             "enabled": True,
             "recursive": False,
             "tags": [],
@@ -165,7 +171,7 @@ def test_list_sources_returns_structured_summary_keywords(
             "id": "text-structured-fields",
             "name": "Manual Name",
             "type": "text",
-            "content": ("支付系统 风控规则 更新。" "支付系统 对账流程 优化。" "支付系统 异常告警 升级。"),
+            "content": ("支付系统 风控规则 更新。支付系统 对账流程 优化。支付系统 异常告警 升级。"),
             "enabled": True,
             "recursive": False,
             "tags": [],
@@ -617,7 +623,10 @@ def test_upsert_source_offloads_name_normalization_to_thread(
             "id": "threaded-upsert-source",
             "name": "Manual Name",
             "type": "text",
-            "content": "Release checklist summary for sprint handoff and milestone review.",
+            "content": (
+                "Release checklist summary for sprint handoff and milestone"
+                " review."
+            ),
             "enabled": True,
             "recursive": False,
             "tags": [],
@@ -1085,8 +1094,9 @@ def test_graph_query_fast_preview_bypasses_graph_enabled_flag(
                 records=[{"query": kwargs["query_text"]}],
                 summary="fast-preview",
                 provenance={
-                    "resolved_output_mode": kwargs.get("preferred_output_mode")
-                    or "fast",
+                    "resolved_output_mode": (
+                        kwargs.get("preferred_output_mode") or "fast"
+                    ),
                 },
                 warnings=[],
             )
@@ -1125,8 +1135,9 @@ def test_graph_query_template_non_fast_downgrades_to_fast_when_graph_disabled(
                 records=[{"query": kwargs["query_text"]}],
                 summary="auto-fast-preview",
                 provenance={
-                    "resolved_output_mode": kwargs.get("preferred_output_mode")
-                    or "fast",
+                    "resolved_output_mode": (
+                        kwargs.get("preferred_output_mode") or "fast"
+                    ),
                 },
                 warnings=[],
             )
@@ -2964,7 +2975,9 @@ def test_restore_knowledge_backup_merge_existing(
                 "imported-source",
                 "imported content",
             ),
-            "sources/imported-source/content.md": "# imported-source\n\nimported content\n",
+            "sources/imported-source/content.md": (
+                "# imported-source\n\nimported content\n"
+            ),
         },
     )
 
@@ -3662,7 +3675,10 @@ def test_project_pipeline_run_does_not_auto_register_source_and_persists_state(
 ):
     logger = logging.getLogger("test_project_pipeline")
     logger.debug(
-        "Starting test_project_pipeline_run_does_not_auto_register_source_and_persists_state",
+        (
+            "Starting"
+            " test_project_pipeline_run_does_not_auto_register_source_and_persists_state"
+        ),
     )
     project_id = "project-pipeline-demo"
     project_dir = tmp_path / "projects" / project_id

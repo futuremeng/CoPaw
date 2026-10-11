@@ -56,7 +56,9 @@ _HANLP_PRETRAINED_URLS: dict[str, str] = {
     "UD_TOK_MMINILMV2L6": "https://file.hankcs.com/hanlp/tok/ud_tok_mMiniLMv2L6_no_space_mul_20220619_091824.zip",
     # --- pos ---
     "C863_POS_ELECTRA_SMALL": "https://file.hankcs.com/hanlp/pos/pos_863_electra_small_20220217_101958.zip",
-    "CTB5_POS_RNN": "https://file.hankcs.com/hanlp/pos/ctb5_pos_rnn_20200113_235925.zip",
+    "CTB5_POS_RNN": (
+        "https://file.hankcs.com/hanlp/pos/ctb5_pos_rnn_20200113_235925.zip"
+    ),
     "CTB5_POS_RNN_FASTTEXT_ZH": "https://file.hankcs.com/hanlp/pos/ctb5_pos_rnn_fasttext_20191230_202639.zip",
     "CTB9_POS_ALBERT_BASE": "https://file.hankcs.com/hanlp/pos/ctb9_albert_base_20211228_163935.zip",
     "CTB9_POS_ELECTRA_SMALL": "https://file.hankcs.com/hanlp/pos/pos_ctb_electra_small_20220215_111944.zip",
@@ -70,8 +72,12 @@ _HANLP_PRETRAINED_URLS: dict[str, str] = {
     "MSRA_NER_BERT_BASE_ZH": "https://file.hankcs.com/hanlp/ner/ner_bert_base_msra_20211227_114712.zip",
     "MSRA_NER_ELECTRA_SMALL_ZH": "https://file.hankcs.com/hanlp/ner/msra_ner_electra_small_20220215_205503.zip",
     # --- dep ---
-    "CTB5_BIAFFINE_DEP_ZH": "https://file.hankcs.com/hanlp/dep/biaffine_ctb5_20191229_025833.zip",
-    "CTB7_BIAFFINE_DEP_ZH": "https://file.hankcs.com/hanlp/dep/biaffine_ctb7_20200109_022431.zip",
+    "CTB5_BIAFFINE_DEP_ZH": (
+        "https://file.hankcs.com/hanlp/dep/biaffine_ctb5_20191229_025833.zip"
+    ),
+    "CTB7_BIAFFINE_DEP_ZH": (
+        "https://file.hankcs.com/hanlp/dep/biaffine_ctb7_20200109_022431.zip"
+    ),
     "CTB9_DEP_ELECTRA_SMALL": "https://file.hankcs.com/hanlp/dep/ctb9_dep_electra_small_20220216_100306.zip",
     "CTB9_UDC_ELECTRA_SMALL": "https://file.hankcs.com/hanlp/dep/udc_dep_electra_small_20220218_095452.zip",
     "PMT1_DEP_ELECTRA_SMALL": "https://file.hankcs.com/hanlp/dep/pmt_dep_electra_small_20220218_134518.zip",
@@ -779,7 +785,10 @@ class NLPRuntime:
         return _default_runtime_state(
             status="busy",
             reason_code="HANLP_CIRCUIT_OPEN",
-            reason="HanLP worker is temporarily throttled after repeated timeouts.",
+            reason=(
+                "HanLP worker is temporarily throttled after repeated"
+                " timeouts."
+            ),
             breaker_key=breaker_key,
             circuit_open=True,
             retry_after_sec=retry_after_sec,
@@ -1106,7 +1115,10 @@ class NLPRuntime:
                 response = _default_runtime_state(
                     status="degraded",
                     reason_code="HANLP_WORKER_TIMEOUT",
-                    reason=f"HanLP worker did not respond within {float(timeout):.3f}s.",
+                    reason=(
+                        "HanLP worker did not respond within"
+                        f" {float(timeout):.3f}s."
+                    ),
                     timeout_sec=float(timeout),
                 )
             else:
