@@ -909,10 +909,7 @@ def _do_ensure_builtin_agents(spec_ids: list[str] | None = None) -> None:
             if getattr(agent_ref, "builtin_label", "") != spec.builtin_label:
                 agent_ref.builtin_label = spec.builtin_label
                 changed = True
-            if (
-                getattr(agent_ref, "system_protected", False)
-                != spec.system_protected
-            ):
+            if getattr(agent_ref, "system_protected", False) != spec.system_protected:
                 agent_ref.system_protected = spec.system_protected
                 changed = True
 

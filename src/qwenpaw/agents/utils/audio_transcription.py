@@ -150,8 +150,7 @@ def check_local_whisper_available() -> dict:
     with _local_whisper_status_lock:
         if (
             _local_whisper_status_cache is not None
-            and (now - _local_whisper_status_cache_time)
-            < _local_whisper_status_cache_ttl_sec
+            and (now - _local_whisper_status_cache_time) < _local_whisper_status_cache_ttl_sec
         ):
             return dict(_local_whisper_status_cache)
 
@@ -343,21 +342,13 @@ def _build_ffmpeg_install_command(
     if system_name == "linux":
         if os.geteuid() == 0:
             if shutil.which("apt-get"):
-                return (
-                    ["apt-get", "install", "-y", "ffmpeg"],
-                    "apt-get",
-                    None,
-                )
+                return (["apt-get", "install", "-y", "ffmpeg"], "apt-get", None)
             if shutil.which("dnf"):
                 return (["dnf", "install", "-y", "ffmpeg"], "dnf", None)
             if shutil.which("yum"):
                 return (["yum", "install", "-y", "ffmpeg"], "yum", None)
             if shutil.which("pacman"):
-                return (
-                    ["pacman", "-Sy", "--noconfirm", "ffmpeg"],
-                    "pacman",
-                    None,
-                )
+                return (["pacman", "-Sy", "--noconfirm", "ffmpeg"], "pacman", None)
         return (
             None,
             None,
@@ -402,10 +393,7 @@ def auto_install_local_whisper_dependencies() -> dict:
     if not status_before["ffmpeg_installed"]:
         command, installer, manual_step = _build_ffmpeg_install_command()
         if command is None:
-            detail = (
-                manual_step
-                or "No supported automatic ffmpeg installer was found."
-            )
+            detail = manual_step or "No supported automatic ffmpeg installer was found."
             manual_steps.append(detail)
             operations.append(
                 {

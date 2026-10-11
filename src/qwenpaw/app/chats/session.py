@@ -474,11 +474,7 @@ class SafeJSONSession:
         """Mirror the latest session state into the sidecar snapshot file."""
         snapshot_path = self._get_snapshot_path(session_save_path)
         try:
-            await run_sync_io(
-                shutil.copyfile,
-                session_save_path,
-                snapshot_path,
-            )
+            await run_sync_io(shutil.copyfile, session_save_path, snapshot_path)
         except Exception:
             logger.warning(
                 "Failed to mirror session snapshot for %s",
@@ -496,11 +492,7 @@ class SafeJSONSession:
             return False
 
         try:
-            await run_sync_io(
-                shutil.copyfile,
-                snapshot_path,
-                session_save_path,
-            )
+            await run_sync_io(shutil.copyfile, snapshot_path, session_save_path)
             logger.warning(
                 "Recovered missing session file from snapshot: %s",
                 session_save_path,

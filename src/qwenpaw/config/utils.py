@@ -567,10 +567,7 @@ def _load_and_validate_config(
             la["port"] = data.get("last_api_port")
     # Backward compat: knowledge.engine values are now coerced to local_lexical.
     knowledge = data.get("knowledge")
-    if isinstance(knowledge, dict) and isinstance(
-        knowledge.get("engine"),
-        dict,
-    ):
+    if isinstance(knowledge, dict) and isinstance(knowledge.get("engine"), dict):
         legacy_engine = knowledge.get("engine") or {}
         provider = str(legacy_engine.get("provider", "")).strip().lower()
         if provider:

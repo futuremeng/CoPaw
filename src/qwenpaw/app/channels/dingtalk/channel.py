@@ -140,10 +140,7 @@ def _make_safe_dingtalk_stream_logger(base: logging.Logger) -> logging.Logger:
                 ),
             )
 
-            if (
-                last_ts <= 0.0
-                or now - last_ts > _HANDSHAKE_TIMEOUT_RESET_SECONDS
-            ):
+            if last_ts <= 0.0 or now - last_ts > _HANDSHAKE_TIMEOUT_RESET_SECONDS:
                 count = 0
 
             count += 1
@@ -2913,7 +2910,7 @@ class DingTalkChannel(BaseChannel):
         self._client = dingtalk_stream.DingTalkStreamClient(
             credential,
             logger=_make_safe_dingtalk_stream_logger(
-                logging.getLogger("copaw.dingtalk.stream"),
+                logging.getLogger("copaw.dingtalk.stream")
             ),
         )
         enqueue_cb = getattr(self, "_enqueue", None)

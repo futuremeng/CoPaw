@@ -424,18 +424,12 @@ def tools_api_client(
     agent_config.tools.builtin_tools["skill_market_search"].icon = None
 
     async def _mock_get_agent_for_request(_request):
-        return SimpleNamespace(
-            agent_id="default",
-            workspace_dir="/tmp/default",
-        )
+        return SimpleNamespace(agent_id="default", workspace_dir="/tmp/default")
 
     def _mock_load_agent_config(_agent_id: str) -> AgentProfileConfig:
         return agent_config
 
-    def _mock_save_agent_config(
-        _agent_id: str,
-        config: AgentProfileConfig,
-    ) -> None:
+    def _mock_save_agent_config(_agent_id: str, config: AgentProfileConfig) -> None:
         nonlocal agent_config
         agent_config = config
 
@@ -509,8 +503,7 @@ def test_update_async_execution_returns_the_configured_icon(
     assert (
         agent_config.tools.builtin_tools[
             "execute_shell_command"
-        ].async_execution
-        is True
+        ].async_execution is True
     )
 
 

@@ -39,9 +39,7 @@ from ...constant import WORKING_DIR
 
 def get_working_skills_dir(workspace_dir: Path | None = None) -> Path:
     """Backward-compatible alias for workspace skill directory."""
-    base_dir = (
-        Path(workspace_dir) if workspace_dir is not None else WORKING_DIR
-    )
+    base_dir = Path(workspace_dir) if workspace_dir is not None else WORKING_DIR
     return get_workspace_skills_dir(base_dir)
 
 
@@ -49,12 +47,9 @@ def list_available_skills(
     workspace_dir: Path | None = None,
 ) -> list[str]:
     """Return available skill names for compatibility with legacy callers."""
-    base_dir = (
-        Path(workspace_dir) if workspace_dir is not None else WORKING_DIR
-    )
+    base_dir = Path(workspace_dir) if workspace_dir is not None else WORKING_DIR
     service = SkillService(base_dir)
     return [skill.name for skill in service.list_available_skills()]
-
 
 __all__ = [
     "SkillConflictError",

@@ -1019,12 +1019,8 @@ if os.path.isdir(_CONSOLE_STATIC_DIR):
         raise HTTPException(status_code=404, detail="Not Found")
 
     def _serve_console_static_file(relative_path: str):
-        normalized_parts = [
-            part for part in Path(relative_path).parts if part not in ("", ".")
-        ]
-        if not normalized_parts or any(
-            part == ".." for part in normalized_parts
-        ):
+        normalized_parts = [part for part in Path(relative_path).parts if part not in ("", ".")]
+        if not normalized_parts or any(part == ".." for part in normalized_parts):
             return None
 
         candidate = (_console_path / Path(*normalized_parts)).resolve()

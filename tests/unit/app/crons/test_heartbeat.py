@@ -69,9 +69,7 @@ async def test_run_heartbeat_once_dispatches_with_agent_last_dispatch(
 
 
 @pytest.mark.asyncio
-async def test_run_heartbeat_once_injects_quality_loop_digest(
-    tmp_path,
-) -> None:
+async def test_run_heartbeat_once_injects_quality_loop_digest(tmp_path) -> None:
     heartbeat_file = tmp_path / HEARTBEAT_FILE
     heartbeat_file.write_text("ping", encoding="utf-8")
 
