@@ -82,7 +82,6 @@ def _load_graph_json(graph_path: str) -> Any:
     Raises GraphifyLoadError on any file / parse / import failure.
     """
     try:
-        import networkx as nx
         from networkx.readwrite import json_graph
     except ImportError as exc:
         raise GraphifyLoadError(
@@ -162,9 +161,7 @@ def _subgraph_to_records(
             edge_index[(u, v)] = G.edges[u, v]
 
     # Sort by degree so highest-degree nodes come first
-    sorted_nodes = sorted(nodes, key=lambda n: G.degree(n), reverse=True)[
-        :top_k
-    ]
+    sorted_nodes = sorted(nodes, key=G.degree, reverse=True)[:top_k]
 
     records: list[dict[str, Any]] = []
     for nid in sorted_nodes:

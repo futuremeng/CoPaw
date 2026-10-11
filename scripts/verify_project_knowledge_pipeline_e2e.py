@@ -131,7 +131,6 @@ def _wait_for_status(
     status_url = f"{api_base.rstrip('/')}/knowledge/project-pipeline/status?project_id={parse.quote(project_id)}"
     headers = {"X-Agent-Id": agent_id}
 
-    last_payload: dict[str, Any] = {}
     while True:
         payload = _http_json(
             "GET",
@@ -140,7 +139,6 @@ def _wait_for_status(
             headers=headers,
             timeout=20,
         )
-        last_payload = payload
         status = str(payload.get("status") or "").strip().lower()
         if status in {"succeeded", "failed"}:
             return payload

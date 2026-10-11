@@ -1759,7 +1759,7 @@ async def get_source_content(source_id: str, request: Request):
 @router.post("/index")
 async def index_all_sources(request: Request):
     (
-        config,
+        _config,
         knowledge_config,
         running_config,
         workspace_dir,
@@ -1889,7 +1889,7 @@ async def search_knowledge(
     scope_id: Optional[str] = Query(default=None),
 ):
     (
-        config,
+        _config,
         knowledge_config,
         _,
         workspace_dir,
@@ -2134,7 +2134,7 @@ async def query_knowledge_graph(
     timeout_sec: int = Query(default=20, ge=1, le=120),
 ):
     (
-        config,
+        _config,
         knowledge_config,
         _,
         workspace_dir,
@@ -2356,7 +2356,7 @@ async def get_memify_job_status(job_id: str, request: Request):
         raise HTTPException(status_code=400, detail="MEMIFY_JOB_ID_REQUIRED")
 
     (
-        config,
+        _config,
         knowledge_config,
         _,
         workspace_dir,
@@ -2389,7 +2389,7 @@ async def run_quality_loop(
     dataset_scope: list[str] | None = Body(default=None),
 ):
     (
-        config,
+        _config,
         knowledge_config,
         _,
         workspace_dir,
@@ -2666,7 +2666,7 @@ async def get_project_pipeline_source_candidates(request: Request):
 async def get_project_pipeline_status(request: Request):
     """Get project-scoped automatic knowledge pipeline status."""
     (
-        config,
+        _config,
         knowledge_config,
         running_config,
         workspace_dir,
@@ -2802,7 +2802,7 @@ async def run_project_pipeline(
 ):
     """Start project-scoped automatic knowledge pipeline."""
     (
-        config,
+        _config,
         knowledge_config,
         running_config,
         workspace_dir,

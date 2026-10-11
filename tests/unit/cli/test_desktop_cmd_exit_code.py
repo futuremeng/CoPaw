@@ -131,7 +131,7 @@ def test_startup_failure_propagates_the_backend_code(
 
     result = CliRunner().invoke(desktop_cmd_module.desktop_cmd, [])
 
-    assert signals == []
+    assert not signals
     assert _exit_code(result) == 3
 
 
@@ -143,5 +143,5 @@ def test_backend_killed_by_a_signal_uses_the_posix_code(
 
     result = CliRunner().invoke(desktop_cmd_module.desktop_cmd, [])
 
-    assert signals == []
+    assert not signals
     assert _exit_code(result) == 137

@@ -247,7 +247,7 @@ def test_project_pipeline_manager_records_pipeline_run_metadata(
     monkeypatch.setattr(
         manager,
         "_start_worker",
-        lambda **kwargs: manager._run_sync_loop(**kwargs),
+        manager._run_sync_loop,
     )
     monkeypatch.setattr(
         "qwenpaw.app.knowledge_workflow.KnowledgeWorkflowOrchestrator.run",

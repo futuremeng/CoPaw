@@ -244,6 +244,7 @@ def main() -> int:
         }
         baseline_path.write_text(
             json.dumps(payload, indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
         )
         print(f"wrote {baseline_path} ({totals['files']} files)")
         return 0
@@ -287,7 +288,7 @@ def main() -> int:
     if not baseline_path.exists():
         print(f"::error::no baseline at {baseline_path}", file=sys.stderr)
         return 2
-    prev = json.loads(baseline_path.read_text())
+    prev = json.loads(baseline_path.read_text(encoding="utf-8"))
     prev_totals = prev["totals"]
     problems: list[str] = []
     for key in (

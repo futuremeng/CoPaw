@@ -2,18 +2,8 @@
 
 from __future__ import annotations
 
-import hashlib
-import json
 import logging
 import re
-from collections import Counter, defaultdict
-from datetime import datetime
-from itertools import combinations
-from pathlib import Path
-from typing import Any
-
-from ..config.config import KnowledgeConfig
-from .manager import KnowledgeManager
 
 logger = logging.getLogger(__name__)
 

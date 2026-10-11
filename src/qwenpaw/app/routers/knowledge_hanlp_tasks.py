@@ -15,7 +15,6 @@ from pydantic import BaseModel, Field
 from ...config import load_config
 from ...config.config import KnowledgeConfig, KnowledgeHanLPTaskConfig
 from ...knowledge.hanlp_nlp_runtime import NLPRuntime
-from qwenpaw.app.agent_context import get_agent_for_request
 
 router = APIRouter(prefix="/nlp", tags=["knowledge"])
 

@@ -40,6 +40,7 @@ from typing import Optional
 from packaging.version import InvalidVersion, Version
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+# pylint: disable=wrong-import-position
 from release_channel import render_ts  # noqa: E402
 
 LOADER_REL = "src/copaw/release_channel.py"

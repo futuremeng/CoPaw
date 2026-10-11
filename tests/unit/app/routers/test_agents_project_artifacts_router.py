@@ -1,8 +1,6 @@
 # -*- coding: utf-8 -*-
 
 import io
-import json
-import re
 from pathlib import Path
 
 import pytest
@@ -373,7 +371,7 @@ def test_upload_project_file_does_not_trigger_auto_knowledge_sync(
     assert response.status_code == 200
     payload = response.json()
     assert payload["path"] == "original/brief.txt"
-    assert calls == []
+    assert not calls
 
     latest_event_id, changed_paths = collect_project_realtime_changes(
         workspace_dir / "projects" / project_id,
@@ -766,7 +764,7 @@ def test_upload_project_file_activates_idle_monitoring_and_sync(
     after = _load_project_summary(tmp_path / "projects" / project.id)
     assert after is not None
     assert after.file_monitoring_state == "active"
-    assert calls == []
+    assert not calls
 
 
 def test_upload_project_file_does_not_auto_sync_chunks(

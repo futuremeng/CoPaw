@@ -107,7 +107,7 @@ def has_hidden_directory_segment(rel_path: str) -> bool:
 
 def extension_of_path(rel_path: str) -> str:
     normalized = normalize_path_lower(rel_path)
-    file_name = normalized.split("/")[-1] if normalized else ""
+    file_name = normalized.rsplit("/", maxsplit=1)[-1] if normalized else ""
     if "." not in file_name:
         return ""
     return file_name.rsplit(".", 1)[-1]
@@ -141,7 +141,8 @@ def classify_stage(rel_path: str, *, builtin: bool) -> StageValue:
 
 
 def is_ignored_file(rel_path: str) -> bool:
-    file_name = normalize_path_lower(rel_path).split("/")[-1] or ""
+    normalized = normalize_path_lower(rel_path)
+    file_name = normalized.rsplit("/", maxsplit=1)[-1] or ""
     if file_name in IGNORED_FILE_NAMES:
         return True
     normalized = normalize_path_lower(rel_path)

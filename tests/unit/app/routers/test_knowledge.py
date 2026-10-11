@@ -18,11 +18,11 @@ from qwenpaw.app.flow_engine import FlowTransitionNotAllowedError
 
 from qwenpaw.app.routers import knowledge as knowledge_router_module
 from qwenpaw.app import knowledge_workflow as knowledge_workflow_module
-from copaw.config.config import Config
-from qwenpaw.knowledge import GraphOpsManager, KnowledgeManager
+from qwenpaw.knowledge import KnowledgeManager
 from qwenpaw.knowledge.knowledge_quantization_architecture import (
     QuantizationArchitectureManager,
 )
+from copaw.config.config import Config
 from tests.fixtures.knowledge_config import make_knowledge_config
 
 # Enable logging capture for the test
@@ -2837,7 +2837,7 @@ def test_put_knowledge_config_syncs_running_toggle_and_module_skill(
     monkeypatch.setattr(
         knowledge_router_module,
         "sync_knowledge_module_skills",
-        lambda enabled: sync_calls.append(enabled),
+        sync_calls.append,
     )
 
     config_payload = make_knowledge_config().model_dump(mode="json")
@@ -2850,7 +2850,7 @@ def test_put_knowledge_config_syncs_running_toggle_and_module_skill(
 
     assert response.status_code == 200
     assert response.json()["enabled"] is False
-    assert sync_calls == []
+    assert not sync_calls
 
 
 def test_put_knowledge_config_does_not_resync_module_skill_when_toggle_unchanged(
@@ -2861,7 +2861,7 @@ def test_put_knowledge_config_does_not_resync_module_skill_when_toggle_unchanged
     monkeypatch.setattr(
         knowledge_router_module,
         "sync_knowledge_module_skills",
-        lambda enabled: sync_calls.append(enabled),
+        sync_calls.append,
     )
 
     config_payload = make_knowledge_config().model_dump(mode="json")

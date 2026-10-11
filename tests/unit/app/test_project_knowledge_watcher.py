@@ -183,7 +183,7 @@ async def test_project_knowledge_watcher_skips_idle_projects_before_first_file_a
     current = watcher._collect_snapshots()
     await watcher._handle_snapshot_changes(current)
 
-    assert calls == []
+    assert not calls
 
 
 @pytest.mark.asyncio
@@ -248,7 +248,7 @@ async def test_project_knowledge_watcher_skips_unregistered_project_sources(
     current = watcher._collect_snapshots()
     await watcher._handle_snapshot_changes(current)
 
-    assert calls == []
+    assert not calls
 
 
 @pytest.mark.asyncio

@@ -216,7 +216,7 @@ def resolve_project_dir(
         summary = load_project_summary(project_dir)
         if summary is None:
             continue
-        if summary.id == project_id or project_dir.name == project_id:
+        if project_id in (summary.id, project_dir.name):
             return project_dir
 
     raise http_exception_factory(

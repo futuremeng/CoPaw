@@ -931,7 +931,7 @@ def test_copaw_hanlp_batch_rejects_more_than_five_sentences(monkeypatch):
             },
         )
 
-    assert response.status_code == 422 or response.status_code == 400
+    assert response.status_code in (422, 400)
     if response.status_code == 400:
         assert response.json().get("detail") == "HANLP_BATCH_TOO_LARGE"
 

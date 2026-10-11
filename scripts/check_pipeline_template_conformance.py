@@ -24,6 +24,7 @@ SRC = ROOT / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
+# pylint: disable=wrong-import-position
 from qwenpaw.app.routers.agents_pipeline_core import (  # noqa: E402
     PipelineValidationError,
     _parse_pipeline_template_doc,

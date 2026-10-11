@@ -120,7 +120,7 @@ def extract_project_conversation_skill_candidates(
                 continue
             seen_ids.add(artifact_id)
 
-            name_seed = message.split(".")[0].strip() or message
+            name_seed = message.split(".", maxsplit=1)[0].strip() or message
             name_tokens = [token for token in name_seed.split() if token]
             if len(name_tokens) > 8:
                 name_seed = " ".join(name_tokens[:8])

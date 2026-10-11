@@ -475,7 +475,7 @@ def has_hidden_directory_segment(
 
 def extension_of_project_path(rel_path: str) -> str:
     normalized = normalize_project_metric_path(rel_path)
-    file_name = normalized.split("/")[-1] if normalized else ""
+    file_name = normalized.rsplit("/", maxsplit=1)[-1] if normalized else ""
     if "." not in file_name:
         return ""
     return file_name.rsplit(".", 1)[-1]
@@ -486,7 +486,8 @@ def is_ignored_project_metric_file(
     *,
     project_ignored_file_names: set[str],
 ) -> bool:
-    file_name = normalize_project_metric_path(rel_path).split("/")[-1] or ""
+    normalized = normalize_project_metric_path(rel_path)
+    file_name = normalized.rsplit("/", maxsplit=1)[-1] or ""
     return file_name in project_ignored_file_names
 
 

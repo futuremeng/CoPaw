@@ -780,7 +780,7 @@ def test_square_import_bundle_toggles_skip_skills_and_tools(
     imported_from = json.loads(
         (workspace_dir / "imported_from.json").read_text(encoding="utf-8"),
     )
-    assert install_calls == []
+    assert not install_calls
 
     activation_summary = json.loads(imported_from["activation_summary"])
     assert activation_summary["import_toggles"] == {

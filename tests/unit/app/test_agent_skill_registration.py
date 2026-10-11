@@ -1,10 +1,9 @@
 # -*- coding: utf-8 -*-
 from __future__ import annotations
-import pytest
-
-
 import importlib
 from pathlib import Path
+
+import pytest
 
 
 class _FakeToolkit:

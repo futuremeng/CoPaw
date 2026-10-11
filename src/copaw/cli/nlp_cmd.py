@@ -12,7 +12,6 @@ from typing import Any
 import click
 
 from qwenpaw.config import load_config
-from copaw.knowledge.hanlp_nlp_runtime import NLPRuntime
 from qwenpaw.knowledge.knowledge_quantization_assessment import (
     build_l2_quantization_scorecard,
     grade_l2_quantization_assessment,
@@ -21,6 +20,7 @@ from qwenpaw.knowledge.knowledge_quantization_assessment import (
     summarize_l2_quantization_risk_label_hits,
 )
 from qwenpaw.constant import WORKING_DIR
+from copaw.knowledge.hanlp_nlp_runtime import NLPRuntime
 
 
 _TASKS: dict[str, str] = {

@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 """Tests for changed_files generation in project pipeline dispatch."""
 
-import pytest
 from qwenpaw.knowledge.project_pipeline_dispatch import (
     _build_changed_files_list,
 )

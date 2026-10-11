@@ -18,7 +18,6 @@ from ..knowledge.project_pipeline_manager import (
 from .builtin_agents import (
     BUILTIN_UNDERSTAND_DOMAIN_ANALYZER_ID,
     BUILTIN_UNDERSTAND_FILE_ANALYZER_ID,
-    BUILTIN_UNDERSTAND_GRAPH_REVIEWER_ID,
     BUILTIN_UNDERSTAND_PROJECT_SCANNER_ID,
 )
 from .flow_engine import FlowDefinition, FlowStepDefinition
@@ -77,7 +76,7 @@ def _lane_overrides(
 
 def _knowledge_workflow_steps() -> list[PipelineTemplateStep]:
     # Only keep the fields understood by PipelineTemplateStep.
-    _fields = {f for f in PipelineTemplateStep.model_fields}
+    _fields = set(PipelineTemplateStep.model_fields)
     return [
         PipelineTemplateStep(**{k: v for k, v in spec.items() if k in _fields})
         for spec in KNOWLEDGE_WORKFLOW_STEP_SPECS
@@ -87,7 +86,7 @@ def _knowledge_workflow_steps() -> list[PipelineTemplateStep]:
 def _knowledge_workflow_steps_from_doc(
     doc: dict[str, Any],
 ) -> list[PipelineTemplateStep]:
-    _fields = {f for f in PipelineTemplateStep.model_fields}
+    _fields = set(PipelineTemplateStep.model_fields)
     raw_steps = doc.get("steps") or []
     if not isinstance(raw_steps, list):
         return []

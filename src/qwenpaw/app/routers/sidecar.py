@@ -51,7 +51,7 @@ def _extract_model_cache_keys(model_id: str) -> list[str]:
     if name.lower().endswith(".zip"):
         name = name[:-4]
     if name.startswith("http://") or name.startswith("https://"):
-        name = name.rstrip("/").split("/")[-1]
+        name = name.rstrip("/").rsplit("/", maxsplit=1)[-1]
         if name.lower().endswith(".zip"):
             name = name[:-4]
         keys.append(name)

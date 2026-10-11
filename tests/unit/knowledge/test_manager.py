@@ -2,13 +2,12 @@
 
 import json
 import re
-from datetime import datetime
 from pathlib import Path
 from unittest.mock import patch, MagicMock
 
 import pytest
 
-from copaw.config.config import Config, KnowledgeSourceSpec
+from copaw.config.config import KnowledgeSourceSpec
 from copaw.knowledge.manager import (
     KnowledgeManager,
     process_ner_with_sliding_window,
@@ -2454,7 +2453,7 @@ def test_semantic_engine_state_reports_tokenize_runtime_failure(
     ):
         tokens = manager._tokenize_semantic_text("Agent runner 关系抽取")
 
-    assert tokens == []
+    assert not tokens
     state = manager.get_semantic_engine_state()
     assert state["status"] == "unavailable"
     assert state["reason_code"] == "NLP_ENGINE_UNAVAILABLE"

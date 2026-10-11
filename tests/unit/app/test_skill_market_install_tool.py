@@ -1,10 +1,9 @@
 # -*- coding: utf-8 -*-
 from __future__ import annotations
-import pytest
-
-
 import importlib
 from types import SimpleNamespace
+
+import pytest
 
 from qwenpaw.app.routers.skills import MarketplaceItem
 

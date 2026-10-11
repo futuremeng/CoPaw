@@ -13,7 +13,6 @@ from unittest.mock import patch
 
 import copaw.knowledge.hanlp_nlp_runtime as hanlp_runtime_module
 
-from copaw.config.config import Config
 from copaw.knowledge.hanlp_nlp_runtime import NLPRuntime
 from tests.fixtures.knowledge_config import make_knowledge_config
 

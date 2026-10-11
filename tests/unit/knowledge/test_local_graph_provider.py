@@ -3,7 +3,7 @@
 import json
 from pathlib import Path
 
-from copaw.config.config import Config, KnowledgeSourceSpec
+from copaw.config.config import KnowledgeSourceSpec
 from copaw.knowledge.local_graph_provider import (
     persist_local_graph,
     query_local_graph,
@@ -245,7 +245,7 @@ def test_local_graph_filters_worklog_explanatory_terms(tmp_path: Path):
     project_root = tmp_path / "project"
     project_root.mkdir(parents=True, exist_ok=True)
     (project_root / "WORKING.md").write_text(
-        ("## 项目状态\n" "生成报告，包含路径与大小信息，统一使用分隔符。\n" "现代液压气动 与 金属材料 术语对齐完成。\n"),
+        "## 项目状态\n生成报告，包含路径与大小信息，统一使用分隔符。\n现代液压气动 与 金属材料 术语对齐完成。\n",
         encoding="utf-8",
     )
 

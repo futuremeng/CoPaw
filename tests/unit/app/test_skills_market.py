@@ -102,7 +102,7 @@ def test_generate_market_index_from_directory_scans_skill_folders(
         effective_branch="main",
     )
 
-    assert warnings == []
+    assert not warnings
     assert len(doc["skills"]) == 1
     assert doc["skills"][0]["skill_id"] == "weather"
     assert doc["skills"][0]["source"]["path"] == "skills/weather"
@@ -142,7 +142,7 @@ def test_extract_market_items_builds_install_url_with_branch_and_path() -> (
         },
     )
 
-    assert errors == []
+    assert not errors
     assert len(items) == 1
     assert (
         items[0].install_url

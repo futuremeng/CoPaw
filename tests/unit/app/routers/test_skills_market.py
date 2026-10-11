@@ -197,7 +197,7 @@ def test_extract_market_items_builds_install_url_with_branch_and_path() -> (
         },
     )
 
-    assert errors == []
+    assert not errors
     assert len(items) == 1
     assert (
         items[0].install_url
@@ -245,7 +245,7 @@ def test_extract_market_items_builds_blob_install_url_for_markdown_file() -> (
         },
     )
 
-    assert errors == []
+    assert not errors
     assert len(items) == 1
     assert (
         items[0].install_url
@@ -364,7 +364,7 @@ def test_generate_market_index_from_directory_scans_skill_folders(
         effective_branch="main",
     )
 
-    assert warnings == []
+    assert not warnings
     assert len(index_doc["skills"]) == 1
     assert index_doc["skills"][0]["skill_id"] == "weather"
     assert index_doc["skills"][0]["name"] == "weather"
@@ -397,7 +397,7 @@ def test_generate_market_index_from_directory_scans_markdown_files(
         effective_branch="main",
     )
 
-    assert warnings == []
+    assert not warnings
     assert len(index_doc["skills"]) == 1
     assert index_doc["skills"][0]["skill_id"] == "weather"
     assert index_doc["skills"][0]["source"]["path"] == "skills/weather.md"
@@ -673,6 +673,7 @@ def test_marketplace_install_endpoint_awaits_hub_install(
                 "version": version,
                 "enable": enable,
                 "target_name": target_name,
+                "cancel_checker": cancel_checker,
             },
         )
         return SimpleNamespace(
@@ -711,6 +712,7 @@ def test_marketplace_install_endpoint_awaits_hub_install(
     assert data["enabled"] is True
     assert captured["bundle_url"] == item.install_url
     assert captured["enable"] is True
+    assert captured["cancel_checker"] is None
     assert reconciled == [str(tmp_path / "workspace")]
     assert reloaded == ["agent-under-test"]
 

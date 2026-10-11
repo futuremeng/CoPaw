@@ -19,7 +19,7 @@ from qwenpaw.providers.visible_text_compat import (
 
 
 def test_strip_leaked_thinking_prefix_for_structured_answer() -> None:
-    leaked = "Thinking\n" "## ✅ 当前进展确认 - 没有丢失！\n" "根据我刚才的读取验证，所有成果都已保存。"
+    leaked = "Thinking\n## ✅ 当前进展确认 - 没有丢失！\n根据我刚才的读取验证，所有成果都已保存。"
 
     cleaned = strip_leaked_thinking_prefix(leaked)
 

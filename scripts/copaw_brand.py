@@ -22,6 +22,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
+# pylint: disable=wrong-import-position
 from check_p1_invariants import (
     DEFAULT_BASE_REF,
     rename_pairs_by_path,
@@ -79,6 +80,7 @@ def cmd_export(args: argparse.Namespace) -> int:
     }
     Path(args.ledger).write_text(
         json.dumps(payload, indent=2, ensure_ascii=False) + "\n",
+        encoding="utf-8",
     )
     print(
         (
@@ -98,14 +100,14 @@ def _rewrite(args: argparse.Namespace, *, forward: bool) -> int:
             print(f"::error::{path} missing", file=sys.stderr)
             total_missing += len(entry["pairs"])
             continue
-        lines = path.read_text().splitlines(keepends=True)
+        lines = path.read_text(encoding="utf-8").splitlines(keepends=True)
         out, done, missing = _apply_pairs(
             lines,
             entry["pairs"],
             forward=forward,
         )
         if done:
-            path.write_text("".join(out))
+            path.write_text("".join(out), encoding="utf-8")
         total_done += done
         total_missing += missing
         if missing:
@@ -131,7 +133,7 @@ def cmd_verify(args: argparse.Namespace) -> int:
         if not path.exists():
             failures.append(f"{path}: missing")
             continue
-        original = path.read_text()
+        original = path.read_text(encoding="utf-8")
         lines = original.splitlines(keepends=True)
         stripped, _, miss_strip = _apply_pairs(
             lines,

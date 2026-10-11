@@ -507,7 +507,7 @@ def _preload_task_keys(config, scope: str) -> list[str]:
         }:
             continue
         task_keys.append(task_key)
-    return sorted(task_keys, key=lambda task_key: str(task_key))
+    return sorted(task_keys, key=str)
 
 
 def _copy_preload_state() -> dict:

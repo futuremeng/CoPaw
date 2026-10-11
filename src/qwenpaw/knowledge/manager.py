@@ -2011,7 +2011,7 @@ class KnowledgeManager:
             "step_id": normalized_step_id,
             "indexed_at": str(indexed_at or "").strip() or None,
             "updated_at": now,
-            "metrics": {key: value for key, value in (metrics or {}).items()},
+            "metrics": dict((metrics or {}).items()),
         }
         if isinstance(extra_fields, dict):
             record.update(
@@ -2665,12 +2665,9 @@ class KnowledgeManager:
             "\n".join(interlinear_lines),
             encoding="utf-8",
         )
-        persisted_lines = [
-            line
-            for line in interlinear_path.read_text(
-                encoding="utf-8",
-            ).splitlines()
-        ]
+        persisted_lines = list(
+            interlinear_path.read_text(encoding="utf-8").splitlines(),
+        )
         if not persisted_lines and interlinear_lines:
             persisted_lines = list(interlinear_lines)
 

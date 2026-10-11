@@ -2994,7 +2994,7 @@ def _apply_step_operation(
         )
 
     # Parse and validate full pipeline
-    frontmatter, body = _parse_md_frontmatter(new_md_content)
+    _frontmatter, _body = _parse_md_frontmatter(new_md_content)
     parsed_template, errors = _parse_pipeline_md_strict(
         template_id=template_id,
         content=new_md_content,
@@ -4279,15 +4279,15 @@ def _build_run_observability(
     fallback_start = _parse_pipeline_iso(run.created_at)
     fallback_end = _parse_pipeline_iso(run.updated_at)
     first_ts = min(
-        [ts for ts in [*start_times, fallback_start] if ts is not None],
+        (ts for ts in [*start_times, fallback_start] if ts is not None),
         default=None,
     )
     last_ts = max(
-        [
+        (
             ts
             for ts in [*end_times, fallback_end, fallback_start]
             if ts is not None
-        ],
+        ),
         default=None,
     )
     duration = 0.0
