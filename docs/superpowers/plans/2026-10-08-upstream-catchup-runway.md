@@ -2151,3 +2151,97 @@ monkeypatch 都是第二套真相；守卫用例一枚钉机制（谓词为真�
 overlay→真渲染守卫、19 枚 tsc、3 枚 prettier、真浏览器 `copaw app`）。
 
 **已闭环计数推到 108。**
+
+---
+
+### 8.36 刀 109-1（2026-10-11）：设计文档那句"全仓仅两处按分发名读版本"是错的 —— 修法不是把句子改对，是让这类句子跑红
+
+**一句话结论**：现扫得 **11 处 = 1 枚声明 + 10 处读点，分布在 5 个文件**（文档旧写 2 处，且其中一枚的行号已漂）；
+门禁 `scripts/check_release_channel_consistency.py` 因此加第 6 条规则 **R6**：登记表（10 条模板）与一次正则全扫做
+**集合相等**比对 —— 今后"只有 N 处"这类话不必靠人记住，漏登记即红。
+
+**根因（不是笔误，是口径）**：旧断言只把 `importlib.metadata.version()` 当作"按分发名读取"的形状，
+漏了同一身份另外四类用法 —— 查 PyPI json（`update_cmd.py:33`）、`metadata.distribution()`（`:181`）、
+拼 pip 升级规格（`:395`）、认 wheel 产物文件名（`build_common.py:64/102`、`build_macos.sh:35/40`、
+`build_win.ps1:36/43`）。这与 §8.34 判据 189 是同一件事的两面：那里是 fork 覆盖命令的参数面被合并吞掉，
+这里是分发名的读取面被文档口径吞掉 —— **一处身份改动散落在多种形状里，任何"我数过了"的清单都会漏**。
+
+**顺带查实并更正的两处**：① `build_win.ps1` 的版本读取在 `:347`（旧写 `:289`，上游合并后行号漂移）；
+② 旧文说"Python 侧唯一的 `metadata.version()` 读的是 `reme-ai`" —— 现树 `src/` 里 `metadata.version()`
+**一处也没有**，被引用的 `reme_light_memory_manager.py:161` 读的是 `reme.__version__`（import 属性，
+与分发名无关），结论仍成立但机制写错了。
+③ 文案侧（`pip install qwenpaw[...]` 给人看的指引：`providers_cmd.py:28`、6 门 locale 的
+`transcriptionInfoDescLocal`、`release-duty.yml:240`、`QuickStart.tsx:74`、插件 README、`website/public/docs/*`）
+**不是运行期读取**，R6 有意不管 —— 它的归属按 §7 账册口径逐文件裁，改不改都不影响分发名能否被读到。
+
+**R6 的三条动作**（`rule_distribution`，`scripts/check_release_channel_consistency.py:193`）：
+1. 声明与 `pending` 的关系：`pypi` 已离开 `pending` ⇒ `[project] name` 必须等于事实源的 `pypi_project`；
+   仍 pending ⇒ 只允许 `pypi_project` 或 `qwenpaw`（= `PRE_RENAME_DECLARATION`，上游改名前那枚，§3 判据 90 同族）。
+   这条把"改名前先把某处改了"挡在门外。
+2. 每条登记读点必须仍含 `template.replace("{distribution}", declared)` —— 半把落（改了读点没改声明，
+   或反过来）红，消息直说"the distribution name moves in one commit with pyproject.toml"。
+3. 全扫（`READER_PATTERNS` 5 支 × `READER_DIRS` 5 目录 × 7 个后缀）命中的文件必须**都在登记表里** ——
+   新增读点不落登记即红，这条才是"清单不会再漏"的机制。
+
+**TDD 读数**：红 = `AttributeError: module ... has no attribute 'declared_distribution'`（**1 failed / 12 passed**）；
+终树 **22 passed**（既有 12 + 新 10），`tests/unit/scripts` 整目录 **158 passed in 18.58s**；
+现树门禁 **rc=0 / 2.26s**，串为
+`Release channel consistency check passed (R1-R6 over 6 channel files and 10 distribution readers)`。
+
+**变异检查（逐条摘，这一步查出两处真覆盖洞，不是走过场）**：
+
+| 摘掉的动作 | 变红 | 用例 |
+| --- | --- | --- |
+| 动作 3：全扫 ↔ 登记表相等 | 1 | `..._rejects_an_unregistered_reader` |
+| 动作 2：每条登记读点仍含新名字面量 | 3 | 落后全部读点 / 落后一枚读点 / 抢在声明之前 |
+| 动作 1b：`pending` 期不得声明第三枚名 | 1 | `..._rejects_a_third_name_while_the_channel_is_still_pending` |
+| 动作 1a：渠道已开 ⇒ 声明必须等于 `pypi_project` | 1 | `..._rejects_an_opened_channel_that_left_the_declaration_out` |
+
+头两行是初版 9 枚就断住的；后两行**是变异检查现造的** —— 最初那条第三枚名用例只断 `rc == 1` 且输出含 `"R6:"`，
+而半把落地的读点字面量红会把同一次运行也变红，于是**把 `elif` 整枝摘掉后 21 枚全绿**（= 该分支无人钉）；
+1a 那条分支更是初版根本没有用例走到（`_open_pypi_channel` 只出现在"改了读点"的那几条里）。
+补法：两条都改断**自己那条分支的消息子串**（`while the pypi channel is pending` / `no longer pending`），
+并新增 1a 用例 ⇒ 再摘对应分支各红 1 枚。⇒ **判据 193（红用例要断到自己那条分支的消息，只断 `rc != 0` 的会被邻近的红掩掉）**：
+一条规则的多条分支共享同一个非零退出码时，`assert rc == 1` 的覆盖面等于零 —— 断消息、断文件名，
+并用"摘分支看掉几枚"来量覆盖，而不是看用例数。
+
+**账（现算，非沿用）**：P1 `--check` rc=0，**117 文件 / +10,968 −521**（behavior 116 / +10,932 / −485，
+机械 1 枚 lockfile）—— 本批 4 枚文件（门禁 + 它的用例 + 两本 docs）全是 fork-created 或 docs 豁免 ⇒ **零增长**。
+其余四枝离线门禁同树全 rc=0：namespace `PASSED` · ci-command-targets `18 命令 / 4 包目录` ·
+locale split `4,658 + 59 + 7 + 1,459 + 23` · brand `7 files / 35 lines`。
+CI 选择集（终树两趟，`tests/unit --ignore=tests/unit/channels`）：**2 failed / 15,801 passed / 23 skipped /
+4 xfailed in 917.45s**，前一趟同集合 **2 / 15,800 in 987.45s** —— 差的 1 枚就是本批最后补的那条 1a 用例，
+红的仍是 §8.35 登记的两枚 `test_acp_available_commands`（工作区耦合，未裁）⇒ **本刀零新增红**。
+L1 必过五目录不受影响（本批未动 `src/`）。
+
+**lint 侧如实记账**：`check-ast` / `black` / `flake8` 三枝在改后的两枚文件上 Passed；`mypy` 那条既有错仍在同一处
+（`module_from_spec` 参数可空，HEAD 在 `:79`，本批把它推到 `:242`，属行号漂移不是新错）；
+`pylint` 两枚文件合跑 rating **9.49/10**，报出的都是既有类 —— 门禁文件 1 条 `C0413`（`sys.path.insert` 之后
+`from release_channel import render_ts` 的惯用法），用例文件 **W0621 10 → 19**
+（新 10 枚里 9 枚沿用同一 `fixture_root` 注名，第 10 枚不取 fixture）——
+既有类、既有报告型红钩子，不新开类别，也不为此加 `disable`（那会把既有 10 枚一起静音）。
+`prettier` 钩子的 `files:` 不覆盖 `docs/superpowers/**`，现跑 `(no files to check) Skipped` ⇒ 本批 docs 无格式化账。
+
+**阶段 2 的宿主代价因此第一次被看见**（不在本刀裁，只登记）：R6 的 5 个文件里
+`src/qwenpaw/cli/update_cmd.py` 与 `scripts/pack/build_common.py` 现读**逐字节等于分叉点**（clean-upstream）
+⇒ 真改名那一刀必须**新开 2 枚冲突宿主**，另 3 枚（`pyproject.toml`、`build_macos.sh`、`build_win.ps1`）已在册。
+替代路径是把这几处按分发名的读取搬进 fork 覆盖层（`src/copaw/cli/update_cmd.py` 已经这样盖住了 `update` 命令），
+但 `_detect_installation()` 的 `metadata.distribution("qwenpaw")` 在 wheel 改名后会对
+`qwenpaw` 那枚 console script **抛 `PackageNotFoundError`**（上游模块自己的路径，我们的覆盖层拦不到它）
+—— 这条要么接受，要么同刀再开一枚覆盖点。**两条都是产品裁决，落刀前要先报。**
+
+**判据 194（散落多形状的身份改动，立"登记表 = 机器全扫"的相等门禁，而不是把清单写对）**：一条身份
+（分发名 / 命令参数 / 文案键）被多种语法形状读取时，任何人工清单的可信度等于它上次被重扫的时间；
+把它做成登记表 + 每次运行重扫 + 集合相等，错的断言就会在提交时红，而不是等改名那天咬人。
+判据 165 / 186（文档与文件名不是证据）的机器化版本 —— 不是再核一遍，是让核不动这件事本身变红。
+**判据 195（读点所有权要先于改名方案算清）**：改名类动作的真实代价 = 命中的每个文件按分叉点分类
+（在册 = 记账；clean-upstream = **新开宿主**）；这个数只有全扫落地后才数得出来，所以"门禁"这一步
+不是官僚，是把不可知变成可知。
+
+**本笔登记的未办（不裁，只落点）**：① 上面那条阶段 2 的"2 枚新宿主 vs 再开一枚覆盖点"二选一，落刀前报用户；
+② `109-2` 那把（fork 自有 `copaw-release.yml` + `scripts/release_channel.py --check-artifacts`，
+外加 `constants.test.ts` 那枚 `/pip install copaw/` 未锚定自咬的前置修）；
+③ §8.35 的两项照旧在册（2 枚 acp 的 `QWENPAW_WORKING_DIR` 全局解耦、上游 `secret_store` 2×timeout 聚合）；
+④ 8.32 未办 ①–⑤ 照旧在册。
+
+**已闭环计数推到 108；109-1（分发名读点全表 + 门禁 R6）已落，109-2 待做。**

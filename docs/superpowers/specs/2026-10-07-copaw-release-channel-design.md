@@ -41,7 +41,7 @@
 | 6 | 安装脚本 | `scripts/install.sh:31` / `scripts/install.ps1:34` / `scripts/install.bat:25` 克隆 `agentscope-ai/QwenPaw.git`；`install.sh:264` / `install.ps1:315` 装 `qwenpaw==<version>` | 上游自有 | 三个都在册（+4−1 / +8−0 / +8−4） | **待办，当前最尖锐的一条**：按我们的文档跑我们的脚本，装进来的是上游产品 |
 | 7 | Docker | `docker-compose.yml:13` `image: agentscope/qwenpaw:latest`；`.github/workflows/docker-release.yml:22-23` `ACR_REGISTRY` / `IMAGE: agentscope/qwenpaw`；`scripts/docker_sync_latest.sh:63`；`scripts/docker_build.sh:17` 默认 tag `qwenpaw:latest`；`deploy/Dockerfile:94` `uv pip install .`（与分发名无关） | 上游自有 | **五个都不在册** | 待办（账号未就绪 ⇒ 在事实源里标 pending；动 YAML 的代价见 §7） |
 | 8 | 下载 CDN | `website/src/pages/Downloads/constants.ts:3`；`src/qwenpaw/plugins/download_catalog.py:17`；`src/qwenpaw/local_models/manager.py:48` 均指 `download.qwenpaw.agentscope.io` | 上游自有 | 不在册 | 待裁（§9）：后两枚是**运行时代码**，我们没有对应桶 |
-| 9 | 桌面包产物名与版本读取 | `.github/workflows/desktop-release.yml:90,134,201,247,271-274`（`QwenPaw-Setup-*.exe` 等）；`scripts/pack/desktop.nsi`；**`scripts/pack/build_macos.sh:161` 与 `build_win.ps1:289` 用 `importlib.metadata.version('qwenpaw')` 读已装分发的版本** | 上游自有 | `build_macos.sh` 在册（+18 −5） | 待办（阶段 2）：分发名一改，这两处立刻读不到版本 |
+| 9 | 按分发名读取已装包的位置 | 见 §3 的读点全表：`pyproject.toml:2` 的声明 + 10 处读点（`update_cmd.py:33/181/395`、`build_common.py:64/102`、`build_macos.sh:35/40/161`、`build_win.ps1:36/43/347`）。产物文件名另有 `.github/workflows/desktop-release.yml:90,134,201,247,271-274`（`QwenPaw-Setup-*.exe` 等）与 `scripts/pack/desktop.nsi` | 上游自有 | 读点里的 3 个文件在册（`pyproject.toml`、`build_macos.sh`、`build_win.ps1`） | 待办（阶段 2）：分发名一改这 10 处立刻读不到 ⇒ 声明与全部读点必须同一把落；这条已由门禁 R6 做成机器账（§8） |
 | 10 | 版本线 | `src/qwenpaw/__version__.py:2` `__version__ = "1.1.11b1"`；`pyproject.toml` 的 `[tool.setuptools.dynamic]` 从它取版本 | 上游自有 | **不在册（逐字同 merge-base）** | 待办（§5，本设计唯一一处新增宿主） |
 
 **顺带核到的一条现成证据支持 §5**：`scripts/pack-tauri/sync_tauri_version.mjs:27` 的版本正则里**已经包含 `.postN`**（`(?:\.post(\d+))?`）——"跟上游同号 + 自加 postN"不是新发明，是现有打包链已经支持的形状。
@@ -60,7 +60,23 @@
 2. **`QWENPAW_*` 环境变量、`~/.qwenpaw` 数据目录、配置键**：改了会让老用户在升级时丢配置 —— 那是数据迁移工程，不是发布渠道。本设计只要求"CoPaw 渠道必须能读上游已装实例的目录"，即**升级不搬家**。
 3. **上游 console script `qwenpaw`**：`[project.scripts]` 里 `qwenpaw` 与 `copaw` 两条原样保留。删它等于删掉用户的既有习惯。
 
-**一处必须跟着改、否则改名立刻咬人**：§2 第 9 行那两个 `importlib.metadata.version('qwenpaw')`。已核实这是全仓仅有的"按分发名读版本"的读点（Python 侧唯一的 `metadata.version()` 调用读的是 `reme-ai`，`src/qwenpaw/agents/memory/reme_light_memory_manager.py:163`，与分发名无关）。
+**一处必须跟着改、否则改名立刻咬人**：按分发名读取已装包的所有位置。原文写"已核实这是全仓仅有的两个 `importlib.metadata.version('qwenpaw')` 读点"，**那是一次没扫过的断言，2026-10-11 现扫推翻了它**。按现身份 `qwenpaw` 与我们的渠道身份 `copaw` / `copaw-community` 扫 `src` `scripts` `plugins` `deploy` `.github/workflows`（`.py/.sh/.ps1/.bat/.yml/.spec/.nsi`），实得 **11 处 = 1 处声明 + 10 处读点**，分布在 5 个文件：
+
+| 落点 | 行 | 读的是 | 分叉点所有权 |
+| --- | --- | --- | --- |
+| `pyproject.toml` | 2 | `name = "qwenpaw"` —— 声明本身 | 在册 |
+| `src/qwenpaw/cli/update_cmd.py` | 33 | `https://pypi.org/pypi/qwenpaw/json`（查最新版） | 逐字同上游 |
+| 同上 | 181 | `metadata.distribution("qwenpaw")`（取已装元数据） | 逐字同上游 |
+| 同上 | 395 | `package_spec = f"qwenpaw=={latest_version}"`（拼升级规格） | 逐字同上游 |
+| `scripts/pack/build_common.py` | 64、102 | `qwenpaw-*.whl`（认构建产物） | 逐字同上游 |
+| `scripts/pack/build_macos.sh` | 35、40、161 | `dist/qwenpaw-${CURRENT_VERSION}-"*.whl`、`dist/qwenpaw-"*.whl`、`version('qwenpaw')` | 在册 |
+| `scripts/pack/build_win.ps1` | 36、43、347 | `"qwenpaw-$CurrentVersion-*.whl"`、`"qwenpaw-*.whl"`、`version('qwenpaw')` | 在册 |
+
+顺带两处更正：`build_win.ps1` 的版本读取现在 **`:347`**（旧写 `:289`，上游合并后行号已移）；旧文说"Python 侧唯一的 `metadata.version()` 调用读的是 `reme-ai`"—— 现树 `src/` 里 **`metadata.version()` 一处也没有**，被引用的 `reme_light_memory_manager.py:161` 实际读的是 `reme.__version__`（import 属性，与分发名无关），所以"除上表外没有别的 Python 侧读点"这个结论仍成立，但机制写错了。
+
+**为什么原断言会错**：它的口径只算了"读版本"，漏掉同属一个分发名的"查 PyPI / 取元数据 / 拼 wheel 名 / 拼 pip 升级规格"四类。**修法不是把这句话改对，是把它变成机器账**：门禁 R6（§8 第 6 条）把上表 10 条读点登记成 `DISTRIBUTION_READERS`，每次运行都与正则全扫做集合相等比对 —— 今后任何人（含我们自己）再写"只有 N 处"，未登记的读点会直接把门禁跑红，而不是等下次改名时才发现。
+
+**文案侧不入此账**：另有把 `pip install qwenpaw`（含 extras）写给用户看的位置 —— `src/qwenpaw/cli/providers_cmd.py:28`、6 门 locale 的 `transcriptionInfoDescLocal`（en/zh/ja/id/pt-BR/ru）、`.github/workflows/release-duty.yml:240`、`website/src/pages/Home/components/QuickStart.tsx:74`、两枚插件 README 与 `website/public/docs/*.md`。那是指引文案而非运行期读取，R6 不管；它的归属仍按 §7 账册口径逐文件裁，改与不改都不影响分发名能否被读到。
 
 **一处分发名的连锁成本（要接受，不打算阻止）**：本文原先写"PyPI 上 `copaw` 与 `qwenpaw` 是两个不同的包"，**2026-10-08 实测推翻了它的前提** —— `https://pypi.org/pypi/copaw/json` 返回 **200**，那枚包就是**上游改名前的自己**：说明文字里的链接全是 `github.com/agentscope-ai/CoPaw`，版本 `0.0.1 → 1.0.2`（46 个发布），最后上传 **2026-04-09**；`qwenpaw` 则从 `1.1.0` 起接上，首枚 **2026-04-12**（现 tip `2.2.1`）。所以 `copaw` 不是空位，是上游占着一个已停更的死名，而且我们的版本线 `1.1.11b1.post1` 正好压在它的 `1.0.2` 之上 —— 真用它，老用户的 `pip install -U copaw` 会静默从 AgentScope 团队的包换成我们的 fork。定名因此取 **`copaw-community`**（2026-10-08 现测 404 = 无人占；同批量过 `copaw-ai` / `copaw-fork` / `futuremeng-copaw` / `copaw-assistant` 也都 404）。连锁成本原样成立：两边都提供 `qwenpaw` 这个 console script，pip 会静默覆盖，上游包不是我们能控的；应对仍只写在文档与安装脚本里："装 CoPaw 渠道用 `pip install copaw-community`，跑 `copaw`"。
 
@@ -143,13 +159,14 @@
 
 ## 8 门禁与测试
 
-**新门禁 `scripts/check_release_channel_consistency.py`**，五条规则：
+**新门禁 `scripts/check_release_channel_consistency.py`**，六条规则（1–5 随阶段 1 落地，6 是 2026-10-11 为阶段 2 加的）：
 
 1. **权威性**：`pending` 是唯一的可用性位 —— 读取方判断"这个渠道能不能用"只看它在不在 `pending` 里，不看字段是否为空。`pypi_project` 是**名字**不是地址，允许在账号就绪前就有值（现值 `copaw-community`），否则未就绪期没有任何地方能写出我们的包名。⚠ 它**不能等于程序名 `copaw`** —— 那枚在 PyPI 上是上游改名前的包（§3）， loader 用例 `test_pypi_name_exists_while_pending` 钉住这条。
 2. **地址类字段**（`docker_namespace`、`download_cdn`）在对应项离开 `pending` 之前必须为 `null`；反过来 `pending` 里没有的项，其字段必须非 `null`。
 3. **禁止串清单**：fork 侧渠道文件（安装脚本、前端指引、fork workflow）里出现 `pypi.org/pypi/qwenpaw`、`agentscope-ai/QwenPaw.git`、`agentscope/qwenpaw` 即红。禁止串取自键值本身，不取任何一门语言的文案（判据 83）。
 4. `console/src/generated/releaseChannel.ts` 与 JSON 同步：重新生成后 `git diff --quiet` 必须干净。
 5. 版本线：`Version(__version__)` 可解析，且**只剥掉 `.postN` / `.devN` 之后剩下的完整号**（含预发布段）必须等于 JSON 里的 `upstream_version`。⚠ 不能用 `Version.base_version` —— 实测 `Version("1.1.11b1.post1").base_version` 是 `1.1.11`，`b1` 会被丢掉，比出来必然错。**上游 ref 在本地不存在时报错而不是静默跳过**（判据 73：一条为空的读数要先问覆盖集）。
+6. **分发名读点表必须等于全表**（2026-10-11 加，阶段 2 前置）：`[project] name` 与每一条"按分发名读已装包"的登记读点，要么一起是新名要么一起是旧名 —— 半把落必红；并且门禁每次把 `DISTRIBUTION_READERS`（现 10 条）和一次正则全扫（`src` `scripts` `plugins` `deploy` `.github/workflows` × `.py/.sh/.ps1/.bat/.yml/.spec/.nsi`，命中现身份 `qwenpaw` 与我们的 `copaw` / `copaw-community`）做**集合相等**比对，出现未登记的读点本身就是红。规则 1 的 `pypi` 可用性也在这里参与：`pypi` 已离开 `pending` 时声明必须等于 `pypi_project`；仍 pending 时声明只允许 `pypi_project` 或 `qwenpaw`（上游改名前那枚，§3），第三枚名字红。
 
 **证红落点**：全树拷到 `/tmp` 或用 fixture，不在工作树里证红（本项目既有约束）。
 
@@ -188,7 +205,7 @@
 **阶段 1（不等任何账号，可立即做）**：事实源 JSON + Python loader + `scripts/release_channel.py` + 前端生成文件与接线 + 门禁五条规则 + 安装脚本的克隆源/包名改指我们仓库 + 版本线写回 `__version__.py`（含 `.post1`）与品牌账册登记 + `copaw update` 文案改为从事实源读。
 验收：门禁绿且五条规则各自证过红；**册只 +1 宿主**（`__version__.py`），其余落点逐文件对照 §7；`pytest tests/unit` / `tsc -b --force` / `npm run test:run` 全绿；`copaw update` 仍是拒绝态，但拒绝文案里的地址来自 JSON。
 
-**阶段 2（PyPI 账号就绪）**：`pyproject.toml:2` 的 `[project] name` `qwenpaw` → `copaw-community`（= 事实源里的 `pypi_project`；console script `copaw` 已在 `pyproject.toml:102`，这一把不需要新增入口）；§3 那两个 `importlib.metadata.version('qwenpaw')` 跟着改；fork 自有发布 workflow；`copaw update` 从拒绝改为真升级（仍按程序名分派）；`pending` 去掉 `pypi`。
+**阶段 2（PyPI 账号就绪）**：`pyproject.toml:2` 的 `[project] name` `qwenpaw` → `copaw-community`（= 事实源里的 `pypi_project`；console script `copaw` 已在 `pyproject.toml:102`，这一把不需要新增入口）；**§3 那张 11 行表里的 10 处读点与声明同一把改**（门禁 R6 会逐条比字面量，漏一处即红）；fork 自有发布 workflow；`copaw update` 从拒绝改为真升级（仍按程序名分派）；`pending` 去掉 `pypi`。
 验收：`pip install copaw-community` 出来的包能起 `copaw` 且 `qwenpaw` console script 仍在；升级命令装的是 `copaw-community==`。
 
 **阶段 3（Docker / 对象存储就绪）**：Docker 命名空间与 fork 镜像 workflow；前端"有新版本"圆点恢复；`pending` 清空。
