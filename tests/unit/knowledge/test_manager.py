@@ -279,6 +279,7 @@ def test_project_directory_unchanged_file_reuses_existing_snapshot(
     assert first["snapshot_count"] == 1
     assert second["snapshot_count"] == 1
     assert len(manifest["snapshots"]) == 1
+    assert len(snapshots) == 1
 
 
 def test_list_sources_include_semantic_uses_lightweight_preview_only(

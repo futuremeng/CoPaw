@@ -672,7 +672,6 @@ def _collect_ranked_entities(
     title_text = str(document.get("title") or "").strip()
     heading_text = _extract_heading_text(document)
     body_text = _prepare_entity_text(document)
-    title_counter = _extract_entity_counter(title_text)
     heading_counter = _extract_entity_counter(heading_text)
     body_counter = _extract_entity_counter(body_text)
 

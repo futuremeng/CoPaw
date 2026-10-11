@@ -10,12 +10,6 @@ import zipfile
 
 import logging
 
-# Enable logging capture for the test
-logging.basicConfig(
-    level=logging.DEBUG,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-)
-
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -30,6 +24,12 @@ from qwenpaw.knowledge.knowledge_quantization_architecture import (
     QuantizationArchitectureManager,
 )
 from tests.fixtures.knowledge_config import make_knowledge_config
+
+# Enable logging capture for the test
+logging.basicConfig(
+    level=logging.DEBUG,
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+)
 
 
 @pytest.fixture

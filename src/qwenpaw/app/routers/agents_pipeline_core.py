@@ -3725,11 +3725,6 @@ def _enrich_run_with_guidance(
         for step_id, status in step_status_by_id.items()
         if status in {"failed", "blocked"}
     ]
-    unfinished_steps = [
-        step_id
-        for step_id, status in step_status_by_id.items()
-        if status not in {"succeeded", "failed", "blocked", "cancelled"}
-    ]
     unsucceeded_steps = [
         step_id
         for step_id, status in step_status_by_id.items()
@@ -4485,10 +4480,6 @@ def _build_pipeline_artifact_records(
     records: list[PipelineArtifactRecord] = []
     produced_paths: set[str] = set()
     step_name_by_id = {step.id: step.name for step in template.steps}
-    step_dep_names_by_id = {
-        step.id: [dep for dep in step.depends_on if dep]
-        for step in template.steps
-    }
     terminal_step_id = template.steps[-1].id if template.steps else ""
 
     for node in raw_steps:

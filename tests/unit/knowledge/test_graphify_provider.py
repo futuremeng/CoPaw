@@ -200,7 +200,7 @@ def test_graphify_query_respects_top_k(tmp_path):
     edges = [
         {
             "source": f"n{i}",
-            "target": f"n{i+1}",
+            "target": f"n{i + 1}",
             "relation": "relates_to",
             "confidence": "EXTRACTED",
         }

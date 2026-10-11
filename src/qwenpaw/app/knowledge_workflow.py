@@ -403,7 +403,6 @@ class KnowledgeWorkflowOrchestrator:
         self._validate_template_executors()
 
     def _validate_template_executors(self) -> None:
-        expected_step_ids = set(_WORKFLOW_STEP_ORDER)
         seen_step_ids: set[str] = set()
         for step in self.template.steps:
             expected_executor = _BUILTIN_KNOWLEDGE_STEP_EXECUTORS.get(step.id)

@@ -323,7 +323,6 @@ def write_chunk_pos_artifacts(
                         token_index = _safe_count_int(
                             token.get("token_index") or 0,
                         )
-                        token_text = str(token.get("text") or "")
                         pos_tag = pos_lookup.get(token_index, "")
                         tagged_token = dict(token)
                         tagged_token["pos"] = pos_tag

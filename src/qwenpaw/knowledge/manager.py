@@ -12,8 +12,6 @@ import re
 import shutil
 from collections import Counter
 from datetime import datetime, timedelta, timezone
-
-UTC = timezone.utc
 from html import escape, unescape
 from pathlib import Path
 from typing import Any, Callable
@@ -29,6 +27,8 @@ from .knowledge_manager_ner import write_chunk_ner_artifacts
 from .knowledge_manager_pos import write_chunk_pos_artifacts
 from .knowledge_manager_semantic import write_chunk_tokenize_artifacts
 from .knowledge_manager_syntax import write_chunk_syntax_artifacts
+
+UTC = timezone.utc
 
 _UNSAFE_FILENAME_RE = re.compile(r'[\\/:*?"<>|]')
 _CHAT_URL_RE = re.compile(
@@ -4694,10 +4694,6 @@ class KnowledgeManager:
         ]
         for mention in mentions:
             surface = str(mention.get("surface") or "").replace("|", "\\|")
-            normalized = str(mention.get("normalized") or "").replace(
-                "|",
-                "\\|",
-            )
             lines.append(
                 (
                     f"| {mention.get('entity_id') or ''} | {surface} |"

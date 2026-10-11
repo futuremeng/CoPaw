@@ -15,8 +15,6 @@ import threading
 import uuid
 from dataclasses import dataclass
 from datetime import datetime, timezone
-
-UTC = timezone.utc
 from pathlib import Path
 from typing import Any, Callable
 
@@ -31,6 +29,8 @@ from .graphify_provider import (
 from .enrichment_pipeline import run_system_knowledge_enrichment
 from .local_graph_provider import persist_local_graph, query_local_graph
 from .manager import KnowledgeManager
+
+UTC = timezone.utc
 
 
 @dataclass
@@ -1053,7 +1053,8 @@ Agent gate review is mandatory before automatic continuation.
                         100
                         if final_status == "succeeded"
                         else max(
-                            0, min(95, int(len(rounds) * 100 / max_rounds)),
+                            0,
+                            min(95, int(len(rounds) * 100 / max_rounds)),
                         )
                     ),
                     "rounds": rounds,

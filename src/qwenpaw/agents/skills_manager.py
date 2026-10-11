@@ -25,6 +25,7 @@ from typing import Any, TypeVar
 import frontmatter
 from pydantic import BaseModel, Field
 
+from ..constant import WORKING_DIR
 from ..exceptions import SkillsError
 from ..security.skill_scanner import scan_skill_directory
 from .utils.file_handling import read_text_file_with_encoding_fallback
@@ -85,8 +86,6 @@ class BuiltinSkillIdentity:
     language: str
     source_name: str
 
-
-from ..constant import WORKING_DIR
 
 ACTIVE_SKILLS_DIR = Path(WORKING_DIR) / "active_skills"
 

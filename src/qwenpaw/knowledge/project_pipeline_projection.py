@@ -965,14 +965,8 @@ def build_processing_modes(
     last_result = _as_dict(state.get("last_result"))
     pipeline_run = _as_dict(last_result.get("pipeline_run"))
     quality_loop = _as_dict(last_result.get("quality_loop"))
-    semantic_status = (
-        str(semantic_engine.get("status") or "idle").strip().lower()
-    )
     semantic_summary = str(semantic_engine.get("summary") or "").strip()
-    semantic_reason = str(semantic_engine.get("reason") or "").replace(
-        "HanLP sidecar",
-        "HanLP sidecar",
-    )
+    semantic_reason = str(semantic_engine.get("reason") or "")
 
     fast_ready = (
         _safe_int(index_result.get("document_count")) > 0
