@@ -1952,5 +1952,64 @@ fork 自有那批照提（零账），在册宿主那批当买不到门禁绿时
 `tests/fixtures/mcp/*` 2 处、`tests/unit/drivers/handlers/test_mcp_stateful_client.py` 2 处）
 + 5 枚 fork 自有文件报 `qwenpaw.knowledge`/`qwenpaw.agents`/`copaw.knowledge`。
 基线宿主不能动，唯一免宿主的手段 = `pyproject.toml` 的 `[tool.pylint]`（该文件已在册），判为"配置吞债"，**只登记不用**。
-④ **L1 必过段那 1 枚**（`test_b1_normalize_before_home_glob_match`）= 授权清单第 ⑥ 项，现算在案。
+④ **L1 必过段那 1 枚**（`test_b1_normalize_before_home_glob_match`）= 授权清单第 ⑥ 项，现算在案（**8.33 刀 106 已闭**）。
 ⑤ 8.31 末那四项照旧未办（overlay→渲染守卫、19 枚 tsc、3 枚历史脏 prettier、真浏览器 `copaw app`）。
+
+### 8.33 刀 106（2026-10-11）：项 ⑥——灾难清除的"家目录"判据从段数改成当前用户的那个家
+
+**一句话结论**：8.32 未办 ④ 那枚 L1 必过红不是测试工件，是**生产安全规则用"路径有几段"当"是不是家"的判据**；
+把当前用户的家作为附加目标钉进判定后，L1 五目录从 `1 failed / 1,335 passed` 变 **`1,339 passed / 1 skipped / 0 failed`**，
+代价 = 新开一枚冲突宿主（`+9` 侵入 / `−1` 上游行）。
+
+**前置事实（为什么必须动生产码）**：`src/qwenpaw/security/tool_guard/safety_checks.py` 的
+`_is_resolved_path_catastrophic` 里那行 `if top in _HOME_TOP_LEVEL: return len(parts) <= 3`
+（`_HOME_TOP_LEVEL = {"home", "users"}`）⇒ 只有 HOME 恰为 `/Users/<单段>` 或 `/home/<单段>` 时
+`rm -rf ~/*` 才被判灾难。上游用例 `tests/unit/security/tool_guard/test_safety_checks.py:288`
+`test_b1_normalize_before_home_glob_match` 用 `home = os.path.expanduser("~")` 取真家，所以它只在
+CI runner 那种三段家里绿；本机 HOME 是四段 `/Users/futuremeng/.k102home` ⇒ 断言
+`is_command_catastrophic("rm -rf ../*", cwd=<home>/project) is True` 红。
+**同一条规则在任何把家放在更深一层的环境里都漏**（`/home/service/app`、容器内 `/root/.cache` 型布局）
+⇒ 按判据 186 走修规则而不是改用例。
+
+**修法（只加不减）**：新增 `_real_home_logical_parts()` = `os.path.expanduser("~")` → 非 `/` 开头直接返回 `()`
+（Windows 原生家不参与）→ 复用既有 `_logical_posix_parts`（含 macOS `/System/Volumes/Data` firmlink 剥离）；
+判定改成 `return len(parts) <= 3 or parts == _real_home_logical_parts()`。别的用户树的三段规则一字未动，
+所以回归面只有"多认一枚家根"这一向。
+
+**TDD 账**：fork 自有守卫 `tests/unit/security/tool_guard/test_safety_checks_nested_home.py`（三枚用例：
+四段家的 `../*` / 绝对 `<home>/*` / `<home>/project/build` 的 `../../*` 都必须 True；
+`<home>/project/build` 的 `../*` 与 `<home>/project/build` 本体必须 False；非家树 `/tmp/unrelated/project`
+的 `../*` 必须 False）先取红 = **1 failed, 2 passed**（红形如 `assert False is True`），
+落修复后 **161 passed**（新文件 + 上游整文件一起跑）。三枚用例在 `os.name == "nt"` 下用 `pytest.skip`
+显式跳过，不用裸 `return` 冒充通过。
+
+**读数**：CI 选择集（`tests/unit --ignore=tests/unit/channels`）**15 failed / 15,774 passed / 23 skipped / 4 xfailed**，
+与改前的 15 枚**逐枚差一**——消失的正是那枚安全红；多出来的 `tests/unit/services/test_terminal.py::test_real_pty_...`
+报 `asyncio.exceptions.CancelledError → TimeoutError`，隔离单跑 3/3 通过（0.66s / 7.62s / 0.26s）
+⇒ 判为并发争抢的计时红、非回归（判据 187 的口径：整树跑与单跑不同轴时以单跑归属）。
+其余 14 枚照旧（`test_cli_update.py` 11 + `test_cli_update_overlay.py` 3，同一根因
+`overlay_update_callback() got an unexpected keyword argument 'prerelease'`，属项 ⑦ 射程）。
+L1 五目录 **1,339 passed / 1 skipped / 0 failed**。两枚动过的文件对八枚钩子全 Passed
+（pragma / whitespace / comma / black / flake8 / mypy / pylint）；新测试文件那行
+`# -*- coding: utf-8 -*-` 是 pragma 钩子自己写进去的，不是我加的。
+离线门禁四道全 rc=0，locale split 4,658 键 / CI command targets 18 命令 · 4 包目录照旧。
+
+**P1 账**：`safety_checks.py` 对分叉点 `2744a976b` 逐字节相同 ⇒ 这一刀**新开一枚冲突宿主**。
+改前现读 `116 文件 / +10,959 −520`，改后 **`117 文件 / +10,968 −521`**（新宿主 `+9 侵入 / −1 上游行`），
+`--check` 先红四条（files / behavior_added / behavior_files / NEW upstream-owned file touched），
+配套 `--write-baseline` 一笔重立。重算顺带吸收两处**负向**移动：旧基线把总数记成 `+10,960 −521`（高 1 行），
+以及 8.32 那笔机械改动留在 `agent_scoped.py` 上的 `15 → 14`。
+
+**更正 8.32 的一句**：留存机械改动的 171 枚**不是全 fork 自有**，现数是 **169 fork-created + 2 枚在册**
+（`.gitignore` 那行只是把空格行改成空行，added 4 不变；`src/qwenpaw/app/routers/agent_scoped.py` 净减 1 行）。
+那两枚没进退回名单，是因为它们对 P1 零增长/负增长，而"退回名单"当时是按 `behavior grew` 那张表反推的
+⇒ **判据 188：在册宿主的归属要按"基线里有这个键 + 分叉点有这个路径"两条轴现数，不能按是否出现在增长表里反推**。
+
+**判据 186（形状型安全谓词的测试红要先问规则在真实环境里对不对）**：一条按"路径段数"实现的安全判定，
+在 CI 的特定家目录形状下恰好成立 ≠ 它对。用例红的时候先复现"非 CI 的家形状"（这里就是四段 HOME），
+能复现就是生产缺陷；把它当工件处理（skip 用例、改断言、或把本机 HOME 摆成三段）等于把漏洞留在树里。
+**判据 187（整树跑与隔离跑不同轴时，单枚红要用隔离重跑归属，并且要报"差集"而不是"净数"）**：
+两次整树跑都是 15 failed 但集合不同 ⇒ 只报 15→15 会同时漏掉"修好一枚"和"新红一枚"；必须逐枚列差集，
+差集里新增的那枚再用隔离重跑判它是计时红还是真回归。
+
+**已闭环计数推到 106。**
