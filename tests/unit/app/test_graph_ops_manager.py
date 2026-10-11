@@ -8,7 +8,7 @@ from unittest.mock import patch
 
 import pytest
 
-from copaw.config.config import Config, GraphifyConfig, KnowledgeSourceSpec
+from copaw.config.config import KnowledgeSourceSpec
 from copaw.knowledge import GraphOpsManager, KnowledgeManager
 from qwenpaw.knowledge.enrichment_pipeline import (
     run_system_knowledge_enrichment,
@@ -208,8 +208,6 @@ def test_graph_query_graphify_no_fallback_raises_when_not_configured(tmp_path):
 
 def test_graph_query_graphify_fallback_on_runtime_error(tmp_path):
     """When the provider raises GraphifyError and fallback_to_local=True, falls back."""
-    from qwenpaw.knowledge.graphify_provider import GraphifyError
-
     knowledge_config = make_knowledge_config()
     knowledge_config.enabled = True
     knowledge_config.engine = "graphify"
