@@ -106,8 +106,25 @@ READER_PATTERNS = (
     re.compile(r"version\(\s*['\"]([\w.\-]+)['\"]\s*\)"),
     re.compile(r"pypi\.org/pypi/([\w.\-]+)/json"),
     re.compile(r"['\"]([\w.\-]+)==\{"),
-    re.compile(r"([\w.\-]+)-[\w$ {}\-*\"']{0,40}\.whl"),
 )
+
+# A wheel filename is ``name-<version>-…whl``, and the version segment holds
+# ``$CurrentVersion``/``${V}``, quotes and globs.  Letting the name group be
+# any token loses to a wider prefix on the same line: in the PowerShell build
+# script, a ``Join-Path`` of a distribution name and a wheel glob matched
+# starting at ``Join``, consumed the whole tail, and swallowed the read point
+# underneath it.  So the name side is anchored to the identities we track.
+# (Writing the offending literal here would make this file a read point itself.)
+WHEEL_TAIL_RE = r"-[\w$ {}.\-*\"']{0,40}\.whl"
+
+
+def wheel_reader_pattern(names):
+    alternation = "|".join(
+        re.escape(name) for name in sorted(names, key=len, reverse=True)
+    )
+    return re.compile(rf"(?<![\w.\-])({alternation}){WHEEL_TAIL_RE}")
+
+
 READER_DIRS = ("src", "scripts", "plugins", "deploy", ".github/workflows")
 READER_SUFFIXES = (".py", ".sh", ".ps1", ".bat", ".yml", ".spec", ".nsi")
 PROJECT_NAME_RE = re.compile(r'^name\s*=\s*"([^"]+)"', re.MULTILINE)
@@ -167,6 +184,7 @@ def scan_distribution_readers(repo_root: Path):
     hits = []
     if declared is None:
         return hits
+    patterns = READER_PATTERNS + (wheel_reader_pattern(tracked),)
     hits.append((PYPROJECT_REL, f"declares name = {declared!r}"))
     for rel_dir in READER_DIRS:
         base = repo_root / rel_dir
@@ -176,7 +194,7 @@ def scan_distribution_readers(repo_root: Path):
             if not path.is_file() or path.suffix not in READER_SUFFIXES:
                 continue
             text = path.read_text(encoding="utf-8", errors="ignore")
-            for pattern in READER_PATTERNS:
+            for pattern in patterns:
                 for match in pattern.finditer(text):
                     if match.group(1) not in tracked:
                         continue
@@ -384,10 +402,16 @@ def main(argv=None):
             print(f"ERROR: {item}")
         return 1
 
+    hits = scan_distribution_readers(repo_root)
+    read_points = sum(
+        1 for _, description in hits if description.startswith("line ")
+    )
     print(
         "Release channel consistency check passed "
-        f"(R1-R6 over {len(CHANNEL_FILES)} channel files and "
-        f"{len(DISTRIBUTION_READERS)} distribution readers)",
+        f"(R1-R6 over {len(CHANNEL_FILES)} channel files; "
+        f"{len(DISTRIBUTION_READERS)} registered templates, "
+        f"{read_points} read points swept in "
+        f"{len({rel for rel, _ in hits})} files)",
     )
     return 0
 

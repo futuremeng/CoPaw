@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import re
 import shutil
 from pathlib import Path
 
@@ -365,7 +366,8 @@ def test_the_live_read_points_are_exactly_the_registered_ones():
     """The registry is the whole table, not a list someone remembered.
 
     Design §3 row 9 once claimed two read points; a scan of the tree finds
-    eleven in five files.  This is what keeps that class of claim honest: an
+    eleven read points plus the declaration, in five files.  This is what
+    keeps that class of claim honest: an
     unregistered reader or a stale registry entry fails here even while every
     red case above still passes.
     """
@@ -378,3 +380,34 @@ def test_the_live_read_points_are_exactly_the_registered_ones():
         literal = template.replace("{distribution}", declared)
         text = (REPO_ROOT / rel).read_text(encoding="utf-8")
         assert literal in text, f"{rel} no longer contains {literal!r}"
+
+
+def test_the_live_sweep_pinpoints_every_registered_line():
+    """File-set equality is not enough -- the sweep must find each *line*.
+
+    A pattern that matches a wider prefix than the identity swallows the real
+    hit: ``qwenpaw-$CurrentVersion-*.whl`` inside ``Join-Path $Dist "..."``
+    matched on ``Join`` first, so the two wheel read points in
+    ``build_win.ps1`` went unswept while their *file* still looked registered.
+    Pinned line by line, an unanchored sweep can no longer report a smaller
+    table than the registry.
+    """
+    mod = _module()
+    declared = _declared(REPO_ROOT)
+    expected = set()
+    for rel, template in mod.DISTRIBUTION_READERS:
+        if rel == mod.PYPROJECT_REL:
+            continue
+        literal = template.replace("{distribution}", declared)
+        text = (REPO_ROOT / rel).read_text(encoding="utf-8")
+        expected.update(
+            (rel, lineno)
+            for lineno, line in enumerate(text.splitlines(), 1)
+            if literal in line
+        )
+    swept = set()
+    for rel, description in mod.scan_distribution_readers(REPO_ROOT):
+        match = re.match(r"^line (\d+):", description)
+        if match:
+            swept.add((rel, int(match.group(1))))
+    assert swept == expected
