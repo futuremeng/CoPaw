@@ -338,7 +338,6 @@ export default function AgentsPage() {
   return (
     <div className={styles.agentsPage}>
       <PageHeader
-        parent={t("agent.parent")}
         current={
           activeTab === "square" ? t("agent.squareTitle") : t("agent.agents")
         }

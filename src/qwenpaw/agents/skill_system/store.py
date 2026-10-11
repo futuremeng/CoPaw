@@ -1372,3 +1372,65 @@ def staged_skill_dir(skill_name: str) -> Iterator[Path]:
         yield stage_dir
     finally:
         shutil.rmtree(temp_root, ignore_errors=True)
+
+
+# A staged write touches its files continuously while it runs, so a stage dir
+# whose newest entry is older than this has no writer left: the process that
+# created it died mid-copy, or has simply been idle that long. Anything
+# fresher may still be written to — including by another QwenPaw instance
+# sharing the system temp dir — so it is left alone.
+_SKILL_STAGE_ORPHAN_GRACE_SECONDS = 24 * 60 * 60
+
+
+def _newest_entry_mtime(path: Path) -> float | None:
+    """Newest mtime anywhere under ``path`` (the directory included)."""
+    try:
+        newest = path.stat().st_mtime
+    except OSError:
+        return None
+    for root, dirs, files in os.walk(path, onerror=lambda _error: None):
+        for name in [*dirs, *files]:
+            try:
+                mtime = os.stat(os.path.join(root, name)).st_mtime
+            except OSError:
+                continue
+            if mtime > newest:
+                newest = mtime
+    return newest
+
+
+def cleanup_orphan_skill_stages(
+    *,
+    max_age_seconds: float = _SKILL_STAGE_ORPHAN_GRACE_SECONDS,
+) -> int:
+    """Remove staged skill directories left behind by a killed process.
+
+    ``staged_skill_dir`` removes its temp root in ``finally``, so a surviving
+    directory carrying that prefix came from a process that died mid-write —
+    or from an instance that is still writing right now. The two are told
+    apart by age: a directory is only removed once nothing inside it has been
+    touched for ``max_age_seconds``. Checking only the directory's own mtime
+    would be wrong, because copying files *into* the staged skill dir does not
+    bump the parent's mtime; the newest mtime in the whole tree is what
+    reflects a live writer. Returns the number of directories removed.
+    """
+    cutoff = time.time() - max_age_seconds
+    removed = 0
+    # Prefix must match the one used by ``staged_skill_dir`` above.
+    for path in Path(tempfile.gettempdir()).glob("qwenpaw_skill_stage_*"):
+        if not path.is_dir():
+            continue
+        newest = _newest_entry_mtime(path)
+        if newest is None or newest > cutoff:
+            continue
+        shutil.rmtree(path, ignore_errors=True)
+        if path.exists():
+            logger.warning(
+                "Failed to remove orphan skill staging dir %s",
+                path,
+            )
+            continue
+        removed += 1
+    if removed:
+        logger.info("Removed %d orphan skill staging dir(s)", removed)
+    return removed

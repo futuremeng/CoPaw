@@ -24,6 +24,7 @@ from qwenpaw.providers.provider import (
     Provider,
 )
 
+from .adapters.request_context import with_session_header
 from .model_info import release_date
 from ..utils.io_utils import run_sync_io
 from .model_catalog import catalog_documents
@@ -182,7 +183,11 @@ class OpenAIProvider(Provider):
         return api_key
 
     def _build_default_headers(self) -> dict:
-        return dict(self.custom_headers) if self.custom_headers else {}
+        return with_session_header(
+            dict(self.custom_headers) if self.custom_headers else {},
+            self.session_header_name,
+            self._request_session,
+        )
 
     def _client(self, timeout: float = 5) -> AsyncOpenAI:
         kwargs: dict = {

@@ -25,6 +25,7 @@ from .registry import (
     select_preload_skills,
 )
 from .store import (
+    cleanup_orphan_skill_stages,
     get_skill_pool_dirs,
     get_skill_pool_dir,
     get_workspace_skills_dir,
@@ -56,6 +57,7 @@ __all__ = [
     "SkillPoolService",
     "SkillService",
     "apply_skill_config_env_overrides",
+    "cleanup_orphan_skill_stages",
     "ensure_skill_pool_initialized",
     "ensure_skills_initialized",
     "get_skill_pool_dirs",

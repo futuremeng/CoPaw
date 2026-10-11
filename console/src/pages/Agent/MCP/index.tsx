@@ -303,7 +303,7 @@ function MCPPage() {
   return (
     <div className={styles.mcpPage}>
       <PageHeader
-        items={[{ title: t("nav.agent") }, { title: t("mcp.title") }]}
+        current={t("mcp.title")}
         extra={
           <div style={{ display: "flex", gap: 8 }}>
             <Button
