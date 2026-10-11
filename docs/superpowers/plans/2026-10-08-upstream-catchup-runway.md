@@ -1643,7 +1643,7 @@ pycodestyle 的 `DEFAULT_IGNORE` 里，`.flake8` 的 `ignore` 是否会清掉它
 ### 8.30 刀 103（2026-10-11）：影子 `console/vitest.config.ts` 的 alias 形状漂出上游，静默杀掉 12 枚测试文件
 
 **落点**：`console/vitest.config.ts`（fork 自有、**册外**：`grep -c vitest scripts/p1_baseline.json` = 0 ⇒ 零冲突面代价）。
-只此一枚文件，+37/−21。
+只此一枚文件，+39/−25（含把这枚文件本身格式化到 prettier 干净的那几行）。
 
 **机制**：vitest 的配置查找顺序里 `vitest.config.*` **赢过** `vite.config.*`，所以 fork 这枚影子文件不是"补充"上游配置，
 而是**整份替掉**它（`plugins`、`css.modules`、`resolve`、`server`、`test.*` 全部换成影子文件里的字段，上游那套一次也不生效）。
