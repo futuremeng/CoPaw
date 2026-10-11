@@ -2488,3 +2488,126 @@ version / enable / target_name / cancel_checker` 六个实参并断 `captured["c
 **未办**：`_activate_import_bundle` 的 `overwrite` 形参现在无人使用（pylint `W0613` 保留在册）——
 它是调用方协议的一部分，删不删随 §8.41 的 unused-argument 一并裁，不在本刀做。
 
+### 8.41 刀 113（2026-10-12）：pylint 的 1,457 条里"改了没人会反对"的那族只有 93 条，而剩下 44 条真缺陷全在别人文件上
+
+**一句话结论**：`9c552a4d5` 在 **40 枚 fork-created 文件**上做 **76 处编辑**，把 pylint 整树 **1,457 → 1,364**
+清掉 **93 条**（这 40 枚自己从 758 → 665，整树差与局部落差同为 93 ⇒ 没有在任何别处新增 finding）；
+尾批 `88a701b0f` 再清 3 条 `unused-import`，**1,364 → 1,361**，把 fork-created 文件上的"真缺陷族"清零。
+剩下的 1,361 条切三档：**风格意见 1,289 / 环境假阳性 28 / 真缺陷 44**，而 44 条**全部**落在在册文件上 ——
+这就是本刀停手的位置，也是 §8.42 要裁的全部。
+
+**提交消息里的一个数要更正**：`9c552a4d5` 写"76 findings cleared (1,457 -> 1,364)"，把两个不同的量当成一个。
+现算是 **76 处编辑操作 / 93 条 findings 清掉**（一处编辑可清多条，例如一枚文件里的 10 枚死导入）。
+
+**为什么切"真缺陷 vs 风格意见"，而不是照单清到 0**：成本不对称，且 pylint 的默认消息码集合本身不是本合同的规格。
+主干五族 —— `protected-access` 549（全在 fork-created）、`redefined-outer-name` 264、`unused-argument` 140、
+`line-too-long` 113、`too-many-*` 122 —— 改它们要么给几百处访问补公共接口，要么动函数签名与测试局部变量名，
+收益是"少一条警告"，风险是行为面变化。反过来 `unused-import` / `reimported` / `unreachable` 是**读代码的人
+会被误导**的那类，且清它们只删不改。**环境假阳性 28 条**另有一层：`no-name-in-module` 23 枚里 15 枚在
+上游同文件上，报错原因是钉住的 lint 环境未安装 `mcp` 那组依赖；`E1120/E1123/E1136` 6 枚同属类型面而非事实面。
+
+**pylint 现算全表**（消息码 × 归属，`pre-commit run pylint --files` 逐文件跑 + 逐文件归属；总数 1,361）：
+
+| 消息码 | 现 | fork-created | 在册 | 上游同 | 定性 |
+| --- | --- | --- | --- | --- | --- |
+| `protected-access` (W0212) | 549 | 549 | 0 | 0 | 风格意见 |
+| `redefined-outer-name` (W0621) | 264 | 256 | 8 | 0 | 风格意见 |
+| `unused-argument` (W0613) | 140 | 136 | 4 | 0 | 风格意见 |
+| `line-too-long` (C0301) | 113 | 94 | 19 | 0 | 风格意见 |
+| `too-many-branches` (R0912) | 53 | 51 | 2 | 0 | 风格意见 |
+| `too-many-statements` (R0915) | 40 | 38 | 2 | 0 | 风格意见 |
+| `reimported` (W0404) | 26 | 0 | 26 | 0 | 真缺陷 |
+| `too-many-return-statements` (R0911) | 25 | 23 | 2 | 0 | 风格意见 |
+| `no-name-in-module` (E0611) | 23 | 8 | 0 | 15 | 环境假阳性 |
+| `unnecessary-lambda` (W0108) | 23 | 21 | 2 | 0 | 风格意见 |
+| `wildcard-import` (W0401) | 22 | 22 | 0 | 0 | 风格意见 |
+| `unused-wildcard-import` (W0614) | 22 | 22 | 0 | 0 | 风格意见 |
+| `unused-import` (W0611) | 17 | 0 | 17 | 0 | 真缺陷 |
+| `wrong-import-order` (C0411) | 14 | 0 | 14 | 0 | 风格意见 |
+| `use-implicit-booleaness-not-comparison` (C1803) | 7 | 5 | 2 | 0 | 风格意见 |
+| `ungrouped-imports` (C0412) | 5 | 0 | 5 | 0 | 风格意见 |
+| `too-many-nested-blocks` (R1702) | 3 | 2 | 1 | 0 | 风格意见 |
+| `no-value-for-parameter` (E1120) | 2 | 0 | 0 | 2 | 环境假阳性 |
+| `unsubscriptable-object` (E1136) | 2 | 2 | 0 | 0 | 环境假阳性 |
+| `try-except-raise` (W0706) | 1 | 1 | 0 | 0 | 风格意见 |
+| `unexpected-keyword-arg` (E1123) | 1 | 0 | 1 | 0 | 环境假阳性 |
+| `superfluous-parens` (C0325) | 1 | 1 | 0 | 0 | 风格意见 |
+| `chained-comparison` (R1716) | 1 | 1 | 0 | 0 | 风格意见 |
+| `useless-return` (R1711) | 1 | 1 | 0 | 0 | 风格意见 |
+| `unreachable` (W0101) | 1 | 0 | 1 | 0 | 真缺陷 |
+| `too-many-boolean-expressions` (R0916) | 1 | 1 | 0 | 0 | 风格意见 |
+| `consider-using-with` (R1732) | 1 | 1 | 0 | 0 | 风格意见 |
+| `unnecessary-pass` (W0107) | 1 | 1 | 0 | 0 | 风格意见 |
+| `too-many-public-methods` (R0904) | 1 | 1 | 0 | 0 | 风格意见 |
+| `cell-var-from-loop` (W0640) | 1 | 1 | 0 | 0 | 风格意见 |
+
+**归属的三种读法怎么算**（判据 198 的机制，这里给可复现命令）：`git rev-parse -q --verify 2744a976b:<path>`
+不存在 ⇒ **fork-created**（编辑零账面成本）；存在且列在 `scripts/p1_baseline.json["files"]`（118 枚键）⇒ **在册**；
+存在且 `git hash-object` 与分叉点字节相同 ⇒ **上游同**。表里"上游同"只有 17 条，但每一条都是**碰一下就新造一枚
+冲突宿主**，所以它们不是"待修"，是"看着能修、实际不能碰"。
+
+**判据 200（formatter 口径必须带上钩子的 `--line-length=79`；按 black 默认的 88 去量会凭空造出 33 枚脏文件）**：
+本刀编辑后我先跑不带参数的 `black --check`，得到"40 枚里 33 枚已脏"，据此几乎要写下"这批文件格式债早就存在"。
+钩子是 `args: [--line-length=79]`（`.pre-commit-config.yaml`，`.flake8` 同样钉 `max-line-length = 79`）。
+同一棵树换成 79 重测：**HEAD 上这 40 枚 0 枚脏**，编辑后 **3 枚脏 / 16 行 diff**。也就是说脏不是既有债，
+是本刀自己造的新债 —— 而 88 的读数把它伪装成了既有债。可迁移的动作只有一个：**量之前先读钩子的 args**，
+因为两个口径的差足以让"既有"与"新增"互换，而这条界线正是判据 198 赖以分箱的前提。
+
+**判据 201（隐式字符串拼接的重排和 black 的合流对撞；同时满足 flake8 / black / pylint 的形状只有一枚融合字面量）**：
+`implicit-str-concat`（W1404）只对**跨行**拼接开火。写成单行 `"a" "b"` 能让 pylint 闭嘴，但那正是
+flake8 与可读性都不想要的形状；写成括号里的跨行拼接，black 在 79 装得下时会把它**合流**，合流后又变回单行拼接。
+三把尺子的唯一不动点是**把相邻字面量并成一枚**（值不变，只是不再"相邻"）。四处同型修正：
+`tests/unit/providers/test_openai_stream_thinking_leak_compat.py`（`leaked = "Thinking\n## ✅ 当前进展确认 - 没有丢失！\n根据我刚才的读取验证，所有成果都已保存。"`）、
+`tests/unit/knowledge/test_local_graph_provider.py`（`write_text` 的内容并为一枚）、
+`src/qwenpaw/knowledge/graphify_provider.py`（`sorted_nodes = sorted(nodes, key=G.degree, reverse=True)[:top_k]` 收成一行）、
+`src/qwenpaw/knowledge/manager.py`（`persisted_lines` 的换行只保留 ATC 要求的那枚尾逗号）。
+自拦一条：第一次尝试保留两行拼接，**没跑就否掉**了 —— 那个长度在 79 内，black 必然合流，合流后 W1404 重新开火。
+
+**验证读数**（全部改后现算；black/ATC/pylint 三枚是刚复算的，与记录逐字相同）：
+- pinned black `--line-length=79 --check` 这 40 枚：**`40 files would be left unchanged`**；
+  add-trailing-comma 在 `/tmp` 副本上跑，**40 枚无变化**（钩子版本不接受 `--line-length`，只能是默认行为）。
+- `pre-commit run pylint --files` 这 40 枚：**665 条**，评分 9.62/10，无新增消息码。
+- `pre-commit run flake8 --all-files`：**587 条不变**（不给显式文件列表 —— 那会绕过 `.flake8` 的 exclude）。
+- 定向 pytest：**3,672 passed / 1 skipped / 4 xfailed**；本刀改过的 5 枚测试文件复跑 **32 passed**。
+- L1 必过五目录：**1,339 passed / 1 skipped**。
+- CI 选择集（`tests/unit`）：**2 failed / 17,834 passed / 24 skipped / 4 xfailed in 1107.06s** ——
+  与 §8.40 记录的基线逐字相同，两枚红仍是那两枚 acp（工作区耦合，未裁）。
+- P1 `--check --target-ref working` **rc=0**，账 **117 文件 / +10,997 −521** 未动（40 枚全 fork-created）；
+  六枚离线门禁 rc=0（用 `/tmp/copaw312/bin/python`，系统 python3 缺 `yaml`/`packaging`/`dotenv`）。
+
+**flake8 残 587 的分档**（本刀不动它：它是 §8.39 的账；给表只为 §8.42 有数可裁）：
+
+| 码 | 条数 | fork-created | 在册 |
+| --- | --- | --- | --- |
+| `E501` line too long | 561 | 376 | 185 |
+| `F811` redefinition | 25 | 0 | 25 |
+| `E305` expected 2 blank lines | 1 | 0 | 1 |
+
+E501 按**物理行形状**（现算：tokenize 判是否落在多行字符串 token 内，行首 `#` 判整行注释）：
+
+| 形状 | 条数 | fork-created | 在册 |
+| --- | --- | --- | --- |
+| 行内字符串超限 | 304 | 244 | 60 |
+| 纯代码超限 | 175 | 55 | 120 |
+| 落在多行字符串内部（docstring/模板） | 75 | 73 | 2 |
+| 代码 + 行尾注释 | 5 | 4 | 1 |
+| 整行注释 | 2 | 0 | 2 |
+
+这张形状表说明为什么"剩 561 条"不等于"还能机械清 561 条"：formatter 只替**纯代码**那 175 条换行，
+`fork-created` 那半里还有 73 条在字符串内部（改了会改值，只能改文案本身）、244 条是行内字符串（同理）；
+整行注释那 30 条已在 `5ebbc839f` 手写过。
+
+**F811 25 条全在册**：21 枚在 `app/routers/agents.py`（自动合并造出的导入影子，§8.34 已记），3 枚在
+`config/utils.py`，1 枚在 `agents/utils/file_handling.py`。它们与 pylint 表里在册的 `reimported` 26 +
+`unused-import` 17 + `unreachable` 1 是同一批痕迹 —— 合并把导入写了两遍，两把尺子从两侧看到同一件事。
+
+**待裁清单（§8.42 呈报的四问，本刀一律不自裁）**：
+① 风格意见族 **1,289** 条：加 `--disable` 进 `.pre-commit-config.yaml`（该文件是**上游同**，动它 = 开一枚配置宿主）、
+还是逐族留账不改配置、还是只在 fork-created 文件上加行级 pragma。
+② 环境假阳性 **28** 条：是否给 pylint 钩子补 `additional_dependencies`（`mcp`）—— 同样是动上游同的配置文件。
+③ 在册 **44** 条真缺陷（`reimported` 26 / `unused-import` 17 / `unreachable` 1）+ flake8 `F811` 25 + `E305` 1：
+清它们必须动在册文件，判据 198 说这属于冲突账，要单独授权而不是随 lint 批走。
+④ 在册 formatter 脏：prettier **10** 枚（+316 / −207，0 枚新宿主）+ black/ATC **15** 枚。
+
+**未办**：`_activate_import_bundle` 的 `overwrite` 形参（`W0613`，在册）随 ① 一起裁；
+`redefined-outer-name` 在册那 8 条随 ③ 一起裁。
