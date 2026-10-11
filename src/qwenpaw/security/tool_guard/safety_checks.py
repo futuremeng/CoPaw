@@ -390,6 +390,14 @@ def _logical_posix_parts(resolved: Path | PurePath) -> tuple[str, ...]:
     return _logical_posix_parts_from(resolved.parts)
 
 
+def _real_home_logical_parts() -> tuple[str, ...]:
+    """Logical POSIX parts of the *current* user's home root, if POSIX."""
+    home = os.path.expanduser("~")
+    if not home.startswith("/"):
+        return ()
+    return _logical_posix_parts(PurePosixPath(home))
+
+
 def _is_safe_temp_tree(parts: tuple[str, ...]) -> bool:
     """Return True for typical temp / pytest workspace roots."""
     if len(parts) >= 2 and parts[1] == "tmp":
@@ -441,7 +449,7 @@ def _is_resolved_path_catastrophic(resolved: Path | PurePath) -> bool:
     # ('/', 'Users') or ('/', 'Users', 'alice') → catastrophic
     # ('/', 'Users', 'alice', 'proj') → not
     if top in _HOME_TOP_LEVEL:
-        return len(parts) <= 3
+        return len(parts) <= 3 or parts == _real_home_logical_parts()
     # /root is the root user's home directory (not a plain system tree).
     # ('/', 'root') → catastrophic (home root)
     # ('/', 'root', 'project') → not (workspace subpath under root's home)
