@@ -9,6 +9,9 @@ const t = ((key: string) => key) as unknown as Parameters<
   typeof getDefaultConfig
 >[0];
 
+// The title and avatar below are the fork's two brand lines in defaultConfig.ts.
+// D-22 stage B moves brand strings into a fork-owned slot and reverts this file to
+// upstream bytes, so these pins are a bridge, not a new contract.
 describe("defaultConfig static shape", () => {
   it("carries the brand theme defaults", () => {
     expect(defaultConfig.theme.colorPrimary).toBe("#FF7F16");
@@ -16,7 +19,7 @@ describe("defaultConfig static shape", () => {
     expect(defaultConfig.theme.prefix).toBe("qwenpaw");
     expect(defaultConfig.theme.leftHeader).toEqual({
       logo: "",
-      title: "Work with QwenPaw",
+      title: "Work with CoPaw",
     });
     expect(defaultConfig.theme.bubbleList.userMessageAnchors.variant).toBe(
       "navigator",
@@ -33,7 +36,7 @@ describe("defaultConfig static shape", () => {
   });
 
   it("carries the welcome defaults with two prompts and an api stub", () => {
-    expect(defaultConfig.welcome.avatar).toBe("/online.svg");
+    expect(defaultConfig.welcome.avatar).toBe("/copaw-icon.svg");
     expect(defaultConfig.welcome.prompts).toHaveLength(2);
     expect(defaultConfig.api).toEqual({ baseURL: "", token: "" });
   });
@@ -66,7 +69,7 @@ describe("getDefaultConfig", () => {
     // Untouched defaults survive the spread.
     expect(cfg.sender).not.toHaveProperty("maxLength");
     expect(cfg.theme.colorPrimary).toBe("#FF7F16");
-    expect(cfg.welcome.avatar).toBe("/online.svg");
+    expect(cfg.welcome.avatar).toBe("/copaw-icon.svg");
     expect(cfg.api).toEqual({ baseURL: "", token: "" });
   });
 

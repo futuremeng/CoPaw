@@ -17,6 +17,9 @@ import React from "react";
 const apiMocks = vi.hoisted(() => ({
   testProviderConnection: vi.fn(),
   configureProvider: vi.fn(),
+  // The fork's modal fetches the running config when configuring lmstudio, so
+  // the api stub has to answer that call for every case that opens the modal.
+  getAgentRunningConfig: vi.fn(),
 }));
 
 vi.mock("../../../../../api", () => ({
@@ -126,6 +129,7 @@ describe("ProviderConfigModal", () => {
     vi.clearAllMocks();
     apiMocks.testProviderConnection.mockResolvedValue({ success: true });
     apiMocks.configureProvider.mockResolvedValue({});
+    apiMocks.getAgentRunningConfig.mockResolvedValue({});
   });
 
   describe("render and hints", () => {
