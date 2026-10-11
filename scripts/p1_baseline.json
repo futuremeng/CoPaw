@@ -281,6 +281,14 @@
       "naming": 0,
       "removed": 0
     },
+    "console/src/pages/Chat/OptionsPanel/defaultConfig.test.ts": {
+      "added": 6,
+      "behavior_added": 5,
+      "behavior_removed": 2,
+      "mechanical": false,
+      "naming": 1,
+      "removed": 3
+    },
     "console/src/pages/Chat/OptionsPanel/defaultConfig.ts": {
       "added": 2,
       "behavior_added": 1,
@@ -360,6 +368,14 @@
       "mechanical": false,
       "naming": 0,
       "removed": 25
+    },
+    "console/src/pages/Settings/Models/components/modals/ProviderConfigModal.test.tsx": {
+      "added": 4,
+      "behavior_added": 4,
+      "behavior_removed": 0,
+      "mechanical": false,
+      "naming": 0,
+      "removed": 0
     },
     "console/src/pages/Settings/Models/components/modals/ProviderConfigModal.tsx": {
       "added": 236,
@@ -923,15 +939,15 @@
     }
   },
   "totals": {
-    "added": 10950,
-    "behavior_added": 10915,
-    "behavior_files": 113,
-    "behavior_removed": 483,
-    "files": 114,
+    "added": 10960,
+    "behavior_added": 10924,
+    "behavior_files": 115,
+    "behavior_removed": 485,
+    "files": 116,
     "mechanical_files": 1,
     "naming_files": 1,
-    "naming_lines": 35,
-    "naming_touched_files": 7,
-    "removed": 518
+    "naming_lines": 36,
+    "naming_touched_files": 8,
+    "removed": 521
   }
 }
