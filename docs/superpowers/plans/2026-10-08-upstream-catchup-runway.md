@@ -2020,3 +2020,134 @@ L1 五目录 **1,339 passed / 1 skipped / 0 failed**。两枚动过的文件对�
 "哪个 commit + 是否含未退回的机械改写"；跨刀对账时用临时 worktree 在那几笔提交上现算，别信文档里的裸数字。
 
 **已闭环计数推到 106。**
+
+### 8.34 刀 107（2026-10-11）：项 ⑦ 的前置——合并吞掉了 fork 覆盖命令的参数面，`update` 在两个程序名下一起死
+
+**一句话结论**：fork 的 `update` 覆盖用 `params=list(上游.params)` 抄选项面、却把回调签名写死成 `yes`，
+上游这 1,201 枚里新增的 `--prerelease` 因此让**每一次** `update` 调用死于
+`TypeError: overlay_update_callback() got an unexpected keyword argument 'prerelease'`；
+改成 `**options` 转发（同仓兄弟覆盖早已用的那个形）后，§8.33 记的那 14 枚红全清，代价 = **零枚新宿主**。
+
+**归属**：动的两枚文件 `src/copaw/cli/update_cmd.py`、`tests/unit/cli/test_cli_update_overlay.py`
+对分叉点 `2744a976b` 均 `git cat-file -e` 不存在 ⇒ **fork-created，零账**；
+上游那枚 `src/qwenpaw/cli/update_cmd.py` 现读仍逐字节等于基线（clean-upstream），本刀一字未动，
+所以它没被拖进冲突面。
+
+**根因（不是"少写一个参数"，是两套面的耦合方式）**：`make_overlay_update_command()`
+（`src/copaw/cli/update_cmd.py:60`）把上游命令的 `params` 整表抄来 ⇒ **解析面自动跟上游**；
+覆盖自己的回调只认 `yes` ⇒ 上游加一枚选项（`src/qwenpaw/cli/update_cmd.py:679 --prerelease`，
+回调 `:685 def update_cmd(ctx, yes, prerelease)`）之后，click 照抄来的面传 kwargs，回调接不住。
+命令注册在**共享**的核心 group 上（判据 90），`copaw` 与 `qwenpaw` 解析到同一枚命令对象，
+所以红的不是 fork 那条拒绝分支，而是上游自己的升级入口 —— 两个程序名全死。
+同仓已有正解：兄弟覆盖 `src/copaw/cli/app_command.py` 用 `functools.wraps(core_callback)` + `*args/**kwargs`
+转发，所以它的 `app` 命令没红。
+
+**修法**：`overlay_update_callback` 改 `@click.pass_context` + `**options: Any`，非 copaw 名时
+`ctx.invoke(_core_update_cmd, **options)`；copaw 名的拒绝分支与文案一字未动。
+转发的 kwargs 面 = 抄来的 params 面 ⇒ 上游将来加的每个选项自动跟着走，不再需要第二把刀。
+
+**用例账（TDD，先红后绿）**：两枚新守卫都取过红，红形就是那条 `TypeError`。
+① `test_copaw_refusal_accepts_every_option_it_advertises`：枚举覆盖命令**自己广告的**选项面，逐枚以最长名传进 CLI，
+断言仍 rc≠0、仍不 pip-install，并额外断言这些选项全是 flag ⇒ 上游一旦加**带值**的选项，这条先红，
+逼下一次去读参数面（修的是这一类，不是这一枚）。
+② `test_qwenpaw_program_forwards_prerelease_to_the_upstream_updater`：钉"转发的 kwargs 真到了上游回调"，
+断言替身收到的调用面是 `{"include_prerelease": True}`。
+顺带修的一处前置：`up_to_date` 替身原来是 `lambda: core_update.__version__`，接不住新 kwarg ⇒ 改成镜像真签名
+`def _fetch_latest(*, include_prerelease: bool = False)`（严格 kw-only，将来签名再漂就大声红）并记录调用面。
+
+**读数**：
+
+| 面 | 改前 | 改后 |
+|---|---|---|
+| 两枚 update 用例文件 | 33 passed / **14 failed** | **49 passed** |
+| CI 选择集（本刀之后、8.35 之前）| §8.33 记的 15 failed / 15,774 passed | 10 failed / 15,781 passed |
+| `copaw`/`qwenpaw` 两个程序名的 `update` | 全死在 TypeError | 拒绝分支与上游升级分支各归其位 |
+
+那 10 枚不是本刀引入的：按判据 187 在 `9bcdbf3eb` 的临时 worktree（不带本刀改动）隔离重跑，9 枚照红 ⇒
+归属见 8.35。flake8/mypy 在本刀动的文件上 Passed；pylint 在这枚 fork 自有测试文件上从 9 条 W0621/W0613 涨到 11 条，
+新增两枚全是**同类**（pytest fixture 形参按模块作用域名重复），该文件在基线上就不绿（8.32 未办 ② 的射程）。
+
+**判据 189（抄来的解析面必须配转发到底的执行面）**：覆盖型命令只要写 `params=list(core.params)`，
+它的回调就不能再点自己认识的选项名——否则上游每加一枚选项就红一次，而且红在上游自己的程序名上（共享 group）。
+取红用例要**枚举广告面**而不是点一枚具体新选项，并断言选项形状（全是 flag）；同仓的 `functools.wraps` +
+`**kwargs` 形是现成正解，先抄自己人再改签名。
+**判据 190（替身要镜像真签名，严格 kw-only）**：测试替身写成 `lambda:` 就等于把上游合同钉死在采集它的那天；
+`def _fetch(*, include_prerelease: bool = False)` 让下一次上游漂签名时替身自己红，而不是让被测代码红在别处。
+
+**已闭环计数推到 107。**
+
+### 8.35 刀 108（2026-10-11）：CI 选择集剩余红的根因是本机钥匙串——unit 套件与真机解耦，但不改上游的安全码
+
+**一句话结论**：`import qwenpaw` 在真实 `HOME` 下要花 **20s 墙钟换 0.2s CPU**，因为
+`_get_master_key` 串行吃满**两趟** `_KEYRING_TIMEOUT=10`（读超时 → 文件兜底命中 → 回写又超时），
+这条把 8 枚计时红判成了机器耦合而非回归；修法只在 fork 自有的 `tests/unit/conftest.py` 加一枚 autouse
+fixture，用上游自己留的逃生口 `QWENPAW_DISABLE_KEYRING`，**零枚新宿主**。
+
+**取证配方（值得复用，成本 3 条命令）**：
+`python -c pass` real 0.03s；`PYTHONPATH=src python -c "import qwenpaw"` real **20.37s / user 0.22s**；
+同一命令 `HOME=/tmp/空目录` real 0.28s。墙钟与 CPU 差两个数量级 ⇒ 阻塞在非 CPU 处。
+栈由 `faulthandler.dump_traceback_later(6/15)` 给出，两次转储正好抓到那两趟调用：
+
+```
+__init__.py:17 load_envs_into_environ → envs/store.py:352 → secret_store.decrypt(:392)
+  → _get_fernet(:366) → _get_master_key(:334)
+  → _try_keyring_get → _call_with_timeout → keyring/backends/macOS/api.py:151 find_generic_password  (10s)
+  → _read_key_file 命中 → _try_keyring_set → api.py:183 delete/set_generic_password                (又 10s)
+```
+
+**为什么不在生产侧修**：`src/qwenpaw/security/secret_store.py` 与 `src/qwenpaw/__init__.py` 现读均与分叉点
+逐字节相同 ⇒ 动它们 = **新开两枚冲突宿主**；而且"读超时之后还要不要回写""导入期要不要解密"是上游的
+钥匙串/启动策略，fork 替它裁等于把一个安全决定搬进我们的账册。
+**生产面读数照记不藏**：`python -m copaw.cli.main update --yes`（真实 HOME、无逃生口）
+= **real 22.50s / user 1.79s** 打三行拒绝文案 ⇒ 同一条 20s 在 CLI 冷启动上是用户可感的；
+触发条件是"这台机器的钥匙串条目不在当前解释器的 ACL 里"（开发者多 venv/worktree 的形状），
+发布后的单解释器安装不会撞上，所以记为上游可上报项而非 fork 缺陷（`_should_skip_keyring` 的文档
+承诺"caller never blocked for more than `_KEYRING_TIMEOUT` seconds"，聚合面是 2×，这条可以直接报上游）。
+
+**测试侧修法（落点零账）**：`tests/unit/conftest.py`（fork-created）加 autouse `isolated_os_keyring`，
+`monkeypatch.setenv("QWENPAW_DISABLE_KEYRING", "1")` —— 与 `src/qwenpaw/hub/local_provisioner.py:362`
+给子进程的那枚逃生口同一支；原则就是这枚 conftest 里 `isolated_config_file` 自己写下的那一句
+（"any unit test that reaches load_config()/save_config() touches the developer's live `~/.copaw/config.json`"），
+不新造机制。
+守卫文件 `tests/unit/test_unit_suite_environment.py`（新建，fork-created）钉两件事：
+`_should_skip_keyring()` 在本套件里必须为真；以及**后果**——用套件自己的 10s 预算重导入
+`qwenpaw.constant` 必须跑完（这条就是那 4 枚 `test_custom_startup_concurrency_parsing` 的失败形）。
+红 = `2 failed`（一枚 `assert False is True`、一枚 `subprocess.TimeoutExpired ... after 10 seconds`），
+绿 = **54 passed in 1.77s**（守卫两枚 + `test_multi_agent_manager_startup.py` 整文件 +
+`tests/unit/security/test_secret_store.py`，后者逐枚 patch `_try_keyring_get/set`，不受逃生口影响）。
+
+**读数（同一棵树上的三趟 CI 选择集，集合差异按判据 187 报）**：
+
+| 趟 | 失败 | 通过 |
+|---|---|---|
+| `9bcdbf3eb`（刀 106 落点，§8.33 记的那趟）| 15 | 15,774 |
+| 刀 107 之后 | 10 | 15,781 |
+| 刀 107 + 108 | **2** | **15,791**（23 skipped / 4 xfailed / 836.78s）|
+
+L1 必过五目录同树现算 **1,339 passed / 1 skipped / 0 failed / 8.50s**（§8.32 那趟是 17.64s，
+逃生口把它也带走了）。离线五门禁全 rc=0（namespace boundaries / release-channel R1–R5 over 6 files /
+ci-command-targets 18 命令 · 4 包目录 / locale split 4,658 键 / brand ledger 7 files 35 lines）；
+P1 对在册宿主 `--check --target-ref working` rc=0（`117 文件 / +10,968 −521`，与 §8.33 改后读数一致，
+本批四枚文件全不在册 ⇒ 零增长，没动基线）。
+
+**剩余 2 枚的归属（不裁，只登记）**：`tests/unit/agents/test_acp_available_commands.py` 的两枚
+`_drain(..., timeout=5.0)` 超时，隔离单跑也红 ⇒ 不是并发争抢。同一文件在两种解耦下都全绿：
+空 `HOME` = 21 passed / 1.86s；真 `HOME` + `QWENPAW_WORKING_DIR=/tmp/…` = 21 passed / 1.53s
+⇒ 与钥匙串无关，是**真工作区**让 ACP 会话启动超出那 5s 预算。该文件逐字节等于分叉点（clean-upstream），
+免宿主落点仍是那枚 fork 自有 conftest（把 `QWENPAW_WORKING_DIR` 也钉进临时目录），
+但它同时会改变 CI 上的工作区形状，**必须整树重跑才能落**，本刀不做。
+
+**判据 191（计时型红的取证是"两种 HOME 的 real/user 比"，不是把预算调大）**：墙钟 ≫ CPU 就是阻塞在非 CPU 处，
+`faulthandler.dump_traceback_later` 给得出栈；同一命令换 HOME 复现即坐实机器耦合。
+调 timeout 或 skip 用例都是把耦合留在树里（判据 186 的同一件事，只是这次量的是时间）。
+**判据 192（套件级机器解耦优先用上游自带的那个逃生口，并且要连后果一起钉）**：上游已经有
+`QWENPAW_DISABLE_KEYRING`（hub provisioner 给自己的子进程就是这枚），fork 再造一层 fixture 或再包一层
+monkeypatch 都是第二套真相；守卫用例一枚钉机制（谓词为真）、一枚钉后果（子进程在自己的 10s 预算内跑完），
+这样上游把逃生口改名时我们会红，而不是静默地把 20s 导入请回来。
+
+**本笔登记的未办（不裁，只落点）**：① 上面那 2 枚 acp 的 `QWENPAW_WORKING_DIR` 全局解耦（候选一行，
+需整树重跑）；② 上游 `secret_store` 的 2×timeout 聚合 + 导入期解密（可上报上游，fork 不代裁）；
+③ 8.32 未办 ①–⑤ 照旧在册（15 枚在册宿主的 comma/black 脏、三枝报告型钩子、pylint `E0611`、
+overlay→真渲染守卫、19 枚 tsc、3 枚 prettier、真浏览器 `copaw app`）。
+
+**已闭环计数推到 108。**
