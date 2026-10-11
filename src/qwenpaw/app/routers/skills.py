@@ -1295,13 +1295,11 @@ async def install_marketplace_skill(
     workspace = await get_agent_for_request(request)
     workspace_dir = Path(workspace.workspace_dir)
 
-    overwrite = payload.overwrite or bool(cfg.install.overwrite_default)
     try:
-        result = install_skill_from_hub(
+        result = await install_skill_from_hub(
             workspace_dir=workspace_dir,
             bundle_url=selected.install_url,
             enable=payload.enable,
-            overwrite=overwrite,
         )
     except SkillScanError as exc:
         return _scan_error_response(exc)

@@ -4517,7 +4517,7 @@ def _resolve_bundle_import_toggles(bundle: dict[str, Any]) -> dict[str, bool]:
     return toggles
 
 
-def _activate_import_bundle(
+async def _activate_import_bundle(
     *,
     workspace_dir: Path,
     local_agent_id: str,
@@ -4541,7 +4541,7 @@ def _activate_import_bundle(
         install_urls = _extract_install_urls(bundle)
         for url in install_urls:
             try:
-                result = install_skill_from_hub(
+                result = await install_skill_from_hub(
                     workspace_dir=workspace_dir,
                     bundle_url=url,
                     enable=True,
@@ -5115,7 +5115,7 @@ async def import_square_agent(
 
     activation_summary: dict[str, Any] | None = None
     if bundle_payload:
-        activation_summary = _activate_import_bundle(
+        activation_summary = await _activate_import_bundle(
             workspace_dir=workspace_dir,
             local_agent_id=local_agent_id,
             source_id=req.source_id,

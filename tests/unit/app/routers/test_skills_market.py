@@ -613,6 +613,108 @@ def test_marketplace_install_endpoint_returns_not_found_when_item_missing(
     assert "MARKET_ITEM_NOT_FOUND" in response.json()["detail"]
 
 
+def test_marketplace_install_endpoint_awaits_hub_install(
+    monkeypatch: pytest.MonkeyPatch,
+    skills_api_client: TestClient,
+    tmp_path: Path,
+) -> None:
+    item = MarketplaceItem(
+        market_id="community",
+        skill_id="proofread-single",
+        name="Proofread Single",
+        source_url="https://github.com/example/community-skills.git",
+        install_url=(
+            "https://github.com/example/community-skills/"
+            "tree/main/skills/proofread-single"
+        ),
+    )
+    monkeypatch.setattr(
+        "qwenpaw.app.routers.skills._load_current_market_config",
+        lambda: SimpleNamespace(
+            install=SimpleNamespace(overwrite_default=False),
+        ),
+    )
+    monkeypatch.setattr(
+        "qwenpaw.app.routers.skills._aggregate_marketplace",
+        lambda *_args, **_kwargs: ([item], [], {}),
+    )
+
+    async def _mock_get_agent_for_request(_request):
+        return SimpleNamespace(
+            workspace_dir=tmp_path / "workspace",
+            agent_id="agent-under-test",
+        )
+
+    monkeypatch.setattr(
+        "qwenpaw.app.agent_context.get_agent_for_request",
+        _mock_get_agent_for_request,
+    )
+
+    captured: dict[str, object] = {}
+    reconciled: list[str] = []
+    reloaded: list[str] = []
+
+    # Mirrors the real keyword-only signature of
+    # agents/skill_system/hub.py's install_skill_from_hub, which is an
+    # async def at the fork point.
+    async def _install_skill_from_hub(
+        *,
+        workspace_dir,
+        bundle_url,
+        version="",
+        enable=False,
+        target_name=None,
+        cancel_checker=None,
+    ):
+        captured.update(
+            {
+                "workspace_dir": str(workspace_dir),
+                "bundle_url": bundle_url,
+                "version": version,
+                "enable": enable,
+                "target_name": target_name,
+            },
+        )
+        return SimpleNamespace(
+            name="proofread-single",
+            enabled=True,
+            source_url=item.source_url,
+        )
+
+    monkeypatch.setattr(
+        "qwenpaw.app.routers.skills.install_skill_from_hub",
+        _install_skill_from_hub,
+    )
+    monkeypatch.setattr(
+        "qwenpaw.app.routers.skills.reconcile_workspace_manifest",
+        lambda workspace_dir: reconciled.append(str(workspace_dir)),
+    )
+    monkeypatch.setattr(
+        "qwenpaw.app.routers.skills.schedule_agent_reload",
+        lambda request, agent_id: reloaded.append(agent_id),
+    )
+
+    response = skills_api_client.post(
+        "/skills/marketplace/install",
+        json={
+            "market_id": "community",
+            "skill_id": "proofread-single",
+            "enable": True,
+            "overwrite": False,
+        },
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["installed"] is True
+    assert data["name"] == "proofread-single"
+    assert data["enabled"] is True
+    assert captured["bundle_url"] == item.install_url
+    assert captured["enable"] is True
+    assert reconciled == [str(tmp_path / "workspace")]
+    assert reloaded == ["agent-under-test"]
+
+
 def test_markets_defaults_endpoint_returns_bundled_defaults(
     skills_api_client: TestClient,
 ) -> None:
