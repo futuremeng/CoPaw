@@ -26,3 +26,16 @@ def isolated_config_file(
     monkeypatch.setattr(_config_utils, "_config_cache", None)
     monkeypatch.setattr(_config_utils, "_config_mtime", None)
     return working_dir
+
+
+@pytest.fixture(autouse=True)
+def isolated_os_keyring(monkeypatch: pytest.MonkeyPatch):
+    """Keep every unit test off the developer's keychain.
+
+    ``qwenpaw`` decrypts its persisted env vars through the OS keyring at
+    import time, and each keyring call is abandoned only after its own
+    10s timeout. CI skips the keyring through ``CI=true``; this is the same
+    escape hatch the hub provisioners already hand their child processes,
+    set explicitly so the suite does not depend on where it runs.
+    """
+    monkeypatch.setenv("QWENPAW_DISABLE_KEYRING", "1")
