@@ -1708,3 +1708,142 @@ antd `Modal` 里的"Paste as text / Attach as file / Cancel"三枚按钮（文�
 所以"跑到了多少条用例"只能读 `numTotalTests`，不能读 suites 数。
 
 **已闭环计数推到 103。**
+
+### 8.31 刀 104（2026-10-11）：8.30 末那 20 枚红是三因，头一因在 fork 自己的生产代码里
+
+**对象**：授权清单第 ④ 项。8.30 末的现算读数 = 20 枚断言红（5 枚文件）+ 2 枚收集错误（共 7 枚红文件）。
+
+**三因分解**（逐枚归属用 `git diff 2744a976b..HEAD --stat -- <file>` 判：空 diff ⇒ 上游逐字节）：
+
+| 因 | 落点 | 吃掉多少 |
+|---|---|---|
+| 一 · 生产侧回归（**唯一一枚真回归**） | `console/src/locales/copaw/register.ts` | `i18n.test.ts` 3 + `locales/copaw/register.test.ts` 7 + `Chat/longTextPaste.integration.test.tsx` 6 = **16 枚**，外加 `layouts/Sidebar.test.tsx` 一枚收集错误 |
+| 二 · fork 测试侧的过期假设 | `Projects/tests/ProjectDetailPage.test.tsx`、`Projects/tests/enLocaleTranslate.ts`、`Knowledge/selectLabels.test.ts`、`Knowledge/metrics.test.ts`、`Projects/tests/projectKnowledgePipelineUi.test.ts` + 新增 `src/test/loadTestLocales.ts` | 1 枚收集错误 + **11 枚**（selectLabels 6 + pipelineUi 4 + metrics 1） |
+| 三 · 与上游的分歧（不是 bug，是两笔账） | `Chat/OptionsPanel/defaultConfig.test.ts`、`Settings/Models/components/modals/ProviderConfigModal.test.tsx` | **4 枚**（defaultConfig 3 枚品牌 + ProviderConfigModal 1 枚 api 替身） |
+
+**因一机制**（`console/node_modules/i18next/dist/cjs/i18next.js:1455`，`BackendConnector.queueLoad`）：
+`if (!options.reload && this.store.hasResourceBundle(lng, ns)) { this.state[name] = 2; }`
+—— i18next 只在 store **还没有**这枚语言包时才请求。WP-13 把 overlay 注册从 `i18n.ts` 搬进
+`register.ts` 后，`registerCopawTranslations(i18n)` 仍在**模块作用域**把六语 overlay 整表
+`addResourceBundle` 进 store ⇒ 六语全被标记为已加载 ⇒ `i18n.ts` 里那枚供上游 base json 的
+`localeBackend.read` 一次也没被调用 ⇒ 在册的上游页面渲染裸 key（`i18n.test.ts` 3 枚红就是这件事）。
+`init` 把加载推到后一个 tick，所以模块作用域那次注册总是先赢。
+
+**修法**：overlay 改挂 i18next 的 `loaded` 事件（同文件 `:1520` 发，载荷 `{lng: {ns: true}}`），按语言各取自己那枚合并进去。
+必须挂在 `loaded` 而不是提前塞：`:1520` 之前 `loaded(name, err, data)` 已经把 base 用
+`store.addResourceBundle(..., {skipCopy: true})` 以 `{...pack, ...resources}` **浅**合并进 store，
+overlay 只有在那之后带 `deep=true, overwrite=true` 落地才不会把 base 整棵盖掉。
+另加 `typeof instance.on !== "function"` 早退：上游 `Sidebar.test.tsx` 用 `vi.mock("i18next")` 交回的是
+`{ t, use, init }` 替身（既没有 `addResourceBundle` 也没有 `on`），它们的 `t` 从不读 store，那里没有可叠的东西。
+
+**因果取证**（探针 = Edit 把 `register.ts` 的合并时机换回整表塞入、读完再 Edit 复原，**不碰 `git checkout`，判据 121**）：
+
+```
+cd console && HOME=~/.k102home npx vitest run src/i18n.test.ts src/locales/copaw/register.test.ts \
+  src/pages/Chat/longTextPaste.integration.test.tsx --reporter=json --outputFile=<f>
+```
+
+同一命令两态 = **39 枚用例 / 16 枚红**（时机换回旧写法）↔ **39 / 0**（事件式合并）。
+16 枚红的标题逐枚 = `i18n.test.ts` 3（`restores the persisted language …`、`logs and falls back to English …`、
+`uses the initialized instance for built-in menu labels`）、`register.test.ts` 7（六语 `registers exactly the
+pre-move merged bundle` + `keeps upstream-owned keys resolvable next to the overlay`）、
+`longTextPaste` 6（`pastes into an empty composer …` 一族）。⇒ 8.30 末那 20 枚的头 16 枚由这一枚文件解释。
+
+**因二**：三枚 fork 自写守卫（selectLabels / metrics / pipelineUi）断言的是 `i18n.t(key, { lng })`，
+但**没有任何人驱动那枚语言的加载**——旧写法把 overlay 提前塞满 store，所以它们一直是靠"store 里恰好只剩
+overlay"这一件事而绿的（base 被压掉之后 overlay 反而全命中）。base 一恢复，裸 key 立刻现形 ⇒
+新增 `console/src/test/loadTestLocales.ts`（`await i18nReady` 后 `i18n.loadLanguages([...], cb)`），
+四处调用点各挂 `beforeAll(() => loadTestLocales(...))`（`register.test.ts` 自己也挂：断言"导入留下的那副 store"
+等于在赌注册时机，摘掉 hook 后它自己的 `expectedBundle` 独立对账照样能证红）。
+`enLocaleTranslate.ts` 那枚测试替身原来靠 `registerCopawTranslations(collector)` 嗅探 overlay，
+时机改成事件式后它没有实例可挂 ⇒ `register.ts` 导出 `copawOverlays`，替身直读 `copawOverlays.en`
+（合并顺序的唯一所有者仍是 `register.ts`，替身没有重新列表）。
+`ProjectDetailPage.test.tsx` 的收集错误 = `document.queryCommandSupported is not a function`（monaco 在 jsdom 下
+import 期就要它，而该文件没有一条用例断言编辑器）⇒ 本地 `vi.mock("../components/ProjectEditorPanel")`，
+与同族兄弟文件替 monaco 的既有做法一致。
+
+**因三**：`ProviderConfigModal.test.tsx` 的 `apiMocks` 只列了 `testProviderConnection` / `configureProvider`，
+而 fork 的 `ProviderConfigModal.tsx:556` effect 调 `api.getAgentRunningConfig()`（在册 +236 行那笔 lmstudio 能力）
+⇒ 上游替身补一枚 `getAgentRunningConfig: vi.fn()` + `beforeEach` 里 `mockResolvedValue({})`。
+`defaultConfig.test.ts` 钉的是 `title: "Work with QwenPaw"` 与 `/online.svg`，而在册生产文件
+`defaultConfig.ts` 的对应两行是 `Work with CoPaw` 与 `/copaw-icon.svg`（两枚资源都在 `console/public/` 里，实测存在）
+⇒ 这是 D-22 阶段 B 的账（`docs/superpowers/plans/2026-10-01-d22-brand-boundary-stage-a.md:72,613`、
+`docs/copaw-brand-boundary.md:51` 把这枚文件列为阶段 B 的 9 枚之一），不是本刀的裁决。
+两条路都不选：把生产那 2 行退回上游 ⇒ 用户可见品牌在 B3 的落点还不存在时先被剥掉；
+放着不管 ⇒ 全套又回到非零红，后面每一刀的"绿"信号都没了。故选**桥**：改上游用例的 3 枚字面量并写明
+"这是桥、阶段 B 退上游字节时连本文件一起退回"。**代价现算**：`check_p1_invariants.py --check` 报
+`NEW upstream-owned file touched` ×2（`defaultConfig.test.ts`、`ProviderConfigModal.test.tsx`），
+册 114 → **116**、+10,950 → **+10,960**、−518 → **−521**、命名 35 → **36 行**（touched 7 → 8 枚）。
+配套 `--write-baseline` 重立，`chore(p1)` 同笔提交。
+
+**验收读数**（配方同 8.30：`cd console && npx vitest run --reporter=json --outputFile=<f>`）：
+
+| 读数 | 8.30 末（改前） | 本笔末（改后） |
+|---|---|---|
+| 跑到的用例 `numTotalTests` | 5,222 | **5,237**（+15 = `ProjectDetailPage` 7 + `Sidebar` 8，即那两枚收集错误变成可跑） |
+| 断言红 | 20 | **0** |
+| 红文件（断言 + 收集） | 7 | **0** |
+| `numFailedTestSuites` | 14 | **0** |
+| 收集到的文件行 | 532 | **532** |
+
+红账对平：改前 20 = 因一 16 + 因三 4；末态 0。中间态（只落因一的修法）实测 5,237 / **15 枚红** / 5 枚文件 =
+因三那 4 枚 + 因二暴露的 11 枚（selectLabels 6 + pipelineUi 4 + metrics 1）；那 11 枚的可复现取法 =
+摘掉三处 `beforeAll(() => loadTestLocales())`。⇒ 本笔**净造红 0**，且头一因是**本笔自己造出来又当场测到的**
+（判据 177）。
+
+**旁证**：`npx tsc -b --noEmit` = **19 枚错误 / 12 枚文件**，与 8.30 那笔的 `npx tsc -b --force` = 19 **同数**，
+且 19 枚的落点文件与本笔 10 枚落点**零交集**（`grep -E "register|loadTestLocales|selectLabels|…"` 空）⇒ 类型面本笔净增 0；
+`scripts/check_copaw_locale_split.py` rc=0（4658 gated keys / 59 template families gated / 7 exempted /
+1459 overlay keys en+zh / 23 upstream-owned exempted）；
+`npx prettier --check` 本笔 10 枚落点里只 `register.ts` 因本笔变脏（`--stdin-filepath` 对 `git show HEAD:` 的字节重取，
+证它在 HEAD 是干净的）⇒ 已改到干净；另 3 枚（`ProjectDetailPage.test.tsx`、`projectKnowledgePipelineUi.test.ts`、
+`metrics.test.ts`）**改前就脏**，本笔没顺手 `--write`（判据 180）。
+Python 侧本笔零改动（`git status --short` 的落点全在 `console/`），pytest 读数**本笔没重取**，不拿旧串当现读（判据 171）。
+
+**本笔新增判据 177–181**：
+
+**判据 177（改共享单例的注册时机 = 全套验证，不是逐文件验证）**：本笔把 overlay 合并从"整表提前塞"改成"挂 `loaded`"，
+逐枚文件重跑全绿，全套却从 20 枚红变成 15 枚红 + 11 枚**新**红——因为三枚 fork 守卫一直靠那枚回归而绿
+（base 被压掉时 overlay 全命中）。边界：判据 165/176 讲的是"少跑"，本笔是另一半——**时机类改动会让一些用例
+从"因错而对"变成对**，所以它的验收必须含一次全套，且把"新造红"逐枚记账，不许写进"净减 N 枚"里抹平。
+
+**判据 178（i18next 的"已有 bundle 就不再请求"是 overlay 注册的硬约束）**：任何在模块作用域把语言包塞进
+`store` 的写法都会关掉 base 加载；正确挂点是 `loaded` 事件（`i18next.js:1520`），且合并要 `deep=true, overwrite=true`，
+因为 base 那侧的写入是 `skipCopy` 浅合并。副作用另记一条：`on` 必须**先探测再挂**，上游用例的 i18next 替身形状是
+`{ t, use, init }`，缺方法时用例文件是收集错误而不是断言红。
+
+**判据 179（断言 `t(key, { lng })` 的守卫用例必须自己驱动加载）**：不驱动 = 在断言"导入副作用恰好发生的顺序"。
+落点收在一枚 `src/test/loadTestLocales.ts`（`await i18nReady` 再 `loadLanguages`），由调用方 `beforeAll` 挂，
+语言子集按用例声明给；`register.test.ts` 那类"对拍整棵 store"的用例同样要挂，否则它测的是注册留下的残局而不是合同。
+
+**判据 180（prettier 只对本次改的行负责，历史脏的整枚文件不要顺手 `--write`）**：判据取法 =
+`npx prettier --stdin-filepath <真路径> --list-different < <(git show HEAD:<真路径>)` 先判改前是否已脏，
+再用 `npx prettier <真路径> | diff - <真路径>` 看差异行有没有落进本笔新增行。本笔实测 4 枚 warn 里
+只 1 枚（`register.ts`）是新增脏，另外 3 枚是历史脏，顺手重排会造出一批与本笔无关的 P1 行。
+
+**判据 181（品牌分歧的桥要留在册内、带退回出处，别当新合同）**：上游用例钉住上游品牌字面量、fork 生产文件带着
+fork 品牌 ⇒ 三选一里"退生产行"会在阶段 B 落点存在之前剥掉用户可见品牌，"放着不管"会毁掉全套绿信号，
+所以选"桥 + 记账"。记账的最小形 = 在册文件数与命名行数的现算增量（本笔 114→116、35→36）+
+用例里那行"阶段 B 退上游字节时连本文件一起退回"的出处（D-22 计划 `:72,613`、边界文档 `:51`）。
+**别把它读成 D-22 阶段 B 开工**：阶段 B 的 S1–S5 仍未验。
+
+**已闭环计数推到 104。**
+
+**本笔登记的未办（不裁，只登记落点与现算数）**：
+① **overlay→渲染那一跳没有用例钉**：现树只有 base 侧的渲染证明（`longTextPaste.integration.test.tsx`
+用真 i18n 实例找 `chat.longTextPaste.*` 三枚按钮，本笔从 6 枚红转绿）。overlay 侧靠事件订阅顺序推理
+（`registerCopawTranslations` 在 import 期订阅，组件在 mount 期订阅，emitter 按注册序触发）⇒ 谁把那枚注册
+挪到 mount 之后就会静默失效。可钉法 = 拿 `I18nextProvider` 渲一枚同时读 base 叶与 overlay 叶的组件。
+② **`npx tsc -b --noEmit` = 19 枚错误 / 12 枚文件**（本笔落点外，8.30 那笔的 `--force` 同数）。拆分现算 =
+**12 枚**是 `AgentSummary` 多出的 4 枚必填字段（`is_builtin`/`builtin_kind`/`builtin_label`/`system_protected`）
+或 `backend` 没同步进旧替身（`useAgentStatusPolling.test.tsx` 4、`CreateBackupModal.test.tsx` 2、
+`useAgentLongPress.test.tsx` 1、`Import/index.test.tsx` 1、`AgentModal.mailDomains.test.tsx` 1、`reorder.test.ts` 1、
+`SettingsCenter/index.test.tsx` 1、`useProjectUploadController.test.tsx` 1 缺 `backend`）、
+**5 枚**是 `vi.fn()` 直接当函数属性用的替身形状（`useArtifactSelectionGuards.test.tsx` 2、
+`useProjectRealtimeController.test.tsx` 2、`useProjectUploadController.test.tsx` 1）、
+**2 枚**在生产文件（`Agent/Knowledge/index.tsx` 的 `AgentsRunningConfig` 实参形状、
+`Projects/components/ProjectEditorPanel.tsx` 把 `{kind, agentId}` 当 `string` 传）。12 + 5 + 2 = 19 闭合。
+⇒ `npm run format:check` 整条红是**这 19 枚造成的**（它是 `tsc -b --noEmit && prettier --check .`），与项 ⑤ 同族。
+③ 3 枚历史脏的 prettier 文件（判据 180 表里那 3 枚）。
+④ 真浏览器 `copaw app` 一笔（8.13 段末已欠，混淆项 = `QwenPew Desktop.app` 会写 `~/.copaw/config.json`）；
+本笔动的是首屏 i18n 加载路径，这枚欠账的权重因此变高，但本笔**没**跑它。
