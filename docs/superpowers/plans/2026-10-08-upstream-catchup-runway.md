@@ -3139,7 +3139,9 @@ grep 只用来列候选，不用来下结论。
 冲突宿主、候选落点 1 行"不成立 —— 同一个 `Path.home()/".qwenpaw"` 表达式在 **4 枚上游自有文件**里一致地
 硬编码（写侧 + 读侧 + 扩展安装链路），只翻 `ws_handler.py` 会把"核心写到的位置"和"扩展被装去读的位置"
 分家。⇒ 本刀落 **fork-created 测试层**（`tests/unit/conftest.py` +13 行 + 1 枚新守卫文件 2 枚用例），
-P1 册**总数一格不动**、flake8 **561 不变**、整树 pylint **1,313 不变**；生产侧那 4 枚留在待裁。
+P1 册**总数一格不动**、flake8 **561 不变**、整树 pylint **1,313 不变**；生产侧那 4 枚留在待裁
+（**同日内已裁并关闭，见本节末"该项已于 2026-10-12 裁决关闭"一段与判据 222、223 —— 那里量出的真实面
+是 8 枚上游自有文件，不是 4 枚**）。
 新增判据 219–221，**已闭环计数推到 118**。
 
 **为什么全量套件会写开发者本机（取证链，四步都不是推测）**：
@@ -3220,13 +3222,45 @@ DEFAULT_CONFIG_PATH)` 的默认值与 `ws_handler.DEFAULT_CONFIG_PATH` 此后是
 裁决。可迁移的动作：登记"改 X 文件一行"这类候选时，先 `grep` 同一表达式在全仓的出现次数并按归属分类，
 把宿主数与"是否行为变化"写进条目；否则下一刀会按 1 枚宿主的预算开工，做到一半发现要裁产品。
 
-**待裁清单（刀 118 之后重列；只改第一项的口径，其余全部不变）**
+**判据 222（共享路径的"写侧 + 读侧"是一个合同，迁移类改动单边落 = 断桥）**：本节原先给的候选落点
+"`ws_handler.py:26` 改由 `WORKING_DIR` 拼"如果单独落地，产出的是一个**看起来完全合理、运行起来全废**的
+状态 —— 核心把 token 写去 A，Chrome 拉起的 host 仍去 B 读旧 token，而 `:115` 那分支还会当场再造一份新
+token，两侧从此永久分家且没有任何一侧报错（host 只会连不上）。可迁移的动作：凡"改某枚路径常量"的候选，
+开刀前先找齐它的**跨进程对面**（这里是安装时 `shutil.copy2` 出去的 `nm_host.py`，`load_config` 的默认参数
+在 `:218`、`run` 的在 `:418`），把对面一并算进价签；找不到的时候，用"这枚文件是不是被复制出去了"来问，
+而不是用"谁 import 了它"。
 
-- **`nm-bridge.json` 的本机路径（生产侧，4 枚上游自有文件，待产品裁）**：测试侧已闭 —— 套件不再写本机，
-  并有守卫钉住；生产侧仍对**真实用户**绕过 `WORKING_DIR` / `QWENPAW_WORKING_DIR`。落法 =
-  `ws_handler.py:26` + `nm_host.py:49` + `api/routes.py:36` + `extension_setup.py:203` 一起改经
-  `WORKING_DIR`，代价 **+4 枚冲突宿主**，并要决定 `~/.copaw` 老安装的读侧迁就。§8.45 那句"1 行 /
-  1 枚宿主"作废（判据 221）。
+**判据 223（Chrome 那棵子树里 host 侧没有环境出口，但安装时物化有现成机制）**：`nm_host.py` 全文件只读
+`sys.argv`（`--probe` / `--check-runtime`）和自己的常量，bundle 里唯一的 env 出口是
+`extension_setup.py:209` 的 `QWENPAW_DESKTOP_PY_RUNTIME`；Chrome 也不会把 shell 环境传给 native host
+⇒ "让读侧改成读 `QWENPAW_WORKING_DIR`"这种改法在真机上永远读不到值。可迁移的动作：这类"独立进程要
+知道核心解析出来的事实"的需求，落点看安装期而不是运行期 —— `extension_setup.py:553` 已经在
+`bin/` 里物化 `build_fingerprint.py`（`"Build fingerprint materialized at installation time."`），
+launcher 也已经 `exec "<interpreter>" "<host_impl>" "$@"` 转发参数（`:573`），两条路都现成。
+
+**该项已于 2026-10-12 裁决关闭（本轮不再开刀）**：产品侧确认 `~/.qwenpaw` 作为 Chrome 套件安装根是
+**设计选择**（`website/public/docs/chrome.zh.md:112` 与 `chrome.en.md:142` 已把它写进用户文档），
+不是缺陷 ⇒ 生产侧一格不动。开刀前把真实面重量了一遍，比本节前面写的"4 枚上游自有文件"更宽：
+写手 **2** 枚（`ws_handler.py:26` 与 `plugins/bundle/chrome/api/routes.py:36`，后者是插件启动实际走的那条：
+`plugin.py:16` 从 `.api.routes` 导入 `configure_nm_bridge`、`:37` 无参调用）、读手 **2** 枚
+（`nm_host.py:49` config、`:53` `logs/nm-host.log`）、安装根 **1 个函数 + 5 个调用点**
+（`extension_setup.py:203 _qwenpaw_home()`，`:254/:655/:717/:825` 及 setup 内部）、观测侧 **2** 枚
+（`observe.py:31` launcher 路径、`:36` 扩展 manifest 路径）、文档 **2** 枚、集成测试 **3** 枚
+（`test_chrome_native_host_install.py:110`、`test_chrome_extension_setup.py:130`、
+`test_chrome_nm_host.py:130`）⇒ 真要迁，是 **8 枚上游自有文件 + 2 文档 + 3 测试**，冲突宿主 +8，
+且必须写读两侧同笔。**重启条件**（写清楚，避免下一刀又从单边改法开工）：出现"自定义 `WORKING_DIR`
+的部署要把 Chrome 接起来"的真实需求时按 A 方案做；`~/.copaw` 老安装的兼容不用再考虑 —— 产品侧确认
+**从未有人装过 copaw**，这条从决策里去掉了。
+
+刀 118 那两枚落点的覆盖面也在此说清：测试隔离钉的是 `ws_handler` 那枚写手；`routes.py:36` 那枚不在
+夹具里，因为 `tests/unit` 没有任何用例 import `plugins.bundle.chrome`（现 grep 0 命中），只有集成测试
+碰它 ⇒ 单元套件不会经由它写本机，本刀的 fake-HOME 实测（3,929 passed、空 HOME 跑完仍为空）覆盖了这个
+判断。
+
+**待裁清单（刀 118 之后重列；第一项已裁决关闭，其余全部不变）**
+
+- ~~`nm-bridge.json` 的本机路径（生产侧，待产品裁）~~ —— **已裁：`~/.qwenpaw` 是 Chrome 套件的固定安装根，
+  属上游文档化的设计选择，生产侧不动**（判据 222、223；完整面与重启条件见上一段）。
 - ① **pylint 风格意见 1,286**；② **环境假阳性 27**；③-补 **在册 `redefined-outer-name` 7 条** +
   `agents.py:4504` 未用的 `overwrite`；④ **在册 formatter 脏**（prettier 10 + black/ATC 15，判据 184
   已裁"先不付"）—— 四本账全部不变。
