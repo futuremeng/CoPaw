@@ -3236,6 +3236,6 @@ DEFAULT_CONFIG_PATH)` 的默认值与 `ws_handler.DEFAULT_CONFIG_PATH` 此后是
   —— 全部不变。
 - `skills_manager.py` 那 14 枚"模块内零自调用、生产侧已改绑 `agents/skill_system/`"的名字（同型候选）不变。
 
-**本刀的两笔提交**：`__CODE__`（`test(unit)`：桥接配置随隔离目录同转 + 2 枚守卫）与 `__DOCS__`（本节）。
+**本刀的两笔提交**：`a17378b7c`（`test(unit)`：桥接配置随隔离目录同转 + 2 枚守卫）与 `cdab00271`（本节）。
 两枚绑定与守卫必须同笔：只转常量而漏单例，`_expected_token` 仍写本机；只转单例而漏常量，任何不传参的
 `configure_nm_bridge()` 调用点仍写本机 —— 守卫的第一条正是钉这两枚相等。
