@@ -75,7 +75,7 @@ from urllib.parse import unquote, urlparse
 from fastapi import File, Form, Query, UploadFile
 from starlette.responses import FileResponse
 from ...agents.skill_system.hub import install_skill_from_hub
-from ...agents.skills_manager import SkillConflictError
+from ...agents.skill_system import SkillConflictError
 from ...config.config import (
     AgentsSquareSourceSpec,
     AgentsSquareConfig,
@@ -83,7 +83,6 @@ from ...config.config import (
     AgentsSquareInstallConfig,
 )
 from ...config.utils import save_config
-from ...agents.skills_manager import SkillPoolService
 from ...knowledge.project_pipeline_manager import (
     DEFAULT_PROJECT_PIPELINE_COOLDOWN_SECONDS,
     DEFAULT_PROJECT_PIPELINE_DEBOUNCE_SECONDS,

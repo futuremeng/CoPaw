@@ -67,3 +67,49 @@ async def test_activate_import_bundle_awaits_skill_install(
     ]
     assert summary["skills_installed"] == ["skill-alpha"]
     assert summary["skill_errors"] == []
+
+
+async def test_activate_import_bundle_reports_conflict_detail(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path,
+) -> None:
+    """A hub name conflict has to reach the caller as the hub reports it.
+
+    ``install_skill_from_hub`` lives in ``agents/skill_system/hub.py``, which
+    is byte-identical to upstream, and it raises the
+    ``qwenpaw.exceptions.SkillConflictError`` carrying a ``detail`` dict that
+    names the clashing skill.  ``agents.skills_manager`` defines a *different*
+    ``SkillConflictError`` (a bare ``RuntimeError``, not a subclass of the
+    exceptions one), so a handler written against the skills_manager class does
+    not catch it: the conflict falls through to the bare ``except Exception``
+    and the client is told ``'Skill conflict'`` instead of which skill
+    collided.
+    """
+    from qwenpaw.app.routers.agents import _activate_import_bundle
+    from qwenpaw.exceptions import SkillConflictError
+
+    async def _conflict(**_kwargs):
+        raise SkillConflictError(
+            {"reason": "conflict", "name": "skill-alpha"},
+        )
+
+    monkeypatch.setattr(
+        "qwenpaw.app.routers.agents.install_skill_from_hub",
+        _conflict,
+    )
+
+    summary = await _activate_import_bundle(
+        workspace_dir=tmp_path,
+        local_agent_id="local-agent",
+        source_id="source-1",
+        original_agent_id="original-1",
+        bundle={
+            "skills": {"install_urls": ["https://example.test/skill-alpha"]},
+            "import": {"tools": False, "flow_descriptions": False},
+        },
+        overwrite=False,
+    )
+
+    assert summary["skills_installed"] == []
+    assert len(summary["skill_errors"]) == 1
+    assert "skill-alpha" in summary["skill_errors"][0]

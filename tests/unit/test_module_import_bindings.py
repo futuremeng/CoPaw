@@ -28,20 +28,12 @@ pytestmark = pytest.mark.unit
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
 #: Retired by a knife, so a fixed entry must be deleted from this table.
-#: ``SkillPoolService`` is still bound twice in ``app/routers/agents.py``:
-#: upstream moved it into ``agents/skill_system/`` and our fork keeps
-#: ``agents/skills_manager.py``, whose copy of the class differs from
-#: upstream's in 14 of 15 method bodies. Which implementation an
-#: upstream-owned router should run is a product call, not a merge-hygiene
-#: one, so the name is listed rather than flipped. ``get_workspace_skills_dir``
-#: was retired by knife 114: the two copies are source-identical, so the
-#: fork's duplicate import line was deleted instead of exempted.
-KNOWN_SHADOWED_IMPORTS: dict[tuple[str, str], str] = {
-    (
-        "src/qwenpaw/app/routers/agents.py",
-        "SkillPoolService",
-    ): "fork copy vs upstream skill_system, awaiting adjudication",
-}
+#: Both names this table ever carried were retired by knife 114 and knife 115:
+#: ``get_workspace_skills_dir`` because the fork's and upstream's copies proved
+#: source-identical, and ``SkillPoolService`` because the product ruled that an
+#: upstream-owned router runs upstream's implementation (see
+#: ``RULED_IMPORT_BINDINGS``, which now guards that choice in one direction).
+KNOWN_SHADOWED_IMPORTS: dict[tuple[str, str], str] = {}
 
 
 def _source_key(node: ast.Import | ast.ImportFrom, alias) -> str:
@@ -121,3 +113,28 @@ def test_detector_accepts_a_submodule_import(tmp_path: Path) -> None:
         encoding="utf-8",
     )
     assert _conflicting(_module_scope_bindings(host)) == []
+
+
+#: Names whose owning implementation the product has ruled on, mapped to the
+#: module the survivor must come from.  A shadow-table entry says "two bindings
+#: exist, unresolved"; this says "one binding, and this side won".  A future
+#: automatic merge that re-adds the losing import line fails here, because
+#: module-scope binding order decides the implementation silently.
+RULED_IMPORT_BINDINGS: dict[tuple[str, str], str] = {
+    (
+        "qwenpaw.app.routers.agents",
+        "SkillPoolService",
+    ): "qwenpaw.agents.skill_system.pool_service",
+}
+
+
+def test_ruled_import_bindings_hold() -> None:
+    import importlib
+
+    for (module_name, attr), owner in sorted(RULED_IMPORT_BINDINGS.items()):
+        module = importlib.import_module(module_name)
+        bound = getattr(module, attr)
+        assert bound.__module__ == owner, (
+            f"{module_name}.{attr} is bound from {bound.__module__}, "
+            f"but the ruling says it must come from {owner}"
+        )

@@ -698,8 +698,8 @@
       "removed": 0
     },
     "src/qwenpaw/app/routers/agents.py": {
-      "added": 3768,
-      "behavior_added": 3768,
+      "added": 3767,
+      "behavior_added": 3767,
       "behavior_removed": 6,
       "mechanical": false,
       "naming": 0,
@@ -947,8 +947,8 @@
     }
   },
   "totals": {
-    "added": 10973,
-    "behavior_added": 10937,
+    "added": 10972,
+    "behavior_added": 10936,
     "behavior_files": 116,
     "behavior_removed": 486,
     "files": 117,
