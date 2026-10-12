@@ -3023,3 +3023,112 @@ P1 册**总数一格不动**（117 文件 / +10,972 −522）、flake8 **561 不
 
 **本刀的两笔提交**：`10390761b`（`chore(skills)`：827 行删除 + `RETIRED_FORK_DEFINITIONS` 退休守卫）
 与 `47fcb02d4`（本节）。守卫与删除必须同笔 —— 先删后立守卫会留一个"死码可复现"的窗口，先立守卫不删则当场红。
+
+### 8.45 刀 117（2026-10-12）：隔离缺口的真实面是 43 枚模块级绑定而不是 1 枚 —— monkeypatch 追不上已在导入那一刻绑死的名字
+
+**一句话结论**：§8.44 待裁的最后一项（测试侧 `conftest`）落刀。**1 枚新增 fork-created 根 `conftest.py`
++ `tests/unit/conftest.py` +8 行 + 1 枚新守卫文件**，三处全在 fork-created 上 ⇒ P1 册**总数一格不动**
+（117 文件 / +10,972 −522）、flake8 **561 不变**、整树 pylint **1,313 不变**（风格 1,286 + 环境 27 +
+真缺陷 0）；全量 unit 从"2 failed / 17,837 passed"换成 **0 failed / 17,841 passed** —— 在册多刀的那对
+acp 工作区耦合红**被本刀一并关掉**（A/B 实测见下）。新增判据 215–218，**已闭环计数推到 117**，
+**unit 基线换为 17,841 / 0 红**。
+
+**根因比 §8.44 记的更宽（这一段是对那条记录的更正）**：§8.44 写的候选落点"在同一枚 fixture 里把
+`qwenpaw.config.config.WORKING_DIR` 一起改指"只覆盖 1 枚模块。开刀前量了真实面：`constant.py:86-94` 在
+**导入那一刻**把 `WORKING_DIR` 解析成三档（`QWENPAW_WORKING_DIR` → 已存在的 `~/.copaw` → `~/.qwenpaw`），
+之后每一枚 `from ..constant import WORKING_DIR` 都绑死在那一刻的值 —— 生产侧这种绑定 **85 处**（grep），
+`tests/unit/app/routers + tests/unit/config` 这枚选择集真正导入到、且改前仍指本机的 **43 枚**（运行时扫
+`sys.modules` 得，判据 216）。逐枚补 43 条 `monkeypatch.setattr` 不叫修，叫把缺口搬进 conftest。
+
+**落点因此分两层，两层都是 fork-created**：
+
+- **新增仓库根 `conftest.py`**（管另外 42 枚）。pytest 先加载 rootdir 的 conftest，再加载
+  `tests/conftest.py` —— 而后者 `:21` 就 `from qwenpaw.providers import provider_manager`，即
+  `qwenpaw.constant` 在那一刻已经绑完。所以唯一能在绑定发生**之前**说话的位子就是仓库根的 conftest，
+  这也是它必须放在根上而不是 `tests/` 里的原因。做的事只有三件：`tempfile.mkdtemp()`、
+  `os.environ.setdefault("QWENPAW_WORKING_DIR", …)`、`atexit` 清理。用 `setdefault` 不是保守，是尊重
+  显式导出的目录（`tests/integration/browser/conftest.py:19` 那类自己指定的仍然赢）。副带收益：xdist
+  下每枚 worker 各自 import 一次 ⇒ 各得一个目录，"两个 pytest 进程共用本机 `agent.json`"这件事
+  （判据 214 的出处）结构性消失，不是被豁免。
+- **`tests/unit/conftest.py`**（管 `config.py` 那一枚，+8 行）。同一枚 autouse `isolated_config_file`
+  里把 `qwenpaw.config.config.WORKING_DIR` 与 `config.utils` 那枚一起改指每用例目录。只补 `utils` 会
+  造出更坏的局面：`load_config()` 写 A 处、它返回的 `AgentsConfig` 指 B 处，`config.py:2504` 与 `:3985`
+  拼出的 default agent `workspace/agent.json` 仍落在会话级目录里跨用例共享。
+- **新守卫 `tests/unit/config/test_unit_suite_working_dir.py`**（2 枚用例）：一枚断言两模块的绑定**相等**，
+  一枚断言 `AgentsConfig().profiles["default"].workspace_dir` 落在该目录**内**。先红实测（改前跑）：
+  两条都点名 `/Users/futuremeng/.copaw`，第二条报 `default agent workspace
+  /Users/futuremeng/.copaw/workspaces/default is not under …`。
+
+**顺带关掉两枚在册红**：`tests/unit/agents/test_acp_available_commands.py::{test_new_session_advertises_commands,
+test_load_session_advertises_commands}` 自合并后一直在册，§8.42 与 §8.44 都写"acp 工作区耦合，未裁"。
+同一命令两态实测：**留**根 conftest ⇒ 21 passed / **2.52s**；把它 `mv` 到 `/tmp`（不是 `git checkout`）
+⇒ 2 failed / 19 passed / **75.97s**。耗时差 30 倍本身就是证据 —— 那两枚在等本机磁盘与钥匙串路径，等完了
+再撞上别人的 `agent.json`。⇒ **unit 红集清空**，全量读数 17,841 = 17,837 + 那 2 枚转绿 + 本刀 2 枚新守卫。
+
+**判据 215（模块级 `from x import NAME` 的测试隔离只能在导入顺序的上游做）**：`monkeypatch` 改的是
+属性，改不动已经复制出去的绑定；同一枚常量在 N 个模块里就是 N 份拷贝，逐份追永远少一份。可迁移的动作：
+凡隔离目标是"某常量在导入时被解析成的那个值"，落点选在**该常量所属包被首次导入之前**能执行的文件
+（本仓是仓库根 conftest；`tests/conftest.py:21` 就是那条界线），并把这条界线写进新文件的 docstring，
+否则下一刀会试图用 fixture 修它。
+
+**判据 216（量隔离缺口用运行时探针，不用 grep 计数）**：grep 给 85 枚候选，其中 `from ..constant import`
+在函数体内的（`runtime/builder.py`、`plugins/loader.py` 等 40 余枚）每次调用现读、本来就没漏；真正漏的是
+"模块级绑定 **且** 被这枚选择集导入到"的交集。可迁移的动作：写一枚 pytest 插件在 `sessionfinish` 扫
+`sys.modules`、把每枚模块的同名属性与"本机真实值"比，改前改后各跑一次同一命令（本刀 43 → 0）；
+grep 只用来列候选，不用来下结论。
+
+**判据 217（长期在册的"环境耦合红"要 A/B 归因，耗时差是免费证据）**：一对红挂了四刀并被记为"未裁"，
+实际从来没人把可疑变量单独移开重跑。可迁移的动作：怀疑是环境耦合时，把新增的那一处**移开**（`mv`，
+不是 `git checkout`）再跑同一命令取反态，两态之间既比 passed/failed 也比秒数 —— 秒数暴涨通常意味着
+代码在等本机资源，而"等"和"撞车"往往是同一枚缺口的两个症状。
+
+**判据 218（fake-HOME 是隔离的判决实验，但它自己会制造红）**：把 `HOME` 指到空目录跑同一选择集，
+是检验"套件是否还依赖本机"的最直接办法：本刀读数 **3,098 passed / 1 failed**，而那 1 枚
+（`test_b1_normalize_before_home_glob_match`）早在 §8.33 就记过它用 `os.path.expanduser("~")` 取真家、
+只在 HOME 形状像家时成立 ⇒ 是**实验的产物**，不是新增回归。但同一实验暴露了一枚真漏：空 HOME 里长出
+`.qwenpaw/nm-bridge.json` —— `src/qwenpaw/browser/control_link/chrome/ws_handler.py:26` 的
+`DEFAULT_CONFIG_PATH = Path.home() / ".qwenpaw" / "nm-bridge.json"` 根本不走 `WORKING_DIR`。
+可迁移的动作：这类实验的红要按"实验造成的 / 实验揭出的"分两类记，后者登记成待裁而不是顺手修。
+
+**全套验证读数（改前改后同命令）**
+
+- 全量 `tests/unit`：**0 failed / 17,841 passed / 24 skipped / 4 xfailed in 1092.96s**（改前
+  2 failed / 17,837 passed / 同 skip 同 xfail）。
+- L1 必过五目录：**1,339 passed / 1 skipped / 0 failed in 7.58s**（与刀 116 逐字同数）；
+  `tests/unit/app/routers`：**1,383 passed**（= 改前"L1 + routers 2,722"减去 L1 的那 1,339，逐字同数）；
+  `tests/contract`：**1 failed / 411 passed / 1 skipped**，那 1 枚 = `test_track_isolation.py::
+  test_inbound_imports_limited_to_the_fork`（`rpa/runtime.py` 越界导入），**A/B 证与根 conftest 无关**
+  —— 移开该文件同样红，属在册那 3 枚 contract/integrated CI 红之一。
+- 运行时探针：`constant.WORKING_DIR=/private/var/…/copaw-test-working-…`，仍绑本机的模块 **0 枚**
+  （改前同一命令 43 枚）。
+- flake8 整树 **561** 逐字不变（全 `E501`）；整树 pylint **1,313** 逐字不变 = 风格 1,286 + 环境假阳性 27
+  （`E0611` 23 + `E1120` 2 + `E1136` 2）+ 真缺陷 0。三枚落点文件自身：flake8 0 枚、pylint 钩子 Passed、
+  `black --line-length=79 --check` unchanged、add-trailing-comma 无改（对拍在 `/tmp` 副本上做，判据 204）
+  ⇒ 整树 formatter 读数不动是因为新增面自身 0 脏。
+- 五道离线门禁 rc=0；`check_p1_invariants.py --check` rc=0 且**总数不动** —— 根 `conftest.py` 与那枚新
+  测试文件都不在上游分叉点的树里（`git rev-parse -q --verify 2744a976b:…` 为空），`tests/unit/conftest.py`
+  本来就在册外。
+- 守卫先红 → 改后 2 passed；`HOME` 换空目录的判决实验另读一遍同一选择集（3,098 / 1，见判据 218）。
+
+**待裁清单（刀 117 之后重列；§8.44 最后一项闭合，"2 枚 acp unit 红"这一项从册上消失）**
+
+- **新增（生产侧，上游拥有，1 行）**：`browser/control_link/chrome/ws_handler.py:26` 用 `Path.home()`
+  硬编码 `~/.qwenpaw/nm-bridge.json`，**无视 `QWENPAW_WORKING_DIR`** ⇒ 改了工作目录的用户会把 bridge
+  配置写到另一个地方，而 `:115` 在读不到该文件时会**当场创建**它。这是上游文件，动它 = 新开一枚冲突宿主
+  + 生产行为变化，故不在本刀射程。候选落点：`DEFAULT_CONFIG_PATH` 改由 `WORKING_DIR` 拼。
+- ① **pylint 风格意见 1,286**（三条路不变）；② **环境假阳性 27**（是否为 pylint 钩子补
+  `additional_dependencies`）；③-补 **在册 `redefined-outer-name` 7 条** + `agents.py:4504` 那枚未用的
+  `overwrite`；④ **在册 formatter 脏**（prettier 10 + black/ATC 15，判据 184 已裁"先不付"）——
+  四本账全部不变，本刀一格没动。
+- **E501 561**：分层见 §8.41；`agents.py` 独占 129 条，改前改后同数。
+- **mypy 65 errors / 22 文件**、3 枚 contract/integrated CI 红（本刀的 `tests/contract` 读数里那 1 枚
+  就是它的本机可见部分）、`secret_store` 2×timeout 聚合、22.50 秒 `copaw update`、overlay→真渲染接替、
+  欠一次真浏览器 `copaw app` 复看、6 枚前端测试回买（+31）、发布渠道阶段 2 的发包那一半、根目录散落物
+  登记 —— 全部不变。**注意：根目录新增了一枚有正当理由的 `conftest.py`，散落物登记那一项要把它算作
+  在册文件而不是散落物（它是 pytest 的 rootdir conftest，作用写在文件 docstring 里）。**
+- ~~2 枚 acp 工作区耦合的 unit 红~~ —— 本刀关掉，反态实测见"顺带关掉两枚在册红"。
+
+**本刀的两笔提交**：`__CODE__`（`fix(tests)`：根 conftest + `config.WORKING_DIR` 同指 + 两枚守卫）与
+`__DOCS__`（本节）。守卫与两层落点必须同笔：只放根 conftest 而补不上 `config.py` 那一枚，
+`isolated_config_file` 与 `AgentsConfig` 会指向两处；只补 `config.py` 而不在根上设环境变量，
+另外 42 枚绑定仍指本机。
