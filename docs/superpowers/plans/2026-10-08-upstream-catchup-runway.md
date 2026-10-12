@@ -3128,7 +3128,7 @@ grep 只用来列候选，不用来下结论。
   在册文件而不是散落物（它是 pytest 的 rootdir conftest，作用写在文件 docstring 里）。**
 - ~~2 枚 acp 工作区耦合的 unit 红~~ —— 本刀关掉，反态实测见"顺带关掉两枚在册红"。
 
-**本刀的两笔提交**：`__CODE__`（`fix(tests)`：根 conftest + `config.WORKING_DIR` 同指 + 两枚守卫）与
-`__DOCS__`（本节）。守卫与两层落点必须同笔：只放根 conftest 而补不上 `config.py` 那一枚，
+**本刀的两笔提交**：`01d1b89d9`（`fix(tests)`：根 conftest + `config.WORKING_DIR` 同指 + 两枚守卫）与
+`13c26cb9d`（本节）。守卫与两层落点必须同笔：只放根 conftest 而补不上 `config.py` 那一枚，
 `isolated_config_file` 与 `AgentsConfig` 会指向两处；只补 `config.py` 而不在根上设环境变量，
 另外 42 枚绑定仍指本机。
