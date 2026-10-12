@@ -2792,3 +2792,126 @@ diff 从 30 行涨到 68 行，把裁决 ④ 尚未授权的在册 formatter 脏
 **本刀的三笔提交**：`11f81a434`（测试侧两枚 inert 缺陷：`unused-import` 1 + `unreachable` 1）·
 `c558ad278`（生产侧六枚在册文件 + 影子表/把手两处配套测试 + 重立的 `scripts/p1_baseline.json`）·
 `80f9ad8e8`（本节）。三枝 `sync/upstream-20261009`、`main`、`wp/integration` 已同点快进并推送。
+
+---
+
+### 8.43 刀 115（2026-10-12）：裁决 ③ 落了 —— 上游拥有的路由跑上游实现，代价是 −1 行 P1，顺带捞出一条被裸 `except` 吞掉的缺陷
+
+**一句话结论**：用户裁"应用上游版本的 `SkillPoolService`"。**3 枚文件 / 4 处编辑**：在册 pylint 真缺陷
+**1 → 0**（也就是 §8.41 那 44 条到此全清）、flake8 **562 → 561**（`F811` 1 → 0）、整树 pylint
+**1,314 → 1,313**、P1 账 `behavior_added 10,937 → 10,936`（−1，就是删掉的那行 fork 导入）、
+`behavior_removed 486` 与冲突面文件数 **117** 都不动。
+换实现之所以只要 −1 行，是因为 fork 那行本来就只是**影子**：上游的绑定早在第 58 行就写好了，
+fork 的第 86 行盖在它后面，删掉盖人的那行即可。
+**全套验证读数**：两枚先红用例取红 → GREEN 7 passed；全量 unit **17,836 passed**（比 §8.42 的
+17,834 只多本刀新写的那两枚）、L1 + 宿主目录 **8,217 passed**，两处都只剩那对已归因的 acp
+工作区耦合红 ⇒ 零新增红；flake8 561、整树 pylint 1,313、
+在册真缺陷 **1 → 0**、五道离线门禁 rc=0、formatter 脏改前改后等量。
+
+**顺着裁决查出来一条真缺陷，不是 lint 账**：`agents.py:78` 那行 `from ...agents.skills_manager import
+SkillConflictError` 导入的是 fork 的 `skills_manager.py:1007 SkillConflictError(RuntimeError)`；
+而第 4527 行 `except SkillConflictError` 要接的那条抛出，来自 `agents/skill_system/hub.py`
+（该文件与上游**字节相同**），它抛的是 `qwenpaw.exceptions.SkillConflictError(SkillsError)`。
+两者只是同名，`issubclass(上游那枚, fork 那枚)` 为 `False` ⇒ 名字冲突从来落不进这个 `except`，
+一路掉进旁边那句 `except Exception`，API 把 `str(exc)` 记成 `'Skill conflict'`，
+把 `exc.detail` 里那枚撞名 skill 的名字丢了。改法是把第 78 行重指到 `...agents.skill_system`
+—— 该行是 fork 自有的行（上游没写过它），所以**零额外账本成本**：一行换目标，`added` 计数不变。
+
+**为什么换实现是安全的**（改前先量的三条，逐条现读）：
+
+| 对拍项 | fork `skills_manager.py:2907` | 上游 `skill_system/pool_service.py:134` |
+| --- | --- | --- |
+| 方法面 | 15 枚 | **19 枚**（严格超集；差异只在 `create_skill` 多一个可选参 `installed_from`） |
+| 该路由唯一调用点 | `download_to_workspace` | 同名同返回合同（`success` / `reason`，含 `builtin_upgrade`、`conflict`） |
+| 构造 | `__init__(self)` | `__init__(self)`（`SkillPoolService()` 那处调用不带参） |
+
+调用点本身在 `_install_initial_skills` 的宽 `except Exception` 里，所以即便实现有行为差，也不会把
+那条路径变成崩；`agents.py:1955` 是唯一使用点。
+
+**逐文件的账**（`--target-ref working` 现算）：
+
+| 文件 | 归属 | 编辑 | `behavior_added` | pylint / flake8 结清 |
+| --- | --- | --- | --- | --- |
+| `src/qwenpaw/app/routers/agents.py` | 在册 | 2 处：删第 86 行 fork 的 `SkillPoolService` 导入；第 78 行 `SkillConflictError` 改指 `...agents.skill_system` | 3768 → 3767（−1） | `reimported` 1 → 0；flake8 `F811` 1 → 0 |
+| `tests/unit/test_module_import_bindings.py` | fork-created | 影子表清空（表里两枚名字至此都已被裁决退场）+ 新增一枚**单向**守卫 `RULED_IMPORT_BINDINGS` | — | — |
+| `tests/unit/app/routers/test_agents_import_bundle_skills.py` | fork-created | 新增一枚用例：hub 的名字冲突必须把 `detail` 传到调用方 | — | — |
+
+守卫换轴这件事值得单记：旧表 `KNOWN_SHADOWED_IMPORTS` 的语义是"这里有两枚绑定，没裁"，
+它对"两枚并存"是双向锁（判据 111 那套）；裁决之后只剩一枚绑定，要防的是**下一次自动合并把输的那行
+再塞回来**，而那件事在 Python 里不报错 —— 模块级绑定顺序悄悄决定实现。所以新守卫读的是
+运行期身份：`importlib.import_module(...)` 取模块属性，再断 `cls.__module__` 等于裁决指定的来源模块。
+表清空与生产去重仍必须同一笔提交，否则双向锁的另一半会红（与 §8.42 同）。
+
+**验证读数（本刀的九项，全部为该树现读）**
+
+- **本刀两枚先红用例**（GREEN 前）：`2 failed` ——
+  `AssertionError: assert 'skill-alpha' in 'Skill conflict'`（detail 被丢）与
+  `qwenpaw.app.routers.agents.SkillPoolService is bound from qwenpaw.agents.skills_manager`（绑定不对）；
+  GREEN 后同两条命令 **7 passed**，另加 `tests/unit/agents/skill_system` 整目录 **778 passed**。
+- **flake8**（`pre-commit run flake8 --all-files`，权威口径）：**562 → 561**，残余全是 `E501`；
+  `F811` 归零。中途我自己新写的一行 docstring 超 79 字符，量出来后当场折行复测（所以两次读数分别
+  是 562 与 561，不是 563 → 561）。
+- **pylint 整树**：**1,314 → 1,313**。`reimported` `unused-import` `unreachable` 三族同树读数为 **0**，
+  即 §8.41 定义的"真缺陷"族在**全树**清零，不再只是 fork-created 侧。
+  `redefined-outer-name` 263（−0）、`wrong-import-order` 12、`ungrouped-imports` 2 未动。
+- **在册真缺陷**：**1 → 0**。刀 114 之后这一格是 lint 账里唯一需要产品裁决的项，裁完即闭合。
+- **P1 册**：**117 文件 / +10,972 −522**；`P1-行为 116 文件 / +10,936 / −486`；`naming 1 纯 / 8 涉 / 36 行`；
+  `mechanical 1`。基线**已从工作树重立**（判据 205），提交后 `--check` 以该树为准复测。
+- **L1 + 宿主目录**（`tests/unit/security`、`tests/contract/security`、`tests/unit/agents`、
+  `tests/unit/app` 一次跑）：**2 failed / 8,217 passed / 5 skipped / 4 xfailed**。
+- **全量 unit 套件**（`pytest tests/unit -q -p no:cacheprovider`，判据 207 要求动导入块就跑它）：
+  **2 failed / 17,836 passed / 24 skipped / 4 xfailed in 1175.00s (19:35)**。两枚红逐枚对名字 =
+  `tests/unit/agents/test_acp_available_commands.py::{test_new_session_advertises_commands,
+  test_load_session_advertises_commands}` —— 与 §8.42 记的那对逐字相同（acp 工作区耦合，未裁），
+  **本刀零新增红**。pass 数 17,834 → **17,836**：多的正是本刀新写的那两枚用例 —— 同一选择集、
+  同一红集、只多两枚绿，这本身就是一次免费的 A/B。
+  （注：`/tmp/k115_unit_full.txt` 中途读到过一份 `12,631 passed / 2093.99s` 的尾巴，那是另一枚
+  选择集的输出被误当成这一份；落笔前以任务输出文件的最终汇总为准，已复读。）
+- **五道离线门禁同树 rc=0**：namespace boundaries `PASSED` · ci-command-targets **19 命令 / 4 包目录** ·
+  locale split `4,658 + 59 + 7 + 1,459 + 23` · brand `7 文件 / 35 行` · release-channel R1–R6
+  `6 文件 / 10 模板 / 11 读点 / 5 宿主`。
+- **formatter 脏零新增**：钩子版 black（`--line-length=79`）对 `agents.py` 改前改后同侧对拍
+  **123 / 123**，ATC **19 / 19**。顺带更正 §8.42 那句"前后 117 / 19"：ATC 那半今天逐字复现（19），
+  black 那半同一条命令今天读 123，不是 117（判据 210）。
+
+**判据 208（裁决过的实现分歧，守卫要从"并存"换成"指定来源"的单向锁）**：影子表能证明"两枚绑定都在、
+尚未裁决"，裁决后它两边都不红 —— 表退场是测试侧的账，而真正会复发的是下一次自动合并把输的那行导入
+重新写回，模块级绑定顺序会悄悄把实现换回去且不报错。可迁移的动作：凡由产品裁过"用哪一侧实现"的名字，
+留一张 `名字 → 必须来自的模块` 的表，断言运行期 `cls.__module__`（判据 202 的身份对拍因此从"改前改后
+各做一次"升级成了常驻用例）。
+
+**判据 209（改导入行时，同名异常类要一起查身份）**：`except SomeError` 家族不是 lint 账，pylint 只会
+说它 `reimported` 或什么都不说；但"导入的是哪一家的同名类"决定了这条 `except` 到底接不接得到。
+本刀的 `SkillConflictError` 就是这一类：两个同名类、无继承关系、抛出方来自与上游字节相同的那本，
+于是 detail 静默丢失、被裸 `except Exception` 吞成一句通用文案。可迁移的动作：动某枚名字的导入行时，
+把该名字在本文件里的**每个使用点**（尤其 `except`）与抛出方的类身份对拍一次，别只看导入块本身。
+
+**判据 210（旧账里的数字若不可复现，就地标出而不是静默替换）**：formatter 脏的对拍只在"同一条命令、
+改前改后两侧各读一次"时才有意义；§8.42 记的 `117 / 19` 里 black 那半用今天的同命令读是 `123`，
+而本刀真正需要证明的是两侧相等。可迁移的动作：记录这类数字时把计数口径一起写下来（数 `+` 行还是数
+`+`/`-` 全部内容行），否则下一刀只能重新猜。
+
+**待裁清单（刀 115 之后重列；③ 已闭合，新增一项删面）**
+
+- **新增（本刀造出的死码）**：fork 的 `skills_manager.py:2907-3695` 那 789 行 `SkillPoolService`
+  现在**全仓零引用**（唯一入口是本刀删掉的那行；`src/copaw/agents/skills_manager.py` 那句
+  `import *` 是通配再导出，不构成引用）。删它落在 fork-created 文件上 = 零账本成本，但 §8.42 那条
+  "`import *` 让每个公开名都是外部可达的公共面"的论证在这里同样成立（`skills_manager.py` 也没有
+  `__all__`），所以要先清那枚星号面有多少外部消费者，再确认 `_staged_skill_dir` 等共享把手不被误删。
+- ① **pylint 风格意见 1,286**（1,313 − 27 环境假阳性 − 0 真缺陷）：三条路不变（改配置 = 新开一枚
+  上游同的宿主 / 逐族留账 / 只在 fork-created 加行级 pragma）。
+- ② **环境假阳性 27**（`no-name-in-module` 23 + `E1120` 2 + `E1136` 2）：是否为 pylint 钩子补
+  `additional_dependencies`（`mcp`）。同样是动上游同的配置。
+- ③-补 **在册 `redefined-outer-name` 还剩 7 条**、`agents.py:4504` 那条 `overwrite` 未用参数：
+  本刀未动，性质仍是风格意见。
+- ④ **在册 formatter 脏**：prettier 10 枚（+316/−207）+ black/ATC 15 枚（付它是 +172 行 P1，判据 184
+  已裁"先不付"）。本刀没让它变多。
+- **E501 561**：分层见 §8.41；`agents.py` 独占 129 条，改前改后同数。
+- **mypy 65 errors / 22 文件**、3 枚 contract/integrated CI 红、2 枚 acp 工作区耦合的 unit 红
+  （本刀那 8,217 读数里那 2 枚仍是它俩）、`secret_store` 2×timeout 聚合、22.50 秒 `copaw update`、
+  overlay→真渲染接替、欠一次真浏览器 `copaw app` 复看、6 枚前端测试回买（+31）、发布渠道阶段 2 的
+  发包那一半、根目录散落物登记 —— 全部不变。
+
+**本刀的两笔提交**：`df326609b`（`fix(lint)`：`agents.py` 两处 + 影子表清空与单向守卫 + 那枚 detail 用例
++ 重立的 P1 基线）与紧随其后的 `docs(runway): record knife 115 as section 8.43`。表清空与生产去重
+必须同笔（判据 111 的双向锁）。
