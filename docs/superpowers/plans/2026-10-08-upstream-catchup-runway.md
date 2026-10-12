@@ -2788,3 +2788,7 @@ diff 从 30 行涨到 68 行，把裁决 ④ 尚未授权的在册 formatter 脏
   formatter 只能替那 175 条换行，其余要么改了会改值、要么已在 `5ebbc839f` 手写过。
 - **mypy 65 errors / 22 文件**：从刀 105 到今天没有进过任何一刀的射程，待裁。
 - 根目录散落物仍**登记未动**（`UPSTREAM_V2_MIGRATION_PLAN.md:92/562` 列的那批）。
+
+**本刀的三笔提交**：`11f81a434`（测试侧两枚 inert 缺陷：`unused-import` 1 + `unreachable` 1）·
+`c558ad278`（生产侧六枚在册文件 + 影子表/把手两处配套测试 + 重立的 `scripts/p1_baseline.json`）·
+`80f9ad8e8`（本节）。三枝 `sync/upstream-20261009`、`main`、`wp/integration` 已同点快进并推送。
