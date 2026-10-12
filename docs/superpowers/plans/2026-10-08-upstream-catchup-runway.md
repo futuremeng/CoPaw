@@ -2921,3 +2921,105 @@ SkillConflictError` 导入的是 fork 的 `skills_manager.py:1007 SkillConflictE
 
 **本刀的两笔提交**：`df326609b`（`fix(lint)`：`agents.py` 两处 + 影子表清空与单向守卫 + 那枚 detail 用例
 + 重立的 P1 基线）与 `325510079`（本节）。表清空与生产去重必须同笔（判据 111 的双向锁）。
+
+### 8.44 刀 116（2026-10-12）：把刀 115 裁剩的 827 行删掉 —— 死活要用两把尺各量一次，名字搜索本身不算证据
+
+**一句话结论**：§8.43 待裁第一项落刀，**2 枚文件 / 3 处删除 + 1 处新增守卫**，全在 fork-created 上 ⇒
+P1 册**总数一格不动**（117 文件 / +10,972 −522）、flake8 **561 不变**、整树 pylint **1,313 不变**、
+真缺陷仍 0；全量 unit **17,837 passed**（只多本刀那枚新守卫）、红集逐字不变 ⇒ 零新增红。
+新增判据 212–214，**已闭环计数推到 116**。
+
+§8.43 待裁清单的第一项（"新增（本刀造出的死码）"）落刀。唯一的落点是 fork-created 的
+`src/qwenpaw/agents/skills_manager.py`：三处删除、827 行，文件 3,695 → 2,868 行，模块级定义 91 → 88 枚。
+
+- `class SkillPoolService`（原 `2907-3695`，该文件最后一枚类，一直写到 EOF）
+- `get_workspace_identity`（原 `388-401`）
+- `ensure_skill_pool_initialized`（原 `1471-1488`）
+
+后两枚只被那枚类调用 ⇒ 与类同笔走。这半边就是刀 115 那句"输的那侧现在是死码"的全部内容。
+
+**删前的闭包（判据 213：两把尺各量一次，缺一把就会删掉活码）**
+
+- 尺一 · 跨文件：`grep -rnI -w` 覆盖 `src tests scripts`（排 `__pycache__`）后，三枚名字的引用只剩它们
+  自己的 def 行。`src/copaw/agents/skills_manager.py:3` 那句 `import *` 是通配再导出、不构成引用；而该桥
+  的模块路径 `copaw.agents.skills_manager` 在 `src tests scripts docs` 里**零**消费者（现读 0 条）
+  ⇒ §8.43 要的"先清那枚星号面有多少外部消费者"，本仓侧是空的。诚实边界：仓库是公开的，仓外的第三方
+  导入量不到 —— 这与每一次 fork-created 删除承担的是同一类风险，本裁决接受它。
+- 尺二 · 模块内：类用到的把手删后仍有别处在调 —— `_mutate_json` 14 处、`_copy_skill_dir` 9 处、
+  `_normalize_skill_dir_name` 5 处、`_staged_skill_dir` 4 处、`_read_frontmatter_safe_from_path` 2 处
+  ⇒ 跟着类一起删会删掉活码，全部留下。
+- 两把尺同时为真（模块内只出现在自己的 def 行 **且** 跨文件零引用）才叫死码：删前 0 枚、删后 0 枚
+  ⇒ **本刀没造出新孤儿**。
+- 该文件也**不是**整枚孤儿：`reconcile_workspace_manifest` 仍有两枚生产导入
+  （`app/routers/agents.py:3615`、`agents/tools/skill_market_install.py:13`）。
+- 剩下同型局面（新登记，见待裁）：14 枚定义在模块内零自调用，但每一枚在 `agents/skill_system/` 都有一枚
+  同名活实现（`registry.py` / `pool_service.py` / `hub.py`），而生产侧全部绑自后者 —— 引其中两枚就是
+  `app/routers/skills.py:44-51`（`import_builtin_skills`、`update_single_builtin`）⇒ 那是"两套同名实现
+  并存"，删它要先裁哪套是正典，与刀 115 同题，不在本刀射程。
+
+**守卫成对（判据 212：单向锁只防一半）**：`RULED_IMPORT_BINDINGS`（刀 115）钉的是"活的那束仍来自上游"，
+它**不会**因为输的那侧重新出现而开红 —— 一次自动合并把 `class SkillPoolService` 按"双方都加了代码"留下时，
+模块级绑定顺序仍让上游那枚赢：裁决绿，死码活。故新表 `RETIRED_FORK_DEFINITIONS` + 用例
+`test_retired_fork_definitions_stay_retired`（`tests/unit/test_module_import_bindings.py`，fork-created，
++27 行）断言那三枚名字在该模块上 `not hasattr`。先红实测：删除**前**跑该用例，红信点名三枚幸存者。
+
+**判据 212（裁掉一套同名实现之后，守卫要成对）**：`名字 → 必须来自的模块` 只钉住胜者，钉不住败者的
+**定义**复活；而"双方都加了代码"正是自动合并最常见的解法。可迁移的动作：凡由产品裁过"两套同名实现取
+哪一套"的地方，除 `__module__` 对拍外，再对被裁那一侧开一枚 `not hasattr` 断言，并把"这枚定义属于哪本书"
+写进表注释 —— 否则下一刀只能靠读实现猜。
+
+**判据 213（"全仓零引用"要用两把尺各量一次）**：单看名字搜索会把"只被本模块内部使用的私有把手"读成死码
+（`_staged_skill_dir` 跨文件 0 引用、模块内 4 处调用），也会把"只被测试引用"的读成活的。可迁移的动作：
+删码前分别量 ①模块内出现次数（≤1 即只有 def 行）与 ②跨文件引用（通配 `import *` 再导出不算引用），
+两条同时成立才进删除清单；删后再量一次同一条判据，**新增孤儿数应为 0**，非 0 就说明这刀把活码删了。
+
+**判据 214（选择集里冒出的单枚红，先空闲复跑再归因，别急着加 skip）**：本刀一趟并发运行里
+`tests/unit/app/routers/test_knowledge.py::test_run_quality_loop_offloads_run_to_thread` 报
+`AgentConfigConflictError: Agent 'default' changed on disk; reload it and retry`
+（抛自 `src/qwenpaw/config/config.py:208`），而本刀没动 `config.py`。机器空闲复跑同一命令 ⇒ 0 红，该文件
+单独跑亦 81 passed ⇒ 归因是两个 pytest 进程共用本机 on-disk `agent.json`。可迁移的动作：这类"单枚、
+与改动无交集、报错形状是磁盘状态冲突"的红，先用同命令复跑 + 把选择集拆到单文件各读一次，再决定是否记账；
+给它加 skip 会把并发污染固化成永久豁免。
+
+**全套验证读数（改前改后同命令）**
+
+- 全量 `tests/unit`：**2 failed / 17,837 passed / 24 skipped / 4 xfailed in 1231.82s** —— 刀 115 的
+  17,836 只多本刀新写的那一枚守卫，红集逐字不变（仍是那对 acp 工作区耦合的）⇒ **零新增红**。
+- L1 必过五目录：**1,339 passed / 1 skipped / 0 failed in 8.67s**（与刀 115 逐字同数）；
+  五目录 + `tests/unit/app/routers`：**2,722 passed / 1 skipped / 0 failed in 76.28s**。
+- flake8 整树 **561**（全 `E501`，与刀 115 同数）。落点文件自身：`skills_manager.py` 改前改后都只 1 枚
+  （`:342`，同一条），守卫文件 0 枚 —— 新写的注释首稿有两条 80/81 列，重排到 79 列内才保持同数。
+- 整树 pylint **1,313** 逐字不变 = 风格 1,286 + 环境假阳性 27 + 真缺陷 0；`W0611` / `W0612` 均 0
+  （那 789 行的类删掉后没让任何导入变成未用，因为它唯一的入口就是刀 115 删的那行）。
+- 五道离线门禁 rc=0；`check_p1_invariants.py --check` rc=0 且**总数不动**（117 文件 / +10,972 −522 /
+  `P1-行为 +10,936 −486`），因为两枚改动文件都是 fork-created ⇒ 本来就在册外。这印证 §8.43 那句
+  "零账本成本"：册只记上游拥有的文件。
+- formatter 脏改前改后等量（`black --line-length=79` `123 / 123`、add-trailing-comma `19 / 19`）。
+- 8 枚相关模块的导入冒烟 + 那 6 枚守卫用例（`test_module_import_bindings.py`）全绿。
+
+**待裁清单（刀 116 之后重列；§8.43 第一项闭合，新增一项同型候选）**
+
+- **新增（同型候选，规模小得多）**：`skills_manager.py` 剩 14 枚"模块内零自调用、生产侧改绑
+  `agents/skill_system/`"的名字 —— 删它同样要先裁哪套实现是正典，性质与刚闭的那项相同。
+- ① **pylint 风格意见 1,286**（1,313 − 27 环境假阳性 − 0 真缺陷）：三条路不变（改配置 = 新开一枚
+  上游同的宿主 / 逐族留账 / 只在 fork-created 加行级 pragma）。
+- ② **环境假阳性 27**（`no-name-in-module` 23 + `E1120` 2 + `E1136` 2）：是否为 pylint 钩子补
+  `additional_dependencies`（`mcp`）。同样是动上游同的配置。
+- ③-补 **在册 `redefined-outer-name` 还剩 7 条**、`agents.py:4504` 那条 `overwrite` 未用参数：
+  本刀未动，性质仍是风格意见。
+- ④ **在册 formatter 脏**：prettier 10 枚（+316/−207）+ black/ATC 15 枚（付它是 +172 行 P1，判据 184
+  已裁"先不付"）。本刀没让它变多。
+- **E501 561**：分层见 §8.41；`agents.py` 独占 129 条，改前改后同数。
+- **mypy 65 errors / 22 文件**、3 枚 contract/integrated CI 红、2 枚 acp 工作区耦合的 unit 红
+  （本刀那 17,837 读数里那 2 枚仍是它俩）、`secret_store` 2×timeout 聚合、22.50 秒 `copaw update`、
+  overlay→真渲染接替、欠一次真浏览器 `copaw app` 复看、6 枚前端测试回买（+31）、发布渠道阶段 2 的
+  发包那一半、根目录散落物登记 —— 全部不变。
+- **新增（测试侧，非本刀造，已量到根因）**：`tests/unit/conftest.py` 的 autouse `isolated_config_file`
+  只 patch 了 `config.utils` 那一枚 `WORKING_DIR` 绑定（连同两枚 mtime 缓存），而 `config.py:57` 另从
+  `..constant` 绑了一枚同名的，`config.py:2504` 与 `:3985` 用它拼 default agent 的
+  `workspace/agent.json` ⇒ 这段选择集仍写本机共享文件（判据 214 那枚红的出处）。候选落点是在同一枚
+  fixture 里把 `qwenpaw.config.config.WORKING_DIR` 一起改指，动的是 fork-created 的 conftest。本刀只是
+  复跑证掉了它，没修。要不要修，待裁。
+
+**本刀的两笔提交**：`10390761b`（`chore(skills)`：827 行删除 + `RETIRED_FORK_DEFINITIONS` 退休守卫）
+与本节那一笔 docs。守卫与删除必须同笔 —— 先删后立守卫会留一个"死码可复现"的窗口，先立守卫不删则当场红。
