@@ -28,20 +28,18 @@ pytestmark = pytest.mark.unit
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
 #: Retired by a knife, so a fixed entry must be deleted from this table.
-#: ``SkillPoolService`` and ``get_workspace_skills_dir`` are still bound twice
-#: in ``app/routers/agents.py``: upstream moved them into
-#: ``agents/skill_system/`` and our fork keeps ``agents/skills_manager.py``,
-#: whose copy of the class differs from upstream's in 14 of 15 method bodies.
-#: Which implementation an upstream-owned router should run is a product call,
-#: not a merge-hygiene one, so the names are listed rather than flipped.
+#: ``SkillPoolService`` is still bound twice in ``app/routers/agents.py``:
+#: upstream moved it into ``agents/skill_system/`` and our fork keeps
+#: ``agents/skills_manager.py``, whose copy of the class differs from
+#: upstream's in 14 of 15 method bodies. Which implementation an
+#: upstream-owned router should run is a product call, not a merge-hygiene
+#: one, so the name is listed rather than flipped. ``get_workspace_skills_dir``
+#: was retired by knife 114: the two copies are source-identical, so the
+#: fork's duplicate import line was deleted instead of exempted.
 KNOWN_SHADOWED_IMPORTS: dict[tuple[str, str], str] = {
     (
         "src/qwenpaw/app/routers/agents.py",
         "SkillPoolService",
-    ): "fork copy vs upstream skill_system, awaiting adjudication",
-    (
-        "src/qwenpaw/app/routers/agents.py",
-        "get_workspace_skills_dir",
     ): "fork copy vs upstream skill_system, awaiting adjudication",
 }
 

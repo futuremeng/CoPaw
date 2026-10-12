@@ -562,8 +562,8 @@
       "removed": 0
     },
     "src/qwenpaw/agents/skill_system/__init__.py": {
-      "added": 20,
-      "behavior_added": 20,
+      "added": 21,
+      "behavior_added": 21,
       "behavior_removed": 0,
       "mechanical": false,
       "naming": 0,
@@ -698,8 +698,8 @@
       "removed": 0
     },
     "src/qwenpaw/app/routers/agents.py": {
-      "added": 3790,
-      "behavior_added": 3790,
+      "added": 3768,
+      "behavior_added": 3768,
       "behavior_removed": 6,
       "mechanical": false,
       "naming": 0,
@@ -722,8 +722,8 @@
       "removed": 8
     },
     "src/qwenpaw/app/routers/skills.py": {
-      "added": 704,
-      "behavior_added": 704,
+      "added": 702,
+      "behavior_added": 702,
       "behavior_removed": 5,
       "mechanical": false,
       "naming": 0,
@@ -762,8 +762,8 @@
       "removed": 0
     },
     "src/qwenpaw/config/config.py": {
-      "added": 65,
-      "behavior_added": 65,
+      "added": 63,
+      "behavior_added": 63,
       "behavior_removed": 0,
       "mechanical": false,
       "naming": 0,
@@ -778,8 +778,8 @@
       "removed": 0
     },
     "src/qwenpaw/config/utils.py": {
-      "added": 25,
-      "behavior_added": 25,
+      "added": 23,
+      "behavior_added": 23,
       "behavior_removed": 0,
       "mechanical": false,
       "naming": 0,
@@ -858,12 +858,12 @@
       "removed": 0
     },
     "tests/unit/app/routers/test_config_router.py": {
-      "added": 50,
-      "behavior_added": 50,
-      "behavior_removed": 8,
+      "added": 51,
+      "behavior_added": 51,
+      "behavior_removed": 9,
       "mechanical": false,
       "naming": 0,
-      "removed": 8
+      "removed": 9
     },
     "tests/unit/app/routers/test_providers_active_openrouter.py": {
       "added": 15,
@@ -947,15 +947,15 @@
     }
   },
   "totals": {
-    "added": 10999,
-    "behavior_added": 10963,
+    "added": 10973,
+    "behavior_added": 10937,
     "behavior_files": 116,
-    "behavior_removed": 485,
+    "behavior_removed": 486,
     "files": 117,
     "mechanical_files": 1,
     "naming_files": 1,
     "naming_lines": 36,
     "naming_touched_files": 8,
-    "removed": 521
+    "removed": 522
   }
 }

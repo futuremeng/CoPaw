@@ -23,7 +23,7 @@ from qwenpaw.exceptions import (
 )
 
 from ...config.context import get_current_workspace_dir
-from ...config.context import get_current_workspace_dir, get_current_focus_dir
+from ...config.context import get_current_focus_dir
 from ...constant import WORKING_DIR
 from ...utils.io_utils import (
     get_path_lock,

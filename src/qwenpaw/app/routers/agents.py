@@ -64,46 +64,26 @@ from ...utils.io_utils import run_sync_io, write_json_atomic
 from ...utils.logging import sanitize_log_value
 import asyncio
 import copy
-import importlib.resources
 import tempfile
 import subprocess
 import threading
 import time
 import unicodedata
 from datetime import datetime
-from typing import Any, Literal, NoReturn, cast
+from typing import cast
 from urllib.parse import unquote, urlparse
-from fastapi import (
-    APIRouter,
-    Body,
-    File,
-    Form,
-    HTTPException,
-    Query,
-    Request,
-    UploadFile,
-)
-from pydantic import BaseModel, Field, field_validator
+from fastapi import File, Form, Query, UploadFile
 from starlette.responses import FileResponse
 from ...agents.skill_system.hub import install_skill_from_hub
 from ...agents.skills_manager import SkillConflictError
-from ..utils import schedule_agent_reload
 from ...config.config import (
-    AgentProfileConfig,
-    AgentProfileRef,
     AgentsSquareSourceSpec,
     AgentsSquareConfig,
     AgentsSquareCacheConfig,
     AgentsSquareInstallConfig,
-    load_agent_config,
-    save_agent_config,
-    generate_short_agent_id,
-    sanitize_agent_id,
-    validate_agent_id,
 )
-from ...config.utils import load_config, save_config
-from ...agents.utils import copy_workspace_md_files
-from ...agents.skills_manager import SkillPoolService, get_workspace_skills_dir
+from ...config.utils import save_config
+from ...agents.skills_manager import SkillPoolService
 from ...knowledge.project_pipeline_manager import (
     DEFAULT_PROJECT_PIPELINE_COOLDOWN_SECONDS,
     DEFAULT_PROJECT_PIPELINE_DEBOUNCE_SECONDS,
@@ -4387,8 +4367,6 @@ def _aggregate_square_items(
             )
         finally:
             if tmp_dir and tmp_dir.exists():
-                import shutil
-
                 shutil.rmtree(tmp_dir, ignore_errors=True)
 
     items.sort(

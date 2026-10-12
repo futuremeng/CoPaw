@@ -37,14 +37,12 @@ from qwenpaw.exceptions import (
 )
 
 from .timezone import detect_system_timezone
-from .product_models import (
+
+# Re-export face: consumers import these models via config.config.
+from .product_models import (  # pylint: disable=unused-import
     KnowledgeSourceSpec,
-    KnowledgeTaskSpec,
     KnowledgeHanLPTaskConfig,
-    KnowledgeTaskMatrixConfig,
     KnowledgeNLPConfig,
-    KnowledgeIndexConfig,
-    KnowledgeAutomationConfig,
     GraphifyConfig,
     KnowledgeConfig,
     AgentsSquareSourceSpec,

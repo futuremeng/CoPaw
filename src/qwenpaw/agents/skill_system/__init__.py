@@ -51,6 +51,7 @@ def list_available_skills(
     service = SkillService(base_dir)
     return [skill.name for skill in service.list_available_skills()]
 
+
 __all__ = [
     "SkillConflictError",
     "SkillInfo",

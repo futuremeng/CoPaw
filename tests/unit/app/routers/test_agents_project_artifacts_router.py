@@ -1201,8 +1201,7 @@ def test_create_project_uses_builtin_template_fallbacks(
         empty_templates_dir,
     )
     monkeypatch.setattr(
-        agents_router_module.importlib.resources,
-        "files",
+        "importlib.resources.files",
         lambda _package: empty_templates_dir,
     )
 
@@ -1255,8 +1254,7 @@ def test_load_project_template_text_supports_legacy_hidden_paths(
         templates_dir,
     )
     monkeypatch.setattr(
-        agents_router_module.importlib.resources,
-        "files",
+        "importlib.resources.files",
         lambda _package: tmp_path / "missing-package",
     )
 
