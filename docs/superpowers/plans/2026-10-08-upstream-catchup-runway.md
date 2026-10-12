@@ -3132,3 +3132,110 @@ grep 只用来列候选，不用来下结论。
 `13c26cb9d`（本节）。守卫与两层落点必须同笔：只放根 conftest 而补不上 `config.py` 那一枚，
 `isolated_config_file` 与 `AgentsConfig` 会指向两处；只补 `config.py` 而不在根上设环境变量，
 另外 42 枚绑定仍指本机。
+
+### 8.46 刀 118（2026-10-12）：桥接配置的写入路径绕过了整套目录隔离 —— 落点选在测试侧，生产侧那 4 枚文件留给产品裁决
+
+**一句话结论**：§8.45 待裁清单最后一项落刀，但**先更正它的价签**：那里写的"上游文件，动它 = 新开一枚
+冲突宿主、候选落点 1 行"不成立 —— 同一个 `Path.home()/".qwenpaw"` 表达式在 **4 枚上游自有文件**里一致地
+硬编码（写侧 + 读侧 + 扩展安装链路），只翻 `ws_handler.py` 会把"核心写到的位置"和"扩展被装去读的位置"
+分家。⇒ 本刀落 **fork-created 测试层**（`tests/unit/conftest.py` +13 行 + 1 枚新守卫文件 2 枚用例），
+P1 册**总数一格不动**、flake8 **561 不变**、整树 pylint **1,313 不变**；生产侧那 4 枚留在待裁。
+新增判据 219–221，**已闭环计数推到 118**。
+
+**为什么全量套件会写开发者本机（取证链，四步都不是推测）**：
+
+1. `src/qwenpaw/browser/control_link/chrome/ws_handler.py:26`
+   `DEFAULT_CONFIG_PATH = Path.home() / ".qwenpaw" / "nm-bridge.json"` —— 不经 `WORKING_DIR`，
+   也不看 `QWENPAW_WORKING_DIR`（整条 chrome 链路没有任何环境出口，逐枚文件查过）。
+2. `:108 _expected_token` 取 `_bridge_state.config_path or DEFAULT_CONFIG_PATH`，读不到文件时 `:115`
+   调 `configure_nm_bridge(config_path=…)` ⇒ `:89 config_path.parent.mkdir(parents=True, exist_ok=True)`
+   是**写**动作。
+3. `app/_app.py:451-456` 在 lifespan 里调 `prime_bridge_token()`，而 `prime_bridge_token` 就是
+   `_expected_token()`（`:167-169`）⇒ 任何进入真 lifespan 的用例都走到那一步。
+4. 判决实验：`HOME=/tmp/k118probe pytest tests/unit/app/routers/test_copaw_hanlp_tasks_router.py`
+   ⇒ **29 passed** 且 `find /tmp/k118probe` 长出 `.qwenpaw/nm-bridge.json`。同一命令在落刀后重跑，
+   那枚空 HOME **跑完仍是空的**。
+
+**为什么这件事在刀 117 之前从未露头**：本机 `~/.qwenpaw/nm-bridge.json` 早在 9 月就存在且里面有 token
+⇒ `_read_existing_token` 命中、直接返回、不写。只有把 HOME 换成空目录（判据 218 那一次实验）才会走创建
+分支。⇒ 这条耦合的表现形式是"偶发多进程争用同一枚 `agent.json` 之外的第二枚本机文件"，而不是"用例变红"。
+
+**生产侧那一刀的代价已量清（本轮不付，留给裁决）**：`git cat-file -e 2744a976b:…` 逐枚验过 4 枚都在上游
+分叉点的树里 —— `browser/control_link/chrome/ws_handler.py:26`、
+`plugins/bundle/chrome/assets/scripts/nm_host.py:49`、`plugins/bundle/chrome/api/routes.py:36`、
+`plugins/bundle/chrome/extension_setup.py:203`（`_qwenpaw_home(home) = home / ".qwenpaw"`，被 `:254` 以
+`home or Path.home()` 调用，`:404/:527/:616/:723` 四处拼出同一枚 `nm-bridge.json`）。
+动它们 = **+4 枚冲突宿主**，且"改完之后扩展去哪读"是行为变化：现有 `~/.copaw` 老安装会读到另一处。
+候选落点仍写在待裁里（把 `DEFAULT_CONFIG_PATH` 改由 `WORKING_DIR` 拼，并同步另外三枚）。
+
+**落点为什么是"两枚绑定一起转"**：`configure_nm_bridge` 的默认参数 `config_path=DEFAULT_CONFIG_PATH`
+在 `def` 执行那一刻就绑死了（判据 220）⇒ 只改模块常量对默认值无效；而 `_expected_token` 实际传的是单例
+字段 ⇒ 只改单例又留了个"调用方不传参就直接写本机"的口子。两枚一起改指
+`working_dir / "nm-bridge.json"`，与刀 117 的 `config` / `config.utils` 同指是同一件事。
+取单例走公开入口 `get_nm_bridge_route_state()`，不写 `_bridge_state`（否则 pylint `W0212` 加进整树账）。
+把 `ws_handler` 导入 conftest 的代价实测 **0.140 秒 / 每进程一次**（`config.utils` 那枚是 0.272 秒，
+同一位置早就在付）。
+
+**守卫 2 枚用例，以及其中一枚的第一版是假绿**：
+`tests/unit/browser/control_link/test_nm_bridge_working_dir_isolation.py`。
+- 先红实测（落刀前跑）：两条都红，逐条点名 `/Users/futuremeng/.qwenpaw/nm-bridge.json`
+  （"outside the per-test directory …/copaw-config0"）。
+- 第二条第一版写成 `assert config_path.exists()` ⇒ **通过**，理由是"真 HOME 里那枚文件本来就存在"，
+  它测到的是本机状态不是机制（判据 219）。改成断言"解析出来的路径落在隔离目录**内**"才真正钉住写入位置。
+- 反态实测（落刀后把三行 `monkeypatch` 注释掉再跑）：**2 failed**；放回：**2 passed**。
+
+**全套验证读数（全部在最后一条编辑之后重取，判据 89）**
+
+- 全量 `tests/unit`：**1 failed / 17,842 passed / 24 skipped / 4 xfailed in 1252.55s**
+  （基线 0 failed / 17,841 passed / 同 skip 同 xfail；17,843 = 17,841 + 本刀 2 枚守卫）。
+- 那 1 枚红 = `tests/unit/services/test_terminal.py::test_real_pty_cwd_unicode_resize_interrupt_and_cleanup`：
+  单文件复跑 **10 passed in 0.90s**，失败栈停在 `await session.output(after)` 等一个 needle ⇒ 负载依赖型，
+  与合并账里同一枚用例的旧处置逐字同级，不是本刀造出的回归。
+- L1 必过五目录：**1,339 passed / 1 skipped / 0 failed in 7.22s**（与刀 117 逐字同数）。
+- fake-HOME 判决实验（改后）：`HOME=/tmp/k118home2 pytest tests/unit/app tests/unit/browser tests/unit/config`
+  ⇒ **3,929 passed / 1 skipped / 4 xfailed in 109.10s**，跑完那枚空 HOME 里**没有任何文件**。
+- 本机对拍：整轮全量前后 `~/.qwenpaw/nm-bridge.json` 的 mtime 仍是 `Sep 16 19:27`（未被写）。
+- 五道离线门禁 rc=0，读数逐字不变：locale split 4,658 / 59 / 7 / 1,459 / 23 · brand 7 文件 / 35 行 ·
+  release channel R1–R6（6 文件 / 10 注册模板 / 11 读点 5 文件）· CI command targets 19 命令 / 4 目录 ·
+  namespace boundaries。
+- `check_p1_invariants.py --check --target-ref working` rc=0 且**总数不动**：
+  **117 文件 / +10,972 −522 / 行为 116 文件（invasive +10,936、deleted −486）/ 命名 1·7·8 / mechanical 1**
+  ⇒ 冲突面 **+0**（两枚落点都不在上游分叉点的树里）。
+- flake8 整树 **561**（全 `E501`）逐字不变；整树 pylint **1,313** 逐字不变，且报告里两枚落点文件 **0 命中**。
+  两枚文件自己：`--files` 单跑时先报出 4 条 `E501`（当场收掉，不加进册）与 1 条 `W0212`（改用公开 getter
+  消掉，没写行级 pragma）；`black --line-length=79 --check` unchanged、add-trailing-comma 无改。
+
+**判据 219（"文件存在"型断言在有真本机的环境下会假绿，要钉"解析到哪"而不是"有没有"）**：守卫第一版
+`assert config_path.exists()` 直接通过，因为开发者家里那枚文件本来就在 —— 它测的是本机状态，不是隔离机制。
+可迁移的动作：凡断言落在"某路径上的产物"，改成断言该产物**属于哪个目录**（这里 `is_relative_to` 隔离根），
+并跑一次"把夹具移开必须变红"的反态。
+
+**判据 220（默认参数在 `def` 那一刻绑死，改模块常量救不了它）**：`configure_nm_bridge(config_path=
+DEFAULT_CONFIG_PATH)` 的默认值与 `ws_handler.DEFAULT_CONFIG_PATH` 此后是两枚独立对象，
+`monkeypatch` 只改后者对前者无效。可迁移的动作：隔离这类路径要同时找齐"常量绑定 + 运行时字段 + 默认参数"
+三处，缺任一处就还剩一条写本机的路；找不到第三处的办法是读 `def` 那一行的签名，而不是读调用点。
+
+**判据 221（待裁项的价签要在开刀时重量一次，登记时的估计会排错刀序）**：§8.45 把这条记成"1 行 / 1 枚上游
+宿主"，实测是 4 枚上游自有文件（写侧 + 读侧 + 扩展安装链路 4 处拼同一文件名）+ 一次"老装法读哪里"的产品
+裁决。可迁移的动作：登记"改 X 文件一行"这类候选时，先 `grep` 同一表达式在全仓的出现次数并按归属分类，
+把宿主数与"是否行为变化"写进条目；否则下一刀会按 1 枚宿主的预算开工，做到一半发现要裁产品。
+
+**待裁清单（刀 118 之后重列；只改第一项的口径，其余全部不变）**
+
+- **`nm-bridge.json` 的本机路径（生产侧，4 枚上游自有文件，待产品裁）**：测试侧已闭 —— 套件不再写本机，
+  并有守卫钉住；生产侧仍对**真实用户**绕过 `WORKING_DIR` / `QWENPAW_WORKING_DIR`。落法 =
+  `ws_handler.py:26` + `nm_host.py:49` + `api/routes.py:36` + `extension_setup.py:203` 一起改经
+  `WORKING_DIR`，代价 **+4 枚冲突宿主**，并要决定 `~/.copaw` 老安装的读侧迁就。§8.45 那句"1 行 /
+  1 枚宿主"作废（判据 221）。
+- ① **pylint 风格意见 1,286**；② **环境假阳性 27**；③-补 **在册 `redefined-outer-name` 7 条** +
+  `agents.py:4504` 未用的 `overwrite`；④ **在册 formatter 脏**（prettier 10 + black/ATC 15，判据 184
+  已裁"先不付"）—— 四本账全部不变。
+- **E501 561** 分层不变；**mypy 65 errors / 22 文件**、3 枚 contract/integrated CI 红、
+  `secret_store` 2×timeout 聚合、22.50 秒 `copaw update`、overlay→真渲染接替、欠一次真浏览器 `copaw app`
+  复看、6 枚前端测试回买（+31）、发布渠道阶段 2 的发包那一半、根目录散落物登记（根 `conftest.py` 算在册）
+  —— 全部不变。
+- `skills_manager.py` 那 14 枚"模块内零自调用、生产侧已改绑 `agents/skill_system/`"的名字（同型候选）不变。
+
+**本刀的两笔提交**：`__CODE__`（`test(unit)`：桥接配置随隔离目录同转 + 2 枚守卫）与 `__DOCS__`（本节）。
+两枚绑定与守卫必须同笔：只转常量而漏单例，`_expected_token` 仍写本机；只转单例而漏常量，任何不传参的
+`configure_nm_bridge()` 调用点仍写本机 —— 守卫的第一条正是钉这两枚相等。
