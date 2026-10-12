@@ -3,6 +3,7 @@
 
 import pytest
 
+from qwenpaw.browser.control_link.chrome import ws_handler as _chrome_ws
 from qwenpaw.config import config as _config_module
 from qwenpaw.config import utils as _config_utils
 
@@ -27,12 +28,24 @@ def isolated_config_file(
     with the reader; one ``load_config()`` writing to a different directory
     than the ``AgentsConfig`` it returns would hand the next test a stale
     ``agent.json``.
+
+    The chrome bridge resolves its Native Messaging config from ``Path.home()``
+    rather than from the working dir, and the app lifespan primes the token on
+    startup -- so a test that enters the real lifespan would create
+    ``~/.qwenpaw/nm-bridge.json`` on the machine running the suite. Both of its
+    bindings move with the rest: the module constant is the default argument of
+    ``configure_nm_bridge`` and the singleton's field is what
+    ``_expected_token`` passes.
     """
     working_dir = tmp_path_factory.mktemp("copaw-config")
+    bridge_config = working_dir / "nm-bridge.json"
     monkeypatch.setattr(_config_utils, "WORKING_DIR", working_dir)
     monkeypatch.setattr(_config_module, "WORKING_DIR", working_dir)
     monkeypatch.setattr(_config_utils, "_config_cache", None)
     monkeypatch.setattr(_config_utils, "_config_mtime", None)
+    monkeypatch.setattr(_chrome_ws, "DEFAULT_CONFIG_PATH", bridge_config)
+    bridge_state = _chrome_ws.get_nm_bridge_route_state()
+    monkeypatch.setattr(bridge_state, "config_path", bridge_config)
     return working_dir
 
 
