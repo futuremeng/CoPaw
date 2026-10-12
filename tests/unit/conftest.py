@@ -3,6 +3,7 @@
 
 import pytest
 
+from qwenpaw.config import config as _config_module
 from qwenpaw.config import utils as _config_utils
 
 
@@ -20,9 +21,16 @@ def isolated_config_file(
     The directory has to live outside the test's own ``tmp_path``: tests that
     build a workspace in ``tmp_path`` and then list it would otherwise see
     ``copaw-config`` among their own fixtures' files.
+
+    ``qwenpaw.config.config`` binds the constant for itself and builds the
+    default agent's workspace path from that binding, so it is moved together
+    with the reader; one ``load_config()`` writing to a different directory
+    than the ``AgentsConfig`` it returns would hand the next test a stale
+    ``agent.json``.
     """
     working_dir = tmp_path_factory.mktemp("copaw-config")
     monkeypatch.setattr(_config_utils, "WORKING_DIR", working_dir)
+    monkeypatch.setattr(_config_module, "WORKING_DIR", working_dir)
     monkeypatch.setattr(_config_utils, "_config_cache", None)
     monkeypatch.setattr(_config_utils, "_config_mtime", None)
     return working_dir
