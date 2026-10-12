@@ -2913,5 +2913,4 @@ SkillConflictError` 导入的是 fork 的 `skills_manager.py:1007 SkillConflictE
   发包那一半、根目录散落物登记 —— 全部不变。
 
 **本刀的两笔提交**：`df326609b`（`fix(lint)`：`agents.py` 两处 + 影子表清空与单向守卫 + 那枚 detail 用例
-+ 重立的 P1 基线）与紧随其后的 `docs(runway): record knife 115 as section 8.43`。表清空与生产去重
-必须同笔（判据 111 的双向锁）。
++ 重立的 P1 基线）与 `325510079`（本节）。表清空与生产去重必须同笔（判据 111 的双向锁）。
