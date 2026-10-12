@@ -1867,7 +1867,7 @@ async def test_retry_stream_when_remote_protocol_error(
 
                 async def _fail_stream():
                     raise httpx.RemoteProtocolError("incomplete chunked read")
-                    yield  # pragma: no cover
+                    yield  # pragma: no cover  # pylint: disable=unreachable
 
                 return _fail_stream()
 
