@@ -138,3 +138,30 @@ def test_ruled_import_bindings_hold() -> None:
             f"{module_name}.{attr} is bound from {bound.__module__}, "
             f"but the ruling says it must come from {owner}"
         )
+
+
+#: Definitions a ruling retired outright, per module.  ``RULED_IMPORT_
+#: BINDINGS`` guards the winning side of a name; this guards that the retired
+#: duplicate does not come back -- an automatic merge that resolves "both sides
+#: added code" by keeping our old class would leave the ruling green and the
+#: dead copy live.
+RETIRED_FORK_DEFINITIONS: dict[str, list[str]] = {
+    "qwenpaw.agents.skills_manager": [
+        "SkillPoolService",
+        "get_workspace_identity",
+        "ensure_skill_pool_initialized",
+    ],
+}
+
+
+def test_retired_fork_definitions_stay_retired() -> None:
+    import importlib
+
+    for module_name, attrs in sorted(RETIRED_FORK_DEFINITIONS.items()):
+        module = importlib.import_module(module_name)
+        survivors = sorted(attr for attr in attrs if hasattr(module, attr))
+        assert not survivors, (
+            f"{module_name} still defines {survivors}, but a ruling retired "
+            "them; the live implementations are the upstream-owned ones "
+            "listed in RULED_IMPORT_BINDINGS"
+        )
