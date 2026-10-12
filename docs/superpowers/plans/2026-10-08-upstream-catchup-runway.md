@@ -2611,3 +2611,180 @@ E501 按**物理行形状**（现算：tokenize 判是否落在多行字符串 t
 
 **未办**：`_activate_import_bundle` 的 `overwrite` 形参（`W0613`，在册）随 ① 一起裁；
 `redefined-outer-name` 在册那 8 条随 ③ 一起裁。
+
+### 8.42 刀 114（2026-10-12）：裁决 ③ 落了 —— 在册真缺陷 44 → 1，剩下那 1 条不是 lint 账而是实现分歧
+
+**一句话结论**：§8.41 待裁 ③ 授权后，**9 枚文件 / 21 处编辑**把在册 pylint 真缺陷 **44 → 1**、
+flake8 **587 → 562**（`F811` 25 → 1、`E305` 1 → 0）；P1 账 `behavior_added 10,961 → 10,937`（−24）、
+`behavior_removed 485 → 486`（+1），冲突面文件数 **117** 不变。留着的那 1 条是 `app/routers/agents.py:86`
+的 `SkillPoolService` 导入影子 —— 两个同名类的实现不同，去重就等于替一枚上游拥有的路由选实现，
+那是产品裁决而不是合并卫生裁决。本刀之所以敢在别人的文件上删 22 行，靠的是改前改后各做一次
+**模块级绑定身份对拍**（判据 202）。
+
+**逐文件的账**（`--target-ref working` 现算；pylint 列 = 该文件结清的消息）：
+
+| 文件 | 归属 | 编辑 | `behavior_added` | `behavior_removed` | 结清 |
+| --- | --- | --- | --- | --- | --- |
+| `src/qwenpaw/app/routers/agents.py` | 在册 | 26 删 / 4 改：把 fork 那半的导入面收窄到上游没写过的名字（含 9 行 `fastapi` 块、`pydantic` 整行，以及函数体内那处 `import shutil`） | 3790 → 3768（−22） | 6 → 6 | `reimported` 21 + `unused-import` 2 |
+| `src/qwenpaw/config/config.py` | 在册 | 删 4 枚零消费名、10 枚 re-export 名改语句级 pragma | 65 → 63（−2） | 0 → 0 | `unused-import` 14 |
+| `src/qwenpaw/config/utils.py` | 在册 | 删 fork 那 2 行，把上游那 2 行恢复成字节相同 | 25 → 23（−2） | 0 → 0 | `reimported` 3 |
+| `src/qwenpaw/agents/utils/file_handling.py` | 在册 | fork 那行收窄成只导 `get_current_focus_dir`，不动上游行 | 3 → 3 | 2 → 2 | `reimported` 1 |
+| `src/qwenpaw/agents/skill_system/__init__.py` | 在册 | `E305`：`__all__` 前补一枚空行 | 20 → 21（+1） | 0 → 0 | flake8 `E305` 1 |
+| `tests/unit/app/routers/test_config_router.py` | 在册 | `HTTPException` 全文件 0 引用，改上游那一行 | 50 → 51（+1） | 8 → 9（+1） | `unused-import` 1 |
+| `tests/unit/providers/test_retry_chat_model.py` | fork-created | `unreachable` 行级 pragma | — | — | `unreachable` 1 |
+| `tests/unit/app/routers/test_agents_project_artifacts_router.py` | fork-created | 2 处借道把手改字符串形式（见判据 203） | — | — | — |
+| `tests/unit/test_module_import_bindings.py` | fork-created | 刀 95 影子表退一枚已结清的登记 + 更正注释 | — | — | — |
+
+**账差为什么是 −24 / +1**：−22 −2 −2 +1 +1 = −24；`behavior_removed` 那唯一 +1 来自
+`test_config_router.py` —— 本刀只在那枚文件里**改写了上游的一行**（`from fastapi import FastAPI, HTTPException`
+→ `from fastapi import FastAPI`），改写上游行按定义就是"删掉一枚上游行 + 加一枚 fork 行"。
+其余全部落在 fork 自己写的那半：删的是重复行，恢复的是上游原文。
+`skill_system/__init__.py` 的 +1 是新加的那枚空行，不是行为。
+
+**44 → 1 的三种处置**：**删 32 / 抑制 11 / 留 1**。抑制的 11 枚 = `config/config.py` 那 10 枚
+re-export 名（语句级 `# pylint: disable=unused-import`）+ `test_retry_chat_model.py` 那枚 `unreachable`
+（行级 pragma，且必须落在 `yield` 那一行，不是 `async def` 那一行）。
+
+**为什么 `unused-import` 17 枚只删 7 枚**：`src/copaw/config/config.py:3` 是
+`from qwenpaw.config.config import * # noqa: F401,F403`，而 `qwenpaw/config/config.py` 没有 `__all__` ——
+于是那里每一个公开名都是**外部可达的公共面**（`copaw.config.config.X` 全部能解析）。加 `__all__` 会改变
+`import *` 的语义（把 wildcard 面收窄），删导入会让真实消费者的名字变 `AttributeError`。全树 grep 只有
+4 枚是零消费（`KnowledgeTaskSpec` / `KnowledgeTaskMatrixConfig` / `KnowledgeIndexConfig` /
+`KnowledgeAutomationConfig`，只在 `product_models.py` 的定义处出现），那 4 枚删；其余 10 枚抑制。
+
+**顺带消失的风格意见，和一句没结清的话**：去重把 `wrong-import-order` 14 → 12、`ungrouped-imports` 5 → 2、
+`redefined-outer-name` 8 → 7 —— 它们本来就是同一批重复导入的次生症状。逐消息对账（12 枚在册宿主）：
+**105 → 56**，其中 49 条消失、2 条 `C0411` 只是换了描述（同一枚 finding，它指的导入行改了写法）。
+§8.41 未办把"在册 `redefined-outer-name` 8 条"挂在 ③ 名下，实际**只顺带掉 1 条，剩 7 条仍在**
+（`test_tools_router.py` 5 枚同名 fixture + `test_workspace_router.py` 1 枚 + `test_retry_chat_model.py`
+1 枚 `httpx`）。它们不是导入影子，本刀没碰，如实退回待裁。
+
+**判据 202（"重复导入"去重前先证两个名字绑到同一个对象；同名同物是 lint 账，同名异物是分歧账）**：
+flake8 与 pylint 都只能证明"这行写了两次"，不能证明"两次是同一个东西"。本刀对 5 枚改动的生产模块做了
+模块级绑定身份对拍（`name → 定义模块`，改前改后各 dump 一次）：`agents.py` 只丢 `NoReturn` 与 `importlib`
+两枚零消费名，`config/config.py` 只丢那 4 枚零消费名，`config/utils.py` 与 `file_handling.py` 的绑定表逐字不变。
+全刀只有**一处换了绑定**：`get_workspace_skills_dir` —— fork 那行指向 `agents.skills_manager`，上游那行指向
+`agents.skill_system.store`；用 `inspect.getsource` 证明两份源码逐字相同（`same object: False`、
+`source identical: True`）之后，才按判据 101"按定义符号找接替者"删掉 fork 行、保留上游行。
+反过来 `SkillPoolService` 不成立，所以它留着：fork 的 `agents/skills_manager.py` 版 15 个方法，
+上游 `agents/skill_system/pool_service.py` 版 19 个，15 个共有方法里**只有 `__init__` 的 AST 相同**，
+其余 14 个别体不同，上游另有 `_configure_skill_automation` / `rename_in_workspaces` /
+`set_skill_auto_sync` / `set_skill_automation` 四枚 fork 没有。该路由唯一的用法在
+`agents.py:1956`：`pool_service = SkillPoolService()` → `download_to_workspace(skill_name=, workspace_dir=,
+overwrite=False)`。留哪一行 = 选哪个实现，本刀不选。
+可迁移的动作：**任何"去重 / 删死导入 / 改指接替者"类清理，先跑绑定对拍，把同名同物与同名异物分开**。
+
+**判据 203（"未用导入"可能是测试的借道把手：删之前 grep 全树的 `句柄模块.库.属性` 形状）**：
+删掉 `agents.py` 里那枚 pylint 判定"未用"的 `import importlib.resources` 后，CI 选择集从 2 红变 5 红。
+逐条根因：两枚在 `tests/unit/app/routers/test_agents_project_artifacts_router.py`，它们不 patch 真调用点，
+而是伸手进模块命名空间取那枚导入句柄 —— `monkeypatch.setattr(agents_router_module.importlib.resources,
+"files", ...)`，被改的是**进程共享的** `importlib` 模块对象；生产代码的真实调用点在
+`project_scaffold_services.py:47`，与那枚导入无关，所以 pylint 说"未用"是对的，测试却说"在用"。
+第三枚是刀 95 的影子表 `test_module_import_bindings.py` 自我兑现：表里登记的两枚名有一枚被本刀结清，
+守卫按设计开红 —— 那枚红不是缺陷，是门禁在正常工作。修法都在测试侧（两枚文件均 fork-created，零账面成本）：
+把手改字符串形式 `monkeypatch.setattr("importlib.resources.files", ...)`，影子表退掉那枚已结清的名。
+可迁移的动作：pylint 的"未用"只统计**本文件内**的名字使用，看不见别的文件通过模块对象伸手进来；
+删这类导入前把全树的 `\.importlib\.` 一类的借道形状 grep 一遍。
+
+**判据 204（会写文件的测量必须在副本上跑：`black` 有 `--check`，add-trailing-comma 没有）**：
+为了回答"ATC 会给 `agents.py` 造多少脏"，我把钩子直接跑在工作树上 —— 它当场写入 19 枚尾逗号，
+diff 从 30 行涨到 68 行，把裁决 ④ 尚未授权的在册 formatter 脏混进了本刀的 ③。恢复方式：
+`git show HEAD:` 取原文，用一个脚本做 8 处逐字替换（每处断言恰好命中 1 次），再证明重建结果与 ATC 的输出
+只差那 19 枚逗号；绑定对拍、P1 账、flake8、pylint 四项读数全部回到误跑之前。
+可迁移的动作：测量类命令先问一句"它会写吗"，会写的只在 `/tmp` 副本上问。
+
+**在册 formatter 脏零新增的证明**（判据 200 的口径：pinned black `23.3.0` + `--line-length=79`、钩子版 ATC）：
+对 HEAD 与工作树分别跑，逐文件比"black 会新增的行数"与"ATC 会改动的行数"：
+`agents.py` 前后都是 **117 / 19**，其余 5 枚在册宿主前后都是 **0 / 0**。
+本刀既没让任何一枚在册文件的 ④ 脏变多，也没顺手替它清掉一点。
+
+**读数核对，一处更正**：`scripts/check_ci_command_targets.py` 现读 **19 命令 / 4 包目录**。
+§8.34 与 §8.37 记的 "18" 是 109-2 那枚 fork 自有 workflow 落地**之前**的读数，§8.38 已把它记成 19 ⇒
+不是账漂，是旧读数还留在原地，本刀不改写历史。
+
+**判据 205（只罚增长的门禁对"收缩方向的陈旧"是盲的；重立基线要先确认 `--write-baseline` 参照的是工作树）**：
+`--write-baseline` 不带 `--target-ref working` 时量的是 **HEAD**。我先按默认写了一次，得到
+`+10,997 / behavior 10,961 / removed 485`，而提交里的基线记的是 `10,999 / 10,963` —— 差的 2 行在
+`app/routers/skills.py`（`704 → 702`）：刀 113 的尾批 `88a701b0f` 让账收缩了 2 行却没重立基线。
+因为 `--check` 只对"增长"开红，收缩从未被报出来，基线与真实账可以长期不一致而全绿。
+按工作树重立后 `--check --target-ref working` **rc=0**，新账 `117 文件 / +10,973 −522`、
+`P1-行为 116 文件 / +10,937 / −486`、`naming 1 纯 / 8 涉 / 36 行`、`mechanical 1`。
+可迁移的动作：每当一笔刀合法地移动了册，收尾时用 `--write-baseline --target-ref working`，
+并在记账里写上"基线已从工作树重立"，否则下一次有人按默认参照重写基线，会把未提交的编辑当成既有账。
+
+**判据 206（"整树"读数只能用带 exclude 的那条命令量；逐枚文件拼出来的表与它不是同一个文件集）**：
+本刀按 §8.41 记的 1,361 起算，实测宿主集内 −49，两数对不上（1,361 − 49 = 1,312，而工作树跑出来是 1,314），
+差 2 逼出这次 A/B。用同一枚钉住的 pylint 环境（`~/.cache/pre-commit/repo9m7jmnhs`，3.0.2）、
+同一条 `pre-commit run pylint --all-files`，在**另一枚干净 worktree**（`CoPaw-wp14`，同样停在 `fc8f103df`）
+量 HEAD：**1,363 → 1,314，−49**，与宿主集内的 −49 逐码吻合 ⇒ 本刀没有在任何别处开新 finding。
+对照之下 §8.41 那张表有三处与实测不符：总数 **1,361**（实 1,363）、`unused-argument` **140**（实 143）、
+`unexpected-keyword-arg` **1 条在册**（HEAD 实测 **0**）—— 少 3 与多 1 相加正好是 2。
+那张表的口径是"`--files` 逐枚跑 + 逐枚归属"，而钩子对整树自带 exclude（`^docs`、`pb2.py`、`grpc.py`），
+两种跑法的**文件集不同**，所以"表加总"与"整树"不能混用，也不该拿其中一个去校另一个。
+可迁移的动作：报"整树"就只报 `--all-files`，报"这批文件"就只报 `--files`，且每次宣称"没有外溢"时要像本刀一样
+**拿另一枚干净 worktree 量 HEAD**，而不是引用上一节里那个来路不同的总数。
+
+**整树 A/B 的逐码差**（HEAD `fc8f103df` → 工作树，`--all-files`，全部落在本刀宿主集内）：
+
+| 码 | HEAD | 现 | 差 |
+| --- | --- | --- | --- |
+| `reimported` (W0404) | 26 | 1 | −25 |
+| `unused-import` (W0611) | 17 | 0 | −17 |
+| `ungrouped-imports` (C0412) | 5 | 2 | −3 |
+| `wrong-import-order` (C0411) | 14 | 12 | −2 |
+| `unreachable` (W0101) | 1 | 0 | −1 |
+| `redefined-outer-name` (W0621) | 264 | 263 | −1 |
+| **合计** | **1,363** | **1,314** | **−49** |
+
+**验证读数（本刀收口的九项，全部为该树现读）**
+
+- **flake8**（`pre-commit run flake8 --all-files`，权威口径）：**587 → 562**。差额正好是本刀的
+  25 枚 `F811` + 1 枚 `E305`；残余形状 = `E501` 561 + `F811` 1，而那 1 枚 `F811` 就是 `SkillPoolService`
+  的存活影子（它和 44 里剩下的那 1 枚 `reimported` 是同一行的两种说法，不是两笔债）。
+- **pylint 整树**：`1,363 → 1,314`，−49，逐码见上表；A/B 用另一枚干净 worktree 量 HEAD（判据 206）。
+- **在册真缺陷**：**44 → 1**（`reimported` 26→1 / `unused-import` 17→0 / `unreachable` 1→0）。
+  fork-created 侧的真缺陷族在 `88a701b0f` 已清零，本刀之后再无"我们的文件里有真 bug"这一格。
+- **P1 册**：**117 文件 / +10,973 −522**；`P1-行为 116 文件 / +10,937 / −486`；`naming 1 纯 / 8 涉 / 36 行`；
+  `mechanical 1`。`behavior_added` 净减 24（去重删掉的都是 fork 加的行），`behavior_removed` 净增 1
+  （唯一一处上游自有行改写：`test_config_router.py:26` 去掉 `HTTPException`）。
+  基线**已从工作树重立**（判据 205），`--check --target-ref working` **rc=0**。
+- **L1 必过五目录**：**1,339 passed / 1 skipped**（`tests/unit/security`、`tests/contract/security`、
+  `tests/unit/agents/{hooks,memory,utils}`）。
+- **本刀宿主相关的定向 pytest**（上述五目录 + `tests/unit/app/routers`、`tests/unit/providers`、
+  `tests/unit/config`）：**3,583 passed / 1 skipped**。
+- **全量 unit 套件**：**2 failed / 17,834 passed / 24 skipped / 4 xfailed**（18 分 30 秒）。
+  那 2 枚红是合并后一直在册的 `tests/unit/agents/test_acp_available_commands.py::{test_new_session_advertises_commands,
+  test_load_session_advertises_commands}` —— 用例依赖 acp 工作区形状，与本刀无关，**本刀零新增红**
+  （判据 207）。
+- **五道离线门禁同树 rc=0**：namespace boundaries `PASSED` · ci-command-targets **19 命令 / 4 包目录** ·
+  locale split `4,658 + 59 + 7 + 1,459 + 23` · brand `7 文件 / 35 行` · release-channel R1–R6
+  `6 文件 / 10 模板 / 11 读点 / 5 宿主`。
+- **formatter 脏零新增**：pinned black `23.3.0 --line-length=79` 与钩子版 ATC 对 HEAD 与工作树逐文件对拍，
+  `agents.py` 前后 **117 / 19** 不变，其余 5 枚在册宿主前后 **0 / 0** 不变（判据 204 的口径）。
+
+**判据 207（"去重导入"这类刀的红测面要包含全量套件，不能只跑宿主目录）**：本刀的编辑集中在 6 枚生产文件的
+导入块，而真正会被它们打破的是**用字符串路径反射**的测试。三枚测试侧红（`test_config_router`、
+`test_retry_chat_model`、`test_agents_project_artifacts_router`）里只有第一枚在宿主同目录，另两枚分别在
+`providers` 与 `app/routers` 的另一支文件；判据 203 那种"通过共享模块对象打补丁"的耦合，只有跑到那一支用例时
+才会现形。可迁移的动作：动导入块 = 跑全量 `tests/unit`，并和合并后已知的红集（当前 2 枚 acp）逐枚对名字，
+而不是只看"有没有新红"。
+
+**待裁清单（刀 114 之后重列；①②④ 是旧项换新数，③ 只结清了一半）**
+
+- ① **pylint 风格意见 1,286**（1,314 − 27 环境假阳性 − 1 存活真缺陷）：三条路仍是
+  加 `--disable` 进 `.pre-commit-config.yaml`（该文件是上游同，动它 = 新开一枚配置宿主）/
+  逐族留账不改配置 / 只在 fork-created 文件加行级 pragma。本刀不改这个数，只把它的分母从 1,314 起算。
+- ② **环境假阳性 27**（`no-name-in-module` 23 + `E1120` 2 + `E1136` 2）：是否为 pylint 钩子补
+  `additional_dependencies`（`mcp`）。同样是动上游同的配置。
+- ③ **在册真缺陷：结清 43/44，剩 1 枚不是 lint 账** —— `src/qwenpaw/app/routers/agents.py:86` 的
+  `SkillPoolService` 是 fork 副本与上游实现的**同名不同体**（AST 方法体对拍：fork 版有 fork 自己加的方法，
+  上游 `skill_system` 版是另一套；router 只有一个使用点）。**待裁：这一枚用 fork 实现还是上游实现。**
+  答完之前它同时是 1 枚 `reimported` 和 1 枚 `F811`，任何"再清一遍 lint"的刀都绕不过它。
+- ③-补 **在册 `redefined-outer-name` 还剩 7 条**（本刀只落 1 条，因为其余 7 条要靠重命名函数内变量，
+  属风格意见而非缺陷）；`agents.py:4505` 那条 `overwrite` 同样未动。
+- ④ **在册 formatter 脏**：prettier 10 枚（+316/−207）+ black/ATC 15 枚（付它是 +172 行 P1，判据 184 已裁
+  "先不付"）。本刀证明它**没有因为 ③ 而变多**，所以这一项的价码与本刀之前完全一致。
+- **E501 561**：形状分层见 §8.41（行内串 304 / 纯代码 175 / 多行串内 75 / 代码+尾注 5 / 整行注释 2）——
+  formatter 只能替那 175 条换行，其余要么改了会改值、要么已在 `5ebbc839f` 手写过。
+- **mypy 65 errors / 22 文件**：从刀 105 到今天没有进过任何一刀的射程，待裁。
+- 根目录散落物仍**登记未动**（`UPSTREAM_V2_MIGRATION_PLAN.md:92/562` 列的那批）。
