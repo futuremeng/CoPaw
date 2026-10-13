@@ -3712,7 +3712,7 @@ pt-BR 3,537 / id 3,304）。改成按当前语言动态加载估算能减 88,053
 **产物侧用结构证明代替浏览器复看**：`graphVisualization-CnkyyBc6.js`（46,533 字节，不在那 11 枚里）
 的 7 条静态边全部指向实存文件，1 条动态边正是 `import("./g6-vendor-CQi1X0Di.js")` —— 惰性链接线正确；
 `g6-vendor` 自身**零条静态 import**，说明它不需要 initial 块导出任何东西。真浏览器 `copaw app`
-复看仍欠（清单里那枚不变）。
+复看当时仍欠 —— 下面"真浏览器复看"那段把它结掉了。
 
 **验证读数**：`tsc -b` 0 红；`npm run build` 整链 **exit 0**（刀 121 之后这条链第一次能一路走到
 bundle 那步，所以这枚门禁读数从此是"真构建"）；前端 `test:run` **533 文件 / 5,238 用例 / 0 红**；
@@ -3745,14 +3745,43 @@ Python 侧 0 改动。
 `AttributeError` 是解释器合同不满足，不是被测代码红。可迁移动作：门禁脚本换解释器再判，与 py>=3.11
 的下限（刀 45）对齐。
 
+**真浏览器复看（补上上面那段"产物侧结构证明"欠的账）**：本机 `copaw app`（127.0.0.1:8099，
+`QWENPAW_WORKING_DIR` 指到临时目录、`QWENPAW_DISABLE_KEYRING=1`）打开 `/knowledge`。
+**第一次复看跑在了错的产物上**：`_resolve_console_static_dir()`（`_app.py:844`）把 `pkg_dir/console`
+排在 `console/dist` 之前，而 `src/qwenpaw/console/` 是 `.gitignore:41` 的构建副本，里面躺着刀 119-5
+装 wheel 时 08:15 那份**裁切前**的产物 —— 浏览器请求的是 `graphVisualization-D0oHMu1v.js`，
+`console/dist/assets` 里只有 `graphVisualization-CnkyyBc6.js`，两边哈希对不上才暴露。把
+`QWENPAW_CONSOLE_STATIC_DIR` 指到 `console/dist` 重启后读数：首屏 76 条资源请求里 **0 条**命中
+`g6` / `antv`；执行一次图谱查询后，服务端日志出现 `GET /assets/g6-vendor-CQi1X0Di.js 200`，
+页面侧该条 `initiatorType` 为 `script`、传输 686 KiB、耗时 8 ms，`graphCanvas` 容器挂 4 枚 canvas，
+力导向布局渲染出 9 节点 / 12 条带关系标签的边，Fit View 与 Status 两枚按钮点下去都有响应，
+整程无 chunk 加载报错。**数据侧的口径要说清**：临时工作区没有任何知识源
+（真 `/api/knowledge/graph-query` 回 `records: []` + `NO_PREVIEW_RECORDS`，图谱区直接显示
+"No graph data available"），所以那 12 组三元组是在页面里替换 `window.fetch` 造出来的。
+被造出来的只有响应体，响应之后的整条链（`recordsToVisualizationData` → `await import("@antv/g6")`
+→ g6 渲染）走的是生产代码 —— 这正好是本刀要证的那一段。控制台另有两条与本刀无关的读数：
+`[moduleRegistry] Module not found: Agent/Knowledge/index`（裁切前后两份产物都有，属既有告警），
+以及每次启动一条 `404 https://pypi.org/pypi/copaw-community/json` —— 那是刀 119 把升级检查的读点
+改指我们分发名的**预期后果**，阶段 2 真发包之前这条 404 会一直在，别当成回归。本机环境已顺手对齐：
+`src/qwenpaw/console/` 用裁切后的 `console/dist` 重刷了一份（旧副本先移走、确认新副本落好后弃掉）。
+
+**判据 241（复看前端产物前先确认服务从哪个目录读静态资源）**：包内 `pkg_dir/console` 优先于
+`console/dist`，而前者是 gitignore 的构建副本 —— 重建 `console/dist` 不会自动刷新它，于是"我明明
+重新构建了"和"浏览器看到的还是旧的"可以同时为真。可迁移动作：拿浏览器实际请求的 chunk 文件名去
+`console/dist/assets` 里查存在性，对不上就说明读的是另一份副本，用 `QWENPAW_CONSOLE_STATIC_DIR`
+强制指定再看一次。
+
 **待裁清单（刀 122 之后；除把 122 划掉外全部不变）**
 
 - ① pylint 风格意见 1,289、② 环境假阳性 27、③ 在册真缺陷 0、④ 在册 formatter 脏（prettier 10 +
   black/ATC 15）、**E501 561**、**mypy 65 / 22**、3 枚 contract/integrated CI 红、`secret_store` 2×timeout、
   22.50 秒 `copaw update`、overlay→真渲染接替（**现在带第二个待办：把那枚"文案改按需加载"的 −88 KB
-  一起结**）、欠一次真浏览器 `copaw app` 复看、根目录散落物登记、`skills_manager.py` 那 14 枚名字、
+  一起结**）、~~欠一次真浏览器 `copaw app` 复看~~（本刀已结，见上段）、根目录散落物登记、
+  `skills_manager.py` 那 14 枚名字、
   `/tmp/k120_copaw_untracked/` 那 8 枚 gitignore 数据的去留、阶段 2 的"发"那一半 4 项 —— 其余不变。
+- **本刀复看新增一枚**：升级检查在阶段 2 发包之前每次启动敲 `pypi.org/pypi/copaw-community/json`
+  拿 404，控制台留一条红。要不要在"渠道尚未发布"时静默跳过这枚检查，等阶段 2 那半把刀时一并裁。
 
 **本刀的提交**：分块与预算并成一笔 —— 门禁里那句注释钉的是"改完以后读 10.05 MiB"，拆成两笔就有
-一笔带着一条与自身读数不符的注释，而合起来这一笔的 `npm run build` 是绿的；本节一笔，本笔之后不再有
-内容编辑。
+一笔带着一条与自身读数不符的注释，而合起来这一笔的 `npm run build` 是绿的；记账一笔；真浏览器
+复看补记一笔（复看改变了两处记录：产物侧的结构证明换成实测读数，待裁清单少一枚、多一枚）。
