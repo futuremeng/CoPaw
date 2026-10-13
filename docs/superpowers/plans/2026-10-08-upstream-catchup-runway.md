@@ -3785,3 +3785,125 @@ Python 侧 0 改动。
 **本刀的提交**：分块与预算并成一笔 —— 门禁里那句注释钉的是"改完以后读 10.05 MiB"，拆成两笔就有
 一笔带着一条与自身读数不符的注释，而合起来这一笔的 `npm run build` 是绿的；记账一笔；真浏览器
 复看补记一笔（复看改变了两处记录：产物侧的结构证明换成实测读数，待裁清单少一枚、多一枚）。
+
+---
+
+## 8.51 刀 123：overlay 接替与"文案按需加载"并成一刀（已闭环）
+
+**结的是两枚纠缠的账**：待裁清单里的 `overlay→真渲染接替`，和刀 122 量出来、当时被"守卫没补之前
+不动它"挡住的那枚 −88 KB（`register.ts` 把 copaw overlay 静态打进 entry）。刀 122 把后者写成了前者
+的搭车项，所以这一刀两枚一起结。落点按用户裁决：**backend read 内合并**。
+
+**先更正一笔前提，因为它决定了落点怎么选**：§8.50 那句"`registerCopawTranslations` 本来就挂在
+i18next 的 `loaded` 事件上"不成立 —— 它是 `i18n.ts` 模块导入期的一次同步注册，一次把 6 语 overlay
+全 `addResourceBundle` 进 store，没有任何事件回调。真正挡路的机制在别处：`react-i18next` 的实例配置
+是 `bindI18n: 'languageChanged'` / `bindI18nStore: ''`，所以**晚到的 store 写入不触发重渲染**。
+把合并点挪进任何一个事件回调（`loaded` 也好、`languageChanged` 之后也好）都会做出"数据已到、页面
+不动"的假接替；只有让合并发生在 `languageChanged` **之前**，重渲染才赶得上。所以这一刀不是"加一道
+守卫"，而是把合并点挪进取数据的漏斗：`localeBackend.read`。
+
+**实现三笔**：
+
+- `bb472bd0d` —— `copawOverlayBackend(localeBackend)` 包住上游形状的 `read`：一次 `loadLocale(lang)`
+  拿基稿，overlay 按语言取文件、深合并进基稿，`callback` 恰好调一次；overlay 侧失败时记日志并回基稿
+  （不让一次 overlay 故障挂住启动）。`console/src/i18n.ts` 的 fork 面从 **+3/−0 缩到 +2/−1**
+  （1 行 import + `.use(localeBackend)` → `.use(copawOverlayBackend(localeBackend))` 这一处替换）。
+  顺带更正一处更老的账：冲突面册簇 G 记的"+16/−1"是旧分叉点上的数，换到 `2744a976b` 之后上游自己
+  写出了 `localeLoaders` / `loadLocale` 那套按需基稿加载，fork 面已经是 3/0；那条"插件层拿不到
+  i18n 句柄 ⇒ 这 16 行搬不出去"的判断随本刀作废。
+- `a2a4715af` —— `register.ts` 换成 `import.meta.glob` 的**惰性**形式 + 按语言取 group 文件。
+  overlay 的实际形状是 13 枚 group 目录 / 36 枚 JSON（en 13、zh 13、ru 3、ja 3、pt-BR 2、id 2），
+  §8.50 记的"24 枚"是错的，一并更正。产物门禁 `verify-initial-bundle.mjs` 跟着改注释与读数。
+- `1935a551e` —— 见下面那枚只有全量套件才暴露的回归。
+
+**产物读数（`console/dist` 现测）**：entry `index-BIVBK-jr.js` 958,435 字节 / Brotli 268,869，
+比裁切前少 **154,488 / 39,018**；initial 11 枚资源合计 **10,383,858 字节 = 9.90 MiB / Brotli
+2,680,991 = 2.56 MiB**，上一刀是 10,538,346 / 2,720,009（10.05 MiB）。预算线是 11 MiB raw /
+3 MiB Brotli（刀 122 按裁决放宽的那条），相对上游自身 9.81 MiB 的读数，fork 重量从 0.24 MiB
+降到 0.09 MiB。刀 122 那枚 88,053 字节的估算走的是"只保留当前语言"（159,118 − en 71,065）的算法，
+实现比估算更远：en 也按需，所以 raw 轴降 154,488、压缩轴降 39,018。**"entry 不再含 overlay 压缩态"
+的产物侧证明**：三枚只在 overlay 里的英文串（"Knowledge Quant Panel" / "Realtime index and source
+coverage" / "Execute structured queries over knowledge graph"）在 `assets/` 全树只命中
+`en-D9cGwoOh.js` 一枚惰性块，entry 里 0 命中。
+
+**一枚只有全量套件才暴露的回归**：`RichFileReferenceInput.test.tsx:41` 找不到名为
+`/Code snippet · 1 line/i` 的按钮。逐层取证后确认不是"文案没渲染"—— chip 渲染了，标签是裸键
+`chat.fileReference.codeSnippet`。根因：这枚用例是全树唯一"挂载真 i18n 而不等它就绪"的用例，
+按需加载把 store 写入推到了 Lexical 延迟首渲染之后，而 `bindI18nStore: ''` 意味着晚到的写入不会再
+触发一次渲染，于是裸键留在 DOM。生产侧不受影响：`main.tsx:60-71` 把首渲染压在
+`Promise.race([i18nReady, 3000ms])` 后面。修法因此落在测试侧 —— `beforeAll(() => i18nReady)`，
+把生产里那道门搬进用例；**成本是一枚上游自有测试文件进册**（+8/−2），P1 基线随之重立为
+**122 文件 / +11,063 −538**（`d2a23f73b`，`--check` 复跑退 0）。
+
+**顺带结掉一枚没人记过的构建侧漏点**：fork 自有测试替身 `enLocaleTranslate.ts` 原先躺在
+`pages/Agent/Projects/tests/` 下，而 `utils/lazyWithRetry.ts:97` 的 `PAGE_MODULES` 用的是
+`import.meta.glob(["../pages/**/*.{ts,tsx}", "!../pages/**/*.test.{ts,tsx}"])` —— 排除的只有
+`.test.` 文件，于是这枚纯测试辅助被当成页面模块打进了生产包。已 `git mv` 到 `console/src/test/`
+并改 9 处引用。**本刀的五枚门禁没有一枚抓住它**，说明该目录下另两枚同形状的辅助文件仍以同样方式
+漏进产物 —— 记进待裁。
+
+**真浏览器复看（`copaw app` 127.0.0.1:8117，`QWENPAW_CONSOLE_STATIC_DIR` 指向 `console/dist`，
+临时工作区）**：
+
+- 首屏 `/chat`：`index.html` 静态引用的 11 枚资源里 **0 枚** overlay 块。服务端日志本轮 150 条
+  `GET /assets/`，其中 27 条是 locale 块 —— 14 枚 `zh-*`（13 overlay + 1 基稿）+ 13 枚 `en-*`
+  overlay，全部 200。**为什么两种语言都加载**：`localStorage.language` 为空 ⇒ `i18n.ts` 按
+  `navigator.language`（zh-CN）起，`App.tsx:409-424` 随后从后端取到偏好 `en` 再 `changeLanguage` ——
+  两次语言解析是上游既有行为，按需加载把它从"纯内存"变成"两轮 chunk 往返"。这是本刀换来的账，
+  记在这里，并进了待裁。
+- `/knowledge` 与 `/settings` 两页 copaw overlay 文案整页可读，DOM 里裸键计数 **0**；控制台
+  0 枚 missingKey、0 枚 chunk 加载报错（三条 `Failed to load …` 是空工作区的数据请求；
+  `[moduleRegistry] Module not found: <路由>/index` 三条同属既有告警，不是本刀引入）。
+- **接替时刻的实测**：在 `/settings` 用顶栏语言菜单切到 Русский —— 该语言的块此前从未加载。点击后
+  新起 4 条请求（基稿 `ru-BF2KxPI9.js` 解码 364,356 字节 / 16 ms，overlay 3 枚分别解码 4,450 /
+  298 / 772 字节），页面**不刷新**即渲染出 1,051 枚西里尔字母、裸键 0。这枚"chunk 数 = 该语言
+  overlay 文件数 + 1 枚基稿"的对拍同时反过来证实了 36 枚文件与 13/13/3/3/2/2 的分布。
+- 缓存轴读数：第二次整页加载 `/settings` 时 13 枚 `en-*` 全部回 304，页面侧 `transferSize` 300 /
+  `decodedBodySize` 0 —— 浏览器缓存生效，但每枚仍要一次协商往返。
+- 首屏门限的读数要说清：`first-contentful-paint` 84 ms **早于** overlay 块落地的 373 ms —— FCP 量的
+  是背景不是内容；内容侧被 `i18nReady` 挡住，最坏 3000 ms 封顶。
+
+**验证读数**：`tsc -b` 0 红；前端 `test:run` **533 文件 / 5,242 用例 / 0 红**（比 §8.50 的 5,238 多
+4 枚：`i18n.test.ts` 2 枚接替守卫 + `register.test.ts` 2 枚按需守卫）；五枚门禁全绿 —— locale split
+（4,658 生产键 / 59 模板族 / 1,459 枚 overlay en+zh / 23 枚上游自有豁免 / 7 族豁免）、release channel
+R1–R6、namespace boundaries、CI command targets、channel contracts；`npm run build` 整链 exit 0；
+P1 `--check` 退 0。Python 侧 0 改动。**耗时读数别当回归用**：本轮全量套件跑出 506.79 s，上一轮
+245.04 s —— 差值来自我并发跑了 tsc、五枚门禁和一次仓库级 grep，属负载污染，不是套件变慢。
+**解释器读数补一笔**：判据 240 说门禁要用 3.11+，实测 `.venv` 那枚 3.10 不止读不了 `ast.TryStar`，
+连 `copaw app` 都起不动（`src/qwenpaw/cli/app_cmd.py:11` → `browser/control_link/chrome/protocol.py:6`
+的 `from enum import StrEnum`），所以复看用的是 `/tmp/copaw_desktop_v`（3.12.13，装的是刀 120 那枚
+wheel）—— 本刀 Python 侧 0 改动，用它是合法的。
+
+**判据 242（文案接替的门禁是"store 写入早于 `languageChanged`"，不是"有没有注册"）**：
+`bindI18n: 'languageChanged'` + `bindI18nStore: ''` 的实例配置决定了晚到的 `addResourceBundle`
+不会触发重渲染，于是任何"在事件回调里补 bundle"的写法都做出假接替 —— 数据到了、页面不动，而且它在
+只测默认语言的用例里看不出来。可迁移动作：改加载时机前先读宿主库的绑定配置；合并点能挪进取数据的
+漏斗就别挪进事件回调。
+
+**判据 243（按需加载之后，语言切换从内存操作变成网络往返，只有真浏览器能证接替赶得上）**：
+切到一枚从未加载过的语言，读该语言新增的 chunk 条数与解码字节，再看页面**不刷新**时的文字与裸键
+计数；chunk 条数应等于该语言 overlay 文件数 + 1 枚基稿，对不上就说明 glob 或合并点错了。可迁移动作：
+这类"加载时机"改动的复看必须包含一次冷语言切换，只测默认语言会漏掉唯一会变慢的那条路径。
+
+**判据 244（`import.meta.glob` 的排除模式只排除它写出来的那个模式）**：`PAGE_MODULES` 排掉
+`pages/**/*.test.{ts,tsx}`，于是 `pages/**/tests/` 下不带 `.test` 的辅助文件照样进生产包 ——
+测试替身放在页面目录下就会被当成页面模块。可迁移动作：新增测试辅助文件先看它的目录是否落在某枚构建
+glob 的匹配范围内；产物里出现 `tests/` 路径的块就是证据，而这类证据不在任何构建失败信号里。
+
+**待裁清单（刀 123 之后；除把 122 那枚 overlay 划掉外，§8.50 列的全部不变）**
+
+- 划掉：`overlay→真渲染接替（带"文案改按需加载"−88 KB 搭车项）` —— 本刀结清。
+- **新增一枚**：`pages/**/tests/` 下另两枚非 `.test.` 辅助文件仍在 `PAGE_MODULES` 的匹配范围里，
+  会以同样方式打进生产包。要不要一起搬走（搬走要改引用），还是给构建 glob 加一条排除规则。
+- **新增一枚**：冷启动的两次语言解析（`navigator` 起 zh、后端偏好回 en）在按需加载下变成 14 + 13 条
+  chunk 请求。要不要把后端偏好读取提到 `i18n.init` 之前（要动 `i18n.ts` 的 fork 面），还是接受这笔
+  往返。并发化（基稿与 overlay 同轮起载）也在这一枚里裁 —— 本刀刻意没做，避免把两件事塞进一笔。
+- 其余不变：① pylint 风格意见 1,289、② 环境假阳性 27、③ 在册真缺陷 0、④ 在册 formatter 脏
+  （prettier 10 + black/ATC 15）、**E501 561**、**mypy 65 / 22**、3 枚 contract/integrated CI 红、
+  `secret_store` 2×timeout、22.50 秒 `copaw update`、根目录散落物登记、`skills_manager.py` 那 14 枚
+  名字、`/tmp/k120_copaw_untracked/` 那 8 枚 gitignore 数据的去留、阶段 2 的"发"那一半 4 项、
+  升级检查在阶段 2 发包前的那条 `pypi.org/pypi/copaw-community/json` 404。
+
+**本刀的提交**：合并点一笔（`bb472bd0d`，含两枚接替守卫）、按需加载一笔（`a2a4715af`，含产物门禁
+与测试替身搬家）、回归修复一笔（`1935a551e`）、P1 重立一笔（`d2a23f73b`）、记账一笔。分笔的理由是
+合并点单独可回退 —— 若按需加载被否，接替守卫仍留在新合并点上，两件事不互相遮蔽。
