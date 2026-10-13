@@ -42,8 +42,8 @@
       "removed": 5
     },
     "console/scripts/verify-initial-bundle.mjs": {
-      "added": 3,
-      "behavior_added": 3,
+      "added": 6,
+      "behavior_added": 6,
       "behavior_removed": 1,
       "mechanical": false,
       "naming": 0,
@@ -201,13 +201,21 @@
       "naming": 0,
       "removed": 0
     },
-    "console/src/i18n.ts": {
-      "added": 3,
-      "behavior_added": 3,
+    "console/src/i18n.test.ts": {
+      "added": 46,
+      "behavior_added": 46,
       "behavior_removed": 0,
       "mechanical": false,
       "naming": 0,
       "removed": 0
+    },
+    "console/src/i18n.ts": {
+      "added": 2,
+      "behavior_added": 2,
+      "behavior_removed": 1,
+      "mechanical": false,
+      "naming": 0,
+      "removed": 1
     },
     "console/src/layouts/constants.test.ts": {
       "added": 100,
@@ -303,6 +311,14 @@
       "behavior_removed": 1,
       "mechanical": false,
       "naming": 1,
+      "removed": 2
+    },
+    "console/src/pages/Chat/RichFileReferenceInput.test.tsx": {
+      "added": 8,
+      "behavior_added": 8,
+      "behavior_removed": 2,
+      "mechanical": false,
+      "naming": 0,
       "removed": 2
     },
     "console/src/pages/Chat/index.module.less": {
@@ -971,15 +987,15 @@
     }
   },
   "totals": {
-    "added": 11007,
-    "behavior_added": 10971,
-    "behavior_files": 120,
-    "behavior_removed": 499,
-    "files": 120,
+    "added": 11063,
+    "behavior_added": 11027,
+    "behavior_files": 122,
+    "behavior_removed": 502,
+    "files": 122,
     "mechanical_files": 1,
     "naming_files": 0,
     "naming_lines": 36,
     "naming_touched_files": 8,
-    "removed": 535
+    "removed": 538
   }
 }
