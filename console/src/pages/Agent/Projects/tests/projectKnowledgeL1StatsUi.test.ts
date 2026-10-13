@@ -9,7 +9,7 @@ import {
   summarizeProjectKnowledgeQualityReviewStats,
   summarizeProjectKnowledgeSourceScanStats,
 } from "../utils/projectKnowledgeL1StatsUi";
-import { t } from "./projectKnowledgeLocaleTranslate";
+import { t } from "../../../../test/projectKnowledgeLocaleTranslate";
 
 describe("projectKnowledgeL1StatsUi", () => {
   it("formats canonical 7-step summaries", () => {

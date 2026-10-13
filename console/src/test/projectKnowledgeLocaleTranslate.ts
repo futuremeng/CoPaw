@@ -1,4 +1,4 @@
-import zhProjectLocale from "../../../../locales/copaw/projects/zh.json";
+import zhProjectLocale from "../locales/copaw/projects/zh.json";
 
 type TranslateFn = (
   key: string,

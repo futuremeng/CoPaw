@@ -5,7 +5,7 @@ import {
   buildProjectKnowledgeSourcesRecentHistorySections,
   buildProjectKnowledgeSourcesRecentHistorySectionsFromState,
 } from "../utils/projectKnowledgeRecentHistoryModel";
-import { t } from "./projectKnowledgeLocaleTranslate";
+import { t } from "../../../../test/projectKnowledgeLocaleTranslate";
 
 describe("projectKnowledgeRecentHistoryModel", () => {
   it("builds processing recent history sections", () => {

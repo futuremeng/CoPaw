@@ -3,7 +3,7 @@ import {
   buildProjectKnowledgeLatestSummaryModel,
   buildProjectKnowledgeLatestSummaryModelFromState,
 } from "../utils/projectKnowledgeLatestSummaryModel";
-import { t } from "./projectKnowledgeLocaleTranslate";
+import { t } from "../../../../test/projectKnowledgeLocaleTranslate";
 
 describe("projectKnowledgeLatestSummaryModel", () => {
   it("builds latest summary parts from direct step inputs", () => {
