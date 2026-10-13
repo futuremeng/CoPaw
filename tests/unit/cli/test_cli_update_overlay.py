@@ -2,9 +2,11 @@
 """``copaw update`` must not hand the install over to upstream.
 
 ``src/copaw/cli/main.py`` re-uses ``qwenpaw.cli.main:cli`` as its command
-group, so ``copaw update`` used to resolve to upstream ``update_cmd``, which
-pip-installs ``qwenpaw==<latest>`` -- i.e. it replaced CoPaw with upstream
-QwenPaw.  The overlay shadows that command the same way it shadows ``app``.
+group, so ``copaw update`` resolved to upstream ``update_cmd``, which
+pip-installed ``qwenpaw==<latest>`` -- i.e. it replaced CoPaw with upstream
+QwenPaw.  The rename redirected that command at ``copaw-community``, which is
+not published yet, so the refusal has to stay; the overlay shadows the command
+the same way it shadows ``app``.
 
 Because the group object is *shared*, the shadow may only change what the
 ``copaw`` program does: running the same group under any other program name
@@ -39,6 +41,15 @@ def _fact_releases_url() -> str:
         ),
     )
     return f"https://github.com/{fact['github_repository']}/releases"
+
+
+def _fact_pypi_project() -> str:
+    fact = json.loads(
+        (_REPO_ROOT / "src/copaw/release_channel.json").read_text(
+            encoding="utf-8",
+        ),
+    )
+    return str(fact["pypi_project"])
 
 
 def _resolve(name: str) -> click.Command:
@@ -140,6 +151,30 @@ def test_copaw_refusal_names_no_upstream_install_target(no_installer) -> None:
         "qwenpaw==",
     ):
         assert marker not in result.output
+
+
+def test_copaw_refusal_names_the_project_it_would_fetch(
+    no_installer,
+) -> None:
+    """The refusal explains what would happen if it ran, so it has to name the
+    project the core updater fetches *now*.
+
+    Before phase 2 renamed the declaration that was upstream's ``qwenpaw``,
+    which is why the copy could claim the updater "would replace this CoPaw
+    install" with their build.  It now names our own unpublished project, and
+    the danger it describes is a 404 rather than a silent swap.  Reading the
+    name from the fact source keeps the sentence true through the next rename.
+    """
+    result = CliRunner().invoke(
+        copaw_cli,
+        ["update"],
+        prog_name="copaw",
+    )
+
+    assert result.exit_code != 0
+    assert no_installer == []
+    assert _fact_pypi_project() in result.output
+    assert "pip-install qwenpaw" not in result.output
 
 
 def test_copaw_program_still_refuses_with_yes(no_installer) -> None:

@@ -128,9 +128,12 @@ ARTIFACT_SUFFIXES = (".whl", ".tar.gz")
 def artifact_prefixes(project: str) -> tuple[str, str]:
     """The two file-name prefixes one project name produces.
 
-    A source distribution collapses runs of ``[-_.]`` to a dash, an installed
-    wheel collapses them to an underscore, so a name with a dash in it has to
-    be checked both ways or our own build reads as foreign.
+    Wheels and ``.dist-info`` always collapse runs of ``[-_.]`` to an
+    underscore (PEP 427).  Source distributions come in both spellings on
+    PyPI: the dash form from older tooling
+    (``python-dateutil-2.9.0.post0.tar.gz``) and the underscore form PEP 625
+    now produces (``jsonschema_specifications-2025.9.1.tar.gz``).  Accepting
+    only one would refuse our own build depending on the packaging version.
     """
     return (
         re.sub(r"[-_.]+", "-", project) + "-",

@@ -82,8 +82,31 @@ PYPROJECT_REL = "pyproject.toml"
 # tolerates -- ``copaw`` itself is upstream's pre-rename package on PyPI.
 PRE_RENAME_DECLARATION = "qwenpaw"
 
+# A registered reader is written in one of two spellings of the same name.
+# ``importlib.metadata``, pip and the PyPI JSON endpoint are normalization
+# insensitive and take the declared form; a *file name* does not: PEP 427
+# collapses ``[-_.]+`` to ``_`` when the wheel and its ``.dist-info`` are
+# named, so ``copaw-community`` ships as ``copaw_community-<ver>-*.whl``.
+# Substituting the declared spelling into the file-name points would make the
+# gate demand a filename the build can never produce.
+WHEEL_NAME_PLACEHOLDER = "{wheel_name}"
+
+
+def wheel_name(declared: str) -> str:
+    return re.sub(r"[-_.]+", "_", declared)
+
+
+def reader_literal(template: str, declared: str) -> str:
+    """The exact text the registered line must contain."""
+    return template.replace("{distribution}", declared).replace(
+        WHEEL_NAME_PLACEHOLDER,
+        wheel_name(declared),
+    )
+
+
 # Every place that reads the installed distribution *by name* (not the import
-# package ``qwenpaw``, which stays).  ``{distribution}`` is the declared name.
+# package ``qwenpaw``, which stays).  ``{distribution}`` is the declared name,
+# ``{wheel_name}`` its PEP 427 file-name form.
 DISTRIBUTION_READERS = (
     (PYPROJECT_REL, 'name = "{distribution}"'),
     ("src/qwenpaw/cli/update_cmd.py", "pypi.org/pypi/{distribution}/json"),
@@ -92,11 +115,11 @@ DISTRIBUTION_READERS = (
         'metadata.distribution("{distribution}")',
     ),
     ("src/qwenpaw/cli/update_cmd.py", '"{distribution}=={'),
-    ("scripts/pack/build_common.py", "{distribution}-*.whl"),
-    ("scripts/pack/build_macos.sh", "dist/{distribution}-"),
+    ("scripts/pack/build_common.py", "{wheel_name}-*.whl"),
+    ("scripts/pack/build_macos.sh", "dist/{wheel_name}-"),
     ("scripts/pack/build_macos.sh", "version('{distribution}')"),
-    ("scripts/pack/build_win.ps1", "{distribution}-$CurrentVersion"),
-    ("scripts/pack/build_win.ps1", "{distribution}-*.whl"),
+    ("scripts/pack/build_win.ps1", "{wheel_name}-$CurrentVersion"),
+    ("scripts/pack/build_win.ps1", "{wheel_name}-*.whl"),
     ("scripts/pack/build_win.ps1", "version('{distribution}')"),
 )
 
@@ -154,23 +177,34 @@ def declared_distribution(repo_root: Path) -> Optional[str]:
 
 
 def _tracked_names(repo_root: Path) -> set:
-    """Identities R6 watches: the declaration plus both fact-source names."""
-    names = set()
+    """Identities R6 watches: the declaration, both fact-source names, and the
+    name we moved off.
+
+    Each identity is watched in both spellings, because a wheel glob in a
+    build script is written in the file-name form and would otherwise sweep as
+    an unknown token.
+
+    ``qwenpaw`` is no longer any identity of ours, but it is the one an
+    upstream merge resurrects, and it comes back in files the registry has
+    never seen; dropping it here would sweep such a read point as unknown
+    instead of reporting it.
+    """
+    names = {PRE_RENAME_DECLARATION}
     declared = declared_distribution(repo_root)
     if declared:
         names.add(declared)
     fact = repo_root / FACT_REL
-    if not fact.exists():
-        return names
-    try:
-        data = json.loads(fact.read_text(encoding="utf-8"))
-    except json.JSONDecodeError:
-        return names
+    data = {}
+    if fact.exists():
+        try:
+            data = json.loads(fact.read_text(encoding="utf-8"))
+        except json.JSONDecodeError:
+            data = {}
     for key in ("pypi_project", "distribution"):
         value = data.get(key)
         if isinstance(value, str) and value:
             names.add(value)
-    return names
+    return names | {wheel_name(name) for name in names}
 
 
 def scan_distribution_readers(repo_root: Path):
@@ -244,7 +278,7 @@ def rule_distribution(loader, data, repo_root):
         if not path.exists():
             errors.append(f"R6: registered reader {rel} is missing")
             continue
-        literal = template.replace("{distribution}", declared)
+        literal = reader_literal(template, declared)
         if literal not in path.read_text(encoding="utf-8"):
             errors.append(
                 (

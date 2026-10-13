@@ -30,7 +30,7 @@ from .process_utils import (
     _process_table,
 )
 
-_PYPI_JSON_URL = "https://pypi.org/pypi/qwenpaw/json"
+_PYPI_JSON_URL = "https://pypi.org/pypi/copaw-community/json"
 
 
 def _subprocess_text_kwargs() -> dict[str, Any]:
@@ -178,7 +178,7 @@ def _detect_source_type(
 
 def _detect_installation() -> InstallInfo:
     """Inspect the current Python environment and installation style."""
-    dist = metadata.distribution("qwenpaw")
+    dist = metadata.distribution("copaw-community")
     # if installed through uv, installer will be `uv`
     installer = (dist.read_text("INSTALLER") or "pip").strip() or "pip"
 
@@ -392,7 +392,7 @@ def _build_upgrade_command(
     include_prerelease: bool = False,
 ) -> tuple[list[str], str]:
     """Build the installer command used by the detached update worker."""
-    package_spec = f"qwenpaw=={latest_version}"
+    package_spec = f"copaw-community=={latest_version}"
     installer = info.installer.lower()
     if installer.startswith("uv") and shutil.which("uv"):
         command = [

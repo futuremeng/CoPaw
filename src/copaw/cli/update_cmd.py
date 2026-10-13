@@ -1,12 +1,13 @@
 # -*- coding: utf-8 -*-
 """Take over upstream's ``update`` command for the ``copaw`` program only.
 
-``qwenpaw.cli.update_cmd`` reads the newest release of the upstream PyPI
-project and pip-installs that project into the current environment.
-The Copaw entry point shares that very command object, so ``copaw update``
-replaced a CoPaw install with upstream QwenPaw.  CoPaw has no PyPI channel
-yet, so the honest behaviour for CoPaw is to refuse and point at our own
-releases.
+``qwenpaw.cli.update_cmd`` reads the newest release of the PyPI project named
+by ``src/copaw/release_channel.json`` and pip-installs that project into the
+current environment.  The Copaw entry point shares that very command object,
+so ``copaw update`` used to replace a CoPaw install with upstream QwenPaw;
+after the rename it would fetch a project that is not published yet.  Either
+way CoPaw has no PyPI channel, so the honest behaviour for CoPaw is to refuse
+and point at our own releases.
 
 The command is registered on the *shared* core group, so the refusal is
 keyed on the program name it was invoked as: every other program (``qwenpaw``
@@ -43,14 +44,16 @@ def overlay_update_callback(ctx: click.Context, **options: Any) -> None:
         return
 
     click.echo(f"CoPaw {__version__}")
+    fact = _load_fact_source()
     click.echo(
         (
             "CoPaw is not published to PyPI yet, so this command installs "
-            "nothing: the upstream updater would pip-install qwenpaw and "
-            "replace this CoPaw install."
+            f"nothing: the updater would pip-install {fact['pypi_project']}"
+            " from PyPI, where that project does not exist until we publish "
+            "it."
         ),
     )
-    click.echo(f"Releases: {_releases_url(_load_fact_source())}")
+    click.echo(f"Releases: {_releases_url(fact)}")
     raise SystemExit(1)
 
 

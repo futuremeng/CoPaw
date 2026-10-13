@@ -61,7 +61,7 @@ def _pick_wheel(wheel_arg: str | None) -> Path:
         return wheel_path
 
     wheels = sorted(
-        (REPO_ROOT / "dist").glob("qwenpaw-*.whl"),
+        (REPO_ROOT / "dist").glob("copaw_community-*.whl"),
         key=lambda p: p.stat().st_mtime,
         reverse=True,
     )
@@ -99,7 +99,7 @@ def main() -> int:
         default=None,
         help=(
             "Wheel path to install. If omitted, pick the newest "
-            "dist/qwenpaw-*.whl."
+            "dist/copaw_community-*.whl."
         ),
     )
     parser.add_argument(

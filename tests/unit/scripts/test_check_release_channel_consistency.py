@@ -226,29 +226,32 @@ def _open_pypi_channel(mod, root):
 
 def _rename_declaration(root, name):
     path = root / "pyproject.toml"
-    text = path.read_text(encoding="utf-8").replace(
-        'name = "qwenpaw"',
+    text, count = re.subn(
+        r'^name\s*=\s*"[^"]+"',
         f'name = "{name}"',
-        1,
+        path.read_text(encoding="utf-8"),
+        count=1,
+        flags=re.MULTILINE,
     )
+    assert count == 1, "the [project] name line disappeared"
     path.write_text(text, encoding="utf-8")
 
 
 def _rename_every_reader(mod, root, old, new):
     """Rewrite every registered reader, the way phase 2 must."""
     for rel, template in mod.DISTRIBUTION_READERS:
-        if "{distribution}" not in template:
+        if rel == mod.PYPROJECT_REL:
             continue
         path = root / rel
         text = path.read_text(encoding="utf-8").replace(
-            template.replace("{distribution}", old),
-            template.replace("{distribution}", new),
+            mod.reader_literal(template, old),
+            mod.reader_literal(template, new),
         )
         path.write_text(text, encoding="utf-8")
 
 
 def test_rule_six_reads_the_declared_name_from_pyproject(fixture_root):
-    assert _declared(fixture_root) == "qwenpaw"
+    assert _declared(fixture_root) == "copaw-community"
 
 
 def test_rule_six_rejects_a_declaration_no_reader_can_be_checked_against(
@@ -265,9 +268,10 @@ def test_rule_six_rejects_a_rename_that_leaves_every_reader_behind(
     fixture_root,
     capsys,
 ):
+    """The shape phase 2 must never land in: the wheel is declared under our
+    own name while the build scripts still glob upstream's."""
     mod = _module()
-    _open_pypi_channel(mod, fixture_root)
-    _rename_declaration(fixture_root, "copaw-community")
+    _rename_every_reader(mod, fixture_root, "copaw-community", "qwenpaw")
     assert run(mod, fixture_root) == 1
     out = capsys.readouterr().out
     assert "R6:" in out
@@ -279,16 +283,11 @@ def test_rule_six_rejects_a_rename_that_leaves_one_reader_behind(
     capsys,
 ):
     mod = _module()
-    _open_pypi_channel(mod, fixture_root)
-    _rename_declaration(fixture_root, "copaw-community")
-    _rename_every_reader(mod, fixture_root, "qwenpaw", "copaw-community")
-    # Undo exactly one registered reader: the rename is now half-landed.
     path = fixture_root / "scripts/pack/build_common.py"
+    stale = mod.reader_literal("{wheel_name}-*.whl", "qwenpaw")
+    live = mod.reader_literal("{wheel_name}-*.whl", "copaw-community")
     path.write_text(
-        path.read_text(encoding="utf-8").replace(
-            "copaw-community-*.whl",
-            "qwenpaw-*.whl",
-        ),
+        path.read_text(encoding="utf-8").replace(live, stale),
         encoding="utf-8",
     )
     assert run(mod, fixture_root) == 1
@@ -297,9 +296,12 @@ def test_rule_six_rejects_a_rename_that_leaves_one_reader_behind(
 
 
 def test_rule_six_accepts_the_complete_rename(fixture_root):
-    """The gate must not be the reason phase 2 skips the readers."""
+    """Both poles are legal, and the rename between them is one commit: the
+    gate may not be the reason phase 2 skips the readers."""
     mod = _module()
-    _open_pypi_channel(mod, fixture_root)
+    _rename_declaration(fixture_root, "qwenpaw")
+    _rename_every_reader(mod, fixture_root, "copaw-community", "qwenpaw")
+    assert run(mod, fixture_root) == 0
     _rename_declaration(fixture_root, "copaw-community")
     _rename_every_reader(mod, fixture_root, "qwenpaw", "copaw-community")
     assert run(mod, fixture_root) == 0
@@ -310,6 +312,8 @@ def test_rule_six_rejects_a_reader_renamed_ahead_of_the_declaration(
     capsys,
 ):
     mod = _module()
+    _rename_declaration(fixture_root, "qwenpaw")
+    _rename_every_reader(mod, fixture_root, "copaw-community", "qwenpaw")
     path = fixture_root / "scripts/pack/build_macos.sh"
     path.write_text(
         path.read_text(encoding="utf-8").replace(
@@ -343,6 +347,7 @@ def test_rule_six_rejects_an_opened_channel_that_left_the_declaration_out(
     """Dropping ``pypi`` from ``pending`` is phase 2's opening move; it must
     not be possible while the wheel is still declared under upstream's name."""
     mod = _module()
+    _rename_declaration(fixture_root, "qwenpaw")
     _open_pypi_channel(mod, fixture_root)
     assert run(mod, fixture_root) == 1
     assert "no longer pending" in capsys.readouterr().out
@@ -355,13 +360,101 @@ def test_rule_six_rejects_an_unregistered_reader(fixture_root, capsys):
     path.write_text(
         (
             "from importlib.metadata import version\n\n"
-            "INSTALLED = version('qwenpaw')\n"
+            "INSTALLED = version('copaw-community')\n"
         ),
         encoding="utf-8",
     )
     assert run(mod, fixture_root) == 1
     out = capsys.readouterr().out
     assert "R6:" in out and "sidecar_reader.py" in out
+
+
+def test_the_registry_names_a_wheel_file_in_its_normalized_form():
+    """A wheel filename is not the declared name: PEP 427 rewrites ``-`` to
+    ``_`` when ``build_wheel`` names the artifact and the ``.dist-info``
+    directory, so ``copaw-community`` ships as ``copaw_community-1.0.whl``.
+
+    Phase 2 renames five glob/filename read points, and two metadata reads that
+    ``importlib.metadata`` resolves regardless of spelling.  Substituting the
+    declared name into all ten templates would make the gate demand a filename
+    the build can never produce, so the registry has to say which shape each
+    point is in.
+    """
+    mod = _module()
+    assert (
+        mod.reader_literal("{wheel_name}-*.whl", "copaw-community")
+        == "copaw_community-*.whl"
+    )
+    assert (
+        mod.reader_literal('name = "{distribution}"', "copaw-community")
+        == 'name = "copaw-community"'
+    )
+
+
+def test_the_sweep_finds_a_reader_in_its_normalized_form(fixture_root):
+    """An unregistered underscored wheel reader must still be reported."""
+    mod = _module()
+    path = fixture_root / "scripts/pack/build_extra.sh"
+    path.write_text(
+        'whls=("${REPO_ROOT}/dist/copaw_community-${V}-"*.whl)\n',
+        encoding="utf-8",
+    )
+    hits = {rel for rel, _ in mod.scan_distribution_readers(fixture_root)}
+    assert "scripts/pack/build_extra.sh" in hits
+
+
+def test_the_sweep_still_sees_upstreams_old_distribution_name(
+    fixture_root,
+    capsys,
+):
+    """The rename moves our tracked identities off ``qwenpaw``, so tracking
+    only the new names would sweep a resurrected upstream read point as an
+    unknown token and let it pass -- and a merge is exactly how one comes back,
+    in a file the registry has never seen."""
+    mod = _module()
+    path = fixture_root / "scripts/pack/build_linux.sh"
+    path.write_text(
+        'whls=("${REPO_ROOT}/dist/qwenpaw-${V}-"*.whl)\n',
+        encoding="utf-8",
+    )
+    assert run(mod, fixture_root) == 1
+    out = capsys.readouterr().out
+    assert "R6:" in out and "build_linux.sh" in out
+
+
+def test_the_live_tree_has_no_read_point_naming_the_old_distribution():
+    """Watching the retired name is free only while the rename is complete;
+    this is the reading that says so, and the reading that goes red the day a
+    merge brings one back."""
+    mod = _module()
+    hits = [desc for _, desc in mod.scan_distribution_readers(REPO_ROOT)]
+    assert not [desc for desc in hits if "qwenpaw" in desc]
+
+
+def test_the_live_tree_ships_under_our_own_pypi_name():
+    """Phase 2's rename half is landed: nothing we build may declare
+    upstream's name, because a wheel named ``qwenpaw`` is a package nobody
+    installed asked for and it shadows the real project on the same machine."""
+    declared = _declared(REPO_ROOT)
+    fact = json.loads(
+        (REPO_ROOT / "src/copaw/release_channel.json").read_text(
+            encoding="utf-8",
+        ),
+    )
+    assert declared == fact["pypi_project"]
+
+
+def test_the_pypi_channel_stays_pending_until_the_package_exists():
+    """The other half of phase 2 is the publish, and that waits for a stable
+    version.  While the name is renamed but unpublished, ``copaw update`` must
+    keep refusing: a released ``copaw-community`` would make the fact source
+    lie and the updater install something no one verified."""
+    fact = json.loads(
+        (REPO_ROOT / "src/copaw/release_channel.json").read_text(
+            encoding="utf-8",
+        ),
+    )
+    assert "pypi" in fact["pending"]
 
 
 def test_the_live_read_points_are_exactly_the_registered_ones():
@@ -379,7 +472,7 @@ def test_the_live_read_points_are_exactly_the_registered_ones():
     registered = {rel for rel, _ in mod.DISTRIBUTION_READERS}
     assert hits == registered
     for rel, template in mod.DISTRIBUTION_READERS:
-        literal = template.replace("{distribution}", declared)
+        literal = mod.reader_literal(template, declared)
         text = (REPO_ROOT / rel).read_text(encoding="utf-8")
         assert literal in text, f"{rel} no longer contains {literal!r}"
 
@@ -400,7 +493,7 @@ def test_the_live_sweep_pinpoints_every_registered_line():
     for rel, template in mod.DISTRIBUTION_READERS:
         if rel == mod.PYPROJECT_REL:
             continue
-        literal = template.replace("{distribution}", declared)
+        literal = mod.reader_literal(template, declared)
         text = (REPO_ROOT / rel).read_text(encoding="utf-8")
         expected.update(
             (rel, lineno)
