@@ -3583,3 +3583,90 @@ commit 落定后同一枚守卫 `2 passed`，整套复跑才是本节记录的�
 **本刀的提交**：`00455133f`（package-data 两行 + `git mv` 2 枚 + 删 12 枚 + README 指路 + 3 枚用例）、
 `944af2d86`（本节，与 §8.47 同笔）与本笔（节内自名哈希的补笔）。两行声明与那枚守卫**必须同笔**：先落声明不落守卫，下一个数据文件还会
 以同样的方式在 wheel 里消失（判据 228）；先落守卫不落声明，守卫红 15 枚、CI 直接挡下 —— 两种拆开都比同笔贵。
+
+### 8.49 刀 121（2026-10-13）：`tsc -b` 19 → 0 —— 那两枚"只是类型错误"里有一枚是真实现缺陷，而剩下 8 枚的根因在 fork 自己往上游类型里加的必填字段上
+
+**一句话结论**：刀 120 排的两枚里先做 121。19 条 `error TS` 分四组，只有第二组是"类型层的事"：
+① `ProjectEditorPanel.tsx:69` 把 `{kind, agentId}` **对象**传给只收 `string` 的 `agentFilesScopeKey`，
+运行时 scope key 塌成 `agent:[object Object]` ⇒ 所有 agent 共用同一个标签页桶（真缺陷，先证红再改）；
+② `Knowledge/index.tsx` 的 `Form.useForm<AgentsRunningConfig>()` 撞上 antd 递归 partial 与上游那行
+`memory_backend_configs?: Record<string, Record<string, unknown>>`；③ 8 枚同型错**不是测试坏了**，
+是 fork 提交 `f9cf47a41a` 给上游拥有的 `AgentSummary` 加了 4 枚**必填**字段，把 7 枚与上游字节一致的
+双替身打红 —— 处置是退回可选而不是去改上游测试（冲突面 +0 文件）；④ 5 枚是
+`ReturnType<typeof vi.fn>` 在 vitest 4 下不再是"什么都能接"的类型。落点 7 枚前端文件（1 枚新守卫用例 +
+3 枚生产侧 + 3 枚 fork-owned 测试），Python 侧 **0 改动**。新增判据 236–237，**已闭环计数推到 121**。
+
+**① 那枚 TS2345 背后是实现**：`console/src/features/files-workspace/filesWorkspaceScope.ts` 逐字等于
+分叉点（上游拥有，`git diff 2744a976b --` 零差），`agentFilesScopeKey(agentId: string)` 只收字符串；
+调用点传对象后 `filesWorkspaceScopeKey` 走到模板串，`String({kind:"agent",agentId:"…"})` 得
+`agent:[object Object]`。因此修复只能落在我们自己的调用点（`agentFilesScopeKey(selectedAgent)`），
+全树 grep 确认这是**唯一一枚调用点**，没有别的宿主带同一个误用。守卫用例
+`ProjectEditorPanel.scope.test.tsx` 钉四路（`useTabsForScope` / `useActiveTabPathForScope` /
+`openTab` / `setActiveTab`）都必须收到 `agent:agent-7`；改前实测红在
+`expected "agent:agent-7" … Received "agent:[object Object]"`，改后 `1 passed`。
+
+**② 表单类型不收窄上游类型**：弹窗真正编辑的只有 5 枚 fork-owned 字段
+（`knowledge_auto_collect_chat_files` / `_chat_urls` / `_long_text` / `knowledge_long_text_min_chars` /
+`knowledge_chunk_size`，逐枚从 `<Form.Item name>` 数出来），所以把表单按这 5 枚 `Pick<>` 出来即可；
+`setFieldsValue(runningConfig)` 与 `{...runningConfig, ...await validateFields()}` 都不用 `as` 绕过。
+`agent.ts:202` 那行 `Record<string, Record<string, unknown>>` 是上游的（blame jinliyl 2026-09-10），不动。
+
+**③ 8 枚同型红的账**：`f9cf47a41a`（2026-04-14）往 `AgentSummary` 加了
+`is_builtin / builtin_kind / builtin_label / system_protected` 四枚**必填**。两条处置的代价不同：
+改 7 枚上游测试的双替身 ⇒ 冲突面 +7 文件、之后每笔合并都要重解；退回可选 ⇒ 册内一行文件多 2 行侵入。
+选后者，三条依据：同一文件里 fork 自己的兄弟类型 `AgentProfileConfig:710-713`、`AgentProfileRef:791-794`
+本来就把这 4 枚写成可选；`console/src` 里这 4 枚名字**零生产读者**（grep 只命中类型定义与两枚 fork
+测试双替身）；后端 `app/routers/agents.py:586-620` 每笔都填，但那是发送端保证，不是读者需要的合同。
+
+**④ `ReturnType<typeof vi.fn>` 这一族**：vitest 4 把它解析成 `Mock<Procedure | Constructable>`，
+那个类型没有 `(value: string) => void` 这条调用签名，所以三枚 fork-owned 测试的 harness props 声明
+不再可赋值。改成从被钉 hook 的参数里索引
+（`Parameters<typeof useProjectUploadController>[0]["onUploadCompleted"]`）或直接写具体签名。
+坑在于**同一文件里裸调用 `vi.fn()` 仍然是可赋值的** —— 红的只有"取 `typeof vi.fn` 的返回类型"这种写法，
+所以这族不能用"把 `vi.fn()` 都换掉"来修，只换声明。
+
+**改后读数**（全部在最后一笔编辑之后实跑）
+
+- `npx tsc -b`：**0 条 `error TS`**（改前 19 条，逐条报错留在 `/tmp/k121_tsc.txt`；中间态可读
+  `/tmp/k121_tsc_after_prod.txt` 19 条里生产侧两条已消失、新守卫自己带进 2 条 `TS2554`，
+  `/tmp/k121_tsc_after_type.txt` 6 条）。
+- 前端全量 `test:run`：**533 files / 5,238 passed / 0 红**（532 / 5,237 是 §8.38 登记的那枚读数，
+  本刀加一文件一枚用例）。
+  这一条之前有一轮跑出 `2 failed / 5,236 passed`，两枚红都是 20 秒**超时**且都在本刀没碰的文件里
+  （`Control/Channels/components/ChannelDrawer.test.tsx`、`pages/Import/index.test.tsx`）：两枚单独复跑
+  分别 `34 passed` / `9 passed`，整套复跑 0 红 ⇒ 与判据 107（全量计时类的红要同负载两态对照）
+  同一口径的负载依赖型，不是回归。
+- Python 侧：本刀 `git status` 里 **0 枚 `.py`**，unit 整套在改后实跑
+  **17,853 passed / 24 skipped / 4 xfailed in 1381.79s**，与 §8.48 同数（这条的作用是确认没漂移）。
+- 门禁：release-channel **rc=0**（`R1-R6 over 6 channel files; 10 registered templates, 11 read points
+  swept in 5 files`）、locale split **rc=0**（4,658 / 59 / 7 / 1,459 / 23）、`prettier --check` 7 枚触点全 OK。
+- 冲突面：`agents.ts` 之外 6 枚落点逐枚 `git cat-file -e 2744a976b:` 全部 **NO**（fork-created），
+  `agents.ts` 本就在册 ⇒ **文件数 +0**；`git diff --numstat 2744a976b` 那枚文件 617 → 619（+2 行侵入）。
+  三枚代码提交落定后按判据 236 重跑 `--json`：**119 文件 / +10,988 −534**（较 §8.48 那一串只涨那 2 行），
+  `behavior_files 119 / naming 0·8·36 / mechanical 1` 全部不动。
+
+**判据 236（册读的是 HEAD，所以提交前取"本刀册数"必然取到上一刀的数）**：
+`check_p1_invariants.py` 的 `--target-ref` 默认值是 `HEAD`，本刀在未提交状态下跑它，读回的仍是
+119 文件 / +10,986 −534 —— 与 §8.48 完全一致的那串数字，**看起来像"本刀没动册"，实际是"本刀的还没进册"**。
+可迁移的动作：取本刀册数要么 `--target-ref working`，要么提交后再跑；两处都跑并把差记进本节最省争论。
+判据 89 讲的是"最后一次编辑之后"，这条补的是"最后一次编辑"要按读数口径的定义算 —— 对读 HEAD 的工具，
+提交本身就是编辑的一部分。
+
+**判据 237（上游文件的编译红先问"必填是谁加的、有没有读者"，别先去改上游的双替身）**：
+7 枚与上游字节一致的测试文件同时红，直觉是"测试落后于类型"，但真源是 fork 单方向收紧了上游拥有的类型。
+可迁移的动作：这类红先做两步 —— `git blame` 那几行看归属、`grep` 生产读者；零读者 + 兄弟类型本就可选
+⇒ 退回可选，把冲突面成本留在 2 行；有读者 ⇒ 才动双替身并把 +N 枚上游文件记进冲突面账。
+
+**待裁清单（刀 121 之后；除把 121 划掉外全部不变）**
+
+- 刀 122（#281，initial bundle 10.73 > 10.00 MiB）是本节之后唯一一枚已排刀；`npm run build` 现在
+  第一次能在 `tsc -b` 那一断上走过去，所以 bundle 那枚门禁的读数从此是"真构建"而不是"跳过了 tsc 的构建"。
+- ① pylint 风格意见 1,289、② 环境假阳性 27、③ 在册真缺陷 0、④ 在册 formatter 脏（prettier 10 +
+  black/ATC 15）、**E501 561**、**mypy 65 / 22**、3 枚 contract/integrated CI 红、`secret_store` 2×timeout、
+  22.50 秒 `copaw update`、overlay→真渲染接替、欠一次真浏览器 `copaw app` 复看、根目录散落物登记、
+  `skills_manager.py` 那 14 枚名字、`/tmp/k120_copaw_untracked/` 那 8 枚 gitignore 数据的去留、
+  阶段 2 的"发"那一半 4 项 —— 全部不变。
+
+**本刀的提交**：一枚改 scope key 的实现 + 守卫（同笔，拆开会留下"修了但没钉"的状态），一枚改类型
+（`AgentSummary` 退回可选 + 表单 `Pick`，生产侧），一枚改三枚测试声明（测试侧，与前一枚的可断点不同），
+本节一笔，本笔之后不再有内容编辑。
