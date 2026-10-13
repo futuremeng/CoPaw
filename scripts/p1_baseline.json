@@ -458,12 +458,12 @@
       "removed": 0
     },
     "pyproject.toml": {
-      "added": 13,
-      "behavior_added": 13,
-      "behavior_removed": 1,
+      "added": 16,
+      "behavior_added": 16,
+      "behavior_removed": 2,
       "mechanical": false,
       "naming": 0,
-      "removed": 1
+      "removed": 2
     },
     "scripts/README.md": {
       "added": 151,
@@ -513,21 +513,29 @@
       "naming": 0,
       "removed": 0
     },
-    "scripts/pack/build_macos.sh": {
-      "added": 18,
-      "behavior_added": 15,
+    "scripts/pack/build_common.py": {
+      "added": 2,
+      "behavior_added": 2,
       "behavior_removed": 2,
       "mechanical": false,
+      "naming": 0,
+      "removed": 2
+    },
+    "scripts/pack/build_macos.sh": {
+      "added": 21,
+      "behavior_added": 18,
+      "behavior_removed": 5,
+      "mechanical": false,
       "naming": 3,
-      "removed": 5
+      "removed": 8
     },
     "scripts/pack/build_win.ps1": {
-      "added": 7,
-      "behavior_added": 0,
-      "behavior_removed": 0,
+      "added": 10,
+      "behavior_added": 3,
+      "behavior_removed": 3,
       "mechanical": false,
       "naming": 7,
-      "removed": 7
+      "removed": 10
     },
     "scripts/pack/desktop.nsi": {
       "added": 16,
@@ -761,6 +769,14 @@
       "naming": 0,
       "removed": 0
     },
+    "src/qwenpaw/cli/update_cmd.py": {
+      "added": 3,
+      "behavior_added": 3,
+      "behavior_removed": 3,
+      "mechanical": false,
+      "naming": 0,
+      "removed": 3
+    },
     "src/qwenpaw/config/config.py": {
       "added": 63,
       "behavior_added": 63,
@@ -947,15 +963,15 @@
     }
   },
   "totals": {
-    "added": 10972,
-    "behavior_added": 10936,
-    "behavior_files": 116,
-    "behavior_removed": 486,
-    "files": 117,
+    "added": 10986,
+    "behavior_added": 10950,
+    "behavior_files": 119,
+    "behavior_removed": 498,
+    "files": 119,
     "mechanical_files": 1,
-    "naming_files": 1,
+    "naming_files": 0,
     "naming_lines": 36,
     "naming_touched_files": 8,
-    "removed": 522
+    "removed": 534
   }
 }
