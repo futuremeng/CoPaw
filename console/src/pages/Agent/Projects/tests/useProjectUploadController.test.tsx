@@ -41,7 +41,9 @@ vi.mock("react-i18next", () => ({
 function TestHarness({
   onUploadCompleted,
 }: {
-  onUploadCompleted: ReturnType<typeof vi.fn>;
+  onUploadCompleted: Parameters<
+    typeof useProjectUploadController
+  >[0]["onUploadCompleted"];
 }) {
   const controller = useProjectUploadController({
     currentAgent: {
@@ -50,6 +52,7 @@ function TestHarness({
       description: "",
       workspace_dir: "/tmp/agent-1",
       enabled: true,
+      backend: "qwenpaw",
       is_builtin: false,
       builtin_kind: "",
       builtin_label: "",

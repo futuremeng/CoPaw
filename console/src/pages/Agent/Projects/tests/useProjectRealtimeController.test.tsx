@@ -56,8 +56,12 @@ class MockWebSocket {
 }
 
 function TestHarness(props: {
-  onFileTreeInvalidated?: ReturnType<typeof vi.fn>;
-  onPipelineInvalidated?: ReturnType<typeof vi.fn>;
+  onFileTreeInvalidated?: Parameters<
+    typeof useProjectRealtimeController
+  >[0]["onFileTreeInvalidated"];
+  onPipelineInvalidated?: Parameters<
+    typeof useProjectRealtimeController
+  >[0]["onPipelineInvalidated"];
 }) {
   useProjectRealtimeController({
     agentId: "agent-1",

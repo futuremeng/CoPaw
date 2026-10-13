@@ -15,8 +15,8 @@ function TestHarness(params: {
   filesLoading?: boolean;
   knownProjectFilePaths?: Set<string>;
   projectFiles?: AgentProjectFileInfo[];
-  setSelectedStepId?: ReturnType<typeof vi.fn>;
-  setSelectedFilePath: ReturnType<typeof vi.fn>;
+  setSelectedStepId?: (value: string) => void;
+  setSelectedFilePath: (value: string) => void;
 }) {
   useArtifactSelectionGuards({
     selectedStepId: params.selectedStepId || "",
