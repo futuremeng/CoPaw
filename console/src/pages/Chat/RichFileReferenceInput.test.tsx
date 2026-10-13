@@ -1,5 +1,5 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import RichFileReferenceInput, {
   RichFileReferenceInputProvider,
 } from "./RichFileReferenceInput";
@@ -8,7 +8,7 @@ import {
   setLastEditorCopy,
 } from "../Coding/lastEditorCopy";
 import { useState } from "react";
-import "../../i18n";
+import { i18nReady } from "../../i18n";
 
 function ControlledRichInput() {
   const [value, setValue] = useState("");
@@ -23,6 +23,12 @@ function ControlledRichInput() {
 }
 
 describe("RichFileReferenceInput", () => {
+  // Same gate main.tsx puts in front of createRoot: the locale bundle (base plus
+  // on-demand copaw overlay) reaches the store asynchronously, and a decorator
+  // rendered before it lands keeps the raw key — react-i18next does not
+  // re-render on later store writes.
+  beforeAll(() => i18nReady);
+
   afterEach(() => clearLastEditorCopy());
 
   it("shows only atomic chips while preserving the raw submitted value", async () => {
