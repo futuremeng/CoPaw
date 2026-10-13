@@ -3895,6 +3895,10 @@ glob 的匹配范围内；产物里出现 `tests/` 路径的块就是证据，�
 - 划掉：`overlay→真渲染接替（带"文案改按需加载"−88 KB 搭车项）` —— 本刀结清。
 - **新增一枚**：`pages/**/tests/` 下另两枚非 `.test.` 辅助文件仍在 `PAGE_MODULES` 的匹配范围里，
   会以同样方式打进生产包。要不要一起搬走（搬走要改引用），还是给构建 glob 加一条排除规则。
+  **→ 已由 §8.52（刀 124）结清为"一枚搬、一枚判 CUT、类级修法另裁"**：`git ls-tree -r HEAD` 复核
+  那两枚 = `pages/Agent/Projects/tests/projectKnowledgeLocaleTranslate.ts`（fork 自有 ⇒ 搬进
+  `console/src/test/`）+ `pages/Chat/tests/convertMessagesHelper.ts`（与它的唯一消费者在分叉点
+  `2744a976b` 都存在 ⇒ 上游自有，搬它 = 往册里加行）。
 - **新增一枚**：冷启动的两次语言解析（`navigator` 起 zh、后端偏好回 en）在按需加载下变成 14 + 13 条
   chunk 请求。要不要把后端偏好读取提到 `i18n.init` 之前（要动 `i18n.ts` 的 fork 面），还是接受这笔
   往返。并发化（基稿与 overlay 同轮起载）也在这一枚里裁 —— 本刀刻意没做，避免把两件事塞进一笔。
@@ -3907,3 +3911,87 @@ glob 的匹配范围内；产物里出现 `tests/` 路径的块就是证据，�
 **本刀的提交**：合并点一笔（`bb472bd0d`，含两枚接替守卫）、按需加载一笔（`a2a4715af`，含产物门禁
 与测试替身搬家）、回归修复一笔（`1935a551e`）、P1 重立一笔（`d2a23f73b`）、记账一笔。分笔的理由是
 合并点单独可回退 —— 若按需加载被否，接替守卫仍留在新合并点上，两件事不互相遮蔽。
+## 8.52 刀 124：`pages/**/tests/` 下那枚 fork 自有测试替身搬出构建 glob（已闭环）
+
+**结的是 §8.51 待裁清单的第一枚**（判据 244 的第二次实例）。那枚条目写的是"另两枚"，现算确实就是两枚
+（`git ls-tree -r HEAD --name-only console/src/pages | grep -E '\.(ts|tsx)$' | grep -v '\.test\.' | grep /tests/`），
+但它们是两种归属，所以这一刀按归属切成两半：一枚搬、一枚判 CUT。
+
+**搬的那枚**：`console/src/pages/Agent/Projects/tests/projectKnowledgeLocaleTranslate.ts` →
+`console/src/test/projectKnowledgeLocaleTranslate.ts`（`git mv`，保留改名历史）。这枚替身是 zh 版
+projects overlay 的查表器（只装 `zh.json` 一份资源表）：按 i18next 优先级解析（bundle 叶压过内联兜底、
+命中不到才回裸键），并对 `{{...}}` 做插值。连带改两处 import：它自己第 1 行的 locale 路径
+`../../../../locales/copaw/projects/zh.json` → `../locales/copaw/projects/zh.json`；三枚引用它的用例
+（`projectKnowledgeL1StatsUi.test.ts:12`、`projectKnowledgeRecentHistoryModel.test.ts:8`、
+`projectKnowledgeLatestSummaryModel.test.ts:6`）各改 1 行为 `../../../../test/projectKnowledgeLocaleTranslate`。
+**diff = 5 条路径 / +4 −4**（改名本身 0/0，其余四处各 1/1）。落点选 `console/src/test/` 不是新决定 ——
+那里已经是 fork 测试替身的既有住处（刀 123 把 `enLocaleTranslate.ts` 搬进的正是同一个目录，
+`loadTestLocales.ts` / `design-mock.ts` / `tauri-mock.ts` / `setup.ts` 都住这），且构建 glob 看不见它。
+
+**CUT 的那枚**：`console/src/pages/Chat/tests/convertMessagesHelper.ts` 与它唯一的消费者
+`console/src/pages/Chat/__tests__/streamingTabSwitch.test.ts` 在分叉点 `2744a976b` 都 `git cat-file -e` 成功
+⇒ 两枚都是上游自有。按判据 52 / D-22 那条轴（不往上游自有宿主里塞 fork 改动），搬它 = 让两枚文件进册并
+产生"下次同步必冲突"的搬家 hunk，收益只是产物里少一枚惰性块 ⇒ 判 CUT，不排刀。
+
+**类级修法量到了价签，但仍留待裁**：给 `utils/lazyWithRetry.ts:97` 的 `PAGE_MODULES` 补一条
+`"!../pages/**/tests/**"`，一次性关掉整类泄漏（含 CUT 那枚）。这一刀**没做**，两个理由：
+一是它动的是构建侧的模块解析面，不在已裁范围内；二是**我在开刀前把它当成"与上游逐字节相同的文件"、
+据此把价签说成"为一枚上游自有的形状付在册行数"—— 这句是错的，现算更正**：`lazyWithRetry.ts` 本来就在册，
+在册读数 **+38 / −4**（`IMPORT_TIMEOUT_MS` / `withImportTimeout` / `pathFromGlobKey` / `hasExplicitExtension`
+四组 fork 改动）。所以那条排除规则的边际代价是**已触碰文件上的 1 行侵入**，不是"一枚新文件进册"——
+比我为它辩护时说的更便宜。便宜到多少、要不要为产物侧的一枚死块付这一行，这是产品裁决不是技术结论，
+所以条目留在待裁、并按新价签重写。
+
+**产物侧证据（`console/dist` 现测，entry `index-BWUTZalZ.js`）**：
+- glob 映射的键数 **467 → 466**（改前数取自 `git ls-tree -r HEAD` 的 `console/src/pages` 匹配文件，
+  改后数取自 `grep -o '"\.\./pages/[^"]*\.\(ts\|tsx\)"' dist/assets/index-BWUTZalZ.js | sort -u | wc -l`
+  = 466，与现树 `find src/pages` 的 466 逐字相同 ⇒ 这把尺两侧对得上）。
+- 其中住在 `tests/` 目录下的键 **2 → 1**，剩下的那枚正是上游自有的 `pages/Chat/tests/convertMessagesHelper.ts`。
+- `grep -rl projectKnowledgeLocaleTranslate console/dist/` 命中 **0** ⇒ 那枚块彻底不在产物里。
+- **initial 读数逐字未动**：9.90 MiB raw / 2.56 MiB Brotli / 11 枚资源。这刀的收益本来就不在这条轴上 ——
+  被搬走的是一枚惰性块（进不了 initial 集），减的是"生产产物里存在一枚只服务于测试的死块"和一次可被
+  lazy-load 的映射，不是首屏字节。报这刀如果去追 initial 降幅就是追错了东西。
+
+**验证读数**：`npx tsc -b --force` rc=0 / 0 行；被改的三枚用例单跑 **3 文件 / 7 条 / 0 红**；前端全量
+`npm run test:run` **533 文件 / 5,242 用例 / 0 红**（与 §8.51 逐字相同 ⇒ 搬家没改变任何断言）；
+`npm run build` 整链 exit 0；五道门禁全绿且读数逐字未动 —— locale split（4,658 / 59 族 / 7 豁免 /
+1,459 overlay / 23 上游自有豁免）、release channel R1–R6（6 文件 / 10 模板 / 11 读点 / 5 文件）、
+namespace boundaries（`non_extension_copaw_only: 0`）、CI command targets（19 命令 / 4 目录）、
+channel contracts（18 枚内建渠道）。`npx prettier --check` 被改 4 文件 **rc=0 / "All matched files use
+Prettier code style"** —— 本刀没有预红包袱。P1 `--check --target-ref working` rc=0，册 **122 文件 /
++11,063 −538 / 行为 122 / 命名 0·8·36 / mechanical 1** 与 `d2a23f73b` 逐字相同；JSON 里查这四条路径
+（含新址 `console/src/test/projectKnowledgeLocaleTranslate.ts`）**全部缺席** ⇒ 冲突面 **+0**，
+这是本刀唯一一条"验的就是价签本身"的读数。Python 侧 0 改动，pytest 按 76 ⑦(iii) 的口径不重跑。
+
+**解释器读数（判据 240 的新形态）**：`/tmp/copaw312` 缺 `packaging` 与 `yaml` ⇒ 五道门禁**不能整批交给一株
+解释器**：locale split 与 namespace boundaries 在 `copaw312` rc=0，release channel / CI command targets /
+channel contracts / P1 `--check` 换 `/tmp/copaw_desktop_v`（3.12.13）才跑得动。⇒ **报"门禁全绿"必须写清
+哪枚门禁用了哪株解释器**，否则下一条"某门禁红"会被误读成仓库状态而不是环境问题。
+
+**判据 245（一次搬家刀的收益要报在它真正影响的轴上，不是报在 headline 指标上）**：这枚文件进不了 initial
+集，所以 initial 读数逐字不动是**预期结果**而不是"零收益"的证据；它影响的是产物块数与 entry 的 glob 映射条数，
+而这两条都不在任何现成门禁的输出里 —— 我是靠"数 glob 键 + grep 块名"现取的。可迁移动作：搬文件类的刀先想清楚
+"它在哪条读数上会动"，把那条读数现算出来当验收项；headline（首屏字节 / 套件绿数）不动不等于刀没效果。
+
+**判据 246（为一枚改动选落点之前，先现算那个落点文件的在册状态 —— "它是上游文件"这句话必须带数）**：
+我把 `lazyWithRetry.ts` 默认成"与上游逐字节相同"，据此把类级修法的价签说成"新增在册文件"；现算 `cmp` 失败、
+P1 JSON 里它是 `+38/−4` 的已触碰文件 ⇒ 真实代价是 1 行侵入。结论方向没变（仍待裁），但**支撑 CUT/待裁的
+数字错了**，而这类数字一旦写进账就会被下一把刀当前提复用。可迁移动作：任何"改它要花多少冲突面"的判断，
+落笔前从 `check_p1_invariants.py --json` 现读那一枚文件的条目，别按"看起来是上游的"推断（判据 126 的镜像面：
+那条说归属要现算，这条说价签也要）。
+
+**待裁清单（刀 124 之后；除下面第一条外，§8.51 列的全部不变）**
+
+- 划掉：`pages/**/tests/` 下另两枚非 `.test.` 辅助文件要不要一起搬走 —— 本刀按归属结清（fork 自有那枚已搬，
+  上游自有那枚判 CUT）。
+- **替换一枚（原条目按新价签重写）**：给 `PAGE_MODULES` 补 `"!../pages/**/tests/**"` 的类级修法 ——
+  落点 `console/src/utils/lazyWithRetry.ts` 已在册（**+38/−4**），所以这条规则的成本是**已触碰文件上的 1 行侵入**、
+  收益是整类泄漏关掉（含那枚 CUT 的上游自有块）。要不要付，等裁。
+- 其余不变：冷启动两次语言解析的 14 + 13 条 chunk 往返、① pylint 风格意见 1,289、② 环境假阳性 27、
+  ③ 在册真缺陷 0、④ 在册 formatter 脏（prettier 10 + black/ATC 15）、**E501 561**、**mypy 65 / 22**、
+  3 枚 contract/integrated CI 红、`secret_store` 2×timeout、22.50 秒 `copaw update`、根目录散落物登记、
+  `skills_manager.py` 那 14 枚名字、`/tmp/k120_copaw_untracked/` 那 8 枚 gitignore 数据的去留、
+  阶段 2 的"发"那一半 4 项、升级检查在阶段 2 发包前的那条 `pypi.org/pypi/copaw-community/json` 404。
+
+**本刀的提交**：搬家一笔（含三枚用例重指与替身自己的 locale 路径）、记账一笔。刻意不再拆 —— 四行改动
+拆两笔只会让"引用改没改全"这件事跨提交。
