@@ -5,6 +5,19 @@ import importlib
 from pathlib import Path
 
 
+def test_shipped_knowledge_module_skills_are_in_the_canonical_dir() -> None:
+    """``KNOWLEDGE_MODULE_SKILLS_DIR`` resolves from ``__file__``.
+
+    The default it ships with must exist, otherwise enabling knowledge
+    raises instead of syncing the skill.
+    """
+    module = importlib.import_module("qwenpaw.knowledge.module_skills")
+    source_dir = module.KNOWLEDGE_MODULE_SKILLS_DIR
+    assert source_dir.is_dir(), source_dir
+    for name in module.KNOWLEDGE_MODULE_SKILL_NAMES:
+        assert (source_dir / name / "SKILL.md").is_file(), name
+
+
 def test_sync_knowledge_module_skills_toggles_active_skill(
     monkeypatch,
     tmp_path: Path,

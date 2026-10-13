@@ -63,6 +63,7 @@ metadata:
 
 ## Related Directories
 
-- `src/copaw/knowledge/skills/` — Knowledge module skills (e.g., knowledge search assistant)
+- `src/qwenpaw/knowledge/skills/` — Knowledge module skills (e.g., knowledge
+  search assistant)
 - `src/qwenpaw/skills_market/` — Marketplace and community skills
 - `copilot-instructions.md` — Agent instructions and skill activation rules
