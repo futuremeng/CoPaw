@@ -5,7 +5,9 @@ import { fileURLToPath } from "node:url";
 const scriptDirectory = dirname(fileURLToPath(import.meta.url));
 const outputDirectory = join(scriptDirectory, "..", "dist");
 const indexPath = join(outputDirectory, "index.html");
-const maximumRawBytes = 10 * 1024 * 1024;
+// Upstream's own build reads 9.81 MiB here; the copaw locale overlay and the
+// fork's console pages take ours to 10.05 MiB, so the budget is one MiB wider.
+const maximumRawBytes = 11 * 1024 * 1024;
 const maximumBrotliBytes = 3 * 1024 * 1024;
 
 const html = await readFile(indexPath, "utf-8");

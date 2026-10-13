@@ -146,6 +146,22 @@ export default defineConfig(({ command, mode }) => {
       rollupOptions: {
         output: {
           manualChunks(id) {
+            // The knowledge graph is the only `@antv/g6` consumer and it mounts
+            // lazily, so g6's private subtree stays out of the initial bundle.
+            // This rule has to come first: below, the d3 rule would claim the
+            // d3 copies @antv/layout installs under its own node_modules, and
+            // the `@antv/` rule would merge all of it into charts-vendor, a
+            // chunk the entry imports statically.
+            if (
+              id.includes("node_modules/@antv/g6/") ||
+              id.includes("node_modules/@antv/g6-extension-") ||
+              id.includes("node_modules/@antv/layout/") ||
+              id.includes("node_modules/@antv/graphlib/") ||
+              id.includes("node_modules/@antv/algorithm/") ||
+              id.includes("node_modules/@antv/hierarchy/")
+            ) {
+              return "g6-vendor";
+            }
             // Charts and the UI's Markdown renderer share D3 and preload helpers.
             // Keep those in the UI chunk so lazy trends cannot create a cycle.
             if (
