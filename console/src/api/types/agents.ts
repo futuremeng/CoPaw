@@ -626,10 +626,12 @@ export interface AgentSummary {
   backend_model?: string | null;
   backend_reasoning_effort?: string | null;
   active_model?: ModelSlotConfig | null;
-  is_builtin: boolean;
-  builtin_kind: string;
-  builtin_label: string;
-  system_protected: boolean;
+  // Fork-owned builtin-agent fields, kept optional like AgentProfileConfig /
+  // AgentProfileRef so upstream-owned AgentSummary doubles still compile.
+  is_builtin?: boolean;
+  builtin_kind?: string;
+  builtin_label?: string;
+  system_protected?: boolean;
   project_count?: number;
   projects?: AgentProjectSummary[];
   /** PawApp id when this profile is an app-owned execution engine. */

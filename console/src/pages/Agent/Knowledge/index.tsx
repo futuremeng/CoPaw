@@ -133,12 +133,21 @@ function formatRemoteStatus(
   return t("knowledge.remoteStateUnknown");
 }
 
+type EnableKnowledgeModalValues = Pick<
+  AgentsRunningConfig,
+  | "knowledge_auto_collect_chat_files"
+  | "knowledge_auto_collect_chat_urls"
+  | "knowledge_auto_collect_long_text"
+  | "knowledge_long_text_min_chars"
+  | "knowledge_chunk_size"
+>;
+
 function KnowledgePage() {
   const { t } = useTranslation();
   const location = useLocation();
   const navigate = useNavigate();
   const [form] = Form.useForm<KnowledgeSourceSpec>();
-  const [enableConfigForm] = Form.useForm<AgentsRunningConfig>();
+  const [enableConfigForm] = Form.useForm<EnableKnowledgeModalValues>();
   const [config, setConfig] = useState<KnowledgeConfig | null>(null);
   const [runningConfig, setRunningConfig] =
     useState<AgentsRunningConfig | null>(null);
