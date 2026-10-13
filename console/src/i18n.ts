@@ -1,7 +1,7 @@
 import { createInstance, type BackendModule, type ReadCallback } from "i18next";
 import { initReactI18next } from "react-i18next";
 import en from "./locales/en.json";
-import { registerCopawTranslations } from "./locales/copaw/register";
+import { copawOverlayBackend } from "./locales/copaw/register";
 
 type LocaleResource = Record<string, unknown>;
 
@@ -82,7 +82,7 @@ const supportedLngs = [...localeCodes, ...languageOnlyAliases];
 const i18n = createInstance();
 
 export const i18nReady = i18n
-  .use(localeBackend)
+  .use(copawOverlayBackend(localeBackend))
   .use(initReactI18next)
   .init({
     lng: initialLanguage,
@@ -94,7 +94,5 @@ export const i18nReady = i18n
       escapeValue: false,
     },
   });
-
-registerCopawTranslations(i18n);
 
 export default i18n;

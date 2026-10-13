@@ -170,3 +170,49 @@ describe("i18n pt-BR bundle resolution", () => {
     expect(i18n.t("chat.newTask")).toBe("Nova tarefa");
   });
 });
+
+// ---------------------------------------------------------------------------
+// copaw overlay hand-off on language switch.
+// react-i18next re-renders on `languageChanged` only (defaults.js bindI18n =
+// 'languageChanged', bindI18nStore = ''), and i18next emits that event before
+// the `loaded` event a `loaded`-hook overlay would wait for.  So an overlay
+// merged on `loaded` lands one store-write after the render that needed it, and
+// the switch shows the fallback-language copy until an unrelated re-render.
+// `common.copiedText` is fork-owned: absent from both base dictionaries and
+// present in the overlay, so its value says exactly which layer answered.
+// ---------------------------------------------------------------------------
+
+describe("i18n copaw overlay hand-off", () => {
+  afterEach(() => {
+    localStorage.clear();
+    vi.resetModules();
+  });
+
+  it("already has the overlay copy when a switch emits languageChanged", async () => {
+    const i18n = await freshI18n();
+    if (!i18n.isInitialized) {
+      await new Promise((resolve) => i18n.on("initialized", resolve));
+    }
+
+    let copyAtLanguageChanged = "";
+    const listener = () => {
+      copyAtLanguageChanged = i18n.t("common.copiedText");
+    };
+    i18n.on("languageChanged", listener);
+    await i18n.changeLanguage("zh");
+    i18n.off("languageChanged", listener);
+
+    expect(copyAtLanguageChanged).toBe("已复制文本");
+  });
+
+  it("keeps the overlay copy for the language loaded at startup", async () => {
+    localStorage.setItem("language", "zh");
+
+    const i18n = await freshI18n();
+    if (!i18n.isInitialized) {
+      await new Promise((resolve) => i18n.on("initialized", resolve));
+    }
+
+    expect(i18n.t("common.copiedText")).toBe("已复制文本");
+  });
+});

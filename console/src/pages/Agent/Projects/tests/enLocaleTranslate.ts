@@ -1,4 +1,4 @@
-import { copawOverlays } from "../../../../locales/copaw/register";
+import { withCopawOverlay } from "../../../../locales/copaw/register";
 import baseEn from "../../../../locales/en.json";
 
 type TranslationMap = Record<string, unknown>;
@@ -9,36 +9,10 @@ type TranslateFn = (
   maybeOptions?: Record<string, unknown>,
 ) => string;
 
-function isPlainObject(value: unknown): value is TranslationMap {
-  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
-}
-
-function mergeTranslations(
-  target: TranslationMap,
-  source: TranslationMap,
-): TranslationMap {
-  const next: TranslationMap = { ...target };
-  for (const [key, value] of Object.entries(source)) {
-    const existing = next[key];
-    if (isPlainObject(existing) && isPlainObject(value)) {
-      next[key] = mergeTranslations(existing, value);
-      continue;
-    }
-    next[key] = value;
-  }
-  return next;
-}
-
-// Production builds the English tree from base en.json plus the copaw overlays,
-// and register.ts is the only owner of the overlay order, so the double reads the
-// merged overlay straight from it instead of re-listing the groups.
-//
-// It cannot go through `registerCopawTranslations`: that only merges a language's
-// overlay once i18next reports the base bundle as loaded, and this double has no
-// i18next instance to hook.
-const overlayEn = copawOverlays.en ?? {};
-
-const enBundle = mergeTranslations(baseEn as TranslationMap, overlayEn);
+// Production hands i18next the base en.json with the copaw overlay merged over it,
+// and register.ts owns both the group order and that merge, so the double asks
+// register.ts for the tree instead of re-listing the groups or re-merging them.
+const enBundle = withCopawOverlay("en", baseEn as TranslationMap);
 
 function lookupEnValue(key: string): string | undefined {
   let cursor: unknown = enBundle;

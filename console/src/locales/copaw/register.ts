@@ -1,4 +1,4 @@
-import type i18n from "i18next";
+import type { BackendModule } from "i18next";
 import copawProjectsEn from "./projects/en.json";
 import copawProjectsRu from "./projects/ru.json";
 import copawProjectsZh from "./projects/zh.json";
@@ -76,7 +76,7 @@ function buildOverlay(...parts: TranslationMap[]): TranslationMap {
   );
 }
 
-export const copawOverlays: Record<string, TranslationMap> = {
+const copawOverlays: Record<string, TranslationMap> = {
   // The knife-72 groups are en/zh deliverables: the other four languages reach
   // them through i18n.ts `fallbackLng`.  The knowledge group is en/zh too,
   // except for the `knowledge.quantReason` family, for which conflict-surface
@@ -117,25 +117,36 @@ export const copawOverlays: Record<string, TranslationMap> = {
   id: buildOverlay(copawProjectsId, workbenchId),
 };
 
-export function registerCopawTranslations(
-  instance: Pick<typeof i18n, "addResourceBundle" | "on">,
-): void {
-  // i18next fetches a language only while the store still has no bundle for it
-  // (`BackendConnector.queueLoad` checks `store.hasResourceBundle`), so adding
-  // every overlay up front marks all six `translation` bundles as loaded and
-  // the upstream base dictionaries never load.  Merge per language once its
-  // base bundle has arrived instead.
-  //
-  // Upstream tests that `vi.mock("i18next")` hand back a `{ t, use, init }`
-  // stand-in with no event API, and their `t` never consults the store, so
-  // there is nothing here to overlay.
-  if (typeof instance.on !== "function") return;
-  instance.on("loaded", (loaded: Record<string, Record<string, boolean>>) => {
-    for (const lng of Object.keys(loaded)) {
-      const translation = copawOverlays[lng];
-      if (translation) {
-        instance.addResourceBundle(lng, "translation", translation, true, true);
-      }
-    }
-  });
+// The console's locale backend merges the overlay into the bundle it hands
+// i18next, so the store never holds a language without its fork copy.  Merging
+// later -- on i18next's `loaded` event -- lands after the `languageChanged`
+// event react-i18next listens to (its `bindI18n` default), so a language switch
+// would render one frame of fallback-language copy and then sit there.
+//
+// i18next fetches a language only while the store has no bundle for it
+// (`BackendConnector.queueLoad` checks `store.hasResourceBundle`), so the merge
+// stays per language: adding every overlay up front would mark all six
+// `translation` bundles as loaded and the base dictionaries would never load.
+export function withCopawOverlay(
+  language: string,
+  base: TranslationMap,
+): TranslationMap {
+  const overlay = copawOverlays[language];
+  return overlay ? mergeTranslations(base, overlay) : base;
+}
+
+export function copawOverlayBackend(backend: BackendModule): BackendModule {
+  return {
+    ...backend,
+    read: (language, namespace, callback) => {
+      backend.read(language, namespace, (error, resources) => {
+        callback(
+          error,
+          isPlainObject(resources)
+            ? withCopawOverlay(language, resources)
+            : resources,
+        );
+      });
+    },
+  };
 }
