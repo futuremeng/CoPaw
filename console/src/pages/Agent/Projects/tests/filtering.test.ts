@@ -3,7 +3,7 @@ import {
   getProjectFilterLabelDescriptor,
   toggleProjectFileFilter,
 } from "../utils/filtering";
-import { t } from "./enLocaleTranslate";
+import { t } from "../../../../test/enLocaleTranslate";
 
 describe("project filtering helpers", () => {
   it("toggles project file filter on repeated click", () => {

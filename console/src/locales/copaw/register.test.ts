@@ -109,3 +109,26 @@ describe("copaw overlay registers into the upstream translation namespace", () =
     ).not.toBe("copaw.projects.knowledge.runtimeStatusIdle");
   });
 });
+
+// ---------------------------------------------------------------------------
+// The overlay has to reach the bundle through a per-language dynamic import.
+// Statically imported JSON is concatenated into the entry chunk, so a visitor
+// who reads one language still downloads the overlay for all six.
+// ---------------------------------------------------------------------------
+describe("copaw overlay is loaded on demand", () => {
+  const registerSource = readFileSync(
+    resolve(process.cwd(), "src/locales/copaw/register.ts"),
+    "utf8",
+  );
+
+  it("declares no static locale JSON import", () => {
+    const staticJsonImports = [
+      ...registerSource.matchAll(/^import\s[^;]*from\s"[^"]*\.json";$/gm),
+    ].map((match) => match[0]);
+    expect(staticJsonImports).toEqual([]);
+  });
+
+  it("resolves the overlay groups through import.meta.glob", () => {
+    expect(registerSource).toContain("import.meta.glob");
+  });
+});

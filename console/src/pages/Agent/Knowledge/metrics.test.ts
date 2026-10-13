@@ -1,7 +1,7 @@
 import { beforeAll, describe, expect, it } from "vitest";
 import i18n from "../../../i18n";
 import { loadTestLocales } from "../../../test/loadTestLocales";
-import { t } from "../Projects/tests/enLocaleTranslate";
+import { t } from "../../../test/enLocaleTranslate";
 import type {
   KnowledgeHistoryBackfillStatus,
   KnowledgeSourceItem,

@@ -1,5 +1,10 @@
-import { withCopawOverlay } from "../../../../locales/copaw/register";
-import baseEn from "../../../../locales/en.json";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
+import {
+  copawOverlayGroupFiles,
+  mergeCopawOverlay,
+} from "../locales/copaw/register";
+import baseEn from "../locales/en.json";
 
 type TranslationMap = Record<string, unknown>;
 
@@ -9,10 +14,23 @@ type TranslateFn = (
   maybeOptions?: Record<string, unknown>,
 ) => string;
 
-// Production hands i18next the base en.json with the copaw overlay merged over it,
-// and register.ts owns both the group order and that merge, so the double asks
-// register.ts for the tree instead of re-listing the groups or re-merging them.
-const enBundle = withCopawOverlay("en", baseEn as TranslationMap);
+// This double reads the overlay group files off disk, so it stays out of
+// `src/pages/**`, where utils/lazyWithRetry.ts's `import.meta.glob` would ship it
+// into the browser build.
+//
+// Production hands i18next the base en.json with the copaw overlay merged over
+// it, and register.ts owns both the group order and that merge.  There the
+// overlay arrives through a per-language dynamic import, so the double reads the
+// same group files from disk rather than awaiting the loader.
+const enBundle = mergeCopawOverlay(
+  baseEn as TranslationMap,
+  copawOverlayGroupFiles("en").map(
+    (file) =>
+      JSON.parse(
+        readFileSync(resolve(process.cwd(), "src/locales/copaw", file), "utf8"),
+      ) as TranslationMap,
+  ),
+);
 
 function lookupEnValue(key: string): string | undefined {
   let cursor: unknown = enBundle;

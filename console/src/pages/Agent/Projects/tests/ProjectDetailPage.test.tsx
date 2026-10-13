@@ -219,9 +219,9 @@ vi.mock("antd", async (importOriginal) => {
 // The app renders the English bundle (i18n default language is "en"), so the
 // double resolves copy from that bundle instead of an inline default.
 vi.mock("react-i18next", async () => {
-  const { t } = await vi.importActual<typeof import("./enLocaleTranslate")>(
-    "./enLocaleTranslate",
-  );
+  const { t } = await vi.importActual<
+    typeof import("../../../../test/enLocaleTranslate")
+  >("../../../../test/enLocaleTranslate");
   return {
     useTranslation: () => ({
       t,

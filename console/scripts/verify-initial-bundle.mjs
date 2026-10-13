@@ -5,8 +5,11 @@ import { fileURLToPath } from "node:url";
 const scriptDirectory = dirname(fileURLToPath(import.meta.url));
 const outputDirectory = join(scriptDirectory, "..", "dist");
 const indexPath = join(outputDirectory, "index.html");
-// Upstream's own build reads 9.81 MiB here; the copaw locale overlay and the
-// fork's console pages take ours to 10.05 MiB, so the budget is one MiB wider.
+// Upstream's own build reads 9.81 MiB here.  The fork's console pages put ours
+// at 10.05 MiB while the copaw locale overlay was bundled statically; the overlay
+// now loads per language on demand, which brings it back to 9.90 MiB, and the
+// budget stays one MiB wider than upstream's so a lazy mount cannot silently
+// re-inflate the entry.
 const maximumRawBytes = 11 * 1024 * 1024;
 const maximumBrotliBytes = 3 * 1024 * 1024;
 

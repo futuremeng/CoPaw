@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { t } from "../Projects/tests/enLocaleTranslate";
+import { t } from "../../../test/enLocaleTranslate";
 import { computeKnowledgeQuantMetrics } from "./metrics";
 import { buildKnowledgeQuantCardViewModels } from "./quantCards";
 

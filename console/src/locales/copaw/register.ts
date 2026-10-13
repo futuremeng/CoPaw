@@ -1,52 +1,7 @@
 import type { BackendModule } from "i18next";
-import copawProjectsEn from "./projects/en.json";
-import copawProjectsRu from "./projects/ru.json";
-import copawProjectsZh from "./projects/zh.json";
-import copawProjectsJa from "./projects/ja.json";
-import copawProjectsPtBR from "./projects/pt-BR.json";
-import copawProjectsId from "./projects/id.json";
-// Conflict-surface knife 76: pipelines and rpa ship en/zh only.  Their
-// ja/ru/pt-BR/id files held nothing but verbatim English, so i18next's
-// `fallbackLng` was already rendering the same string from the en overlay.
-import copawPipelinesEn from "./pipelines/en.json";
-import copawPipelinesZh from "./pipelines/zh.json";
-import copawRpaEn from "./rpa/en.json";
-import copawRpaZh from "./rpa/zh.json";
-import workbenchEn from "./workbench/en.json";
-import workbenchRu from "./workbench/ru.json";
-import workbenchZh from "./workbench/zh.json";
-import workbenchJa from "./workbench/ja.json";
-import workbenchPtBR from "./workbench/pt-BR.json";
-import workbenchId from "./workbench/id.json";
-import copawKnowledgeEn from "./knowledge/en.json";
-import copawKnowledgeZh from "./knowledge/zh.json";
-// Conflict-surface knife 79: the knowledge group carries a ja and a ru carrier
-// for `knowledge.quantReason` only.  Both are real translations restored from
-// the fork's own pre-split dictionaries, so the group stays a subset of the en
-// overlay instead of padding out to verbatim English.
-import copawKnowledgeJa from "./knowledge/ja.json";
-import copawKnowledgeRu from "./knowledge/ru.json";
-// Conflict-surface knife 72: copy the fork's own console pages read, restored
-// from the fork's dropped dictionaries (or supplied from an upstream v2 / inline
-// donor).  Same en/zh-only deliverable as the knowledge group above.
-import agentEn from "./agent/en.json";
-import agentZh from "./agent/zh.json";
-import agentConfigEn from "./agentConfig/en.json";
-import agentConfigZh from "./agentConfig/zh.json";
-import approvalEn from "./approval/en.json";
-import approvalZh from "./approval/zh.json";
-import chatEn from "./chat/en.json";
-import chatZh from "./chat/zh.json";
-import commonEn from "./common/en.json";
-import commonZh from "./common/zh.json";
-import mcpEn from "./mcp/en.json";
-import mcpZh from "./mcp/zh.json";
-import modelsEn from "./models/en.json";
-import modelsZh from "./models/zh.json";
-import skillsEn from "./skills/en.json";
-import skillsZh from "./skills/zh.json";
 
 type TranslationMap = Record<string, unknown>;
+type OverlayModule = { default: TranslationMap };
 
 function isPlainObject(value: unknown): value is TranslationMap {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
@@ -68,54 +23,67 @@ function mergeTranslations(
   return next;
 }
 
-// Later files win, matching the order copaw overlays were merged in before.
-function buildOverlay(...parts: TranslationMap[]): TranslationMap {
-  return parts.reduce<TranslationMap>(
-    (acc, part) => mergeTranslations(acc, part),
-    {},
-  );
+// Later groups win, matching the order the copaw overlays were merged in before.
+export function mergeCopawOverlay(
+  base: TranslationMap,
+  parts: readonly TranslationMap[],
+): TranslationMap {
+  return parts.reduce(mergeTranslations, base);
 }
 
-const copawOverlays: Record<string, TranslationMap> = {
-  // The knife-72 groups are en/zh deliverables: the other four languages reach
-  // them through i18n.ts `fallbackLng`.  The knowledge group is en/zh too,
-  // except for the `knowledge.quantReason` family, for which conflict-surface
-  // knife 79 shipped ja and ru carriers.
-  en: buildOverlay(
-    copawProjectsEn,
-    copawPipelinesEn,
-    copawRpaEn,
-    workbenchEn,
-    copawKnowledgeEn,
-    agentEn,
-    agentConfigEn,
-    approvalEn,
-    chatEn,
-    commonEn,
-    mcpEn,
-    modelsEn,
-    skillsEn,
-  ),
-  ru: buildOverlay(copawProjectsRu, workbenchRu, copawKnowledgeRu),
-  zh: buildOverlay(
-    copawProjectsZh,
-    copawPipelinesZh,
-    copawRpaZh,
-    workbenchZh,
-    copawKnowledgeZh,
-    agentZh,
-    agentConfigZh,
-    approvalZh,
-    chatZh,
-    commonZh,
-    mcpZh,
-    modelsZh,
-    skillsZh,
-  ),
-  ja: buildOverlay(copawProjectsJa, workbenchJa, copawKnowledgeJa),
-  "pt-BR": buildOverlay(copawProjectsPtBR, workbenchPtBR),
-  id: buildOverlay(copawProjectsId, workbenchId),
-};
+// Which groups make up the overlay, in the order they win over each other.  The
+// conflict-surface knives own this list: knife 76 dropped the verbatim-English
+// ja/ru/pt-BR/id carriers from pipelines and rpa, knife 79 kept ja and ru in the
+// knowledge group for the one real translation they carry
+// (`knowledge.quantReason`), and the knife-72 groups are en/zh deliverables that
+// the other four languages reach through i18n.ts `fallbackLng`.  A group with no
+// file for a language is skipped rather than padded with English, so this single
+// order describes every language.
+export const copawOverlayGroups = [
+  "projects",
+  "pipelines",
+  "rpa",
+  "workbench",
+  "knowledge",
+  "agent",
+  "agentConfig",
+  "approval",
+  "chat",
+  "common",
+  "mcp",
+  "models",
+  "skills",
+] as const;
+
+const copawOverlayModules = import.meta.glob<OverlayModule>("./*/*.json");
+
+// The overlay is fetched per language, in the group files it actually ships:
+// statically imported JSON is concatenated into the entry chunk, so every
+// visitor would download all six languages to read one.
+export function copawOverlayGroupFiles(language: string): string[] {
+  return copawOverlayGroups
+    .map((group) => `${group}/${language}.json`)
+    .filter((file) => `./${file}` in copawOverlayModules);
+}
+
+async function loadCopawOverlayParts(
+  language: string,
+): Promise<TranslationMap[]> {
+  const modules = await Promise.all(
+    copawOverlayGroups.map(
+      (group) => copawOverlayModules[`./${group}/${language}.json`]?.(),
+    ),
+  );
+  return modules
+    .filter(isModuleWithTranslation)
+    .map((module) => module.default);
+}
+
+function isModuleWithTranslation(
+  value: OverlayModule | undefined,
+): value is OverlayModule {
+  return value !== undefined && isPlainObject(value.default);
+}
 
 // The console's locale backend merges the overlay into the bundle it hands
 // i18next, so the store never holds a language without its fork copy.  Merging
@@ -127,25 +95,28 @@ const copawOverlays: Record<string, TranslationMap> = {
 // (`BackendConnector.queueLoad` checks `store.hasResourceBundle`), so the merge
 // stays per language: adding every overlay up front would mark all six
 // `translation` bundles as loaded and the base dictionaries would never load.
-export function withCopawOverlay(
-  language: string,
-  base: TranslationMap,
-): TranslationMap {
-  const overlay = copawOverlays[language];
-  return overlay ? mergeTranslations(base, overlay) : base;
-}
-
 export function copawOverlayBackend(backend: BackendModule): BackendModule {
   return {
     ...backend,
     read: (language, namespace, callback) => {
-      backend.read(language, namespace, (error, resources) => {
-        callback(
-          error,
-          isPlainObject(resources)
-            ? withCopawOverlay(language, resources)
-            : resources,
-        );
+      backend.read(language, namespace, (readError, resources) => {
+        if (!isPlainObject(resources)) {
+          callback(readError, resources);
+          return;
+        }
+        // i18next has to be answered either way: a rejected overlay chunk left
+        // the load hanging, and an unresolved `changeLanguage` never settles.
+        void loadCopawOverlayParts(language)
+          .then((parts) =>
+            callback(readError, mergeCopawOverlay(resources, parts)),
+          )
+          .catch((error: unknown) => {
+            console.error(
+              `Failed to load the copaw overlay for "${language}":`,
+              error,
+            );
+            callback(readError, resources);
+          });
       });
     },
   };

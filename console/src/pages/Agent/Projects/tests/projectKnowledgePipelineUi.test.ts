@@ -12,7 +12,7 @@ import {
   getProjectKnowledgeSemanticSummary,
   getTriggerModeLabel,
 } from "../utils/projectKnowledgePipelineUi";
-import { t as translateEn } from "./enLocaleTranslate";
+import { t as translateEn } from "../../../../test/enLocaleTranslate";
 
 // Asserts against the English bundle the app renders, not an inline default.
 const t = translateEn as unknown as TFunction;
