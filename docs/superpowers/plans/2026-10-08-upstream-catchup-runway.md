@@ -3273,3 +3273,313 @@ launcher 也已经 `exec "<interpreter>" "<host_impl>" "$@"` 转发参数（`:57
 **本刀的两笔提交**：`a17378b7c`（`test(unit)`：桥接配置随隔离目录同转 + 2 枚守卫）与 `cdab00271`（本节）。
 两枚绑定与守卫必须同笔：只转常量而漏单例，`_expected_token` 仍写本机；只转单例而漏常量，任何不传参的
 `configure_nm_bridge()` 调用点仍写本机 —— 守卫的第一条正是钉这两枚相等。
+
+### 8.47 刀 119（2026-10-13）：阶段 2 的改名那一半整把落地 —— 1 枚声明 + 11 处读点同笔改指 `copaw-community`，发包那一半仍等授权
+
+**一句话结论**：§8.36 量过的价签（5 枚读点文件里 2 枚逐字等于分叉点 ⇒ **+2 枚冲突宿主**）由产品裁决付掉
+（原话"可以，直接做，不过要等版本稳定之后再推到正式发布"），本刀把 `qwenpaw` 这枚**分发名**从树里退休：
+`pyproject.toml:2` 的声明与 11 处读点同一笔改指 `copaw-community`，构建产物从 `qwenpaw-*.whl` 变成
+`copaw_community-2.2.2b4.post1-py3-none-any.whl`（现读 42,789,197 字节 / 3,766 条目）。
+**发布语义一格没动**：`pending` 照旧含 `pypi`，`release_channel.py --check-artifacts dist` 对着真产物仍
+**rc=1** 打 `ERROR: the pypi channel is still pending; refusing to publish`，`copaw update` 照旧拒绝。
+P1 册 **117 → 119 文件 / +10,986 −534**（+2 宿主逐字命中预判）。新增判据 224–227，**已闭环计数推到 119**。
+
+**这一把为什么必须整把落**（R6 那份合同是 109-1 立的）：登记表与全树重扫要相等，且每条在册读点必须仍含
+新名字面量 ⇒ 半把（改声明不改读点，或反之）当场红。改前实测就是那枚红：
+`pytest tests/unit/scripts/test_check_release_channel_consistency.py -q` ⇒ **1 failed / 47 passed in 10.67s**，
+断言逐字 `AssertionError: assert 'qwenpaw' == 'copaw-community'`；三条改名定向用例先红实测
+`-k "normalized_form or ships_under_our_own or stays_pending"` ⇒ **3 failed / 1 passed / 23 deselected in 5.32s**。
+
+**落点（1 枚声明 + 11 处读点 / 5 枚文件，逐枚行数与在册归属）**
+
+| 文件 | 行 | 归属与侵入 |
+| --- | --- | --- |
+| `pyproject.toml:2` | +1 −1 | 在册；`name` 从 `qwenpaw` 改 `copaw-community` |
+| `src/qwenpaw/cli/update_cmd.py:33/:181/:395` | +3 −3 | **本刀起在册**（改前逐字等于分叉点）：PyPI JSON 地址、`metadata.distribution()`、`package_spec` |
+| `scripts/pack/build_common.py` | +2 −2 | **本刀起在册**（同上）：wheel glob 换文件名形 |
+| `scripts/pack/build_macos.sh` | +3 −3 | 在册：`dist/{wheel}-` + `version('{distribution}')` |
+| `scripts/pack/build_win.ps1` | +3 −3 | 在册：wheel glob ×2 + `version('{distribution}')` |
+| `scripts/check_release_channel_consistency.py` | +49 −15 | fork 自有：`{wheel_name}` 占位符 + `wheel_name()` + `reader_literal()` + `_tracked_names()` 留退休名 |
+| `scripts/release_channel.py` | +6 −3 | fork 自有：`artifact_prefixes()` 的 docstring 改成两形合同 |
+| `src/copaw/cli/update_cmd.py` | +12 −9 | fork 自有：拒绝文案不再写死包名，改从事实源读 |
+
+5 枚在册文件的侵入算术与 P1 读数逐格对得上：**+14 invasive / −12 deleted**（1+3+2+3+3+… 按枚 = 14），
+`behavior_added 10,936 → 10,950`、`behavior_removed 486 → 498`、`behavior_files 116 → 119`。
+
+**两枚只有改名当天才暴露的合同**：
+
+1. **登记表必须区分"包名形"和"文件名形"**。PEP 427 把 wheel 文件名里的 `[-_.]+` 折成 `_`，
+   所以 `copaw-community` 落盘是 `copaw_community-…whl` —— 而 `build_common.py`、`build_macos.sh`、
+   `build_win.ps1` 里那 4 条 glob 是**文件名**，短横形字面量永远匹配不上。⇒ 注册表新增
+   `WHEEL_NAME_PLACEHOLDER = "{wheel_name}"`，`reader_literal()` 按占位符选形展开（`{distribution}` 原样、
+   `{wheel_name}` 过 `re.sub(r"[-_.]+", "_", …)`）。守卫 `test_the_registry_names_a_wheel_file_in_its_normalized_form`
+   钉的正是"文件名条目若用短横形，登记即红"。
+2. **sdist 两形在真 PyPI 上都存在**，§8.38 那句"PEP 427 归一化形式"只说对一半：现查
+   `python-dateutil-2.9.0.post0.tar.gz` 是老短横形、PEP 625 之后的 `jsonschema_specifications-2025.9.1.tar.gz`
+   / `zope_interface-8.6.tar.gz` 是归一形、`add_trailing_comma-4.0.0.tar.gz` 又混用 ⇒ `artifact_prefixes()`
+   两形都收（否则真发布那天按 sdist 名误拒）。
+
+**改名把 fork 自有那侧的一处陈旧文案翻了出来**：`src/copaw/cli/update_cmd.py` 的拒绝文案原先写死
+`pip-install qwenpaw`。本刀让它从事实源取 `pypi_project` ⇒ 文案与真动作同源，下次改名不用再来一遍。
+守卫 `test_copaw_refusal_names_the_project_it_would_fetch` 断言两件事：输出含事实源那枚名，且不含
+`pip-install qwenpaw`。落点先红实测：改前该文件 **1 failed / 12 passed in 0.75s**，改后 **13 passed in 0.98s**。
+
+**`_tracked_names()` 为什么要留着退休的 `qwenpaw`**：全树重扫的"受盯身份"若只剩新名，将来某次上游合并把
+带 `qwenpaw` 的读点复活进来，扫描会把它当**未知身份**放过 ⇒ R6 静默漏扫。现表 = `{新名, 旧名}` ∪ 每个身份的
+wheel 形。这条是判据 196（"全扫的名字侧必须锚在受盯身份上"）的反向补集，先红实测
+`-k old_distribution` ⇒ **1 failed / 1 passed / 27 deselected in 1.31s**。
+
+**装进 venv 的身份读数（改名生效与品牌未动，两件事分开钉）**
+`/tmp/copaw_desktop_v` 装本刀 wheel 后现读：
+`importlib.metadata.version('copaw-community')` = **2.2.2b4.post1**；
+`version('qwenpaw')` → **PackageNotFoundError: No package metadata was found for qwenpaw**（改名生效的判据）；
+`copaw --version` 仍打印 **`QwenPaw, version 2.2.2b4.post1`**（品牌串属品牌册，本刀一格没动，判据 94 那条
+"入口可用性要执行装好的脚本"在这里复用）；`copaw update` 仍 **rc=1** 并点名 `copaw-community`。
+元数据目录名是 `copaw_community-2.2.2b4.post1.dist-info`（归一形）—— 与分发名不同形，这是判据 224 的实测面。
+
+**全套验证读数（全部在最后一条编辑之后重取，判据 89）**
+
+- 全量 `tests/unit`：**17,850 passed / 24 skipped / 4 xfailed in 1032.05s**（基线 17,843 + 本刀 7 枚守卫：
+  `test_check_release_channel_consistency.py` +6、`test_cli_update_overlay.py` +1）；**0 红**。
+- L1 必过五目录：**1,339 passed / 1 skipped**，与刀 117、118 逐字同数。
+- 五道离线门禁读数照旧，其中 release channel 一行原文：
+  `Release channel consistency check passed (R1-R6 over 6 channel files; 10 registered templates, 11 read points swept in 5 files)`
+  —— 模板数与读点数在改名前后**同数**（改名只换字面量，不换形状），这正是 R6 想要的性质。
+  locale split 4,658 / 59 / 7 / 1,459 / 23 · brand 7 文件 / 35 行 · CI targets 19 命令 / 4 目录 · namespace PASSED。
+- flake8 整树 **561**（全 `E501`）不变；整树 pylint **1,313 → 1,316**，+3 由两枚在册测试文件的 per-file
+  A/B 直接测得（`test_cli_update_overlay.py` 11→12、`test_check_release_channel_consistency.py` 19→21，
+  全部 `W0621 redefined-outer-name` 风格意见，记进待裁 ① 不加真缺陷）。
+- `check_p1_invariants.py --check --target-ref working`：**rc=1、9 条 `::error::`**
+  （`files grew: 117 -> 119`、`NEW upstream-owned file touched: scripts/pack/build_common.py`、
+  `… src/qwenpaw/cli/update_cmd.py` 等）⇒ 基线重记成独立一笔提交，处置同 §8.20。
+- 中途合并跑（改名进行到一半）：**6 failed / 1,314 passed / 2 skipped** —— 6 枚全在 R6/fixture 侧，
+  逐枚随落点清；改名后那枚 fixture 第一版 **5 failed / 22 passed in 3.02s**（它自己在拼旧字面量），
+  重写 `_rename_declaration`（`re.subn` 带 `count=1` 断言）与 `_rename_every_reader`（改用
+  `mod.reader_literal`）后 **40 passed in 3.63s**。
+- `tests/unit/scripts` + `tests/unit/cli` 合并：**1,447 passed / 2 skipped in 56.47s**。
+
+**判据 224（按产物文件名匹配的代码，要同时接住包名形与 PEP 427 归一形）**：`copaw-community` 在 wheel 与
+`.dist-info` 里必然是 `copaw_community`（PEP 427 折 `[-_.]+`→`_`），但 **sdist 两形在真 PyPI 上并存**
+（`python-dateutil-2.9.0.post0.tar.gz` 老形 / PEP 625 的 `jsonschema_specifications-2025.9.1.tar.gz` 新形 /
+`add_trailing_comma-4.0.0.tar.gz` 混用）。可迁移的动作：凡"用声明名去拼产物文件名"的地方，先问这行拼的是
+**分发名**还是**文件名**，把形状写进登记表（这里落成两枚占位符 `{distribution}` / `{wheel_name}`），
+而不是让读代码的人去猜归一化规则；`importlib.metadata` / pip / PEP 503 那一侧对拼写不敏感，别把结论过去。
+
+**判据 225（改名刀要 grep 自己 fork 层的硬编码文案，不能只跟着门禁走）**：R6 的读点表覆盖上游自有文件，
+`src/copaw/cli/update_cmd.py` 的拒绝文案是 fork 自己写的、不在表内，改名当天它就变成**说错话的文案**
+（"would pip-install qwenpaw"，而真动作已是 `copaw-community==…`）。可迁移的动作：任何改名/换渠道刀，
+落刀前对 fork 自有目录同一枚字面量做一次 `grep`，命中的要么进登记表，要么改成从事实源读（本刀取后者，
+并加断言"输出含事实源名、且不含旧名"）。
+
+**判据 226（覆盖式扫描的受盯集合要留着退休身份）**：把 `qwenpaw` 从 `_tracked_names()` 里删掉，今天更干净，
+但下次合并复活一枚带旧名的上游读点时，全树重扫会把它当未知字符串放过 ⇒ 门禁绿而树里有读点指向已退休的包。
+可迁移的动作：改名刀要把旧名**留在扫描集合**（只是不再允许出现在树里），新名进声明集合；两集合不等是设计，
+写进注释与用例（`test_the_sweep_still_sees_upstreams_old_distribution_name`）。判据 196 讲的是"锚在受盯身份上
+以免被更宽 token 吞掉"，这条讲的是"受盯身份本身要含历史形"。
+
+**判据 227（改名生效与品牌未动是两枚独立断言，元数据目录名不能当改名证据）**：venv 里同时成立的是
+`version('qwenpaw')` → `PackageNotFoundError`（改名生效）与 `copaw --version` →
+`QwenPaw, version 2.2.2b4.post1`（品牌照旧，属品牌册那 7 文件 / 35 行未闭），且 `.dist-info` 目录是归一形
+`copaw_community-…`。可迁移的动作：这类"换标识符但不换对外称呼"的刀，验收要**分开钉**元数据可见身份与
+用户可见串；只看 `--version` 会把"改名完全没生效"读成"改名生效了"。
+
+**待裁清单（刀 119 之后；除 pylint 那一本账全部不变）**
+
+- ① **pylint 风格意见 1,286 → 1,289**（+3 全为本刀两枚测试文件的 `W0621`）；② 环境假阳性 27；
+  ③ 在册真缺陷 **0**；④ 在册 formatter 脏（prettier 10 + black/ATC 15，判据 184 已裁"先不付"）。
+- **E501 561** 分层不变；**mypy 65 errors / 22 文件**、3 枚 contract/integrated CI 红、`secret_store`
+  2×timeout 聚合、22.50 秒 `copaw update`、overlay→真渲染接替、欠一次真浏览器 `copaw app` 复看、
+  根目录散落物登记、`skills_manager.py` 那 14 枚名字 —— 全部不变。
+- **阶段 2 剩下的是"发"那一半，仍需单独授权**：`pending` 去掉 `pypi`、真 `copaw update`、创建
+  `COPAW_PYPI_API_TOKEN` secret、在 GitHub 设置停用上游那四枚 workflow。本刀**没碰**这四件。
+- 109-1 记过的那枚可回购项（把 6 枚 release-channel 前端用例搬进 fork 自有文件 ⇒ 退 `constants.test.ts`
+  那 +31 行）不变。
+
+**本刀的提交**：代码与守卫一笔（`feat(release)`：分发名整把改指 `copaw-community` + 形状合同 + 7 枚守卫），
+P1 基线重记独立一笔（`scripts/p1_baseline.json`，117→119 文件 / +10,986 −534），本节一笔，
+节内自名哈希的补笔一笔。改名与 `{wheel_name}` 那枚形状标注**必须同笔**：只改声明不改 4 条 glob，
+门禁当场红；只改 glob 不带形状标注，`reader_literal()` 会用短横形去比对文件名行 —— 那是"绿着的漏扫"，
+比红更坏（判据 224、226）。
+
+### 8.48 刀 120（2026-10-13）：第一次把 wheel 装进干净 venv 起桌面，后端在 import 那一步就死了 —— 根因不是改名，是 package-data 从没被任何断言盯过
+
+**一句话结论**：刀 119-5 那次"wheel + sdist，装进干净 venv 起桌面"的验收（裁决原话）当场抓到一枚**在册真缺陷**：
+`copaw desktop` 起的后端在**导入期**抛
+`RuntimeError: Authoritative pipeline definition not found: …/site-packages/qwenpaw/app/pipelines/builtin-knowledge-processing-v1.json`，
+因为 `app/pipelines/*.json` 从没写进 `[tool.setuptools.package-data]`。顺带查出同型第二枚
+（`knowledge/skills` 的数据在 **2,022 笔之前**那笔"代码翻了、数据没翻"的 fork 提交后一直不在 wheel 里）
+与 12 枚**零读者**的 builtin_agents 残留。落点：package-data **+2 行**、`git mv` **2 枚**、删 **12 枚**、
+README 指路 **1 行**、守卫 **+3 枚用例**（新文件 2 + 既有文件 1）；修后 wheel 3,766 条目含全部 4 枚关键数据，
+桌面版 **0 Traceback / 0 5xx** 起在 webview 里。P1 册**一格不动**（本刀 5 枚落点全部 fork-created，
+逐枚 `git cat-file -e 2744a976b:` 验过）。新增判据 228–235，**已闭环计数推到 120**。
+
+**取证链：为什么这枚红只有 wheel 能暴露**（四步，栈是日志原文）
+
+1. `copaw desktop` → `desktop_cmd.py` 起子进程 `-m qwenpaw app` → `qwenpaw/app/_app.py:59`
+   `from .routers import create_agent_scoped_router` → `routers/__init__.py:6` → `routers/agents.py:93`
+   `from ..knowledge_workflow_steps import _load_builtin_pipeline_doc`。
+2. `knowledge_workflow_steps.py:47` 是**模块级赋值** `KNOWLEDGE_WORKFLOW_STEP_SPECS = _load_builtin_step_specs()`
+   ⇒ `:34` → `:23` 的 `raise RuntimeError` 发生在 **import**，不是某个功能被调用时。
+   ⇒ 后果不是"知识流程红"，是**整个后端起不来**（`desktop_cmd.py:439 Server did not become ready in time`、
+   `:465 Backend already exited with code 1`）。
+3. 同一枚 `git ls-files src/qwenpaw/app/pipelines` 在源树里存在、在 wheel 里没有 ⇒ 差的就是声明。
+4. 为什么 17,843 条用例一条都不红：套件跑在 **editable 安装**上，数据文件直接从源树读
+   （判据 228）。这条盲区不是第一次咬人 —— §8.47 之前那枚"wheel 没带 `app/pipelines` 文档、装完起不来"
+   就是它，只是当时没有 wheel 可装。
+
+**守卫先红，以及它自己的第一红是假指控**：`tests/unit/copaw/test_package_data_coverage.py`（2 枚用例）。
+- 第一版 `_tracked_data_files()` 用 `path.relative_to("src")` 拼相对路径，而 pyproject 里的 glob 是
+  **包相对**（`qwenpaw/**` 之下不含包名）⇒ 首红名单 **441 枚**（423 + 18），里面赫然包括
+  `copaw/release_channel.json` 和三枚字体许可证 —— 这三类**早就正确声明过**。
+  改成 `relative_to(f"src/{package}")`、并把offender 前缀补回 `src/{package}/` 之后，真名单 **15 枚**（判据 230）。
+- 15 枚 = 12 枚 `src/copaw/agents/md_files/builtin_agents/understand-*/en/{PROFILE,SOUL}.md`
+  + 2 枚 `src/copaw/knowledge/skills/{INDEX.md,knowledge_search_assistant/SKILL.md}`
+  + 1 枚 `src/qwenpaw/app/pipelines/builtin-knowledge-processing-v1.json`。
+- 匹配器自己是守卫的一部分，所以自带 7 例自证（`test_the_glob_matcher_keeps_setuptools_meaning`）：
+  `**` 跨目录、`*` 不跨 `/`、`console/**` 不匹配 `console2/`（判据 231）。匹配器错一次的代价是"441 枚假指控"
+  或"静默放过"，两种都比缺声明更坏。
+
+**15 枚的逐枚处置**（不是"补齐声明"一句话）
+
+| 组 | 枚数 | 处置 | 依据 |
+| --- | --- | --- | --- |
+| `qwenpaw/app/pipelines/*.json` | 1 | 补 `"app/pipelines/*.json",` | 导入期硬读（上面那条栈），必须随 wheel |
+| `copaw/knowledge/skills/**` | 2 | `git mv` 进 `src/qwenpaw/knowledge/skills/` + 补 `"knowledge/skills/**",` | 读它的代码在 qwenpaw 那侧（下面单独取证） |
+| `copaw/agents/md_files/builtin_agents/understand-*/en/*` | 12 | `git rm -r` 删掉 | **零读者已证**：`src/qwenpaw/app/builtin_agents.py` 对这六枚给 `template_key=None`，而 `setup_utils.py:275` 只按 `agents_root/"md_files"/template_id/<lang>` 拼路径 ⇒ 这六枚的目录名永远不会被任何读法命中 |
+
+**第二枚的根因是一笔 fork 提交，不是上游也不是改名**：`b74542312`（2026-05-07，
+`refactor: make qwenpaw knowledge canonical and thin copaw shims`，作者 Future Meng），
+`git merge-base --is-ancestor b74542312 2744a976b` ⇒ **rc=1，不是上游祖先**，距 HEAD **2,022 笔**。
+那笔把 `src/copaw/knowledge/module_skills.py` 改成 `from qwenpaw.knowledge.module_skills import *`，
+而真实现 `src/qwenpaw/knowledge/module_skills.py:9` 是
+`KNOWLEDGE_MODULE_SKILLS_DIR = Path(__file__).parent / "skills"` —— 代码翻了，`skills/` 数据留在 `src/copaw` 那侧。
+⇒ 这 2,022 笔里该目录**读不到任何东西**（`sync_knowledge_module_skills` 被 `app/routers/agent.py:1088` 与
+`app/routers/knowledge.py:1492` 调用）。它长期不红的唯一原因：树里那枚既有用例
+`tests/unit/app/test_knowledge_module_skills.py` 把 `KNOWLEDGE_MODULE_SKILLS_DIR` **monkeypatch 到 `tmp_path`**
+（判据 232）⇒ 本刀给该文件加 1 枚"真目录里真文件在"的用例。
+
+**gitignore 那 8 枚是守卫看不见的另一半面**：`.gitignore:114 AGENTS.md` 盖掉 7 枚
+（6 枚 `…/builtin_agents/*/en/AGENTS.md` + `app/project_templates/project/AGENTS.md`）、
+`:69 config.json` 盖掉 `src/copaw/skills_market/config.json`；同型还有 `:41 src/qwenpaw/console/` 与
+`:47 src/qwenpaw/docs/`。以 `git ls-files` 为真源的守卫**结构上不可能**报它们（判据 233）。
+本刀的处置：这 8 枚按"删残留"裁决**先移不走删**（`/tmp/k120_copaw_untracked/`，可逆），
+现查后确认运行时读的那枚市场目录是 `qwenpaw/skills_market/default.json`（`routers/skills.py:513` 的
+`parents[2] / "skills_market"`）—— 它在册、已声明、wheel 里有；console 那枚由 pack 脚本构建产物落进 wheel，
+修后实测 `STATIC_DIR: …/site-packages/qwenpaw/console`（判据 233 的正面样本）。
+
+**修后运行时读数（同一枚 wheel 重装进 `/tmp/copaw_desktop_v` 现取）**
+
+- wheel：`dist/copaw_community-2.2.2b4.post1-py3-none-any.whl`，**3,766 条目**，逐枚在册
+  `qwenpaw/app/pipelines/builtin-knowledge-processing-v1.json`、`qwenpaw/knowledge/skills/INDEX.md`、
+  `qwenpaw/knowledge/skills/knowledge_search_assistant/SKILL.md`、`copaw/release_channel.json`；
+  sdist 41,303,340 字节同批产出。
+- 装好的 venv 里：`import qwenpaw.app._app` ⇒ **app import ok**、`KNOWLEDGE_WORKFLOW_STEP_SPECS` ⇒ **7 条 step spec**、
+  `KNOWLEDGE_MODULE_SKILLS_DIR` ⇒ `…/site-packages/qwenpaw/knowledge/skills` **True**、`activated: True`。
+- 桌面版（`/tmp/k120_desktop.log`，08:18→08:45）：`Starting QwenPaw app on http://127.0.0.1:57147`、
+  `Uvicorn running`、`desktop_cmd.py:415 HTTP ready, creating webview window…`、`:425 Calling webview.start()`；
+  `GET / → 200`、`/api/version → 200`、`/api/auth/status`、`/api/config/theme`、`/api/frontend_plugin` 全 200；
+  **0 条 Traceback、0 条 5xx**；`pip list` 里是 `copaw-community 2.2.2b4.post1`。
+
+**全套验证读数（全部在最后一条编辑之后重取，判据 89）**
+
+- 全量 `tests/unit`：**0 红**，本刀 +3 枚守卫 ⇒ **17,853 条**（= 刀 119 的 17,850 + 3）。
+  这条读数是**两次实跑对拍出来的**，不是一次：
+  ① 第一次整套 `pytest tests/unit` = `1 failed / 17,852 passed / 24 skipped / 4 xfailed in 979.85s`，
+  唯一那枚红正是 `test_package_data_coverage`，成因见判据 235（背景里的拆提交把 `git reset` 落进了同一时间窗）；
+  commit 落定后单跑该文件 `2 passed`。② 之后在同一份已提交状态整轮复跑，命令换成
+  `pytest tests/unit tests/contract` ⇒ **1 failed / 18,264 passed / 25 skipped / 4 xfailed in 1072.70s**；
+  那 1 枚红是 `tests/contract/browser/test_track_isolation.py::test_inbound_imports_limited_to_the_fork`
+  （`src/qwenpaw/rpa/runtime.py` 越界导入），**在册那 3 枚 contract/integrated CI 红之一**（§8.45 记过，
+  单文件复跑 `1 failed / 2 passed in 0.43s`，`git log e8d38985e^..d30d06b86 -- 该文件` **0 笔** ⇒ 与本刀无关）。
+  两把尺子互证：18,264 − 411（§8.45 那条 contract 的 passed 数）= **17,853**，与 ①+守卫的推导逐字相同；
+  skip 24 + 1 = 25、xfail 4 也对齐 ⇒ unit 侧 **0 红**、contract 侧**没有新增红**。
+- L1 必过五目录：**1,339 passed / 1 skipped in 16.39s**；rc=0。
+- flake8 整树 **561**（全 `E501`）不变；整树 pylint **1,316** 不变，且新守卫文件**在 pylint 的扫内**却
+  **0 条命中**（`--files` 单跑先是 `W0611: Unused import pytest`，收掉后 Passed —— 不是"没扫到"）。
+- 五道离线门禁 rc=0，读数与 §8.47 逐字相同（release channel 仍是 `10 registered templates, 11 read points
+  swept in 5 files`；namespace `non_extension_copaw_only: 0` / `result: PASSED`）。
+- `check_p1_invariants.py --check --target-ref working`：**9 条 `::error::`、总数与 §8.47 完全一致**
+  （117 → 119 文件 / +10,986 −534 / 命名 0 pure · 8 touched · 36 行 / mechanical 1）
+  ⇒ **本刀冲突面 +0**：`src/qwenpaw/agents/skills/README.md`、`src/qwenpaw/knowledge/skills/*`、
+  `tests/unit/app/test_knowledge_module_skills.py`、`tests/unit/copaw/test_package_data_coverage.py`
+  逐枚 `git cat-file -e 2744a976b:` 全部 **NO**（fork-created）。
+- `release_channel.py --check-artifacts dist` 对着这两枚真产物仍 **rc=1**（`pypi` 仍在 `pending`）—— 本刀
+  没让任何发布语义前进。
+
+**顺带开出的两枚（已排刀，不记进本刀）**：构建那轮 `npm run build` = `tsc -b && vite build && …`，
+`tsc -b` 报 **19 条 `error TS`**（17 条测试替身形状：`AgentSummary` 缺
+`is_builtin/builtin_kind/builtin_label/system_protected` + `Mock` 对签名；**2 条生产侧**：
+`src/pages/Agent/Knowledge/index.tsx(490,37)` 与 `…/Projects/components/ProjectEditorPanel.tsx(69,39)` 的
+TS2345）；因为 `&&` 在 tsc 就断，wheel 里的 console 来自一次显式标注"tsc skipped"的二次构建
+（`✓ 20636 modules transformed`、monaco-css OK、precompress 549 assets），其最后一道自检
+`Initial bundle: 10.73 MiB raw, 2.77 MiB Brotli across 11 assets.` 之后
+`Error: Initial raw bundle exceeds 10.00 MiB.` ⇒ 刀 121（#280，先根因那 2 条生产侧）与
+刀 122（#281，归因 0.73 MiB 超预算并把这枚门禁写进文档）。
+
+**判据 228（editable 安装对 package-data 完全失明：全绿套件能构建出启动即死的 wheel）**：
+源树直读让"缺声明"在测试里不可见，红只在装好的 venv 里出现，且出现在 import 期。可迁移的动作：
+凡新增或改动"按包内路径读数据"的刀，验收要有一次**非 editable** 的实测（`python -m build` + 干净 venv +
+真启动那一条命令），只跑 `pytest` 与只跑 `pip install -e` 都不算；更便宜的替代是本刀那枚守卫
+（`git ls-files` 的在册数据 ⟺ package-data 声明）。
+
+**判据 229（模块级读盘 = 启动期致命，失败面要按"服务起不来"记）**：`X = _load()` 在 `:47` 这种模块级赋值
+把一次配置缺失升格为整包 import 失败；同一枚文件里那三行 `raise RuntimeError` 因此没有"降级"路径。
+可迁移的动作：给"读包内数据"的代码分类时，先问读取发生在 **import** 还是**调用**，前者进 P1 级清单。
+
+**判据 230（覆盖式守卫的第一红要先证伪自己：拿已知正确项验红名单）**：441 枚假指控里包含
+`copaw/release_channel.json` 这种"上一刀刚验过声明"的条目 —— 那是基准路径错位的信号，不是树里有 441 枚债。
+可迁移的动作：新写覆盖式守卫时，先塞 2–3 枚**已知已声明**的样本，看它们是否出现在红名单里；
+出现即先修守卫。相对路径的基准必须与声明的基准同源（这里是包相对）。
+
+**判据 231（守卫里的匹配器自己是守卫的一部分，要自证语义）**：setuptools 的 `**` 跨目录、`*` 不跨 `/`，
+把 glob 拍平成"整串 fnmatch"会让 `docs/*.md` 匹配到 `docs/nested/README.md` ⇒ 漏报。本刀把那 7 例
+按段匹配的自证用例留在同一个文件里（`test_the_glob_matcher_keeps_setuptools_meaning`），
+因为"红名单可信"是"缺声明即红"的前提。
+
+**判据 232（"代码翻了、数据留在原地"的提交可以长期绿；monkeypatch 掉路径的用例看不见真路径坏着）**：
+`b74542312` 之后 2,022 笔里该功能一直读空，唯一相关用例把 `KNOWLEDGE_MODULE_SKILLS_DIR` 指到 `tmp_path`。
+可迁移的动作：凡"路径常量 + 目录内容"的合同，钉两枚 —— 常量解析到哪（已有用例），以及**真目录里真有真文件**
+（本刀补的那枚）；只有前者时，搬家类提交（改常量不改数据）永远绿。
+
+**判据 233（`.gitignore` 会让必需数据同时躲开 `git ls-files` 清单与 wheel）**：`AGENTS.md`（`:114`，7 枚命中）
+与 `config.json`（`:69`，1 枚）这类"模式级"忽略规则盖在包目录里 ⇒ 以 git 跟踪为真源的守卫结构上看不见，
+而构建端静默少文件。可迁移的动作：数据清单不能只以跟踪文件为真源，还要对**运行时实际读的那枚路径**现查
+"装好的包里有没有它"（本刀正面样本：`routers/skills.py:513` 读 `qwenpaw/skills_market/default.json`，
+在册 + 已声明 + wheel 里有；`STATIC_DIR` 落在 `site-packages/qwenpaw/console`）。
+
+**判据 234（一条 lint 读数必须连着计数表达式一起记：同一棵树能读出 1,309 / 1,313 / 1,316）**：
+整树 pylint 历史上被 `[a-zA-Z_/.-]+\.py` 这类字符集"路径里不含数字"的正则扫过，
+静默丢掉 3 条（`scripts/check_p1_invariants.py:220 R0912`、
+`scripts/verify_project_knowledge_pipeline_e2e.py:131/:166 C0301`）；再退掉连字符又少 4 条
+（`packages/qwenpawmail-mcp/**` 的 4 条 `E0611`）。本刀的处置：整树读数的命令与正则写进本节，
++3 的归因不靠总数相减而靠两枚文件的 `--files` A/B（11→12、19→21）。可迁移的动作：报告任何"逐字不变"的
+计数时，把 `grep -cE` 的表达式一并留下 —— 只留数字，下一刀无法判断变化是真的还是口径变了。
+
+**判据 235（判据 89 的范围包括索引：读 `git ls-files` 的守卫会跟着 INDEX 红，拆提交那一轮不能同时跑整套）**：
+本刀的第一次整套读数是 `1 failed / 17,852 passed / 24 skipped / 4 xfailed in 979.85s`，那枚红正是
+`test_package_data_coverage` —— 不是树有缺陷，而是背景里的拆提交把 `git reset` 落进了同一时间窗：
+reset 只动索引，把本刀删掉的 12 枚与 `git mv` 的 2 枚**重新登记为在册**而磁盘上没有 ⇒
+守卫照 `git ls-files` 的口径报了它们，**这个红在当时的索引状态下是对的**。
+commit 落定后同一枚守卫 `2 passed`，整套复跑才是本节记录的那条读数。
+可迁移的动作：凡是 shell 出去问 git 的守卫（`ls-files`、`diff`、`cat-file`），它的真源是索引不是工作树，
+所以取"改后读数"的那轮必须等**索引不再变动**（拆提交、`git reset`、暂存/取消暂存都算）；
+反过来这也说明这类守卫钉的是"下一次提交要发布什么"，正是我们想要的口径。
+
+**待裁清单（刀 120 之后；除两枚新增排刀外全部不变）**
+
+- ① **pylint 风格意见 1,289**（含刀 119 的 +3 枚 `W0621`）；② 环境假阳性 27；③ 在册真缺陷 **0**（本刀那枚
+  package-data 缺声明属**真缺陷**，已闭，不进这一栏）；④ 在册 formatter 脏（prettier 10 + black/ATC 15）。
+- **E501 561**、**mypy 65 errors / 22 文件**、3 枚 contract/integrated CI 红、`secret_store` 2×timeout 聚合、
+  22.50 秒 `copaw update`、overlay→真渲染接替、欠一次真浏览器 `copaw app` 复看（本刀已在 wheel 装好的 venv 里
+  起过一次真 webview，但那是构建产物侧的复看，`copaw app` 那条仍未做）、根目录散落物登记、
+  `skills_manager.py` 那 14 枚名字 —— 全部不变。
+- **新增两枚排刀**：刀 121 = 19 条 `tsc -b`（先根因 2 条生产侧）、刀 122 = initial bundle 10.73 > 10.00 MiB。
+- 阶段 2 的"发"那一半（`pending` 去 `pypi`、真 `copaw update`、`COPAW_PYPI_API_TOKEN`、停用上游四枚 workflow）
+  **仍需单独授权**，本刀一格没动。
+- **新增一项待裁**：wheel 里 `AGENTS.md` / `config.json` 这类被 gitignore 的数据要不要改成
+  "要么进册要么明确不需要"（判据 233 的正面处置）。本刀只是把 8 枚移到 `/tmp/k120_copaw_untracked/`
+  （可逆）并记下现查结论，**没有**替产品决定它们该不该随包发布。
+
+**本刀的提交**：代码与守卫一笔（package-data 两行 + `git mv` 2 枚 + 删 12 枚 + README 指路 + 3 枚用例），
+本节一笔，节内自名哈希的补笔一笔。两行声明与那枚守卫**必须同笔**：先落声明不落守卫，下一个数据文件还会
+以同样的方式在 wheel 里消失（判据 228）；先落守卫不落声明，守卫红 15 枚、CI 直接挡下 —— 两种拆开都比同笔贵。
