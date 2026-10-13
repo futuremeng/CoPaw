@@ -66,10 +66,7 @@ export default function ProjectEditorPanel({
   // Use the shared coding tabs store, keyed by the upstream files-workspace
   // scope key so project tabs persist under the agent bucket.
   const { selectedAgent } = useAgentStore();
-  const scopeKey = agentFilesScopeKey({
-    kind: "agent",
-    agentId: selectedAgent,
-  });
+  const scopeKey = agentFilesScopeKey(selectedAgent);
   const tabs = useTabsForScope(scopeKey);
   const activeTabPath = useActiveTabPathForScope(scopeKey);
   const { openTab, closeTab, setActiveTab, setTabContent, setTabDirty } =
