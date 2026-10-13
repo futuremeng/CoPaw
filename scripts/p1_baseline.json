@@ -41,6 +41,14 @@
       "naming": 0,
       "removed": 5
     },
+    "console/scripts/verify-initial-bundle.mjs": {
+      "added": 3,
+      "behavior_added": 3,
+      "behavior_removed": 1,
+      "mechanical": false,
+      "naming": 0,
+      "removed": 1
+    },
     "console/src/App.tsx": {
       "added": 7,
       "behavior_added": 7,
@@ -154,8 +162,8 @@
       "removed": 2
     },
     "console/src/api/types/agents.ts": {
-      "added": 617,
-      "behavior_added": 617,
+      "added": 619,
+      "behavior_added": 619,
       "behavior_removed": 1,
       "mechanical": false,
       "naming": 0,
@@ -442,8 +450,8 @@
       "removed": 2
     },
     "console/vite.config.ts": {
-      "added": 2,
-      "behavior_added": 2,
+      "added": 18,
+      "behavior_added": 18,
       "behavior_removed": 2,
       "mechanical": false,
       "naming": 0,
@@ -963,15 +971,15 @@
     }
   },
   "totals": {
-    "added": 10986,
-    "behavior_added": 10950,
-    "behavior_files": 119,
-    "behavior_removed": 498,
-    "files": 119,
+    "added": 11007,
+    "behavior_added": 10971,
+    "behavior_files": 120,
+    "behavior_removed": 499,
+    "files": 120,
     "mechanical_files": 1,
     "naming_files": 0,
     "naming_lines": 36,
     "naming_touched_files": 8,
-    "removed": 534
+    "removed": 535
   }
 }
