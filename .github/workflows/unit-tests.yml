@@ -48,7 +48,10 @@ jobs:
       always() &&
       (needs.spam-gate.result == 'skipped' || needs.spam-gate.outputs.blocked != 'true')
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    # The py3.11 leg needs the whole unit suite plus the three gates and the
+    # L1 hard gate: measured in CI at ~1,000 s.  A smaller cap kills the
+    # suite mid-run and the must-pass steps after it report skipped.
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:

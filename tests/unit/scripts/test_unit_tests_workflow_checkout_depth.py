@@ -16,6 +16,11 @@ collected" check and the L1 hard gate -- reports ``-`` and never runs.  The
 check has exactly one enforcement point in the repository, this workflow, so
 the ratchet currently has no working guard rail anywhere but a developer's
 full clone.
+
+The second case guards the same job's other invisible contract, its time
+budget: a step that finally gets to run can still be killed by
+``timeout-minutes``, which turns the must-pass steps after it into ``skipped``
+rather than green.
 """
 
 from __future__ import annotations
@@ -27,6 +32,14 @@ import yaml
 REPO_ROOT = Path(__file__).resolve().parents[3]
 WORKFLOW = REPO_ROOT / ".github/workflows/unit-tests.yml"
 BASELINE_SCRIPT = "check_p1_invariants.py"
+FULL_UNIT_LEG = "Run all unit tests"
+# Measured in CI (run 38526622361) from the per-step timestamps: on the
+# slower leg the suite was at 93% after 807 s when the 15-minute cap killed
+# it, so the whole leg needs about 870 s; plus install 87 s, the three gates
+# 7 s, checkout/setup 11 s, the collect check 16 s and the L1 gate 10 s --
+# roughly 1,000 s, i.e. 17 minutes.  30 is that worst path with room for
+# runner variance.
+MIN_UNIT_LEG_MINUTES = 30
 
 
 def _jobs_running(script: str) -> list[tuple[str, dict]]:
@@ -58,4 +71,24 @@ def test_gate_that_reads_the_baseline_checks_out_full_history():
         assert "0" in depths, (
             f"{name} checks out at {depths}: {BASELINE_SCRIPT} cannot "
             "resolve the fork point from a shallow clone"
+        )
+
+
+def test_leg_running_the_whole_unit_suite_has_a_time_budget():
+    document = yaml.safe_load(WORKFLOW.read_text(encoding="utf-8"))
+    legs = [
+        (name, job)
+        for name, job in (document.get("jobs") or {}).items()
+        if any(
+            str(step.get("name", "")).startswith(FULL_UNIT_LEG)
+            for step in job.get("steps") or []
+        )
+    ]
+    assert legs, "no job runs the whole unit suite; revisit this guard"
+    for name, job in legs:
+        budget = job.get("timeout-minutes")
+        assert isinstance(budget, int) and budget >= MIN_UNIT_LEG_MINUTES, (
+            f"{name} budgets {budget} minutes for a leg measured at about "
+            "17 minutes of work in CI; the cap kills it mid-suite and the "
+            "must-pass steps after it report skipped"
         )
