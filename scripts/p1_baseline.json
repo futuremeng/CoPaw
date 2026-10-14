@@ -482,12 +482,12 @@
       "removed": 0
     },
     "pyproject.toml": {
-      "added": 16,
-      "behavior_added": 16,
-      "behavior_removed": 2,
+      "added": 18,
+      "behavior_added": 18,
+      "behavior_removed": 4,
       "mechanical": false,
       "naming": 0,
-      "removed": 2
+      "removed": 4
     },
     "scripts/README.md": {
       "added": 151,
@@ -987,15 +987,15 @@
     }
   },
   "totals": {
-    "added": 11087,
-    "behavior_added": 11051,
+    "added": 11089,
+    "behavior_added": 11053,
     "behavior_files": 122,
-    "behavior_removed": 503,
+    "behavior_removed": 505,
     "files": 122,
     "mechanical_files": 1,
     "naming_files": 0,
     "naming_lines": 36,
     "naming_touched_files": 8,
-    "removed": 539
+    "removed": 541
   }
 }
