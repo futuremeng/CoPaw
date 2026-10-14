@@ -3987,7 +3987,10 @@ P1 JSON 里它是 `+38/−4` 的已触碰文件 ⇒ 真实代价是 1 行侵入�
 - **替换一枚（原条目按新价签重写）**：给 `PAGE_MODULES` 补 `"!../pages/**/tests/**"` 的类级修法 ——
   落点 `console/src/utils/lazyWithRetry.ts` 已在册（**+38/−4**），所以这条规则的成本是**已触碰文件上的 1 行侵入**、
   收益是整类泄漏关掉（含那枚 CUT 的上游自有块）。要不要付，等裁。
-- 其余不变：冷启动两次语言解析的 14 + 13 条 chunk 往返、① pylint 风格意见 1,289、② 环境假阳性 27、
+  **→ 已由 §8.53（刀 125）裁"落刀"结清**；真实边际不是 1 行而是 **+5/−1**（prettier 把超 80 列的三元素
+  数组折成多行），判据 247。
+- 其余不变：冷启动两次语言解析的 14 + 13 条 chunk 往返（**→ 已由 §8.53 裁"接受，不排刀"**，触发面量到
+  只有首访那一轮）、① pylint 风格意见 1,289、② 环境假阳性 27、
   ③ 在册真缺陷 0、④ 在册 formatter 脏（prettier 10 + black/ATC 15）、**E501 561**、**mypy 65 / 22**、
   3 枚 contract/integrated CI 红、`secret_store` 2×timeout、22.50 秒 `copaw update`、根目录散落物登记、
   `skills_manager.py` 那 14 枚名字、`/tmp/k120_copaw_untracked/` 那 8 枚 gitignore 数据的去留、
@@ -3995,3 +3998,104 @@ P1 JSON 里它是 `+38/−4` 的已触碰文件 ⇒ 真实代价是 1 行侵入�
 
 **本刀的提交**：搬家一笔（含三枚用例重指与替身自己的 locale 路径）、记账一笔。刻意不再拆 —— 四行改动
 拆两笔只会让"引用改没改全"这件事跨提交。
+
+---
+
+## 8.53 刀 125（2026-10-14）：类级 glob 排除落刀，并把这类泄漏从"逐刀搬家"换成构建失败信号
+
+**结的是 §8.52 待裁的两枚**，裁决来自人：(a) 那枚类级 `PAGE_MODULES` 排除 —— 落刀；(b) 冷启动两次语言解析的
+27 条 chunk 往返 —— 接受、不排刀（记录在下面"裁决记录"那一节）。两枚文件都改在**已触碰的在册上游文件**上：
+
+1. `console/src/utils/lazyWithRetry.ts:97-104` —— pattern 列表补 `"!../pages/**/tests/**"`，一次性关掉整类泄漏。
+2. `console/scripts/verify-initial-bundle.mjs` —— 加一条产物规则：从 initial 集的 JS 里收集
+   `"../pages/**.{ts,tsx}"` 的 glob 键，任何含 `/tests/` 的键就 throw。
+
+第 2 条是我自己加的范围，理由是 §8.52 那句"这类证据不在任何构建失败信号里"——只要它不是失败信号，
+下一条刀还会用同一个形状漏进来。落点选这枚脚本而不是 `console/package.json`：它本来就在册（**+6/−1**，
+比 package.json 的 +13/−5 便宜），而且已经在 `npm run build` 的失败链上。
+
+**先红是对真产物取的**（不是对假想目标）：改前用 HEAD 构建的 `console/dist` 跑 `npm run verify:initial-bundle` ⇒
+
+```
+Error: Test helpers shipped through the pages glob: ../pages/Chat/tests/convertMessagesHelper.ts.
+```
+
+**价签现算：+5/−1，不是我为它辩护时说的 +1/−1**。语义上是一条规则，diff 上是五行 —— 三元素数组超了
+prettier 的 80 列被折成多行。P1 `--target-ref working --json` 的两枚宿主条目：`lazyWithRetry.ts`
+**38/4 → 43/5**、`verify-initial-bundle.mjs` **6/1 → 25/1**；册 **122 文件 / +11,087 −539**（改前 +11,063 −538），
+行为 **+11,051 侵入 / −503 上游行删除**，命名 0·8·36、mechanical 1 逐字不动。
+`--check` 如实红在四条 growth 断言上（`behavior_added 11027 → 11051` 等）—— 这正是它该做的事，
+所以本轮 P1 的验收项是"红的形状等于我付的账"，不是 rc=0。**冲突面文件数 +0**。
+
+**产物侧 A/B（两态各建一次，同一条 grep）**：
+
+| 状态 | entry | glob 映射键 | 住 `tests/` 的键 | `dist/assets/*.js` | entry 字节 |
+| --- | --- | --- | --- | --- | --- |
+| 改前（HEAD 代码） | `index-BWUTZalZ.js` | 466 | 1 | 653 | 958,178 |
+| 改后 | `index-qBTqswPy.js` | 465 | 0 | 652 | 958,052 |
+
+⇒ 少一枚惰性块、映射少一条、entry 少 126 字节；`grep -rl convertMessagesHelper console/dist/assets` 命中 **0**
+（块名与内容都不在产物里）。initial 读数逐字不动（9.90 MiB raw / 2.56 MiB Brotli / 11 枚资源）—— 判据 245 那条轴。
+
+**为什么这刀不改任何路由行为**（动构建 glob 唯一的真实风险）：`console/src` 里含 `tests/` 的匹配只有三条，逐条现读 ——
+`pages/Coding/getLanguage.test.ts:11`（用例内的文件名字符串）、`lazyWithRetry.ts:101`（本刀新加的那行）、
+`pages/Chat/sessionApi/index.ts:1878`（注释）。⇒ 没有任何路由路径解析到 `pages/**/tests/`。
+被排除那枚块的唯一消费者是上游自有的 `pages/Chat/tests/streamingTabSwitch.test.ts`，它按相对路径直接 import、
+不经 glob（单跑 1 文件 / 10 条 / 0 红）。
+
+**验证读数**：`tsc -b --force` rc=0；前端全量 `npm run test:run` **533 文件 / 5,242 用例 / 0 红**（348.26 s；本轮没有并发跑别的重活，
+这个耗时与 §8.51 那对 506.79 / 245.04 s 的读数不同口径，三条都别当回归用）；定向 6 文件 / **39 条** 0 红
+（`lazyWithRetry.test.tsx` + `ChunkErrorBoundary.test.tsx` = 22、`streamingTabSwitch` = 10、三枚搬家用例 = 7）；
+`npm run build` 整链 exit 0（含新规则那一步）；`npx prettier --check` 被改 2 文件 rc=0；五枚门禁读数逐字未动 ——
+locale split（4,658 生产键 / 59 模板族 / 7 族豁免 / 1,459 枚 overlay en+zh / 23 枚上游自有豁免）、
+namespace boundaries（`non_extension_copaw_only: 0`）、CI command targets（19 命令 / 4 目录）、
+release channel R1–R6（6 文件 / 10 模板 / 11 读点 / 5 文件）、channel contracts（18 枚内建渠道）。
+Python 侧 0 改动，pytest 按 76 ⑦(iii) 不重跑。
+
+**解释器读数（这是对 §8.52 那句"门禁要用 3.11+"的更正）**：`/tmp/copaw312` 与 `/tmp/copaw_desktop_v` 都已被系统回收，
+本轮改用仓库 `.venv`（3.10.20）：P1 `--check` / `--json`、locale split、namespace boundaries、CI command targets、
+release channel **全部 rc=0** —— 五枚里只有 `check_channel_contracts.py` 在 3.10 撞
+`AttributeError: module 'ast' has no attribute 'TryStar'`（`scripts/check_channel_contracts.py:1211`），
+为它新建 `/tmp/copaw_gate125`（3.12.13，只用标准库，不需第三方依赖）跑通。
+⇒ 3.11+ 的需求是**那一枚门禁的 AST 扫描**，不是"门禁整批"；P1 不做 AST 扫描，3.10 就出得来精确读数。
+
+**真浏览器复看停在哪一层（不含糊）**：本轮只有静态产物、没有后端。`vite preview`（127.0.0.1:43199 服务 `console/dist`）
+下 App 的后端就绪门（`App.tsx:196-207` → `tauri/BackendLoadingPage`）在路由渲染之前就返回错误页，
+所以 **`/knowledge`、`/settings` 的页面级文案复看没做**。取到的是壳层证据：产物加载正常、控制台 22 条消息里
+**0 枚 `[moduleRegistry] Module not found`、0 枚 chunk 加载报错**，fork 自有 6 条路由 + 4 项菜单的 audit 行照常打出。
+页面级复看的必要条件是一株 3.11+ 且装好依赖的解释器（3.10 起不动 `copaw app`：`browser/control_link/chrome/protocol.py:6`
+的 `from enum import StrEnum`）—— 需要它的那把刀先把环境建回来。
+
+**判据 247（一条规则的价签要按格式化器的口径报，不按"我写了几条"报）**：我按语义说"1 行侵入"，
+`git diff --numstat` 与 P1 都报 **+5/−1**，差额来自 prettier 把超 80 列的数组折行。册的口径是行数，
+所以报价签要用 numstat/P1 现读，别用"规则条数"。可迁移动作：给任何"只加一条"的估算配一次 `git diff --numstat` 实测。
+
+**判据 248（新写的产物规则必须对改前产物实测一次红，否则你不知道它读的是不是那个集合）**：这条规则扫的是
+initial 集里 entry chunk 的 glob 映射；如果它读错了集合（比如只读到 `index.html` 直引的块名），改后会**恒绿**、
+看起来像"泄漏已修"。改前那次红点名了那枚文件，才同时证了规则有效与泄漏真实存在。可迁移动作：
+产物类门禁的顺序是"先建改前产物 → 跑规则取红 → 改生产侧 → 重建取绿"，红的一刻就是规则的验收用例。
+
+**判据 249（前端复看能验到哪一层，由 fork 自有的后端就绪门决定，不是由静态服务器决定）**：静态预览能让产物跑起来，
+但路由在就绪门后面，所以"shell 起来了"不等于"页面渲染对了"。报告必须写清复看停在哪一层、缺的那层需要什么环境。
+可迁移动作：把"3.11+ 且装好依赖的解释器"当成前端复看的准入条件登记，而不是每次临时发现。
+
+**冷启动那一枚的裁决记录（接受，不排刀）**：触发面现算 —— 只有 `localStorage.getItem("language")` 为空
+（首访，或清过存储）才会走 navigator 起 zh → 后端偏好回 en 的两轮解析，按需加载把它变成 14 + 13 = 27 条 chunk 请求；
+§8.51 实测第二次进页时 13 枚 `en-*` 全回 304（命中缓存，但每枚仍要一次协商往返）。要修得动三枚在册上游文件
+（`App.tsx` +7/−1、`i18n.ts` +2/−1、`main.tsx` +3/−0），把偏好读取提到 `i18n.init` 之前 —— 代价是把 fork 面推进
+上游的启动序列，收益只落在首访那一类访问上，而 §8.51 的 FCP/`i18nReady` 读数说明内容侧最坏 3000 ms 封顶。⇒ 不划算，接受。
+
+**待裁清单（刀 125 之后；除下面两条外，§8.52 列的全部不变）**
+
+- 划掉：`PAGE_MODULES` 的类级 glob 排除 —— 本刀落刀结清（+5/−1，产物守卫同笔落地）。
+- 划掉：冷启动两次语言解析的 27 条 chunk 往返 —— 裁"接受，不排刀"，理由与触发面见上。
+- **新增一枚**：`pages/Chat/sessionApi/index.ts:1878` 那批 test-only 导出住在**生产模块**里（上游自有的注释
+  点名给 `./tests/testLargeSession.test.tsx` 用）。本刀关掉的是"住在 `tests/` 目录里的辅助文件"那一类，
+  这是另一种形状（活文件内的测试专用导出，会进首屏块）。要不要裁，等裁。
+
+**本刀的提交**：规则一笔（`lazyWithRetry.ts` 的排除 + `verify-initial-bundle.mjs` 的产物守卫 —— 同一件事的两半，
+拆开会留下"构建红但没有修法"的中间态）、棘轮一笔（`scripts/p1_baseline.json` 现数 `122 文件 / +11,087 −539`，
+行为 `+11,051 / −503` ⇒ `unit-tests.yml:89` 的 `--check` 只对增长变红，本刀挪了册就必须重立，与 §8.50 那笔同法）、
+记账一笔。
+
+新增判据 247–249，**已闭环计数推到 125**（§8.51、§8.52 两节没写这一行，按刀号对得上：123 / 124 / 125）。
