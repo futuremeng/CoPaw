@@ -769,8 +769,10 @@ mechanical 1 全部零动）。冲突面 **+0 枚**：`agents.py` 本就在册�
   原先这里写的"理论 76"（以及按 8.10 再减 14 得到的 62）都是推导值，与实测差 22 枚（判据 139）。
 - **真浏览器 `copaw app` 一笔仍欠**（混淆项：`QwenPew Desktop.app` 会写 `~/.copaw/config.json`）。
 - **144 枚 prettier 脏一个 `--write` 都没跑**（判据 63：预红文件不在本轮顺手格式化）。
-- `pip install "mcp<1.28"`（`unit-tests.yml:78`）能不能去掉未判：pin-free venv 用 mcp 1.30.0
-  收集 15,725 / 0 error。
+- ~~`pip install "mcp<1.28"`（`unit-tests.yml:78`）能不能去掉未判~~ —— 已由刀 126 判掉（§8.54）：
+  pin 的两个前提都过期、`streamablehttp_client` 在 1.30.0 里存在、mcp 选择集 544/1 在 1.30.0 与 1.27.2
+  逐枚同结果 ⇒ 零收益，且 `<1.28` 与 pyproject 的 `>=1.28,<2.0` 不相交，让 CI 跑在包自己声明之外。
+  同笔补上真缺的 `hub` extra（`tests/unit/hub/test_docker_provisioner.py` 无 importorskip 直接 import docker）。
 
 ### 8.14 刀 96：8.10 那 14 枚测试侧红全部结清（`c4db29af5` + 账 `c24891ac1`）
 
@@ -4119,3 +4121,133 @@ initial 集里 entry chunk 的 glob 映射；如果它读错了集合（比如�
 所以棘轮那一笔不动册。
 
 新增判据 247–250，**已闭环计数推到 125**（§8.51、§8.52 两节没写这一行，按刀号对得上：123 / 124 / 125）。
+
+---
+
+### 8.54 刀 126：CI 装法那一行 mcp pin 判掉（附 `hub` 那一半是真缺），并把上一刀没实测就报过的 unit 读数在最终树上重取
+
+**触发**：§8.13 挂着的一句"`pip install "mcp<1.28"`（`unit-tests.yml:78`）能不能去掉未判"。
+这刀先判它，再把刀 125 那笔里我用**推导**代替**实测**的 unit 读数重取一遍。
+
+**判它 = 五点实测，不靠观点**
+
+| 检 | 现读 |
+| --- | --- |
+| pyproject 的边界 | `pyproject.toml:81` = `"mcp>=1.28,<2.0"`，由上游 `f3046db66`（2026-08-19）写入 |
+| pin 的来历 | `57587c880`（2026-09-29）加入，注释给的理由是"agentscope 1.0.20 要 `mcp.client.streamable_http.streamablehttp_client`，1.28 起不再导出"＋"pyproject 没有 mcp 边界" |
+| 前提一（1.0.20） | 现树声明 `agentscope[model-ollama]==2.0.9` ⇒ 注释引用的那枚版本在仓库里 grep 不到 |
+| 前提二（无边界） | 已由上一行的 pyproject 现读推翻 ⇒ **两个前提都过期**，pin 是在替一个不存在的世界守门 |
+| 符号真在不在 | `streamablehttp_client` 在 **1.30.0 与 1.27.2 都能 import**（同一株 venv 两版各验一次）⇒ pin 要防的那个 `ImportError` 在现树根本不发生 |
+| 行为有没有别 | mcp 相关选择集（`tests/unit/drivers` + `tests/unit/app/mcp` + `tests/unit/app/test_mcp_background_startup.py` + `test_mcp_oauth_{helpers,discovery,callback,flows}.py` + `test_mcp_runtime_status_router.py`）= **544 passed / 1 skipped**，1.30.0 与 1.27.2 两版同数同结果 ⇒ **零行为收益** |
+
+⇒ 那行 pin 的净效果是让 CI 跑在**包自己声明为不支持的版本**上（`<1.28` 与 `>=1.28` 不相交），收益为 0。判掉。
+
+**同一次取证撞出的真缺**：`tests/unit/hub/test_docker_provisioner.py` 没有 `importorskip`，直接 `import docker`，
+而 `.[dev,test]` 不装 `docker` ⇒ 那一步在 CI 里本来就是红的。上游自己的夜间腿 `full-tests-nightly.yml:137`
+装 `.[dev,test,full]`（`full` 拉 `hub`）所以它不红。⇒ 补 extra 才是这刀的实际修复，删 pin 是把 CI 从
+"跑在包声明之外"改回"跑在包声明之内"。
+
+**落点**（`git diff --numstat` 现读）：`.github/workflows/unit-tests.yml` **+7/−7** —— 两步骤同样改法
+（`.[dev,test]` + `mcp<1.28` → `.[dev,test,hub]`），第一步骤另退掉那 5 行过期注释、换成写明"`hub` 不是可选项 +
+mcp 由 pyproject 界定"的 6 行。守卫用例 = fork 自有 `tests/unit/scripts/test_unit_tests_workflow_install.py`
+（76 行 / 2 条 / flake8 rc=0 / `black --line-length=79 --check` rc=0）：一条把 `-e ".[…]"` 的 extra 集合解出来断言
+`"hub" in extras`，一条从 pyproject 用 `tomllib` 读 mcp 的 specifier 列表、再断言工作流里没有任何一行按包名撞上 `mcp`
+（两条都双向钉：pyproject 哪天不再界定 mcp，第二条自己先红，见判据 254）。
+**归属**：`unit-tests.yml` 不在 P1 在册集里（`--json` 的 `files` 映射查它 = 缺席，判据 142 的形状），
+守卫用例是 fork 自建 ⇒ **冲突面 +0**、棘轮不动。
+
+**RED/GREEN 实测（顺序按判据 136：全量读数取完才装探针）**：把 `unit-tests.yml` 临时换回改前字节 ⇒
+`2 failed`，两条的报错各自点名自己要的那半：
+`AssertionError: pip install -e ".[dev,test]"` / `assert 'hub' in {'dev', 'test'}` 与
+`CI overrides the declared mcp range: ['pip install "mcp<1.28"', 'pip install "mcp<1.28"']`。
+换回最终字节（`cmp` 证逐位相同、`git diff --numstat` 仍 7/7）⇒ `2 passed`。
+⚠ 第一版守卫用例的红是**假红**：依赖名用 `requirement.split("[")[0]` 解析，对 `mcp>=1.28,<2.0` 这种"边界在前、
+没有 extras 方括号"的形状永远取不到 `mcp` ⇒ 断言因"没匹配上任何声明"而红，不是因"CI 越界"而红。修法是两边
+用同一个解析器（`_package_name()` = `re.split(r"[<>=!\[]", req)[0]`），见判据 253。
+
+**环境（本刀的准入条件）**：`/tmp` 里那两株验证 venv 已被系统回收 ⇒ 重建 `/tmp/copaw_verify12`
+（`uv venv --python /opt/homebrew/bin/python3.12` = **3.12.13**，装法照抄本刀改后的 CI 命令
+`uv pip install -e ".[dev,test,hub]"`）⇒ 现装 `mcp 1.30.0` / `docker 7.2.0` / `agentscope 2.0.9` / `pytest 9.1.1`。
+⚠ uv 造的 venv 不带 pip，`python -m pip list` 恒空，读数要用 `uv pip list/show --python …`。
+
+**读数（全部在最终树上现取，替换刀 125 里我未实测就写下的那些）**
+
+| 读数 | 现数 |
+| --- | --- |
+| CI 那步的选择集 `tests/unit --ignore=tests/unit/channels` | `--collect-only -q` = **15,858 tests collected / 0 error**；实跑 = **1 failed / 15,835 passed / 23 skipped / 4 xfailed / 779.42 s** |
+| CI 一直 ignore 的 `tests/unit/channels` | collect **2,020**，实跑 **2,019 passed / 1 skipped / 108.83 s** ⇒ 两侧合起来的 passed = 17,854 |
+| CI 唯一 must-pass 那步（L1 五目录） | **1,339 passed / 1 skipped / 54.62 s** |
+| 唯一那枚红的归属 | `tests/unit/hub/test_process_isolation.py:643`（`test_macos_sandbox_cli_can_reach_only_its_runtime`）—— 文件与上游 tip `2744a976b` **逐字节相同**（`cmp` 现证）、`:569` 带 `@pytest.mark.skipif(sys.platform != "darwin")` ⇒ **CI（ubuntu）永远跑不到它**。报错文本直接证明根因不在被测能力：`/usr/bin/sandbox-exec` 的 allow-list 只放 runtime 目录，解释器 `import ssl` 时 `dlopen … /opt/homebrew/opt/openssl@3/lib/libssl.3.dylib (file system sandbox blocked open())` ⇒ 换成 ssl 不在 homebrew 前缀里的解释器就不红（**这半句是推断，本机没有第二株 3.11+ 解释器可实测**）。⇒ 不修、不排刀，登记为环境面 |
+| 五道离线门禁（仓库 `.venv` = 3.10 跑得动的四枚） | locale split rc=0（4,658 gated / 59 模板族 / 7 豁免 / 1,459 overlay 叶 / 23 上游键豁免）· P1 `--check` rc=0 · 命名空间边界 `PASSED`（shared 35 / copaw_only 6 / reverse 0 / non-thin 0）· release channel rc=0（**R1–R6**、6 枚渠道文件、10 条登记模板、11 个读点 / 5 枚文件）· brand verify rc=0（7 文件 / 35 行） |
+| CI command targets | rc=0，**19 run commands across 4 package dirs** ⇒ 旧账那句"16 命令 / 3 目录"作废（判据 125：口径换了就重取，不复述） |
+| channel contracts（要 3.11+，用 `copaw_verify12`） | rc=0，**18 channels / 18 with tests / 0 missing** |
+| P1 `--target-ref working --json`（含未提交的本刀改动） | totals **122 文件 / +11,087 −539**、行为 `+11,051 / −503`、naming 36、**mechanical 1** ⇒ 与已提交的基线逐字相同（`added: [] / dropped: []`）⇒ 本刀不入册、不重立棘轮 |
+
+⚠ **122 与 `--json` 的 123 个键不是矛盾**：`_totals()` 在 `scripts/check_p1_invariants.py:203` 用
+`files = [e for e in entries.values() if not e["mechanical"]]` 算 `files`，而映射按路径把机械行也列出来；
+唯一那枚 mechanical = `console/package-lock.json`。报"册有几枚"时必须连口径一起报。
+
+⚠ **一处我没归因的算术差**：摘要各项之和 15,835 + 1 + 23 + 4 = **15,863**，比 collect 的 15,858 多 5。
+取证 = 逐行统计进度字符（`awk` 只取以 `[ NN%]` 结尾的行）：`.` 15,835 / `F` 1 / `s` 18 / `x` 4 = **15,858**，
+与 collect 逐类对齐 ⇒ 差的 5 是**没有进度字符的 skipped 报告**。已排除 rerun 类插件
+（`site-packages` 只有 `pytest-timeout` 与 `pytest-xdist`，未启用 `-n`），且 venv 里没装 `pytest-repeat` / `flaky`。
+**最可能是用例通过后在 teardown/最终化阶段又报了一个 skip**（pytest 允许同一用例报两个阶段的结果），
+但这只是候选解释、没实测 ⇒ 挂着，不影响红/绿归属（本选择集只有一枚红，且已按枚取证）。
+
+**没重取的读数，以及凭什么可以不重取**：前端 vitest / `npm run build` / initial bundle 沿用 §8.53 的
+533 文件 / 5,242 条 / 0 红与 9.90 MiB —— 本刀改的是 CI 安装命令与一枚 `tests/` 下的新文件，**一枚前端文件都没动**；
+lint 五把读数（flake8 561 / 整树 pylint 1,316）同理，新增文件本身 flake8+black 双 rc=0。
+这类"按改动面决定哪些读数过期"的取舍要写出来，不能靠"看起来无关"默认。
+
+**新增待裁（不是本刀的刀，登记）**：**插件的 `@patchable` 覆盖通路在现树是死的**。`console/src/plugins/dynamicModuleRegistry.ts`
+的 `registerHostModulesDynamic()`（`:22`）与 `registerHostModulesEager()`（`:81`）是 `moduleRegistry.register()` 的
+**唯一两个调用者，而它们自己零调用者** ⇒ `moduleRegistry` 永远空，于是（1）每次页面懒加载都走
+`lazyWithRetry.ts:128-215` 的注册表查找、`moduleRegistry.ts:81-89` 打一行 `Module not found` 再回落到真 dynamic import；
+（2）插件合同里公开的 `window.QwenPaw.modules`（`hostExternals.ts:185-188`、`plugins/types/qwenpaw.d.ts:316`、
+`moduleRegistry.ts:122/132`）在运行时是 `{}`。渲染不受影响（回落是设计好的），丢的是**能力 + 控制台噪音**。
+归属实测 = 上游 `f07a6a013 feat(hub): …（#7112）` 在 `console/src/main.tsx` 删掉了 `void registerHostModulesDynamic();`
+（`git log -S"void registerHostModulesDynamic" -- console/src/main.tsx` 只有 `4d0cd5047` 与 `f07a6a013` 两笔），
+上游把 `installHostSdk()` / `registerBuiltinCards()` 搬进了 `PluginContext.tsx:89-94`，**没搬这枚注册**；
+分叉点上的上游也一样 ⇒ **不是我们合并吞的**。恢复代价实测 = 在册宿主 `console/src/main.tsx`（现 +3/−0）**+1 行**，
+是上游自有文件 ⇒ 冲突面 +1 枚。要不要恢复、以及是否先报上游，等裁。
+
+**判据 251（工作流里"覆盖上游边界"的单独一行 pin，要按它当初防的那个报错还在不在判，不按 pin 是不是"防御性"判）**：
+一条 `pip install "<pkg><specifier>"` 与 `pyproject` 的声明区间不相交时，CI 跑的就是包自己声明为不支持的版本；
+而 pin 通常是为某枚具体报错加的。判法 = 三步实测：注释里的依赖版本能否 grep 到、被 import 的符号在新区间能否
+import、相关用例集在新旧两版各跑一遍对拍。本刀三个答案分别是"grep 不到 / 能 / 逐枚同结果" ⇒ 判掉。
+可迁移动作：每次同步后把 `.github/workflows/*` 里所有单独的 `pip install` 行按这三步扫一遍，别默认它们还成立。
+
+**判据 252（"删掉一条 pin 后没红"不是证据，"同一枚选择集在两版下逐枚同名同结果"才是）**：
+只在新版跑一遍只能证明"没崩"，证不了版本差没被用例吃掉。⇒ 结论要配一次真 A/B（本刀 = 544/1 两版相同），
+且 A/B 完必须把 venv 装回 CI 等价集合再报其余读数。
+
+**判据 253（守卫用例的红要按"红的理由"验，不按"红了"验）**：第一版用 `split("[")` 取依赖名，对
+`mcp>=1.28,<2.0` 恒取不到名字 ⇒ 它红在"检测器没识别出声明"，而不是"CI 越界"。这种红会一路绿到上线：
+将来 pin 真被加回来，解析器仍然取不到名字，用例仍然绿。⇒ 证红之后再加一步"红得对不对"的核对：读断言消息里的
+实际解析结果（`assert 'hub' in {'dev', 'test'}` 那种），确认它点的是被检对象而不是检测器自己。
+
+**判据 254（"pyproject 已不再界定它"也要钉，否则守卫会静默变成恒真）**：第二条用例先断言
+从 pyproject 读到的 mcp specifier 列表**非空**，再断言工作流里没有越界行 —— 前者一旦失效（上游哪天删了边界），
+"CI 没有 pin"就不再等价于"CI 服从声明"，用例必须自己变红提示重看，而不是继续绿。可迁移动作：
+凡是"读 A 的声明、检查 B 是否越界"的门禁，都要给"A 的声明读到了吗"单独一枚断言。
+
+**判据 255（CI 工作流里的注释是会过期的代码）**：那 5 行注释描述的世界（agentscope 1.0.20、pyproject 无 mcp 边界）
+在现树两处都已换掉，而注释看起来仍然自洽、没人会去读它。⇒ 同步时把注释里的**可 grep 的事实**（版本号、包名、
+"pyproject 没有 X 边界"这类断言）当成检查项扫一遍：grep 不到就整段重写，不要只改代码留着注释。
+
+**判据 256（全量 unit 的红要先按平台门分一层）**：`skipif(sys.platform != "darwin")` 装饰的 mac-only 用例在 CI
+永远不跑、在 macOS 本机却会红 ⇒ 这类红既不是合并回归、也不该进五表，但**必须在记录里点名并写明"CI 跑不到"**，
+否则下一笔同步会在本机重开它、并误认成新回归（本刀就是：那句"unit 0 红"对 `tests/unit/hub` 那枚用例不成立）。
+可迁移动作：报"全量 0 红"之前先数一次选择集里带平台/环境装饰器的用例，把它们的本机结果单独列。
+
+**判据 257（同一份读数内部要能自洽到对上 collected；对不上就如实挂着，别编机制）**：进度行字符统计
+（`.`/`F`/`s`/`x` = 15,835/1/18/4，和恰为 collected 的 15,858）是这枚对账的取证法，它把"5 枚差异"精确定位到
+"5 个没有进度字符的 skip 报告"，从而排除了 rerun、重复收集、xdist 三条常见解释。⇒ 差异未归因就写"未归因 +
+已排除清单"，不要写一个听起来合理的机制；错误的机制解释比空白更难被下一笔发现（判据 134 的同一型，方向从
+"按簇预判红"换成"按猜测补机制"）。
+
+**本刀的提交**：规则一笔（`.github/workflows/unit-tests.yml` + `tests/unit/scripts/test_unit_tests_workflow_install.py`
+—— 缺 extra 与越界 pin 是同一行安装命令的两半，守卫必须和它钉的那行同笔落地）、记账一笔（本节）。
+**推送本身就是这刀唯一的真验证**：只有 CI 才会用改后的装法在新起的 runner 上重装一遍。
+
+新增判据 251–257，**已闭环计数推到 126**。
