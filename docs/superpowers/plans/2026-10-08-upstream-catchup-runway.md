@@ -4828,8 +4828,8 @@ ERROR: qwenpaw has an invalid wheel, .dist-info directory
   26 registered requirement sites, 27 names in 26 files swept`（登记表 34→**26** 枚文件）。
 - **同一份代码在同一棵树的 fresh clone 里 rc=0、读数逐字相同**（`/tmp/k136_head`，那 8 枚 `.md` 在那儿不存在），
   ⇒ CI 会看到的正是这一行。
-- 用例：该文件 **40 passed**（刀 131 后 37 → 38? 现读 40，含本刀 3 条）、`tests/unit/scripts` **191 passed**；
-  R6 读数未变（11 处 / 5 枚文件）⇒ 在册口径没让既有扫描少看到任何东西。
+- 用例：该文件 **40 passed**（含本刀新增 3 条）、`tests/unit/scripts` **191 passed**（同目录在刀 131 后实测
+  188，本刀 +3 对得上）；R6 读数未变（11 处 / 5 枚文件）⇒ 在册口径没让既有扫描少看到任何东西。
 - P1 现读 `--check --target-ref working` rc=0，**123 文件 / +11,094 −544、命名 0 pure / 8 touched / 36 行、
   mechanical 1**，与刀 131 重立的基线**逐字相同** ⇒ 本刀两枚落点都是 fork 自有文件、不属"P1 上游自有文件"，
   冲突面 +0、棘轮不动、不需要 `--write-baseline`。
