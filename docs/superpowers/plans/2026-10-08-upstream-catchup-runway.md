@@ -4669,3 +4669,107 @@ ERROR: qwenpaw has an invalid wheel, .dist-info directory
 改名留下的第二处"语义翻了但 diff 里看不见"，且它在我们自己的桌面打包路径上。
 
 新增判据 272–273，**已闭环计数推到 130**。
+
+### 8.59 刀 131：把"改名刀要手工 grep 的那家字符串分布"做成门禁 R8 + 登记表，它当场抓出第三处真缺陷（判据 274–275）
+
+**动机是用户裁定的一条常规**："不要反复核对同样的东西；确实需要核对的，做成自动化测试或验证脚本。"
+刀 130 登记的那家"退休分发名仍写在需求形状的字符串里"正是每笔改名刀都要重做一遍的手工 grep ⇒ 本刀把它
+做成 release-channel 的 **R8**（规则 + 一张按文件的登记表），手工 grep 从此不再是一次核对动作。
+
+**R8 的语义**（`scripts/check_release_channel_consistency.py:440-600`）：
+- 扫描根 `REQUIREMENT_DIRS`（`src` / `scripts` / `tests` / `plugins` / `deploy` / `.github` / `console/src`，:440）；
+  后缀 = R6 的读点后缀（`.py .sh .ps1 .bat .yml .spec .nsi`，:160）再加 `.json .md .yaml`（:449）；
+  跳过 `__pycache__` / `node_modules`。
+- "需求形状"= 被盯的分发名后紧跟 extras、版本钉或直接 URL 三者之一（`REQUIREMENT_TAIL`，:455）。
+  `==` 必须后跟内容，否则门禁自己的禁词标记 `"qwenpaw=="`（用于*探测*退休名）会被当成需求自噬；
+  这条边界是第一版扫描器读出 63 处 / 36 枚假阳性之后收的。
+- `REQUIREMENT_SITES`（:468）按文件登记 34 枚，四类语义写在常量上方注释里：`install`（交给包管理器，
+  名字必须等于声明）、`copy`（给用户看的话）、`doc`（文档）、`test`（钉字符串或造 fixture 的用例）。
+- 四条拒绝：未登记文件里出现需求形状 ⇒ 红；登记了却扫不到名字 ⇒ 红（"literal 搬走了、改写了、
+  还是扫描根变了"）；登记的条目文件不存在 ⇒ 红；`install` 类的名字既不等于 `[project] name` 也不等于其
+  PEP 427 wheel 形式 ⇒ 红。**登记条目扫不到名字也算红**是"拒绝靠扫到零通过"，与 R7 同一条保险。
+
+**现读分布由扫描器给**：34 枚文件 / 35 个（文件, 名字）对 / **64 处**出现，按类 `install` 2 枚 3 处、
+`copy` 14 枚 28 处、`doc` 12 枚 16 处、`test` 6 枚 17 处。
+**这推翻了刀 130 手工数的 58 处**：`copy` 的 28 处逐类对得上，`doc` 少算 4（我按 8+2+2 数成 12，扫描器在
+同一批文件里读到 16），`test` 少算 11（登记了 6 枚文件但手工只按"6 处 pin"记）。差额根因：手工数是按
+"用户可见文案"这个心理分类去看，测试侧 fixture 里的重复字面量被跳过。⇒ 判据 274。
+
+**R8 落地即抓出的真缺陷**（刀 119 改名留下的第三处"语义翻了但 diff 里看不见"）：
+`scripts/pack/build_common.py:156` 在 conda 桌面打包路径把 `qwenpaw[full] @ <copaw_community-*.whl>` 交给 pip。
+pip 实测（`/opt/homebrew/bin/pip3` 26.2.1，py3.15，`--dry-run --no-deps`），改前：
+
+```
+ERROR: qwenpaw has an invalid wheel, .dist-info directory
+'copaw_community-2.2.2b4.post1.dist-info' does not start with 'qwenpaw'
+```
+
+改后同一条命令过了名字检查，只在 Python 下界上停住：
+`ERROR: Package 'copaw-community' requires a different Python: 3.15.0 not in '<3.14,>=3.11'`。
+改动 3 加 / 2 删（一行需求名 + 那条注释重排贴合 79 列）。
+
+**TDD 循环实测**（4 枚新用例在 `tests/unit/scripts/test_check_release_channel_consistency.py:634,655,672,686`）：
+1. 只写用例、R8 尚不存在：`-k` 选这 4 枚 → **`4 failed, 33 deselected in 0.32s`**；其中一枚的 E 行只报出 R6，
+   说明未实现时那枚红在别处而非"规则缺席"，据此把断言改成钉 R8 的消息前缀。
+2. 实现 R8、生产侧未修：整文件 → **`3 failed, 34 passed in 17.71s`**，三枚红同一句：
+   `ERROR: R8: scripts/pack/build_common.py hands 'qwenpaw' to a package manager while pyproject.toml declares
+   'copaw-community'; pip refuses a requirement whose name does not match the artifact's .dist-info`。
+3. 修完生产侧：门禁用例连同另一枚引用该门禁的 `test_copaw_release_workflow.py` → **`43 passed in 11.79s`**
+   （37 枚门禁用例 + 6 枚 workflow 用例）。
+
+**验证读数（最终树全部现取）**：
+- 门禁 rc=0：`Release channel consistency check passed (R1-R8 over 6 channel files; 10 registered templates,
+  11 read points swept in 5 files; 34 registered requirement sites, 35 names in 34 files swept)`。
+  另三道 fork 门禁 rc=0：`check_namespace_boundaries`（`result: PASSED`）、
+  `check_copaw_locale_split`（4658 生产门控键 / 59 模板键族 / 7 族豁免 / 1459 overlay 键 en+zh / 23 枚上游自有键豁免）、
+  `check_ci_command_targets`（4 个包目录 19 条 run 命令）；`check_channel_contracts` 换 3.11+ 解释器才跑得动
+  （仓库 `.venv` 是 py3.10，直跑 `AttributeError: module 'ast' has no attribute 'TryStar'`），
+  在 `/tmp/copaw_verify12` 下 rc=0（`[OK] All built-in channels have contract tests.`）。
+- 全量 unit（`/tmp/copaw_verify12`，py3.12，`-q`，日志 `/tmp/k131_unit.log`）：
+  **2 failed, 17,863 passed, 24 skipped, 4 xfailed, 65 warnings in 984.44s**。计数对账：刀 130 读 17,860 passed
+  / 1 failed，本刀加 4 枚用例 ⇒ 17,864 枚候选，其中 1 枚转红 ⇒ 17,863 passed / 2 failed。
+- 两枚红：
+  1. `tests/unit/hub/test_process_isolation.py::test_macos_sandbox_cli_can_reach_only_its_runtime` —— 本册已登记
+     的 mac-only（`sandbox-exec` 拒开 `/opt/homebrew/opt/openssl@3/lib/libssl.3.dylib`），与上游逐字节相同，
+     CI（linux）跑不到；与刀 130 的红集合一致。
+  2. **本刀新观察到**：`tests/unit/services/test_terminal.py::test_real_pty_cwd_unicode_resize_interrupt_and_cleanup`
+     在全量跑里红，栈停在 `session.output()` 等 `changed.wait()` 的 20 s 硬预算
+     （`src/qwenpaw/services/terminal.py:151`）被 `CancelledError` 取消。单跑 **3/3 绿**
+     （0.47 s / 8.43 s / 0.39 s）；那枚文件在分叉点 `2744a976b` 就存在（上游自有，最后提交 `9edada8f9`），
+     20 s 也是上游写的 ⇒ 判为全量负载下的计时 flake，不是本刀造的回归。列新增待裁，不动上游用例。
+- `git diff --numstat`：`184 2 scripts/check_release_channel_consistency.py`、`3 2 scripts/pack/build_common.py`、
+  `108 3 tests/unit/scripts/test_check_release_channel_consistency.py`。
+- 格式化：`black --line-length=79 --check` 对两枚 fork 自有文件 rc=0（`2 files would be left unchanged`，
+  带一条"py3.10 解释器解析 py3.13 语法"的无害警告）；`scripts/pack/build_common.py` 手工贴合，
+  因为该文件在 HEAD 上就已经 black-dirty（HEAD 副本 `--check` rc=1），本刀不替上游文件带进整块 formatter 脏。
+- flake8 在 `scripts/**` 的读数**本册一律不作证据**：`setup.cfg` 的 `[flake8] exclude = scripts/*`，
+  `.pre-commit-config.yaml` 又把 `^scripts/pack/` 从 black/flake8/check-ast/check-yaml/trailing-whitespace/
+  add-trailing-comma 里排除。同一份字节按仓库路径读 0 条、拷到 `/tmp` 读 3 条（E501）——差别是配置不是代码。
+  ⇒ 判据 275。
+- 棘轮：`--check --target-ref working` rc=1，只报 `scripts/pack/build_common.py behavior grew: 4 -> 9`、
+  `behavior_added 11055 -> 11058`、`behavior_removed 506 -> 508`，无 NEW upstream-owned host ⇒
+  totals **123 文件 / +11,094 −544**（`mechanical: 1`、naming `0 pure / 8 touched / 36 lines`），
+  冲突面文件数 **+0**（那枚在册文件本就在册）。
+
+**判据 274（需要反复核对的分布必须做成门禁 + 登记表，登记表还得能拒绝"扫到零"）**：一条规则如果每次核对
+都要靠人写一次 grep，那它的分布读数就是每笔刀的一次手工误差源 —— 本刀的 58 → 64 就是证据（`doc` 少 4、
+`test` 少 11，`copy` 分毫不差；错的那两类恰好是"我按语义分类没去看"的那两类）。落法要求三件一起：扫描根
+写死在门禁里、命中必须逐文件登记、登记条目扫不到名字同样算红。第三件不可省：只有前两件的话，"删掉一行登记表"
+就把规则关掉了，而删登记表在 diff 里看起来像整理。
+
+**判据 275（对 `scripts/**` 报 lint 绿之前，必须先证明这条路没被仓自己的 lint 配置排除）**：`setup.cfg`
+的 `[flake8] exclude` 含 `scripts/*`，`.pre-commit-config.yaml` 的 `exclude` 含 `^scripts/pack/`，所以门禁脚本
+自身（`scripts/check_*.py`，本册已有 6 道）和打包脚本在仓库路径下读 flake8/black 是**空跑**，rc=0 不携带任何信息。
+要么显式绕过配置（`--no-local` / 临时副本），要么在记录里写"这条 lint 读数不适用"。刀 131 期间我差点把
+"仓库路径 0 条 vs `/tmp` 副本 3 条"报成一次改进，根因就在这两条 exclude 里。
+
+**新增待裁（本刀只登记，不改）**：
+- real-pty 用例在全量 unit 负载下会红（本机 n=1，单跑 3/3 绿）。两条路：给这枚上游用例加 fork 侧的等待预算
+  （动上游文件，P1 在册 +1），或把"本机全量跑的红集合"允许清单正式写进验证脚本。待裁。
+- R8 的登记表按**文件**粒度登记语义，不按行：一枚登记为 `copy` 的文件将来新增一处交给 pip 的用法，仍会绿。
+  要收这一口需要把表换成（文件, 行锚/符号）粒度，代价是上游合并时表会经常失配。待裁。
+
+**R8 不自夸的边界**：只匹配被盯分发名 + 需求形状后缀；散文里裸写 `qwenpaw` 不算需求（by design，否则会淹没
+在文档叙述里）。`.toml` 不在 `REQUIREMENT_SUFFIXES`（R7 专管 `pyproject.toml` 的 requirement 逐条扫描）。
+
+新增判据 274–275，**已闭环计数推到 131**。
