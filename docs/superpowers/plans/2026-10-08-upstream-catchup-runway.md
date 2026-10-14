@@ -4310,6 +4310,7 @@ fetch 后：git ls-tree -r --name-only 2744a976b | wc -l = 5,994   ← 分叉点
 
 ⇒ `--depth=1` 只是给克隆打上 shallow 标记，**不动已在位的对象**；本刀那半与那步互不干扰。
 仍未测的只剩"CI 那台 runner 能否解析上游 URL"（网络面，且那步带 `|| true`，失败会被吞）。
+**→ 本节末"推送后实测"已答：解析得动。**
 
 **新增待裁（登记，不排刀）**：
 1. unit 那步现在是 `continue-on-error: true` 的 informational 步，而 CI 里唯一硬门是 L1 那五枚路径 —— 要不要把
@@ -4317,6 +4318,8 @@ fetch 后：git ls-tree -r --name-only 2744a976b | wc -l = 5,994   ← 分叉点
 2. matrix 那两枝（3.11 / 3.13）的门禁分工为什么长这样、要不要重排，未裁。
 3. `git fetch --depth=1 … || true` 里那个 `|| true` 是否该改成显式失败 —— 它现在会把"命名空间门禁拿不到上游 ref"
    这种降级吞成绿。本刀不动它。
+4. （推送后新增）`unit-tests` 那枝的 `timeout-minutes: 15`（`unit-tests.yml:51`，上游 `cc0eaf52e` 加的、我们复活
+   文件时带回来的）现在不够跑 CI 选择集 —— 抬预算、还是把 unit 拆成独立 job，未裁（见本节末"推送后实测"）。
 
 **判据 258（门禁"存在"不等于门禁"在跑"，要按强制点计数 + 实际执行历史两样取）**：一枚 `--check` 脚本在 CI YAML 里
 有一行只证明它被调用过；证明它有效必须两枚读数：(a) 全仓 grep 数它有几个强制点，(b) 从 `gh run view --json jobs`
@@ -4347,4 +4350,31 @@ pytest 都验不出效果（本机一直是全历史克隆），守卫用例能�
 **本刀的提交**：规则一笔（`.github/workflows/unit-tests.yml` + `tests/unit/scripts/test_unit_tests_workflow_checkout_depth.py`）、
 记账一笔（本节）。**推送是这刀唯一的真验证**：只有 CI 才会在全历史检出下第一次真跑 P1 / brand / release-channel。
 
-新增判据 258–263，**已闭环计数推到 127**。
+**推送后实测（补记）= 本刀那三件要证的事全证到了，并照出第三枚 CI 缺陷**：run `38526622361`（sha `aae21b788`、
+`Unit Tests - py3.11` 那枝 job `115728384742`），步骤结论按 `gh api .../jobs` 逐枚现读：
+
+| 检 | 现读 |
+| --- | --- |
+| `Check namespace boundaries (gate)` | **success** —— 日志里有 `From https://github.com/agentscope-ai/CoPaw` + `* [new branch] main -> qwenpaw_upstream_main` ⇒ 上一节列为"只有 runner 能答"的那半**已答**：URL 解析得动，且这枚 shallow fetch 跑在全历史检出之后没把分叉点对象弄没（本机 `git clone --local` 那次的预测被线上证实） |
+| `Check P1 invariants (gate)` | **success，自写进 CI 起第一次真执行** —— 打印 `P1 upstream-owned files modified: 122 (+11087/-539)`、`P1-命名: 0 pure / 8 touched / 36 lines`、`P1-行为: 122 files / +11051 invasive / -503`、`mechanical: 1 files (lockfiles)`、`P1 invariants hold (no growth vs baseline)` ⇒ 与本机的读数逐字相同；同一步的 `copaw_brand.py verify` 打印 `ledger replayable: 7 files / 35 lines` |
+| `Release channel consistency (gate)` | **success** —— `R1-R6 over 6 channel files; 10 registered templates, 11 read points swept in 5 files` |
+| `Run all unit tests`（informational） | **跑到 93% 被取消**（07:25:40；该 job 起跑 07:10:26）⇒ 后面 `Fail loudly if nothing was collected`、`Run L1 hard gate tests (must pass)` 两枚 = `skipped`，整枝 conclusion = `cancelled` |
+| `Unit Tests - py3.13` | **success**，12 分 41 秒（三道门禁 = `skipped`，是 `if: matrix.python-version == '3.11'` 的设计，不是"没跑"）|
+| `Coverage Report` | **success** |
+
+**那枚 `cancelled` 的根因 = 这枝自己的 `timeout-minutes: 15`（`unit-tests.yml:51`）**：07:10:26 → 07:25:42 =
+15 分 16 秒，日志尾一行 `##[error]The operation was canceled.`；归属现读 —— 那行是上游在自己的
+`cc0eaf52e` 加进 `unit-tests.yml` 的，上游又在 `c05077d9a`（`ci(infra): drop redundant unit-tests.yml workflow (#4748)`）
+把整枚文件删掉（`git merge-base --is-ancestor` 三枚都 = 是分叉点祖先；`git cat-file -e 2744a976b:.github/workflows/unit-tests.yml`
+= **ABSENT** ⇒ 文件由我们复活、复活时把那行一起带回来，所以它仍在册外、改它不动冲突面）。
+⇒ 15 分钟这个预算是按"unit 那步只在 3.13 跑、3.13 只需 12–14 分"配的；P1 一修好，3.11 也开始跑整套，
+而本机刚量过的 15,859 条要 **23 分 25 秒** ⇒ 预算不够。**不是本刀造成的**（判据 261 同一分账），
+只是本刀之后才看得见。**已另立为刀 128 候选，未开工**（要不要抬预算、还是把 unit 从这两枝拆成独立 job，是裁决）。
+
+**判据 264（`timeout-minutes` 是一枚隐形契约：让"后面的步终于能跑"的修复，必须连同该 job 的时间预算一起重读）**：
+本刀把 P1 那步从 exit 128 修成 success，收益是后面四步第一次执行 —— 代价是它们在 15 分钟预算里跑到 93% 就被砍，
+于是那两枚 must-pass 步从"`-`（从没跑过）"变成"`skipped`（被预算砍掉）"，读起来仍不是绿。取证只需两步：
+job 的 `started_at`/`completed_at` 之差对上 YAML 里的 `timeout-minutes`，再读那步日志尾一行。
+可迁移动作：修门禁 / 修检出这类"前置解除"型改动，落地时把同 job 的预算、选择集大小、后续 must-pass 步一起取一次数。
+
+新增判据 258–264，**已闭环计数推到 127**。
