@@ -4874,7 +4874,8 @@ ERROR: qwenpaw has an invalid wheel, .dist-info directory
 
 **本刀的 CI 复跑读数（`a713b4d58`，fork 自有 `Unit Tests` run `38556878592`，整体 success）**：
 
-- `Unit Tests - py3.11` 枝 11 枚 step 全绿：`Check CoPaw locale split guard` / `Install dependencies` /
+- `Unit Tests - py3.11` 枝 14 枚 step（含 `Set up job` 与 `Post *`）**全 success**：
+  `Check CoPaw locale split guard` / `Install dependencies` /
   `Check namespace boundaries (gate)` / `Check P1 invariants (gate)` / **`Release channel consistency (gate)`** 全 success，
   其后 `Run all unit tests`、`Fail loudly if nothing was collected`、`Run L1 hard gate tests` 也 success
   （刀 131-5 之前那三道里 R8 直接红、unit/L1 被砍成 `skipped`）。
