@@ -4460,6 +4460,19 @@ extras（`copaw-community[qwenpaw-data,hub,local,whisper,codex,qoder]`）或直�
 **待补的验证**：本机这些读数只证明"用例断言的是 YAML 里那个数字"，不证明"30 分钟真的够用"。够用与否只有 runner 能答，
 按判据 253（推送是这类 CI 契约唯一的真验证）在推送后读新 run 的步级结论补记。
 
+**补记（推送后 CI 实测，run `38535351433` / headSha `0a666a2b2`，2026-10-14 现取 `gh run view --json jobs`）**：
+- `Unit Tests - py3.11` 整枝 conclusion **success**，`08:28:31Z → 08:46:20Z` = **1,069 s**，14 枚 step 全 success ——
+  `Run all unit tests (informational)` 不再 `cancelled`，`Fail loudly if nothing was collected` 与
+  `Run L1 hard gate tests (must pass)` 不再 `skipped`。这就是"30 分钟够用"的唯一真证据。
+- `Unit Tests - py3.13` 整枝 conclusion **success**，`08:28:31Z → 08:41:40Z` = **789 s**（三道门禁仍 `skipped`，
+  那是 `if:` 设计）。3.11 那枝的三道门禁（namespace / P1 / release-channel）逐枚 success ⇒ 刀 127 的
+  `fetch-depth: 0` 在抬预算后依然成立。
+- 预算复算对照：上面推算 ~1,000 s，实测 1,069 s，差 **+69 s（+6.9%）**；30 分钟上限用掉 1,069 / 1,800 = **59%**，
+  留 731 s 余量。判据 267 的"按最慢一枝取"在数字上成立：1,069 s 那枝比 789 s 那枝多 280 s。
+- **未取到**：unit 与 L1 两步里的 collected / passed 计数。`Coverage Report` 那枝当时仍 `in_progress`，Actions 的
+  日志要整个 run 结束才能下载（`gh run view --log --job=…` 回 "run 38535351433 is still in progress"），
+  而 jobs API 的 step 对象只有结论与时间戳、没有输出文本（判据 271）。
+
 **判据 266（时间预算的守卫用例要断言下限、并把测算过程写在常数旁边）**：断 `>= 30` 而不是 `== 30`，抬到 45 不会误判红，
 而任何一次"退回 15"或删掉那行（`None`）都必判红；同时预算这个数字必须能被读者复算 —— 常数上方逐条记 807 s / 93% /
 install 87 s / collect 16 s / L1 10 s 的来源 run，被改的 YAML 里也留一行。否则下一个读到 `30` 的人无法区分
@@ -4471,3 +4484,90 @@ install 87 s / collect 16 s / L1 10 s 的来源 run，被改的 YAML 里也留�
 读数是逐 matrix 枝各取一次再取 max，并记录各枝之间为什么不同（这里是那三道门禁只在 3.11 跑）。
 
 新增判据 266–267，**已闭环计数推到 128**。
+
+---
+
+### 8.57 刀 129：待裁 5 由我裁定 —— extras 那两枚自引用改指 `copaw-community`，并把"依赖声明"从 R6 的盲区里拿出来立成 R7
+
+**起因与裁决**：刀 127 的推送照出 `pyproject.toml:181` 的 `full = ["qwenpaw[qwenpaw-data,hub,…]"]` —— 刀 119 把声明名
+改成 `copaw-community` 之后，这枚字符串从"引用我自己"变成"真去 PyPI 拉上游分发"。待裁 5 用户裁 **"你来决定"**，
+即由我定修法、并定"依赖声明要不要进门禁"，自己实现、自己验证。
+
+**取证（刀 129-0，task #297，读的是 CI 日志原文不是推断）**：改名前那次 install 确实是自引用 —— run `38232407961`
+job `114754874690` 的解析里这一条是 `…extra == "qwenpaw-data"->qwenpaw==2.2.2b4.post1` 且不下载 `qwenpaw` 产物；
+从 run `38333158948` 起，上游 `Tests` 那道七枚 job 全部在 `Install dependencies` 报 `ResolutionImpossible`，
+根因是上游逐版本 pin 的 `agentscope` 与我们的 `agentscope==2.0.9` 互斥。R6 看不见这枚泄漏：它的扫根
+`READER_DIRS` 不含仓根、`READER_SUFFIXES` 不含 `.toml`。
+
+**裁定（两问，都是我的决定，附理由与代价）**：
+1. **修法 = 把两枚自引用改指 `copaw-community`**（`full` 与 `sip-livekit`），不删 extras、不加豁免名单。理由：语义与
+   改名前完全等价（"我全量装我自己"），面最小 = 2 行；删 extras 会改掉上游 `Tests` 那道用来装依赖的调用形状，
+   那是比修复更大的一笔。代价：这两行进在册文件，棘轮必须动（下面有读数）。
+2. **纳入门禁，但新开 R7 而不是扩 R6 的扫根。** 理由：把 `READER_DIRS` 扩到仓根、`READER_SUFFIXES` 加 `.toml`
+   会让 R6 自己给 `pyproject.toml` 登记的 `DISTRIBUTION_READERS` 模板进入扫描面 ⇒ 自咬（门禁自己的模板被当成泄漏）。
+   R7 只读 `[project].dependencies` 与 `optional-dependencies` 的每一条，判据窄而可解释：**声明名是我们的、
+   但某条 requirement 的名字是退休名**。代价：两条规则读同一个文件，读者要知道分工（已在门禁 docstring 写明"Seven rules"）。
+
+**落点（`git diff --numstat` 现读 = `pyproject.toml` 2/2、门禁脚本 127/2、守卫用例 100/1）**：
+- `pyproject.toml`：`full = ["copaw-community[qwenpaw-data,hub,local,whisper,codex,qoder]"]`、
+  `sip-livekit = ["copaw-community[sip]", …]`。
+- `scripts/check_release_channel_consistency.py`：新常量 `DEPENDENCY_TABLES` 与三枚正则、`_array_opened_by()`、
+  `_outside_strings()`、`dependency_requirements()`（行级状态机）、`rule_dependencies()`，`main()` 接线，
+  成功行改打 `(R1-R7 …)`。不引 `tomllib` —— 门禁跑在仓库 `.venv`（3.10）上，那里没有这个库；`packaging` 已在依赖里。
+- `tests/unit/scripts/test_check_release_channel_consistency.py`：4 枚用例 —— 1 枚钉活树（docstring 记上面那两个
+  run 号），3 枚钉 fixture（命中 / 预改名态豁免 / 空扫必红即 vacuity guard）。
+
+**验证读数（本机，全部现跑）**：
+- 先红（探针：用 Edit 把 `full` 那行退回 `qwenpaw[…]`，读完再 Edit 复回，未用 `git checkout`）：门禁打
+  `ERROR: R7: pyproject.toml requires 'qwenpaw[qwenpaw-data,hub,local,whisper,codex,qoder]' while declaring 'copaw-community'; the string names the upstream distribution, not us`；
+  活树用例 `1 failed in 0.33s`。复回后 `git diff --numstat pyproject.toml` 仍是 2/2。
+- 后绿：门禁 rc=0，`Release channel consistency check passed (R1-R7 over 6 channel files; 10 registered templates, 11 read points swept in 5 files)`。
+- R7 实扫面：`dependency_requirements()` 现读 **88** 条 requirement，落在 `copaw-community` 上的自引用 2 条
+  （`copaw-community[qwenpaw-data,hub,local,whisper,codex,qoder]`、`copaw-community[sip]`），退休名 0 条。
+- extras 结构对拍（`tomllib` 读，3.12 解释器）：`optional-dependencies` 共 **11** 枚，`full` 引用的 6 枚
+  （`qwenpaw-data/hub/local/whisper/codex/qoder`）与 `sip-livekit` 引用的 `sip` **全部存在** ⇒ 自引用改指我们之后
+  不会"引用一枚不存在的 extra"。**这是结构对拍，不是 pip 解析**（见下面未取的那一项）。
+- 用例目录整跑：`tests/unit/scripts` **184 passed in 10.49s**（刀 128 记的是 180，+4 = 本刀 4 枚）。
+- 其余四道门禁：brand verify rc=0（`ledger replayable: 7 files / 35 lines`）、locale split rc=0
+  （4658 production gated keys / 1459 overlay keys en+zh）、namespace rc=0（`result: PASSED`，本机另有
+  一行 `warning: failed to read baseline ref 'qwenpaw_upstream_main'`，CI 里那枚 ref 有真 URL）。
+- lint：两枚 .py 文件 flake8 rc=0（过程中先红过一次 `E501 line too long (80 > 79)` 在用例 docstring，已收行）；
+  `black --line-length=79 --check` = "2 files would be left unchanged"。
+- 棘轮：改前 `--check` rc=0；工作树 `--check --target-ref working` rc=1，三条 `::error::` 是
+  `behavior_added 11051 -> 11053`、`behavior_removed 503 -> 505`、`pyproject.toml behavior 18 -> 22` ⇒
+  **本刀确实动在册文件**（`pyproject.toml` 在分叉点就存在）。`--write-baseline` 后 `--check` rc=0，
+  基线 totals = **122 文件 / +11,089 −541**（`behavior 11,053 / 505`、`mechanical: 1`、naming `36 lines / 8 touched files`）。
+  冲突面净增 **+2 行侵入 / +2 行删除**，全在 `pyproject.toml` 那一枚文件里（18 → 22）。
+  `scripts/p1_baseline.json` 自身 +8 −8，它在分叉点不存在 ⇒ 不进册。
+
+**未取的验证（明写）**：本机没跑真 pip/uv 解析（`/tmp/copaw_verify12` 是 uv 造的、不带 pip，且 88 条依赖会走网络实装），
+所以"这 2 行真的把 `ResolutionImpossible` 解掉了"这一条只有 CI 能答：推送后读上游 `Tests` 那道七枚 job 的
+`Install dependencies` 是否从红转绿（判据 253）。上面 184 枚用例、88 条扫描、11 枚 extras 对拍全都只证明
+"声明的形状对"，不证明"解析器满意"。
+
+**判据 268（改分发名时，`<旧名>[extra]` 这类自引用必须逐条入读点表 —— 它的含义由声明名决定，不由字符串决定）**：
+这行字符串在刀 119 前后**逐字未变**，diff 里看不见它，但语义从"我自己"翻成"PyPI 上那个上游包"。凡是改名刀，
+读点表必须包含"每一条以旧分发名命名的 requirement"，且要按 PEP 508 解析出 `name` 再比，不能按子串比
+（`qwenpaw-data-context` 里含 `qwenpaw` 却是另一个真包）。
+
+**判据 269（门禁要覆盖一类事实，先问"这类事实写在哪些文件里"，而不是"我现在的扫根里有几枚文件"）**：
+R6 的扫根形状（无仓根 / 无 `.toml`）就是这道泄漏的成因；刀 119 老老实实扫了 10 条读点仍漏了声明文件里的 2 条。
+"绿"不等于"没泄漏"，除非扫根与事实所在的文件集合相等 —— 这条与本册 §8.55 里那条"扫描根不含这些文件时，
+门禁绿不能作为没有泄漏的证据"是同一条判据的第二例。
+
+**判据 270（手写 TOML 行级扫描必须自己区分"数据行"与"注释行"）**：第一版 R7 把 `[project] dependencies` 数组里
+那行注释（引述 Kitty 术语 `associated text`）当成 requirement，报 `R7: … is not a PEP 508 requirement`，
+3 枚用例红。根因修复是 `_outside_strings()`：只在引号外剥 `#`。可迁移：因为解释器版本限制拿不到 `tomllib` 时，
+每加一条行级规则都要先问"这一行是数据还是注释"，并把注释形状喂进用例。
+
+**判据 271（run 未整体结束时，CI 只有 step 结论可读，计数级证据读不到）**：`gh run view --log` 在同 run 另一枝
+仍 `in_progress` 时直接返回 "logs will be available when it is complete"，而 jobs API 的 step 对象只有
+`conclusion`/`started_at`/`completed_at`。要 collected/passed 这类计数，得等 run 结束、或让摘要步把数字写进
+job summary/artifact。
+
+**待裁清单更新**：待裁 5 结清（本刀）。新增一条待裁：**矩阵两枝的门禁分布** —— 这次实测 3.11 比 3.13 多 280 s，
+差额几乎全是那三道门禁只在 3.11 跑；把它挪成独立 job 能让 unit 两枝平齐，但那是拆 job，与刀 128 的"抬预算"裁决相邻，
+不擅动。
+
+新增判据 268–271，**已闭环计数推到 129**。
+
