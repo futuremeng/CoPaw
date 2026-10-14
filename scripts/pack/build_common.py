@@ -153,7 +153,7 @@ def main() -> int:
                 "-m",
                 "pip",
                 "install",
-                f"qwenpaw[full] @ {wheel_uri}",
+                f"copaw-community[full] @ {wheel_uri}",
             ],
             env=install_env,
         )
@@ -193,7 +193,8 @@ def main() -> int:
                 ],
             )
         # pip may uninstall/reinstall files owned by conda while resolving
-        # qwenpaw[full]. Restore conda-managed packaging tools before packing.
+        # copaw-community[full]. Restore conda-managed packaging tools
+        # before packing.
         _run(
             [
                 conda,
