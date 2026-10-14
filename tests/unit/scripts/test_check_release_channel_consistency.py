@@ -7,6 +7,7 @@ import importlib.util
 import json
 import re
 import shutil
+import subprocess
 import tomllib
 from pathlib import Path
 
@@ -710,3 +711,81 @@ def test_no_install_path_requires_a_distribution_we_do_not_declare():
         f"install paths naming a distribution other than {sorted(allowed)}: "
         f"{sorted(offenders)}"
     )
+
+
+@pytest.fixture()
+def git_fixture(fixture_root):
+    """The copied fixture as a checkout, so git has an index to consult.
+
+    CI runs the gate against a fresh clone.  A fixture that is not a repo
+    cannot tell a tracked file from one that only exists on this machine,
+    which is exactly the distinction R8 has to get right.
+    """
+    for argv in (
+        ("init", "-q"),
+        ("config", "user.email", "gate@example.invalid"),
+        ("config", "user.name", "gate fixture"),
+        ("add", "-A"),
+        ("commit", "-q", "-m", "fixture"),
+    ):
+        subprocess.run(
+            ("git",) + argv,
+            cwd=fixture_root,
+            check=True,
+            capture_output=True,
+        )
+    return fixture_root
+
+
+def test_rule_eight_ignores_a_file_git_does_not_track(git_fixture, capsys):
+    """An untracked local file is not a read point: CI never sees it.
+
+    ``src/qwenpaw/docs/`` is gitignored, so a requirement string living there
+    exists only in this machine's checkout.  Knife 131 registered eight such
+    files from a local walk and the gate then red-failed in CI with "registered
+    requirement site ... is gone" -- the sweep found none of them.
+    """
+    mod = _module()
+    path = git_fixture / "src/qwenpaw/docs/browser.en.md"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text('Install `qwenpaw[hub]` first.\n', encoding="utf-8")
+    assert run(mod, git_fixture) == 0, capsys.readouterr().out
+
+
+def test_rule_eight_rejects_a_registered_site_that_is_untracked(
+    git_fixture,
+    capsys,
+):
+    """Registering a gitignored path guarantees a CI-only red.
+
+    The error has to name the actual cause.  "is gone" sends the next reader
+    hunting for a deletion that never happened -- the file is right there on
+    the machine that registered it.
+    """
+    mod = _module()
+    path = git_fixture / "src/qwenpaw/docs/browser.en.md"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text('Install `qwenpaw[hub]` first.\n', encoding="utf-8")
+    mod.REQUIREMENT_SITES = mod.REQUIREMENT_SITES + (
+        ("src/qwenpaw/docs/browser.en.md", "doc"),
+    )
+    assert run(mod, git_fixture) == 1
+    out = capsys.readouterr().out
+    assert "R8:" in out and "browser.en.md" in out and "not tracked" in out
+
+
+def test_every_registered_channel_site_is_tracked_by_git():
+    """Both registries must only name files a fresh clone contains.
+
+    Measured against the live tree, not a fixture: a local walk can pick up a
+    gitignored artifact and register it, which passes on this machine and
+    breaks the first CI run.
+    """
+    mod = _module()
+    tracked = mod.tracked_paths(REPO_ROOT)
+    assert tracked is not None and tracked, "REPO_ROOT is not a git checkout"
+    registered = {rel for rel, _ in mod.REQUIREMENT_SITES} | {
+        rel for rel, _ in mod.DISTRIBUTION_READERS
+    }
+    untracked = sorted(registered - tracked)
+    assert untracked == [], f"registered sites git does not track: {untracked}"

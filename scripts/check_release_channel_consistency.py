@@ -26,6 +26,11 @@ Seven rules (design §8):
                     name; such a string was a self-reference before the
                     rename and is a dependency on the upstream distribution
                     after it.
+* R8 requirement -- every requirement-shaped reference (a watched name plus
+                    extras, a ``==`` pin or a `` @ url``) is registered with the
+                    reason it exists, an ``install`` site names the distribution
+                    we actually declare, and both the registry and the sweep
+                    only see files a fresh clone contains.
 
 Usage:
     python scripts/check_release_channel_consistency.py
@@ -38,6 +43,7 @@ import argparse
 import importlib.util
 import json
 import re
+import subprocess
 import sys
 from pathlib import Path
 from typing import Optional
@@ -183,6 +189,29 @@ def declared_distribution(repo_root: Path) -> Optional[str]:
     return match.group(1) if match else None
 
 
+def tracked_paths(repo_root: Path):
+    """Paths git would hand a fresh clone, or ``None`` outside a checkout.
+
+    Both registries are built by scanning on this machine, and this machine
+    contains files git was told to ignore -- ``src/qwenpaw/docs/`` is one such
+    directory (``.gitignore``).  A registry that names one of them reads green
+    here and red in CI, where the file does not exist; the sweep therefore has
+    to enumerate the same set a clone does.
+
+    Unit fixtures copy the registry into a temp directory with no git index, so
+    ``None`` means "trust the filesystem": there is nothing else to consult.
+    """
+    result = subprocess.run(
+        ("git", "ls-files", "-z"),
+        cwd=repo_root,
+        capture_output=True,
+        check=False,
+    )
+    if result.returncode != 0:
+        return None
+    return {path.decode("utf-8") for path in result.stdout.split(b"\0") if path}
+
+
 def _tracked_names(repo_root: Path) -> set:
     """Identities R6 watches: the declaration, both fact-source names, and the
     name we moved off.
@@ -228,12 +257,17 @@ def scan_distribution_readers(repo_root: Path):
         return hits
     patterns = READER_PATTERNS + (wheel_reader_pattern(tracked),)
     hits.append((PYPROJECT_REL, f"declares name = {declared!r}"))
+    cloned = tracked_paths(repo_root)
     for rel_dir in READER_DIRS:
         base = repo_root / rel_dir
         if not base.is_dir():
             continue
         for path in sorted(base.rglob("*")):
             if not path.is_file() or path.suffix not in READER_SUFFIXES:
+                continue
+            if cloned is not None and (
+                str(path.relative_to(repo_root)) not in cloned
+            ):
                 continue
             text = path.read_text(encoding="utf-8", errors="ignore")
             for pattern in patterns:
@@ -484,15 +518,10 @@ REQUIREMENT_SITES = (
     ("console/src/locales/id.json", "copy"),
     ("console/src/locales/pt-BR.json", "copy"),
     (".github/workflows/release-duty.yml", "copy"),
-    # Documentation.
-    ("src/qwenpaw/docs/channels.en.md", "doc"),
-    ("src/qwenpaw/docs/channels.zh.md", "doc"),
-    ("src/qwenpaw/docs/cli.en.md", "doc"),
-    ("src/qwenpaw/docs/cli.zh.md", "doc"),
-    ("src/qwenpaw/docs/console.en.md", "doc"),
-    ("src/qwenpaw/docs/console.zh.md", "doc"),
-    ("src/qwenpaw/docs/hub.en.md", "doc"),
-    ("src/qwenpaw/docs/hub.zh.md", "doc"),
+    # Documentation.  ``src/qwenpaw/docs/*.md`` is deliberately absent: that
+    # whole directory is gitignored, so the requirement strings living in it
+    # exist only on the machine that built them and no clone can be checked
+    # against them.
     ("scripts/pack/README.md", "doc"),
     ("scripts/pack/README_zh.md", "doc"),
     ("plugins/apps/qwenpaw-data/README.md", "doc"),
@@ -518,6 +547,7 @@ def requirement_pattern(names):
 
 
 def _requirement_files(repo_root: Path):
+    cloned = tracked_paths(repo_root)
     for rel_dir in REQUIREMENT_DIRS:
         base = repo_root / rel_dir
         if not base.is_dir():
@@ -525,9 +555,12 @@ def _requirement_files(repo_root: Path):
         for path in sorted(base.rglob("*")):
             if not path.is_file() or path.suffix not in REQUIREMENT_SUFFIXES:
                 continue
+            rel = str(path.relative_to(repo_root))
+            if cloned is not None and rel not in cloned:
+                continue
             if REQUIREMENT_SKIP & set(path.relative_to(repo_root).parts):
                 continue
-            yield str(path.relative_to(repo_root)), path
+            yield rel, path
 
 
 def scan_requirement_names(repo_root: Path) -> dict:
@@ -560,6 +593,7 @@ def rule_requirement_sites(repo_root):
     registered = dict(REQUIREMENT_SITES)
     allowed = {declared, wheel_name(declared)}
     found = scan_requirement_names(repo_root)
+    cloned = tracked_paths(repo_root)
     for rel in sorted(set(found) | set(registered)):
         category = registered.get(rel)
         if category is None:
@@ -568,6 +602,15 @@ def rule_requirement_sites(repo_root):
                     f"R8: {rel} requires "
                     f"{sorted(found[rel])} but is not registered in "
                     "REQUIREMENT_SITES"
+                ),
+            )
+            continue
+        if cloned is not None and rel not in cloned:
+            errors.append(
+                (
+                    f"R8: registered requirement site {rel} is not tracked by "
+                    "git; the sweep only sees what a fresh clone contains, so "
+                    "this entry reads green here and red in CI"
                 ),
             )
             continue
