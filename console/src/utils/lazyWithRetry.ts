@@ -95,7 +95,11 @@ function recoverableLazy(
 // All page modules, keyed relative to this file (src/utils/).
 // e.g. "../pages/Settings/Debug/index.tsx"
 const PAGE_MODULES = import.meta.glob<ComponentType<unknown>>(
-  ["../pages/**/*.{ts,tsx}", "!../pages/**/*.test.{ts,tsx}"],
+  [
+    "../pages/**/*.{ts,tsx}",
+    "!../pages/**/*.test.{ts,tsx}",
+    "!../pages/**/tests/**",
+  ],
   { import: "default" },
 );
 

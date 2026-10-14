@@ -25,6 +25,7 @@ const initialJavaScriptNames = new Set(
   initialJavaScriptAssets.map((asset) => asset.split("/").at(-1)),
 );
 const importGraph = new Map();
+const pageGlobKeys = new Set();
 
 for (const asset of initialJavaScriptAssets) {
   const source = await readFile(join(outputDirectory, asset), "utf-8");
@@ -34,6 +35,24 @@ for (const asset of initialJavaScriptAssets) {
       .filter((dependency) => initialJavaScriptNames.has(dependency)),
   );
   importGraph.set(asset.split("/").at(-1), dependencies);
+  for (const match of source.matchAll(/"\.\.\/pages\/[^"]+\.(?:ts|tsx)"/g)) {
+    pageGlobKeys.add(match[0].slice(1, -1));
+  }
+}
+
+// The route map in utils/lazyWithRetry.ts is built from import.meta.glob over
+// ../pages/**, whose exclusion only hides *.test.* files.  A plain helper that
+// lives in a pages/**/tests/ directory therefore ships as a page module, and no
+// other signal in the build would say so.
+const testHelpersInPageGlob = [...pageGlobKeys]
+  .filter((key) => /\/tests\//.test(key))
+  .sort();
+if (testHelpersInPageGlob.length > 0) {
+  throw new Error(
+    `Test helpers shipped through the pages glob: ${testHelpersInPageGlob.join(
+      ", ",
+    )}. Move them out of pages/** or exclude that directory in lazyWithRetry.ts.`,
+  );
 }
 
 const visited = new Set();
