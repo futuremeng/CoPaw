@@ -4414,3 +4414,60 @@ extras（`copaw-community[qwenpaw-data,hub,local,whisper,codex,qoder]`）或直�
 `pyproject.toml` / `setup.py` 的 `install_requires` 与 `optional-dependencies` 逐条读一遍；而门禁的扫描根若不含
 这些文件，"门禁绿"不能作为"没有泄漏"的证据 —— 必须另取一次工具自己的目录清单（本刀读数 = `READER_DIRS` 无仓根、
 `READER_SUFFIXES` 无 `.toml`）。
+
+---
+
+### 8.56 刀 128：抬 unit 那枝的时间预算 —— 裁决"抬预算"（不拆 job），预算按矩阵里最慢那一枝的 CI 实测步长取数
+
+**起因与裁决**：刀 127 把 P1 那步从 exit 128 修成 success 之后，同一次 run 里 unit 那步跑到 93% 被 15 分钟上限砍掉，
+`Fail loudly` 与 `L1 hard gate` 两枚 must-pass 步从"`-`"变成"`skipped`"（判据 264）。摆出的两条路是"抬预算"与
+"把 unit 拆成独立 job"，用户裁 **抬预算**。
+
+**取数（run `38526622361` 的 `gh api .../actions/jobs` 步级 `started_at`/`completed_at` 之差，逐枚现算）**：
+
+| job | 步 | 秒 | 结论 |
+| --- | --- | --- | --- |
+| `Unit Tests - py3.11`（总 916 s） | Set up job / checkout / setup-python / locale guard | 1 / 5 / 5 / 1 | success |
+|  | Install dependencies | 87 | success |
+|  | 三道门禁（namespace / P1 / release-channel） | 4 / 1 / 2 | success |
+|  | Run all unit tests | **807**（到 93% 被砍） | cancelled |
+|  | Fail loudly + L1 hard gate | 0 / 0 | skipped |
+| `Unit Tests - py3.13`（总 761 s） | Install dependencies | 71 | success |
+|  | 三道门禁 | 0 | skipped（`if:` 设计，非"没跑"） |
+|  | Run all unit tests | 650 | success |
+|  | Fail loudly + L1 hard gate | 16 / 10 | success |
+
+**换算（这一步是推断，不是读数）**：807 s 处 93% ⇒ 3.11 那枝整套约 `807 / 0.93 ≈ 868 s`；加上它前面的 106 s
+（setup + install + 三门禁）与后面的 26 s（collect 检查 + L1，取自 3.13 实测）≈ **1,000 s ≈ 17 分钟**。
+30 分钟 = 这条最长路径的约 1.8 倍，留给 runner 波动。
+
+**落点（两枚文件，`git diff --numstat` 现读 = 工作流 +4 −1、守卫用例 +33 −0）**：
+- `.github/workflows/unit-tests.yml`：`unit-tests` job 的 `timeout-minutes: 15` → `30`，并加三行注释写死"这个数字是
+  从 CI 步长测出来的、以及砍掉的代价是 must-pass 步变 skipped"。
+- `tests/unit/scripts/test_unit_tests_workflow_checkout_depth.py`：同一枚文件加第二枚用例
+  `test_leg_running_the_whole_unit_suite_has_a_time_budget`，按步名 `Run all unit tests` 找出"跑整套 unit"的 job，
+  断言 `timeout-minutes` 是整数且 `>= MIN_UNIT_LEG_MINUTES = 30`（常数上方逐行记 807 s / 93% / 87 s / 16 s / 10 s 的出处）。
+
+**验证读数（本机，全部现跑）**：
+- 先红：`1 failed, 1 passed in 11.20s`，红的一行是 `AssertionError: unit-tests budgets 15 minutes for a leg measured at about 17 minutes of work in CI…`
+- 后绿：`2 passed in 0.12s`
+- 该目录整跑：`tests/unit/scripts` **180 passed in 10.89s**
+- lint：`flake8` 该文件 rc=0；`black --line-length=79 --check` rc=0（"1 file would be left unchanged"，另有一行
+  "Python 3.10 cannot parse code formatted for Python 3.13" 的环境告警，属仓库 `.venv` 解释器版本，不是本刀引入）
+- 棘轮：`check_p1_invariants.py --check` rc=0，读数仍是 **122 (+11087/-539)**、`0 pure / 8 touched / 36 lines`、
+  `+11051 invasive / -503`、`mechanical: 1` ⇒ **冲突面 +0**（`unit-tests.yml` 在分叉点不存在，守卫用例是 fork 自有文件）
+
+**待补的验证**：本机这些读数只证明"用例断言的是 YAML 里那个数字"，不证明"30 分钟真的够用"。够用与否只有 runner 能答，
+按判据 253（推送是这类 CI 契约唯一的真验证）在推送后读新 run 的步级结论补记。
+
+**判据 266（时间预算的守卫用例要断言下限、并把测算过程写在常数旁边）**：断 `>= 30` 而不是 `== 30`，抬到 45 不会误判红，
+而任何一次"退回 15"或删掉那行（`None`）都必判红；同时预算这个数字必须能被读者复算 —— 常数上方逐条记 807 s / 93% /
+install 87 s / collect 16 s / L1 10 s 的来源 run，被改的 YAML 里也留一行。否则下一个读到 `30` 的人无法区分
+"测出来的 30"与"拍脑袋的 30"，而这正是本刀要防的那类隐形契约。
+
+**判据 267（job 级预算要按矩阵里最慢的那一枝取，不能按"绿过的那一枝"取）**：同一份 YAML 里 3.13 整枝 761 s 早已 success，
+只看"哪枝绿"会得出"15 分钟够用"；而 `timeout-minutes` 是 job 级、对 matrix 每一枝都生效，砍人的是 3.11
+（它多跑三道门禁、套件也更慢：916 s 未完 vs 761 s 完成）。可迁移动作：凡 job 级资源常数（时间 / 内存 / 并发），
+读数是逐 matrix 枝各取一次再取 max，并记录各枝之间为什么不同（这里是那三道门禁只在 3.11 跑）。
+
+新增判据 266–267，**已闭环计数推到 128**。
