@@ -55,7 +55,11 @@ jobs:
         python-version: ["3.11", "3.13"]
 
     steps:
+      # ``check_p1_invariants.py`` diffs the tree against the fork point, so a
+      # shallow checkout makes the gate abort before the tests below can run.
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v5
