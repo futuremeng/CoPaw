@@ -24,8 +24,9 @@ def test_codex_and_qoder_sdks_are_optional_and_in_full() -> None:
     assert not any("qoder-agent-sdk" in item for item in dependencies)
     assert extras["codex"] == ["openai-codex==0.144.4"]
     assert extras["qoder"] == ["qoder-agent-sdk==1.0.9"]
+    # Derived from the declaration: the fork ships under its own name.
     assert extras["full"] == [
-        "qwenpaw[qwenpaw-data,hub,local,whisper,codex,qoder]",
+        f"{project['name']}[qwenpaw-data,hub,local,whisper,codex,qoder]",
     ]
 
 
