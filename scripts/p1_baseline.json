@@ -538,12 +538,12 @@
       "removed": 0
     },
     "scripts/pack/build_common.py": {
-      "added": 2,
-      "behavior_added": 2,
-      "behavior_removed": 2,
+      "added": 5,
+      "behavior_added": 5,
+      "behavior_removed": 4,
       "mechanical": false,
       "naming": 0,
-      "removed": 2
+      "removed": 4
     },
     "scripts/pack/build_macos.sh": {
       "added": 21,
@@ -995,15 +995,15 @@
     }
   },
   "totals": {
-    "added": 11091,
-    "behavior_added": 11055,
+    "added": 11094,
+    "behavior_added": 11058,
     "behavior_files": 123,
-    "behavior_removed": 506,
+    "behavior_removed": 508,
     "files": 123,
     "mechanical_files": 1,
     "naming_files": 0,
     "naming_lines": 36,
     "naming_touched_files": 8,
-    "removed": 542
+    "removed": 544
   }
 }
