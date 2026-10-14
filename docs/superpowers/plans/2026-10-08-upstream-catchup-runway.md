@@ -4655,6 +4655,8 @@ assert extras["full"] == [
 `plugins/apps/qwenpaw-data/README*.md` 2）、发布值班模板 1 处（`.github/workflows/release-duty.yml:240`
 的 `pip install qwenpaw==${version}`）、插件提示 1 处（`plugin.json:27` 的 `pack_requires_hint`）、
 测试侧 6 处。改这些是改**用户可见文案**，要连 locale 键与文档一起动，故列待裁不动。
+⚠ **这串读数被 §8.60 推翻**：扫描器当时走文件系统，把 8 枚 gitignore 的本机产物算成读点；在册口径的现读是
+**27 个（文件, 名字）对 / 26 枚文件**，其中"文档 12 处"里有 8 枚根本不在册。
 
 **同时结清一条真缺陷（另开刀 131）**：`scripts/pack/build_common.py:156` 在 conda 打包路径里把
 `f"qwenpaw[full] @ {wheel_uri}"` 交给 pip，而 `wheel_uri` 指向的是 `copaw_community-*.whl`。pip 实测
@@ -4691,6 +4693,8 @@ ERROR: qwenpaw has an invalid wheel, .dist-info directory
 
 **现读分布由扫描器给**：34 枚文件 / 35 个（文件, 名字）对 / **64 处**出现，按类 `install` 2 枚 3 处、
 `copy` 14 枚 28 处、`doc` 12 枚 16 处、`test` 6 枚 17 处。
+⚠ **这串读数被 §8.60 推翻**：那 12 枚 `doc` 里有 8 枚是被 `.gitignore` 忽略的本机构建产物，一次 fresh clone
+拿不到 ⇒ 在册口径的现读 = 26 枚文件 / 27 个（文件, 名字）对（`install` 2 / `copy` 14 / `doc` 4 / `test` 7）。
 **这推翻了刀 130 手工数的 58 处**：`copy` 的 28 处逐类对得上，`doc` 少算 4（我按 8+2+2 数成 12，扫描器在
 同一批文件里读到 16），`test` 少算 11（登记了 6 枚文件但手工只按"6 处 pin"记）。差额根因：手工数是按
 "用户可见文案"这个心理分类去看，测试侧 fixture 里的重复字面量被跳过。⇒ 判据 274。
@@ -4852,8 +4856,49 @@ ERROR: qwenpaw has an invalid wheel, .dist-info directory
   从事实源派生文案），是产品裁决。待裁。
 - `NPM Format` 的 `console format check` 在 main 上连续 6 笔红（13 枚文件）：要么把它并进在册脏文件的
   对账（§8.54/§8.55 那笔 13 vs 10 未结的账），要么判掉这枚 workflow。待裁。
+- fork 自有 `unit-tests.yml` 的 unit 枝缺 `Install Linux isolation dependency` 那步 ⇒ 2 枚 bwrap 用例在 CI 恒红
+  （详见下面「本刀的 CI 复跑读数」）。待裁。
 
-**未验证**：本刀的 CI 复跑读数（推送后读 run）；`Tests 38552283778` 与 `Pre-commit Checks 38552283841`
-这两枚 run 写文档时仍 `in_progress`，未取结论。
+**`ea57bbf64` 那批余下两枚 run 的结论（现已读到）**：
 
-新增判据 276–277，刀 131 的闭环要等这次 CI 复跑读绿。
+- 上游 `Tests 38552283778` 整体 **failure**，unit py3.11 枝（job `115812939809`）实读
+  **`1 failed, 17837 passed, 24 skipped, 4 xfailed, 68 warnings, 27 errors in 1173.41s`**。那 1 枚 failed 是
+  `tests/unit/scripts/test_check_release_channel_consistency.py::test_this_repository_passes_the_guard`，
+  27 枚 error **全在同一枚文件的 setup**：`fixture source missing: src/qwenpaw/docs/channels.en.md`
+  ⇒ **同一处污染在两处显形，而门禁自己的用例比门禁规则更早暴露它**（与本机 fresh worktree 复现的报错逐字相同）。
+  其余枝的 job 结论现读为 Contract 3.11 / 3.13、Integrated p0 / p2 **failure**、p1 **success**（具体红条未逐条对账，
+  刀 130 那三条继承缺陷是最可能的来源，但本刀没有读那几枚 job 的日志 ⇒ 记为未验证）。
+- `Pre-commit Checks 38552283841` **failure** 在 `Run pre-commit`，5 枚 hook 红：
+  `Add trailing commas` / `mypy` / `black` / `flake8` / `pylint` ⇒ 已登记的 lint 债（判据 162/173 的"照旧不排刀"），
+  本刀未逐文件对账。
+
+**本刀的 CI 复跑读数（`a713b4d58`，fork 自有 `Unit Tests` run `38556878592`，整体 success）**：
+
+- `Unit Tests - py3.11` 枝 11 枚 step 全绿：`Check CoPaw locale split guard` / `Install dependencies` /
+  `Check namespace boundaries (gate)` / `Check P1 invariants (gate)` / **`Release channel consistency (gate)`** 全 success，
+  其后 `Run all unit tests`、`Fail loudly if nothing was collected`、`Run L1 hard gate tests` 也 success
+  （刀 131-5 之前那三道里 R8 直接红、unit/L1 被砍成 `skipped`）。
+- 门禁在 CI 上打印的摘要行与本机**逐字相同**：
+  `R1-R8 over 6 channel files; 10 registered templates, 11 read points swept in 5 files; 26 registered requirement
+  sites, 27 names in 26 files swept` ⇒ 在册口径把"本机读的"和"clone 读的"合成同一件事（判据 276 的正证）。
+- `Run all unit tests` 实读 **`collected 15871 items` / `2 failed, 15847 passed, 23 skipped, 4 xfailed, 20 warnings in 915.88s`**；
+  `Run L1 hard gate tests` 实读 `collected 1340 items` / `1339 passed, 1 skipped in 9.79s`。
+  py3.13 枝同样三步 success（三门禁按 `if:` `skipped`）。
+- **那 2 枚红的归属已证，不是本刀造的**：两条都是
+  `tests/unit/hub/test_process_isolation.py::test_linux_runtime_filesystem_is_shared_and_persistent[/data/member]`
+  与 `[/workspace]`，报错 `ProcessIsolationError: Local isolation requires bubblewrap (bwrap) on Linux.`。
+  对拍刀 130 那次同枝同文件的 run `38538655054`（job `115767693979`）=
+  **`3 failed, 15839 passed …`**，三条红里就含**同样这两条**，第三条是刀 129 造、刀 130 已修的 `test_codex_and_qoder_sdks_are_optional_and_in_full`
+  ⇒ 本册两刀净效果 = **CI unit 红 3 → 2，且剩下的 2 条逐字未变**。
+- ⚠ 这 2 条红是 **fork 自有 workflow 的环境缺口**：上游 `Tests` 那枝有一步 `Install Linux isolation dependency`
+  （在 `38552283778` 的 job step 表里现读到），而 `unit-tests.yml` 那枝没有这一步 ⇒ bwrap 不存在。
+  **新增待裁**：要不要给 fork 的 `unit-tests.yml` 补那步装 bwrap（改 CI YAML ⇒ 按判据 273 必须同笔带一枚断言下限的
+  fork 自有守卫用例）。本刀不动。
+
+**同批其余 run 的结论（`a713b4d58`）**：`CodeQL 38556878631` **success**；`NPM Format 38556878435` **failure**
+（`console format check`，与 §8.54/§8.55 那笔 13 vs 10 未结的账同一形状）；写本段时 `Tests 38556878449` 与
+`Pre-commit Checks 38556879179` 仍 `in_progress` ⇒ 结论未取，记为未验证。
+
+**刀 131 自此闭环**（R8 落地 + 登记表换成在册口径 + 门禁在 CI 真跑绿）。
+
+新增判据 276–277。
