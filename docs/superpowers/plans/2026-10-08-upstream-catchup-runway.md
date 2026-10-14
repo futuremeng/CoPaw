@@ -4251,3 +4251,100 @@ import、相关用例集在新旧两版各跑一遍对拍。本刀三个答案�
 **推送本身就是这刀唯一的真验证**：只有 CI 才会用改后的装法在新起的 runner 上重装一遍。
 
 新增判据 251–257，**已闭环计数推到 126**。
+
+### 8.55 刀 127：刀 126 的推送照出第二枚 CI 缺陷 —— P1 棘轮门禁在 CI 里从来没跑起来过一次，根因是检出深度
+
+**触发**：刀 126 推完取 CI 读数（run 38517772699）。那刀要证的两件事都绿了（两枝安装步 ✓、
+`py3.13` 整枝含 L1 硬门 ✓、`Coverage Report` ✓），但 `Unit Tests - py3.11` 红在
+`Check P1 invariants (gate)` —— **不是本刀改出来的**，红的是一枚结构缺陷。
+
+**根因 = 一条报错 + 五条实测，先归因再动刀**
+
+| 检 | 现读 |
+| --- | --- |
+| 报错原文 | `subprocess.CalledProcessError: Command '['git', 'ls-tree', '-r', '--name-only', '2744a976b']' returned non-zero exit status 128`（栈停在 `scripts/check_p1_invariants.py:59`） |
+| 为什么 | `check_p1_invariants.py:32` 的 `DEFAULT_BASE_REF = "2744a976b"` 要按分叉点那枚提交对象做 `ls-tree` / `diff`；`.github/workflows/unit-tests.yml:58`、`:139` 两枚 `actions/checkout@v4` 都没写 `fetch-depth`，而全仓 workflow `grep -rn fetch-depth` **零命中** ⇒ 检出只有 HEAD 一枚提交 |
+| 基线到底在不在我们历史里 | `git merge-base --is-ancestor 2744a976b main` ⇒ **是 main 的祖先**（合并过上游），所以"全历史检出"必然含它；红的纯粹是"没下载"，不是"不存在" |
+| 这枚门禁有几个强制点 | `grep -rn check_p1_invariants .github/ .pre-commit-config.yaml scripts/*.sh` ⇒ 全仓**只有 1 处** = `unit-tests.yml:90`。本机那次 rc=0 靠的是我这株完整克隆，不是门禁 |
+| 是不是本刀造成的 | 同一枚失败步在 `999b3fa33`（10-13）、`94ff498ef`（10-13）两枝 `py3.11` 上都在；再往前 run 37873677304（10-09）的 `py3.10` 同步骤、同报错，只是 sha 是上一代基线 `e111ec6fb` ⇒ **四个实测实例跨两代基线，门禁自写进 CI 起没有一次真正执行过** |
+| 连带吞掉了哪些步 | `run:` 步失败即断枝：`py3.11` 上 `Run all unit tests`、`Fail loudly if nothing was collected`、`Run L1 hard gate tests (must pass)` 三步全显示 `-`（从未执行），`Release channel consistency (gate)` 同理 |
+
+⇒ CI 的实际分工（现读，不是设计意图）：locale + 命名空间在 3.11、unit + L1 **只在 3.13**、
+**P1 / brand / release-channel 三道在 CI 里等于不存在**。P1 棘轮是这轮同步的核心护栏，它唯一的强制点却是死的。
+
+**落点**：`.github/workflows/unit-tests.yml` 的 `unit-tests` 那枝 checkout 加 `with: fetch-depth: 0`（+4/−0，含两行注释）。
+`coverage` 那枝的 checkout 不动 —— 它不跑依赖历史的门禁，本刀的守卫用例也没要求它。
+
+**先红**：`tests/unit/scripts/test_unit_tests_workflow_checkout_depth.py`（1 枚用例）断言"跑了 `check_p1_invariants.py`
+那枝必须有一枚 `actions/checkout@*` 步带 `fetch-depth: 0`"。改前实测红在正确的对象上：
+`AssertionError: unit-tests checks out at ['None']: check_p1_invariants.py cannot resolve the fork point from a shallow clone`。
+改后 `tests/unit/scripts` 整目录 **179 passed**。flake8 rc=0、`black --line-length=79 --check` rc=0。
+
+**改后全套读数**
+
+| 检 | 现读 |
+| --- | --- |
+| P1 `--check` | rc=0，**122 文件 / +11,087 −539**、行为 `+11,051 / −503`、naming 0/8/36、mechanical 1 ⇒ 与基线逐字相同；workflow 与用例都在册外（分叉点无此路径）⇒ **冲突面 +0，棘轮不重立** |
+| brand verify | rc=0，7 文件 / 35 行 |
+| release channel | rc=0，R1–R6 / 6 枚渠道文件 / 10 条登记模板 / 11 个读点 / 5 枚文件 |
+| locale split | rc=0，4,658 / 59 / 7 / 1,459 / 23 |
+| CI command targets | rc=0，19 命令 / 4 目录 |
+| CI 那步的选择集 `tests/unit --ignore=tests/unit/channels` | `--collect-only -q` = **15,859 tests collected / 0 error**；实跑 = **1 failed / 15,836 passed / 23 skipped / 4 xfailed / 1,405.90 s** ⇒ 与 §8.54 那把逐位对得上，只多本刀那枚新守卫（collect 15,858 → 15,859、passed 15,835 → 15,836），红集一字未动（还是 `test_process_isolation.py:643` 那枚 mac-only 的）。**耗时没归因**：779.42 s → 1,405.90 s，这一把期间本机还并发跑着取证的 `git clone --local`，不作为回归证据 |
+
+**没重取的读数，以及凭什么**：前端 vitest / `npm run build` / initial bundle / lint 五把沿用 §8.54 —— 本刀只改一枚
+workflow YAML 与 `tests/` 下新文件，一枚前端与 `src/` 文件都没动。CI 那步的另外两把（`tests/unit/channels`
+2,019 passed / 1 skipped、L1 硬门 1,339 passed / 1 skipped）同样沿用：前者与本刀新增的 `tests/unit/scripts/`
+文件不在一个选择集里，后者五枚路径（`tests/unit/security`、`tests/contract/security`、
+`tests/unit/agents/{hooks,memory,utils}`，`unit-tests.yml` 现读）没有一枚覆盖新增文件所在目录。
+
+**那处交互改成实测（不在 CI 猜）**：命名空间那步自带 `git fetch --depth=1 https://github.com/agentscope-ai/CoPaw.git main:qwenpaw_upstream_main || true`，
+而它在 CI 里**跑在 P1 那步之前** —— 于是问题变成"全历史检出后再做一枚 shallow fetch，会不会把 P1 需要的分叉点对象弄没"。
+本机不能对上游 `git fetch`（要另行授权），但这枚是纯 git 行为，可以用 `git clone --local` 起一株完整克隆来问：
+
+```
+克隆深度：git rev-list --count HEAD = 3,781
+fetch 前：git ls-tree -r --name-only 2744a976b | wc -l = 5,994
+git fetch --depth=1 origin main:probe_ref_up            → rc=0，新建 .git/shallow（内容是那枚 tip）
+fetch 后：git ls-tree -r --name-only 2744a976b | wc -l = 5,994   ← 分叉点照样读得到
+```
+
+⇒ `--depth=1` 只是给克隆打上 shallow 标记，**不动已在位的对象**；本刀那半与那步互不干扰。
+仍未测的只剩"CI 那台 runner 能否解析上游 URL"（网络面，且那步带 `|| true`，失败会被吞）。
+
+**新增待裁（登记，不排刀）**：
+1. unit 那步现在是 `continue-on-error: true` 的 informational 步，而 CI 里唯一硬门是 L1 那五枚路径 —— 要不要把
+   全量 unit 转成硬门，是独立的裁决（本刀只让它在 3.11 那枝"能跑到"，没改它的红绿语义）。
+2. matrix 那两枝（3.11 / 3.13）的门禁分工为什么长这样、要不要重排，未裁。
+3. `git fetch --depth=1 … || true` 里那个 `|| true` 是否该改成显式失败 —— 它现在会把"命名空间门禁拿不到上游 ref"
+   这种降级吞成绿。本刀不动它。
+
+**判据 258（门禁"存在"不等于门禁"在跑"，要按强制点计数 + 实际执行历史两样取）**：一枚 `--check` 脚本在 CI YAML 里
+有一行只证明它被调用过；证明它有效必须两枚读数：(a) 全仓 grep 数它有几个强制点，(b) 从 `gh run view --json jobs`
+的 steps 里读出它的 conclusion。本刀读数是"1 个强制点、4 次同一步失败、后续 4 步从未执行"，于是那句
+"P1 棘轮有 CI 兜底"从刀 102 起就是错的。可迁移动作：每次给 CI 加门禁，取一次"它在 CI 里真跑过且绿"的运行证据。
+
+**判据 259（依赖 git 历史的检查在 CI 里要连检出深度一起判）**：任何脚本只要出现 `git ls-tree` / `git diff <sha>` /
+`git log <sha>`，它的前提就是"那枚提交对象在克隆里"，而 `actions/checkout@v4` 默认 `fetch-depth: 1`。
+⇒ 审这类门禁时先 grep `fetch-depth`，零命中就等于这类门禁全红。
+
+**判据 260（一步失败会连带把后续步变成 `-`，所以"某步没红"可能是"它没跑"）**：`gh run view` 里
+`Run L1 hard gate tests` 显示 `-` 而不是 `✓`，之前被我记成"L1 在 3.11 上跑过且随分支跳过"。⇒ 读 CI 必须区分
+`success` / `failure` / `skipped`，报"跑过"之前先确认它不是 `-`。
+
+**判据 261（照出的缺陷要按"谁造成的"分账，不按"谁发现的"记账）**：本刀没造成 P1 那枚红，只是在它前面活得够久。
+⇒ 另立一刀、另写一节，并把"早于本刀"的证据（那 4 个 run 号与两代基线 sha）写进记录，避免下一个人以为是同步回归。
+
+**判据 262（改 CI 配置的守卫用例只能钉"配置形状"，真验证仍在跑的那台机器）**：`fetch-depth: 0` 这行任何本地
+pytest 都验不出效果（本机一直是全历史克隆），守卫用例能钉的只有"这一行没被下次同步顺手删掉"。⇒ 记录必须写清
+"推送才是本刀唯一的真验证"，并把只有 runner 才能答的那部分单独点名（本刀 = 上游 URL 能否解析）。
+
+**判据 263（"本机不能做的动作"常常只是"不能做那个动作的网络那半"，把它拆出来就能测）**：`git fetch` 要另行授权，
+所以我不能对上游拉 ref；但我要问的其实不是网络，是"一枚 `--depth=1` 的 fetch 会不会让已在位的提交对象读不到"。
+这半句是纯 git 行为 ⇒ `git clone --local` 起一株完整克隆、对它自己的 `origin` 做同一枚 `--depth=1` fetch、
+前后各跑一次 `git ls-tree -r --name-only <基线>` 就够了（实测都是 5,994，`.git/shallow` 只多一枚 tip）。
+可迁移动作：遇到"这事只能等 CI/线上验"先拆一层 —— 网络与凭据那半确实测不了，git / 文件系统 / 解释器行为那半通常测得了。
+
+**本刀的提交**：规则一笔（`.github/workflows/unit-tests.yml` + `tests/unit/scripts/test_unit_tests_workflow_checkout_depth.py`）、
+记账一笔（本节）。**推送是这刀唯一的真验证**：只有 CI 才会在全历史检出下第一次真跑 P1 / brand / release-channel。
+
+新增判据 258–263，**已闭环计数推到 127**。
