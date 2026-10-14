@@ -4377,4 +4377,40 @@ pytest 都验不出效果（本机一直是全历史克隆），守卫用例能�
 job 的 `started_at`/`completed_at` 之差对上 YAML 里的 `timeout-minutes`，再读那步日志尾一行。
 可迁移动作：修门禁 / 修检出这类"前置解除"型改动，落地时把同 job 的预算、选择集大小、后续 must-pass 步一起取一次数。
 
-新增判据 258–264，**已闭环计数推到 127**。
+**同一次推送里另外四道 workflow 的读数（补记第二，为的是照出刀 119 留下的一处真缺陷）**：`aae21b788` / `0514215c1`
+两枚 sha 上按 `gh run view --json jobs` 逐枚现读步骤结论 ——
+
+| workflow | 现读 | 归属 |
+| --- | --- | --- |
+| `Unit Tests`（fork 自有 `unit-tests.yml`） | 见上表：三道门禁第一次绿，unit 那步被 15 分预算砍 | 刀 127 已闭 + 刀 128 候选 |
+| `Pre-commit Checks` `38526622370` | `Run pre-commit` 失败，日志数得 **11 枚 hook Passed / 5 枚 Failed**（`Add trailing commas`、`mypy`、`black`、`flake8`、`pylint`） | 在册 lint 债（lint 册），照旧不排刀（判据 162/173） |
+| `NPM Format (website & console)` `38529969724` | `console format check` 失败，一行 `[warn] Code style issues found in 13 files. Run Prettier to fix.` | 在册 prettier 脏；**这个 13 与本机那把的口径没对过**，只作 CI 面读数 |
+| `Tests`（上游自有 `tests.yml`）`38526622609` | **七枚测试 job 全在同一枚 `Install dependencies` 步失败** ⇒ `Test Summary` 红 | 见下 |
+
+`Tests` 那七枚不是新 lint，是**装不上**：pip 报 `ResolutionImpossible`，冲突那几行是
+`copaw-community 2.2.2b4.post1 depends on agentscope==2.0.9` 对 `qwenpaw[...]==2.2.1 depends on agentscope==2.0.7.post1`
+（再往下每个上游版本各钉一枚 agentscope）。根因在 `pyproject.toml:181`：
+`full = ["qwenpaw[qwenpaw-data,hub,local,whisper,codex,qoder]"]`（`sip-livekit` 那行同形，`qwenpaw[sip]`）——
+改名前这枚要求由**我们自己的分发名**满足，改名后它变成"从 PyPI 拉上游那个 `qwenpaw`"，而上游每版都把自己的
+`agentscope` 钉死 ⇒ 与我们的 `agentscope==2.0.9` 互斥 ⇒ `pip install -e ".[dev,test,full]"`（`tests.yml:140/204/295`、
+`full-tests-nightly.yml:137/234/329`）全红。归属现取：第一枚"卡在 install"的 run = `38333158948`（sha `94ff498ef`、
+2026-10-13T01:39Z），上一枚还过得去 install 的 = `38232407961`（sha `64d0133c4`、2026-10-12T09:49Z，红在后面那步），
+两枚之间只有六个提交、其中 `e8d38985e feat(release): ship under our own PyPI name copaw-community` = 刀 119-2 那笔改名。
+⇒ **改名把这道本已红的 workflow 从"跑起来再红"退成"根本装不上"**（分账同判据 261：不是刀 127 造成的）。
+真用户面同样受影响：`pip install "copaw-community[full]"` 现在会去装上游分发，不是我们的码。
+门禁面补一枚事实：R6 的扫描根是 `READER_DIRS = ("src", "scripts", "plugins", "deploy", ".github/workflows")`
++ `READER_SUFFIXES`（`.py .sh .ps1 .bat .yml .spec .nsi`）⇒ **仓根的 `pyproject.toml` 压根不在扫的范围里**，
+所以那枚 extras 里的上游分发名 R6 看不见（这解释"门禁全绿而树里真有泄漏"并非矛盾）。
+
+**新增待裁 5**：`full` / `sip-livekit` 两枚 extras 里的 `qwenpaw[...]` 怎么改 —— 候选是把它展开成我们自己的
+extras（`copaw-community[qwenpaw-data,hub,local,whisper,codex,qoder]`）或直接指到 `copaw-community`，
+并决定要不要把 `pyproject.toml` 纳入 R6 的扫描根（纳入要给那枚在册文件重立基线）。未裁、未排刀。
+
+新增判据 258–265，**已闭环计数推到 127**。
+
+**判据 265（改名必须连"分发名出现在依赖声明里"的那一类一起扫，因为改名后它会从'指自己'静默变成'指上游'）**：
+一枚 extras 写 `qwenpaw[...]`，在名字还是 `qwenpaw` 时是自引用（pip 用正在装的那枚满足它），改名后同一个字符串
+变成一条真的 PyPI 依赖 ⇒ 解析冲突 / 装到别人的码。可迁移动作：凡改分发名，除了 grep 读点，还要把
+`pyproject.toml` / `setup.py` 的 `install_requires` 与 `optional-dependencies` 逐条读一遍；而门禁的扫描根若不含
+这些文件，"门禁绿"不能作为"没有泄漏"的证据 —— 必须另取一次工具自己的目录清单（本刀读数 = `READER_DIRS` 无仓根、
+`READER_SUFFIXES` 无 `.toml`）。
