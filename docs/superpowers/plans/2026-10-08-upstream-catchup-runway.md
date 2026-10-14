@@ -4571,3 +4571,101 @@ job summary/artifact。
 
 新增判据 268–271，**已闭环计数推到 129**。
 
+
+### 8.58 刀 130：把刀 129 漏在别处的上游字面量改成派生（判据 272–273）
+
+**先补刀 129 推送后的 CI 读数**（那七枚 job 的问题当时只知"run 未结束读不到计数"）：
+
+- 上游 `Tests` run **38538655049**（headSha `28b2a5565`）整体 **failure**。七枚测试 job 的
+  `Install dependencies` **全部 success** —— 对比 run 38333158948 那七枚全死在 `ResolutionImpossible`，
+  刀 129 那 2 行确实解掉了阻塞（这是判据 253 那条待答问题的答案）。
+- 同一 run 的测试计数（从 job 日志实读）：Unit py3.11 `1 failed, 17,860 passed, 24 skipped, 4 xfailed in 996.92s`、
+  py3.13 同计数 `in 972.05s`；Contract 3.11 / 3.13 各 `1 failed, 411 passed, 1 skipped`（6.62s 量级）；
+  Integrated p0 `1 failed, 146 passed in 488.14s`、p1 `1,409 passed, 3 xpassed in 1151.09s`（success）、
+  p2 `1 failed, 334 passed, 2 skipped in 794.97s`。
+- 三枚 contract/integrated 红的归属用**改名前那次成功 run 38232407961** 对拍：同三条
+  （`tests/contract/browser/test_track_isolation.py::test_inbound_imports_limited_to_the_fork`， offender
+  `src/qwenpaw/rpa/runtime.py:61` 的上游浏览器导入；
+  `tests/integration/test_multi_agent_lifecycle.py::test_disabled_agent_blocks_scoped_operations`；
+  `tests/integration/test_active_model_scopes.py::test_agent_scope_unknown_agent_is_handled`）
+  在改名前就是红 ⇒ 继承缺陷，不是本册新造。
+- fork 自有 `unit-tests` run **38538655054** 整体 **success**：py3.11 枝 08:56:02Z→09:13:13Z = **1,031 s**，
+  五步全 success，含三道门禁第一次在 CI 真跑（`Check namespace boundaries`、`Check P1 invariants`、
+  `Release channel consistency`）；py3.13 枝 **888 s**，那三道按 `if:` 设计 `skipped`。
+  1,031 / 1,800 = **57%** 的刀 128 预算 ⇒ 刀 128 的"抬预算"被这次实测重新证明过一次。
+
+**Unit 那枚红是刀 129 新造的**，日志实读（run 38538655049 job 115767759193）：
+
+```
+FAILED tests/unit/harnesses/test_optional_dependencies.py::test_codex_and_qoder_sdks_are_optional_and_in_full
+  assert ['copaw-commu...codex,qoder]'] == ['qwenpaw[qwe...codex,qoder]']
+  At index 0 diff: 'copaw-community[qwenpaw-data,hub,local,whisper,codex,qoder]'
+                   != 'qwenpaw[qwenpaw-data,hub,local,whisper,codex,qoder]'
+```
+
+改名前那枝 unit 是 success ⇒ 这条红只能是刀 129 把 `full` 改指我们之后，一枚**在别处的上游用例**
+还在钉死退休字面量。
+
+**改动**（一枚文件，`tests/unit/harnesses/test_optional_dependencies.py`，+2 −1）：把那条断言从写死字符串
+改成从声明派生 ——
+
+```python
+# Derived from the declaration: the fork ships under its own name.
+assert extras["full"] == [
+    f"{project['name']}[qwenpaw-data,hub,local,whisper,codex,qoder]",
+]
+```
+
+派生形式同时保住这枚用例的原意（`full` 必须引用自己的六个 extra，即"自引用"这个合同），又不押注
+分发名的具体拼写；同一文件第 51 行那条 `Install qwenpaw[qoder] to enable Qoder.` 属于**用户可见文案**，
+本刀不动（见下面待裁）。
+
+**验证读数**：
+- 红→绿：改前 `1 failed, 1 passed in 0.52s` → 改后 `2 passed in 0.23s`（同一枚文件两枚用例）。
+- 全量 unit（本机 `/tmp/copaw_verify12`，py3.12，`-q`，日志 `/tmp/k130_unit.log`）：
+  **1 failed, 17,860 passed, 24 skipped, 4 xfailed, 66 warnings in 2417.97s**，唯一那枚红是本册已登记的
+  mac-only `tests/unit/hub/test_process_isolation.py::test_macos_sandbox_cli_can_reach_only_its_runtime`
+  （`skipif(sys.platform != "darwin")`，与上游逐字节相同）⇒ 与刀 129 的红集合一致，无新增。
+  计数与 CI 两枝的 17,860 对得上。
+- `git diff --numstat` = `2 1 tests/unit/harnesses/test_optional_dependencies.py`。
+- lint：该文件 flake8 rc=0；`black --line-length=79 --check` rc=0。
+- 五道门禁 rc=0。release-channel 那行的通过读数这次带出 R7 已进册：
+  `R1-R7 over 6 channel files; 10 registered templates, 11 read points swept in 5 files`。
+- 棘轮：`--check --target-ref working` rc=1，报 `files grew: 122 -> 123`、
+  `behavior_added 11053 -> 11055`、`behavior_removed 505 -> 506`、
+  `NEW upstream-owned file touched: tests/unit/harnesses/test_optional_dependencies.py`
+  ⇒ 本刀动了一枚在册的上游自有文件，totals **123 文件 / +11,091 −542**（`mechanical: 1`、
+  naming `0 pure / 8 touched / 36 lines`）。`--write-baseline` 后 `--check` rc=0。
+
+**判据 272（改名刀必须跑全量 unit 套件，不能只跑改动目录所在那一枝）**：刀 129 的本地验证跑了
+`tests/unit/scripts`（184 枚）+ 五道门禁，没跑 `tests/unit` 全量，于是一枚**离改动目录很远**的上游用例
+（`tests/unit/harnesses/`）里钉死的退休字面量只有 CI 能抓到。改名类刀的影响面由"字符串分布"决定，不由
+"我改了哪个目录"决定；而这类字符串分布恰好是可以机器枚举的 —— 本册据此开刀 131（R8 规则）。
+
+**判据 273（改 CI 的 YAML 必须同笔带一枚 fork 自有守卫用例，且守卫断言下限而不是精确值）**：由用户在刀 128
+之后裁定，作为标准术语使用。裸 YAML 改动在本地没有任何执行体，`timeout-minutes` 这类常量一旦回退，
+表现是 step `cancelled` + must-pass 步 `skipped`，门禁全绿也看不见。守卫断言写 `>= 30` 而不是 `== 30`，
+是为了下次抬预算不必同时改用例。
+
+**新增待裁（用户可见文案那一家，本刀只登记不改写）**：退休分发名仍写在**给用户看的话**里，
+现读 **58 处 / 34 枚文件**（由刀 131 的 R8 扫描器给出，不是手工 grep）：生产侧 6 条
+（`harnesses/base.py:118`、`harnesses/codex/adapter.py:53`、`cli/hub_cmd.py:149`、`cli/providers_cmd.py:28`、
+`hub/docker_provisioner.py:142,494`）、前端 7 份 locale 共 20 处（`codexNotFound`、`qoderNotFound`、
+`transcriptionInfoDescLocal`）、文档 12 处（`src/qwenpaw/docs/*` 8 枚、`scripts/pack/README*.md` 2、
+`plugins/apps/qwenpaw-data/README*.md` 2）、发布值班模板 1 处（`.github/workflows/release-duty.yml:240`
+的 `pip install qwenpaw==${version}`）、插件提示 1 处（`plugin.json:27` 的 `pack_requires_hint`）、
+测试侧 6 处。改这些是改**用户可见文案**，要连 locale 键与文档一起动，故列待裁不动。
+
+**同时结清一条真缺陷（另开刀 131）**：`scripts/pack/build_common.py:156` 在 conda 打包路径里把
+`f"qwenpaw[full] @ {wheel_uri}"` 交给 pip，而 `wheel_uri` 指向的是 `copaw_community-*.whl`。pip 实测
+（`/opt/homebrew/bin/pip3` 26.2.1，py3.15，`--dry-run --no-deps`）：
+
+```
+ERROR: qwenpaw has an invalid wheel, .dist-info directory
+'copaw_community-2.2.2b4.post1.dist-info' does not start with 'qwenpaw'
+```
+
+对照 `copaw-community[full] @ …` 过了名字检查（只在 `<3.14,>=3.11` 的 Python 下界上停住）⇒ 这是刀 119
+改名留下的第二处"语义翻了但 diff 里看不见"，且它在我们自己的桌面打包路径上。
+
+新增判据 272–273，**已闭环计数推到 130**。
