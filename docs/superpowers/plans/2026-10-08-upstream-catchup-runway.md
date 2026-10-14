@@ -4773,3 +4773,87 @@ ERROR: qwenpaw has an invalid wheel, .dist-info directory
 在文档叙述里）。`.toml` 不在 `REQUIREMENT_SUFFIXES`（R7 专管 `pyproject.toml` 的 requirement 逐条扫描）。
 
 新增判据 274–275，**已闭环计数推到 131**。
+
+### 8.60 刀 131-6：R8 在本机绿、在 CI 红 —— 登记表被 gitignore 的本机文件污染（判据 276–277）
+
+**CI 实读（`ea57bbf64`，四笔推送后）**：
+
+- fork 自有 `Unit Tests` run **38552283747**：`Coverage Report` success、`Unit Tests - py3.13` success、
+  **`Unit Tests - py3.11` failure**。红不在测试步骤，而在门禁步骤 —— 该 job 14 枚 step 的实读是
+  `Check namespace boundaries (gate) success` / `Check P1 invariants (gate) success` /
+  **`Release channel consistency (gate) failure`**，其后 `Run all unit tests`、`Fail loudly if nothing was
+  collected`、`Run L1 hard gate tests` 三步全 `skipped`（门禁是硬步骤，红了就砍掉测试腿）。
+- 日志里的八行报错（job `115812872676`，原文）：
+  `ERROR: R8: registered requirement site src/qwenpaw/docs/{channels,cli,console,hub}.{en,zh}.md is gone`。
+- 同批 `CodeQL 38552283783` success、`NPM Format 38552283951` failure（`console format check` 那枚 job，
+  日志实读 **13 files**，清单含 `index.html`、`src/api/modules/agent.ts`、`src/styles/layout.css` 等）；
+  这枚 failure 在最近 6 笔 main 上（`0514215c1 / 120ea711f / 0a666a2b2 / 28b2a5565 / d1f050f31 / ea57bbf64`）
+  **逐笔都在红** ⇒ 继承项，不是本刀造的，就是 §8.54/§8.55 那笔"prettier 13 vs 10"未对账的 CI 侧读数。
+
+**根因（不是猜，三步证完）**：
+
+1. `git check-ignore -v src/qwenpaw/docs/channels.en.md` → **`.gitignore:47:src/qwenpaw/docs/`**，
+   `git ls-files src/qwenpaw/docs/` → **0 命中**，`git ls-tree -r 2744a976b -- src/qwenpaw/docs` → **0**。
+   即这枚目录**上游也没在册**，它是本机的构建产物；我这台机器有，CI 的 fresh clone 没有。
+2. 刀 131 的登记表是**拿本机全树扫出来的**：`_requirement_files()` 用 `rglob("*")` 走文件系统，于是把 8 枚
+   只活在本机的 `.md` 收了进来并登记为 `doc`。本机门禁因此恒绿（文件在、命中在、登记在，三样自洽）。
+3. CI 上"登记在、文件不在"⇒ 命中 R8 的第三条拒绝（registered-but-gone）×8。**登记表的 64 处 / 34 枚文件
+   这个读数本身就是错的**，它把 8 枚本机产物算进了"全树真表"。
+
+**可本机复现的证法**（判据 277）：`git worktree add --detach /tmp/k136_head HEAD` 拿到一枚没有 gitignore
+文件的检出，把当时的测试文件复制进去跑 → 两用例 **ERROR at setup**，报错是
+`AssertionError: fixture source missing: src/qwenpaw/docs/channels.en.md`（用例的 fixture 从登记表派生文件清单）。
+也就是说**门禁的测试用例比门禁自己更早暴露这个污染**，而且 fresh worktree 是零风险的复现场（不动工作树）。
+用完 `git worktree remove --force` 撤掉。
+
+**改动**（两枚 fork 自有文件，`scripts/check_release_channel_consistency.py` +63 −10、
+`tests/unit/scripts/test_check_release_channel_consistency.py` +79）：
+
+- 新增 `tracked_paths(repo_root)`：`git ls-files -z` 的集合 = 一次 clone 会拿到的文件；rc≠0 时返回 `None`
+  （单测 fixture 是把登记表复制进临时目录、没有 git 索引，那里文件系统就是唯一真相）。
+- **两道扫描都换成在册口径**：R8 的 `_requirement_files()` 与 R6 的 `scan_distribution_readers()` 各自跳过
+  不在 `tracked_paths()` 里的文件。
+- **登记表新增一条拒绝**：登记的落点若 git 不认 ⇒ `R8: registered requirement site … is not tracked by git;
+  the sweep only sees what a fresh clone contains, so this entry reads green here and red in CI`。
+  报错要指名真正原因；"is gone"会把下一个人带去查一次根本没发生的删除。
+- `REQUIREMENT_SITES` 删掉那 8 枚 `src/qwenpaw/docs/*.md`，并在注释里写清"这枚目录被 gitignore，故意不收"。
+- 顺手补模块 docstring：刀 131 加了 R8 却只写到"Seven rules"，R8 那段规则说明此前**没进文档**。
+- 三条新用例：`test_rule_eight_ignores_a_file_git_does_not_track`（未在册的命中不当成读点）、
+  `test_rule_eight_rejects_a_registered_site_that_is_untracked`（登记未在册文件必红，且红要有原因）、
+  `test_every_registered_channel_site_is_tracked_by_git`（**拿真树量**：两本登记表的名字必须全在 `git ls-files` 里）。
+
+**改后读数**：
+
+- 门禁现树 rc=0：`R1-R8 over 6 channel files; 10 registered templates, 11 read points swept in 5 files;
+  26 registered requirement sites, 27 names in 26 files swept`（登记表 34→**26** 枚文件）。
+- **同一份代码在同一棵树的 fresh clone 里 rc=0、读数逐字相同**（`/tmp/k136_head`，那 8 枚 `.md` 在那儿不存在），
+  ⇒ CI 会看到的正是这一行。
+- 用例：该文件 **40 passed**（刀 131 后 37 → 38? 现读 40，含本刀 3 条）、`tests/unit/scripts` **191 passed**；
+  R6 读数未变（11 处 / 5 枚文件）⇒ 在册口径没让既有扫描少看到任何东西。
+- P1 现读 `--check --target-ref working` rc=0，**123 文件 / +11,094 −544、命名 0 pure / 8 touched / 36 行、
+  mechanical 1**，与刀 131 重立的基线**逐字相同** ⇒ 本刀两枚落点都是 fork 自有文件、不属"P1 上游自有文件"，
+  冲突面 +0、棘轮不动、不需要 `--write-baseline`。
+- `check_namespace_boundaries.py` `result: PASSED`、`check_copaw_locale_split.py` passed（4,658 生产键 / 59 模板族 /
+  7 豁免族 / 1,459 overlay 键 / 23 枚上游自有键豁免）。
+
+**判据**：
+
+- **276**：凡"全树扫描 + 登记表"形状的门禁，**扫描集合必须钉在 `git ls-files` 上，登记表里每一条也必须在册**。
+  理由不是风格：本机树含 gitignore 产物，拿它建的登记表本身就是一个错读数，它会同时给出"本机恒绿"和
+  "CI 恒红"，而这两个信号都没在描述仓库。刀 120 的判据 233 是同一条规律的正面（`.gitignore` 让必需数据
+  同时躲开 `git ls-files` 与 wheel），本刀是反面（躲开的东西不该进表）。
+- **277**：怀疑"本机绿、CI 红"时，先 `git worktree add --detach /tmp/x HEAD` 复现，不要改工作树、不要靠推理结案。
+  门禁的 fixture 若从登记表派生文件清单，会在 setup 阶段直接把污染指出来（本刀实测：`fixture source missing`）。
+
+**新增待裁（本刀只登记，不改）**：
+
+- 那 8 枚（以及同目录其余）`src/qwenpaw/docs/*.md` 从此**不在门禁视野里**：它们含 `qwenpaw[hub]` 之类的
+  需求串，但既不在册也不被扫。要不要让构建产物也受渠道约束（做法 = 把这些 md 改成在册文件，或让生成器
+  从事实源派生文案），是产品裁决。待裁。
+- `NPM Format` 的 `console format check` 在 main 上连续 6 笔红（13 枚文件）：要么把它并进在册脏文件的
+  对账（§8.54/§8.55 那笔 13 vs 10 未结的账），要么判掉这枚 workflow。待裁。
+
+**未验证**：本刀的 CI 复跑读数（推送后读 run）；`Tests 38552283778` 与 `Pre-commit Checks 38552283841`
+这两枚 run 写文档时仍 `in_progress`，未取结论。
+
+新增判据 276–277，刀 131 的闭环要等这次 CI 复跑读绿。
