@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""scripts/check_release_channel_consistency.py guards the six rules."""
+"""scripts/check_release_channel_consistency.py guards the seven rules."""
 
 from __future__ import annotations
 
@@ -7,9 +7,12 @@ import importlib.util
 import json
 import re
 import shutil
+import tomllib
 from pathlib import Path
 
 import pytest
+from packaging.requirements import Requirement
+from packaging.utils import canonicalize_name
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 
@@ -506,3 +509,99 @@ def test_the_live_sweep_pinpoints_every_registered_line():
         if match:
             swept.add((rel, int(match.group(1))))
     assert swept == expected
+
+
+def _declared_requirements(pyproject_text: str) -> list[str]:
+    document = tomllib.loads(pyproject_text)["project"]
+    requirements = list(document.get("dependencies", []))
+    for extras in document.get("optional-dependencies", {}).values():
+        requirements.extend(extras)
+    return requirements
+
+
+def test_no_dependency_declares_the_retired_distribution():
+    """A self-reference is a dependency on somebody else once we rename.
+
+    ``full = ["qwenpaw[qwenpaw-data,hub,...]"]`` was satisfied by the project
+    being installed while the declaration still read ``qwenpaw`` (proved in CI:
+    run 38232407961 job 114754874690 resolves it as
+    ``...extra == "qwenpaw-data"->qwenpaw==2.2.2b4.post1`` and downloads no
+    ``qwenpaw`` artifact).  After ``pyproject.toml`` declares
+    ``copaw-community`` the same string is a PyPI dependency on the upstream
+    distribution, whose per-version ``agentscope`` pins exclude ours.  That is
+    why every job of the upstream ``Tests`` workflow died in
+    ``Install dependencies`` from run 38333158948 on.
+    """
+    mod = _module()
+    retired = canonicalize_name(mod.PRE_RENAME_DECLARATION)
+    offenders = [
+        raw
+        for raw in _declared_requirements(
+            (REPO_ROOT / mod.PYPROJECT_REL).read_text(encoding="utf-8"),
+        )
+        if canonicalize_name(Requirement(raw).name) == retired
+    ]
+    assert offenders == [], (
+        f"{mod.PYPROJECT_REL} still requires the retired distribution name: "
+        f"{offenders}"
+    )
+
+
+def test_rule_seven_rejects_a_dependency_on_the_retired_distribution(
+    fixture_root,
+    capsys,
+):
+    mod = _module()
+    path = fixture_root / "pyproject.toml"
+    path.write_text(
+        path.read_text(encoding="utf-8").replace(
+            '"copaw-community[sip]"',
+            '"qwenpaw[sip]"',
+        ),
+        encoding="utf-8",
+    )
+    assert run(mod, fixture_root) == 1
+    assert "R7:" in capsys.readouterr().out
+
+
+def test_rule_seven_accepts_the_pre_rename_self_reference(
+    fixture_root,
+    capsys,
+):
+    """The same string is legitimate while the declaration reads ``qwenpaw``.
+
+    R7 compares a requirement against the *declared* name, so a merge that
+    replays the pre-rename spelling (the two state R6 already has to tolerate)
+    stays green instead of demanding a third identity.
+    """
+    mod = _module()
+    _rename_declaration(fixture_root, "qwenpaw")
+    _rename_every_reader(mod, fixture_root, "copaw-community", "qwenpaw")
+    path = fixture_root / "pyproject.toml"
+    path.write_text(
+        path.read_text(encoding="utf-8").replace(
+            '"copaw-community[',
+            '"qwenpaw[',
+        ),
+        encoding="utf-8",
+    )
+    assert run(mod, fixture_root) == 0, capsys.readouterr().out
+
+
+def test_rule_seven_refuses_to_scan_nothing(fixture_root, capsys):
+    """A scan whose input regions moved would otherwise pass by finding zero.
+
+    ``dependencies`` can become ``dynamic``, or the extras can be retabled;
+    either edit silences R7 unless the rule asserts it actually read a
+    requirement.
+    """
+    mod = _module()
+    path = fixture_root / "pyproject.toml"
+    text = path.read_text(encoding="utf-8")
+    text = text[: text.index("[project.optional-dependencies]")]
+    path.write_text(
+        re.sub(r"(?ms)^dependencies = \[.*?^\]", "", text),
+        encoding="utf-8",
+    )
+    assert run(mod, fixture_root) == 1
+    assert "R7:" in capsys.readouterr().out

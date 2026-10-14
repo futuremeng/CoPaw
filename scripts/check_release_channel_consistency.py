@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 """Guard CoPaw's release-channel fact source against its consumers.
 
-Six rules (design §8):
+Seven rules (design §8):
 
 * R1 authority   -- ``pending`` is the only availability bit, and it can only
                     name declared channels; our own distribution names are
@@ -21,6 +21,11 @@ Six rules (design §8):
                     installed distribution move in the same commit, and the
                     registry is the whole table: a read point that is not
                     registered is itself a red.
+* R7 dependency  -- no requirement declared for the distribution itself names
+                    the retired identity while the declaration reads our own
+                    name; such a string was a self-reference before the
+                    rename and is a dependency on the upstream distribution
+                    after it.
 
 Usage:
     python scripts/check_release_channel_consistency.py
@@ -37,6 +42,8 @@ import sys
 from pathlib import Path
 from typing import Optional
 
+from packaging.requirements import InvalidRequirement, Requirement
+from packaging.utils import canonicalize_name
 from packaging.version import InvalidVersion, Version
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -297,6 +304,123 @@ def rule_distribution(loader, data, repo_root):
     return errors
 
 
+# R7's scan roots: the two TOML regions that declare requirements for this
+# distribution.  Parsing stays line-based on purpose -- the gate must run on
+# the same interpreter its sibling gates do, and a TOML library is not a
+# declared dependency of any gate.
+DEPENDENCY_TABLES = ("project", "project.optional-dependencies")
+TABLE_HEAD_RE = re.compile(r"^\[([^\]]+)\]\s*$")
+ARRAY_HEAD_RE = re.compile(r"^\s*([A-Za-z0-9_-]+)\s*=\s*\[\s*$")
+ONE_LINE_ARRAY_RE = re.compile(r"^\s*([A-Za-z0-9_-]+)\s*=\s*\[(.*)\]\s*$")
+QUOTED_RE = re.compile(r'"([^"]*)"')
+
+
+def _array_opened_by(line):
+    """``(key, inline_body)`` when the line opens a TOML array."""
+    match = ONE_LINE_ARRAY_RE.match(line)
+    if match:
+        return match.group(1), _outside_strings(match.group(2))
+    match = ARRAY_HEAD_RE.match(line)
+    if match:
+        return match.group(1), None
+    return None, None
+
+
+def _outside_strings(text: str) -> str:
+    """``text`` with a trailing ``#`` comment removed.
+
+    Comments sit inside these arrays (the ``dependencies`` block explains the
+    ``agent-client-protocol`` upper bound and quotes the Kitty term
+    "associated text"), and sweeping a comment's quoted word in as a
+    requirement makes the gate red on a line pip never reads.
+    """
+    kept = []
+    in_string = False
+    for char in text:
+        if char == '"':
+            in_string = not in_string
+        elif char == "#" and not in_string:
+            break
+        kept.append(char)
+    return "".join(kept)
+
+
+def dependency_requirements(repo_root: Path) -> Optional[list]:
+    """Every requirement string declared for the distribution itself."""
+    path = repo_root / PYPROJECT_REL
+    if not path.exists():
+        return None
+    table = ""
+    collecting = False
+    found = []
+    for line in path.read_text(encoding="utf-8").splitlines():
+        header = TABLE_HEAD_RE.match(line)
+        if header:
+            table = header.group(1)
+            collecting = False
+            continue
+        if collecting:
+            if line.strip().startswith("]"):
+                collecting = False
+            else:
+                found.extend(
+                    QUOTED_RE.findall(_outside_strings(line)),
+                )
+            continue
+        if table not in DEPENDENCY_TABLES:
+            continue
+        key, inline = _array_opened_by(line)
+        if key is None:
+            continue
+        if table == "project" and key != "dependencies":
+            continue
+        if inline is None:
+            collecting = True
+        else:
+            found.extend(QUOTED_RE.findall(inline))
+    return found
+
+
+def rule_dependencies(repo_root):
+    declared = declared_distribution(repo_root)
+    requirements = dependency_requirements(repo_root)
+    if requirements is None or declared is None:
+        return []  # R6 already reports an unreadable declaration
+    if not requirements:
+        return [
+            (
+                f"R7: {PYPROJECT_REL} yielded no requirement to check; the "
+                "declarations moved out of the two tables R7 reads"
+            ),
+        ]
+    if declared == PRE_RENAME_DECLARATION:
+        # While we ship under the upstream name these strings are self-
+        # references, and R6 has to keep replaying that state.
+        return []
+    errors = []
+    retired = canonicalize_name(PRE_RENAME_DECLARATION)
+    for raw in requirements:
+        try:
+            name = canonicalize_name(Requirement(raw).name)
+        except InvalidRequirement:
+            errors.append(
+                (
+                    f"R7: {PYPROJECT_REL} declares {raw!r}, which is not a "
+                    "PEP 508 requirement"
+                ),
+            )
+            continue
+        if name == retired:
+            errors.append(
+                (
+                    f"R7: {PYPROJECT_REL} requires {raw!r} while declaring "
+                    f"{declared!r}; the string names the upstream "
+                    "distribution, not us"
+                ),
+            )
+    return errors
+
+
 def _load_loader(repo_root: Path):
     spec = importlib.util.spec_from_file_location(
         "_rc_consistency_loader",
@@ -449,6 +573,7 @@ def main(argv=None):
     errors += rule_codegen(data, repo_root)
     errors += rule_version_line(data, repo_root)
     errors += rule_distribution(loader, data, repo_root)
+    errors += rule_dependencies(repo_root)
 
     if errors:
         for item in errors:
@@ -462,7 +587,7 @@ def main(argv=None):
     print(
         (
             "Release channel consistency check passed "
-            f"(R1-R6 over {len(CHANNEL_FILES)} channel files; "
+            f"(R1-R7 over {len(CHANNEL_FILES)} channel files; "
             f"{len(DISTRIBUTION_READERS)} registered templates, "
             f"{read_points} read points swept in "
             f"{len({rel for rel, _ in hits})} files)"
