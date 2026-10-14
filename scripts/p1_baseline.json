@@ -42,8 +42,8 @@
       "removed": 5
     },
     "console/scripts/verify-initial-bundle.mjs": {
-      "added": 6,
-      "behavior_added": 6,
+      "added": 25,
+      "behavior_added": 25,
       "behavior_removed": 1,
       "mechanical": false,
       "naming": 0,
@@ -450,12 +450,12 @@
       "removed": 1
     },
     "console/src/utils/lazyWithRetry.ts": {
-      "added": 38,
-      "behavior_added": 38,
-      "behavior_removed": 4,
+      "added": 43,
+      "behavior_added": 43,
+      "behavior_removed": 5,
       "mechanical": false,
       "naming": 0,
-      "removed": 4
+      "removed": 5
     },
     "console/tsconfig.app.json": {
       "added": 1,
@@ -987,15 +987,15 @@
     }
   },
   "totals": {
-    "added": 11063,
-    "behavior_added": 11027,
+    "added": 11087,
+    "behavior_added": 11051,
     "behavior_files": 122,
-    "behavior_removed": 502,
+    "behavior_removed": 503,
     "files": 122,
     "mechanical_files": 1,
     "naming_files": 0,
     "naming_lines": 36,
     "naming_touched_files": 8,
-    "removed": 538
+    "removed": 539
   }
 }
