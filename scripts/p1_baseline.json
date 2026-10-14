@@ -977,6 +977,14 @@
       "naming": 0,
       "removed": 0
     },
+    "tests/unit/harnesses/test_optional_dependencies.py": {
+      "added": 2,
+      "behavior_added": 2,
+      "behavior_removed": 1,
+      "mechanical": false,
+      "naming": 0,
+      "removed": 1
+    },
     "tests/unit/providers/test_retry_chat_model.py": {
       "added": 66,
       "behavior_added": 66,
@@ -987,15 +995,15 @@
     }
   },
   "totals": {
-    "added": 11089,
-    "behavior_added": 11053,
-    "behavior_files": 122,
-    "behavior_removed": 505,
-    "files": 122,
+    "added": 11091,
+    "behavior_added": 11055,
+    "behavior_files": 123,
+    "behavior_removed": 506,
+    "files": 123,
     "mechanical_files": 1,
     "naming_files": 0,
     "naming_lines": 36,
     "naming_touched_files": 8,
-    "removed": 541
+    "removed": 542
   }
 }
