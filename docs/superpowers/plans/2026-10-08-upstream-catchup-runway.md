@@ -4897,8 +4897,12 @@ ERROR: qwenpaw has an invalid wheel, .dist-info directory
   fork 自有守卫用例）。本刀不动。
 
 **同批其余 run 的结论（`a713b4d58`）**：`CodeQL 38556878631` **success**；`NPM Format 38556878435` **failure**
-（`console format check`，与 §8.54/§8.55 那笔 13 vs 10 未结的账同一形状）；写本段时 `Tests 38556878449` 与
-`Pre-commit Checks 38556879179` 仍 `in_progress` ⇒ 结论未取，记为未验证。
+（`console format check`，与 §8.54/§8.55 那笔 13 vs 10 未结的账同一形状）；
+`Pre-commit Checks 38556879179` **failure**（`Run pre-commit`，与上一批同一族 hook）⇒ 已登记的 lint 债。
+上游 `Tests 38556878449` 整体 **failure**，但 job 级现读：**`Unit Tests - py3.11` success、`Unit Tests - py3.13` success**
+（py3.11 枝 10 枚 step 全 success，含 `Run Hub Local runtime E2E`）⇒ **上一批那 `1 failed + 27 errors` 的污染在这一批全部消失**；
+余下 4 枚红 = `Contract Tests` 3.11 / 3.13 与 `Integrated Tests` p0 / p2，与刀 130 归因的三条继承缺陷同一形状、`p1` success。
+（这两批之间我们没有动过 contract/integrated 任何一枚文件 ⇒ 判为形状未变；那 4 枚 job 的逐条日志本刀未读。）
 
 **刀 131 自此闭环**（R8 落地 + 登记表换成在册口径 + 门禁在 CI 真跑绿）。
 
