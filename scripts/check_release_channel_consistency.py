@@ -421,6 +421,183 @@ def rule_dependencies(repo_root):
     return errors
 
 
+# R8 -- requirement-shaped references to one of our tracked identities,
+# written anywhere in the tree.
+#
+# R6 watches the places that read the *installed* distribution by name and R7
+# watches the declarations, but a third family carries the same coupling:
+# strings shaped like a PEP 508 requirement -- ``name[extras]``, ``name==pin``,
+# ``name @ url`` -- because pip/conda read those names too, and a rename
+# changes what they resolve to without changing a single character.  A
+# direct-URL requirement is the sharpest case: the artifact on the other side
+# of the ``@`` is named by the build, so a stale literal there is refused by
+# pip at the moment the desktop pack runs.
+#
+# The sweep therefore covers every path a requirement string can hide in, and
+# each hit has to be registered below with the reason it exists.  Registering
+# is cheap; the price is paid once per file instead of by a manual grep that
+# nobody repeats.
+REQUIREMENT_DIRS = (
+    "src",
+    "scripts",
+    "tests",
+    "plugins",
+    "deploy",
+    ".github",
+    "console/src",
+)
+REQUIREMENT_SUFFIXES = READER_SUFFIXES + (".json", ".md", ".yaml")
+REQUIREMENT_SKIP = frozenset({"__pycache__", "node_modules"})
+
+# ``==`` must be followed by something, or the gate's own forbidden-name
+# markers (``"qwenpaw=="``, a prefix used to *detect* the retired name) would
+# read as requirements.
+REQUIREMENT_TAIL = (
+    r"(?:\[[^\]\n]{0,60}\]"  # extras
+    r"|==[^\s\"'`]{1,40}"  # version pin
+    r"| @ )"  # direct URL
+)
+
+# ``install`` -- the literal is handed to pip/conda as something to install, so
+# its name must equal the distribution we actually declare and build; a
+# mismatch is not a style problem, pip refuses the artifact
+# (``.dist-info`` must start with the requirement's own name).
+# ``copy`` -- user-visible text telling a human what to install.
+# ``doc`` -- documentation and README instructions.
+# ``test`` -- a test pinning or fixtureing the string.
+REQUIREMENT_SITES = (
+    # Handed to a package manager.
+    ("src/qwenpaw/cli/update_cmd.py", "install"),
+    ("scripts/pack/build_common.py", "install"),
+    # User-visible copy that names an extra to install.
+    ("src/qwenpaw/harnesses/base.py", "copy"),
+    ("src/qwenpaw/harnesses/codex/adapter.py", "copy"),
+    ("src/qwenpaw/cli/hub_cmd.py", "copy"),
+    ("src/qwenpaw/cli/providers_cmd.py", "copy"),
+    ("src/qwenpaw/hub/docker_provisioner.py", "copy"),
+    ("plugins/apps/qwenpaw-data/plugin.json", "copy"),
+    ("console/src/locales/en.json", "copy"),
+    ("console/src/locales/zh.json", "copy"),
+    ("console/src/locales/ja.json", "copy"),
+    ("console/src/locales/ru.json", "copy"),
+    ("console/src/locales/vi.json", "copy"),
+    ("console/src/locales/id.json", "copy"),
+    ("console/src/locales/pt-BR.json", "copy"),
+    (".github/workflows/release-duty.yml", "copy"),
+    # Documentation.
+    ("src/qwenpaw/docs/channels.en.md", "doc"),
+    ("src/qwenpaw/docs/channels.zh.md", "doc"),
+    ("src/qwenpaw/docs/cli.en.md", "doc"),
+    ("src/qwenpaw/docs/cli.zh.md", "doc"),
+    ("src/qwenpaw/docs/console.en.md", "doc"),
+    ("src/qwenpaw/docs/console.zh.md", "doc"),
+    ("src/qwenpaw/docs/hub.en.md", "doc"),
+    ("src/qwenpaw/docs/hub.zh.md", "doc"),
+    ("scripts/pack/README.md", "doc"),
+    ("scripts/pack/README_zh.md", "doc"),
+    ("plugins/apps/qwenpaw-data/README.md", "doc"),
+    ("plugins/apps/qwenpaw-data/README_ZH.md", "doc"),
+    # Tests that pin the string or build a fixture out of it.
+    ("tests/unit/app/routers/test_harnesses_router.py", "test"),
+    ("tests/unit/cli/test_cli_update_overlay.py", "test"),
+    ("tests/unit/cli/test_hub_cmd.py", "test"),
+    ("tests/unit/harnesses/test_codex_adapter.py", "test"),
+    (
+        "tests/unit/harnesses/test_optional_dependencies.py",
+        "test",
+    ),
+    ("tests/unit/scripts/test_check_release_channel_consistency.py", "test"),
+)
+
+
+def requirement_pattern(names):
+    alternation = "|".join(
+        re.escape(name) for name in sorted(names, key=len, reverse=True)
+    )
+    return re.compile(rf"(?<![\w.\-])({alternation}){REQUIREMENT_TAIL}")
+
+
+def _requirement_files(repo_root: Path):
+    for rel_dir in REQUIREMENT_DIRS:
+        base = repo_root / rel_dir
+        if not base.is_dir():
+            continue
+        for path in sorted(base.rglob("*")):
+            if not path.is_file() or path.suffix not in REQUIREMENT_SUFFIXES:
+                continue
+            if REQUIREMENT_SKIP & set(path.relative_to(repo_root).parts):
+                continue
+            yield str(path.relative_to(repo_root)), path
+
+
+def scan_requirement_names(repo_root: Path) -> dict:
+    """``rel -> {names}`` for every requirement-shaped reference.
+
+    A dict rather than a list because the rule needs both directions: files the
+    sweep found that are not registered, and files registered that the sweep
+    no longer finds.
+    """
+    pattern = requirement_pattern(_tracked_names(repo_root))
+    found: dict = {}
+    for rel, path in _requirement_files(repo_root):
+        text = path.read_text(encoding="utf-8", errors="ignore")
+        names = {match.group(1) for match in pattern.finditer(text)}
+        if names:
+            found[rel] = names
+    return found
+
+
+def rule_requirement_sites(repo_root):
+    errors = []
+    declared = declared_distribution(repo_root)
+    if declared is None:
+        return [
+            (
+                f"R8: {PYPROJECT_REL} has no [project] name to check "
+                "requirement sites against"
+            ),
+        ]
+    registered = dict(REQUIREMENT_SITES)
+    allowed = {declared, wheel_name(declared)}
+    found = scan_requirement_names(repo_root)
+    for rel in sorted(set(found) | set(registered)):
+        category = registered.get(rel)
+        if category is None:
+            errors.append(
+                (
+                    f"R8: {rel} requires "
+                    f"{sorted(found[rel])} but is not registered in "
+                    "REQUIREMENT_SITES"
+                ),
+            )
+            continue
+        names = found.get(rel)
+        if not names:
+            path = repo_root / rel
+            if not path.exists():
+                errors.append(f"R8: registered requirement site {rel} is gone")
+                continue
+            errors.append(
+                (
+                    f"R8: {rel} is registered as {category!r} but no longer "
+                    "carries a requirement-shaped distribution name; the "
+                    "literal moved, was reworded, or the scan root changed"
+                ),
+            )
+            continue
+        if category == "install":
+            for name in sorted(names - allowed):
+                errors.append(
+                    (
+                        f"R8: {rel} hands {name!r} to a package manager while "
+                        f"{PYPROJECT_REL} declares {declared!r}; pip refuses a "
+                        "requirement whose name does not match the artifact's "
+                        ".dist-info"
+                    ),
+                )
+    return errors
+
+
 def _load_loader(repo_root: Path):
     spec = importlib.util.spec_from_file_location(
         "_rc_consistency_loader",
@@ -574,6 +751,7 @@ def main(argv=None):
     errors += rule_version_line(data, repo_root)
     errors += rule_distribution(loader, data, repo_root)
     errors += rule_dependencies(repo_root)
+    errors += rule_requirement_sites(repo_root)
 
     if errors:
         for item in errors:
@@ -581,16 +759,20 @@ def main(argv=None):
         return 1
 
     hits = scan_distribution_readers(repo_root)
+    sites = scan_requirement_names(repo_root)
     read_points = sum(
         1 for _, description in hits if description.startswith("line ")
     )
     print(
         (
             "Release channel consistency check passed "
-            f"(R1-R7 over {len(CHANNEL_FILES)} channel files; "
+            f"(R1-R8 over {len(CHANNEL_FILES)} channel files; "
             f"{len(DISTRIBUTION_READERS)} registered templates, "
             f"{read_points} read points swept in "
-            f"{len({rel for rel, _ in hits})} files)"
+            f"{len({rel for rel, _ in hits})} files; "
+            f"{len(REQUIREMENT_SITES)} registered requirement sites, "
+            f"{sum(len(names) for names in sites.values())} names in "
+            f"{len(sites)} files swept)"
         ),
     )
     return 0

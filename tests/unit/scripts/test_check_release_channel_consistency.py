@@ -49,9 +49,20 @@ def _module():
 
 @pytest.fixture()
 def fixture_root(tmp_path):
-    """A copy of the live tree: every red below is a real regression."""
+    """A copy of the live tree: every red below is a real regression.
+
+    The file list is derived from the gate's own registries, so a rule that
+    starts reading a new file is a fixture that copies it -- the alternative is
+    a red that comes from the fixture being thin instead of the tree.
+    """
+    mod = _module()
     root = tmp_path / "repo"
-    for rel in FIXTURE_FILES:
+    rels = (
+        set(FIXTURE_FILES)
+        | {rel for rel, _ in mod.DISTRIBUTION_READERS}
+        | {rel for rel, _ in mod.REQUIREMENT_SITES}
+    )
+    for rel in sorted(rels):
         source = REPO_ROOT / rel
         assert source.exists(), f"fixture source missing: {rel}"
         target = root / rel
@@ -241,7 +252,8 @@ def _rename_declaration(root, name):
 
 
 def _rename_every_reader(mod, root, old, new):
-    """Rewrite every registered reader, the way phase 2 must."""
+    """Rewrite every registered reader and requirement site, the way a
+    rename must."""
     for rel, template in mod.DISTRIBUTION_READERS:
         if rel == mod.PYPROJECT_REL:
             continue
@@ -250,6 +262,18 @@ def _rename_every_reader(mod, root, old, new):
             mod.reader_literal(template, old),
             mod.reader_literal(template, new),
         )
+        path.write_text(text, encoding="utf-8")
+    spellings = (
+        (old, new),
+        (mod.wheel_name(old), mod.wheel_name(new)),
+    )
+    for rel, _category in mod.REQUIREMENT_SITES:
+        path = root / rel
+        if not path.exists():
+            continue
+        text = path.read_text(encoding="utf-8")
+        for source, target in spellings:
+            text = text.replace(source, target)
         path.write_text(text, encoding="utf-8")
 
 
@@ -605,3 +629,84 @@ def test_rule_seven_refuses_to_scan_nothing(fixture_root, capsys):
     )
     assert run(mod, fixture_root) == 1
     assert "R7:" in capsys.readouterr().out
+
+
+def test_rule_eight_rejects_an_unregistered_requirement_site(
+    fixture_root,
+    capsys,
+):
+    """A new ``pip install qwenpaw[extra]``-shaped string is a new read point.
+
+    Knife 119 renamed the distribution and knife 129 fixed the two declarations
+    that were found by hand; both times the sites that kept naming the retired
+    distribution were in files no scan root covered.  R8 covers the whole
+    requirement shape, so a file that starts requiring one of our identities
+    has to say so in ``REQUIREMENT_SITES`` in the same commit.
+    """
+    mod = _module()
+    path = fixture_root / "scripts/pack/setup_extra.sh"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text('pip install "qwenpaw[hub]"\n', encoding="utf-8")
+    assert run(mod, fixture_root) == 1
+    out = capsys.readouterr().out
+    assert "R8:" in out and "setup_extra.sh" in out
+
+
+def test_rule_eight_rejects_an_install_site_naming_another_distribution(
+    fixture_root,
+    capsys,
+):
+    mod = _module()
+    path = fixture_root / "src/qwenpaw/cli/update_cmd.py"
+    text = path.read_text(encoding="utf-8")
+    assert "copaw-community=={" in text
+    path.write_text(
+        text.replace("copaw-community=={", "qwenpaw=={"),
+        encoding="utf-8",
+    )
+    assert run(mod, fixture_root) == 1
+    out = capsys.readouterr().out
+    assert "R8:" in out and "update_cmd.py" in out
+
+
+def test_rule_eight_refuses_to_scan_nothing(fixture_root, capsys):
+    """A registered site that silently stopped matching is a moved scan root.
+
+    R8 is only worth having if it notices the day the requirement shape is
+    written differently (a variable name, a retabled file) and the sweep starts
+    finding zero while still reporting success.
+    """
+    mod = _module()
+    (fixture_root / "src/qwenpaw/cli/update_cmd.py").unlink()
+    assert run(mod, fixture_root) == 1
+    out = capsys.readouterr().out
+    assert "R8:" in out and "update_cmd.py" in out
+
+
+def test_no_install_path_requires_a_distribution_we_do_not_declare():
+    """The live-tree reading: a direct-URL requirement names its own wheel.
+
+    ``pip`` refuses an artifact whose ``.dist-info`` name does not start with
+    the requirement's own name, which is why ``build_common.py`` asking for
+    ``qwenpaw[full] @ <copaw_community wheel>`` fails with::
+
+        ERROR: qwenpaw has an invalid wheel, .dist-info directory
+        'copaw_community-2.2.2b4.post1.dist-info' does not start with 'qwenpaw'
+    """
+    mod = _module()
+    declared = mod.declared_distribution(REPO_ROOT)
+    allowed = {declared, mod.wheel_name(declared)}
+    install = {
+        rel for rel, category in mod.REQUIREMENT_SITES if category == "install"
+    }
+    offenders = {
+        (rel, name)
+        for rel, names in mod.scan_requirement_names(REPO_ROOT).items()
+        if rel in install
+        for name in names
+        if name not in allowed
+    }
+    assert offenders == set(), (
+        f"install paths naming a distribution other than {sorted(allowed)}: "
+        f"{sorted(offenders)}"
+    )
