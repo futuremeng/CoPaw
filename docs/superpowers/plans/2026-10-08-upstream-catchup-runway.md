@@ -4907,3 +4907,75 @@ ERROR: qwenpaw has an invalid wheel, .dist-info directory
 **刀 131 自此闭环**（R8 落地 + 登记表换成在册口径 + 门禁在 CI 真跑绿）。
 
 新增判据 276–277。
+
+### 8.61 刀 132：给 fork 的 unit 两枝补 `bubblewrap` —— 结清 §8.60 待裁第三项（判据 278）
+
+**来历**：§8.60 的 CI 复跑读绿后仍剩 2 枚红，两条同因 ——
+`ProcessIsolationError: Local isolation requires bubblewrap (bwrap) on Linux.`。
+当时只登记不改：「要不要给 fork 的 `unit-tests.yml` 补那步装 bwrap」。用户裁"继续修" ⇒ 本刀落这一步。
+
+**根因（三把证据，不是猜）**：
+
+1. 宿主 `tests/unit/hub/test_process_isolation.py` 是上游自有**且我们一行未改**
+   （`git cat-file -e 2744a976b:<file>` 成功、`git diff 2744a976b -- <file>` 空）⇒ 红不是 fork 回归。
+2. 上游 `.github/workflows/tests.yml:110` 有一步 `Install Linux isolation dependency`
+   （`apt-get install -y bubblewrap` + 一条带存在性判断的 apparmor sysctl），`full-tests-nightly.yml` 也有；
+   fork 自有的 `unit-tests.yml` 从来没有 ⇒ 同一枚用例在 fork 的腿上必红。
+3. 暴露面逐枚核过，不是"大概只有这里"：全仓 6 枚跑 pytest 的 workflow 中，
+   `_e2e-job.yml` / `e2e-smoke.yml` / `creator-app-tests.yml` 都按 marker 或另一棵用例根选
+   （实读到 `p0`、`integration and p0/p1/p2`、`ui_smoke`、`plugins/apps/qwenpaw-creator/backend/tests`），
+   而那枚隔离文件**没有任何 `pytestmark`** ⇒ 未选中的腿跑不到它。会跑到的只有 `unit-tests.yml` 的
+   py3.11 与 py3.13 两枝，新步的 `if: runner.os == 'Linux'` 把两枝都覆盖。
+
+**改动**（两枚 fork 自有文件）：
+
+- `.github/workflows/unit-tests.yml` **+17**：`checkout` 之后、`Set up Python` 之前插入
+  `Install Linux isolation dependency`，正文与上游同形。
+- `tests/unit/scripts/test_unit_tests_workflow_isolation_dependency.py`（新，103 行）：按判据 273 取**下界**
+  而不是抄具体 apt 命令 —— ① 跑全量 unit 的那枝必须有一步装 `bubblewrap`，**且带 Linux 条件**
+  （无条件的话将来加 mac/windows 腿会去跑 apt 而红）；② 那步必须**排在 suite 之前**
+  （排在后面等于没装）。
+- 先红实测：改 YAML 前两枚用例都红，逐字
+  `AssertionError: no step installs bubblewrap, so the isolation cases fail with 'Local isolation requires bubblewrap (bwrap) on Linux')`；
+  改后 2 passed。
+
+**读数**（本机，刀 132 树）：
+
+- 新文件 **2 passed**；`tests/unit/scripts` **193 passed**（刀 131-6 后现读 191，+2 对得上）。
+- 三道门禁一格没动：P1 `--check --target-ref working` rc=0 = **123 文件 / +11,094 −544、
+  命名 0 pure / 8 touched / 36 行、mechanical 1**（与基线逐字相同）；namespace `result: PASSED`；
+  release channel `R1-R8 over 6 channel files; 10 registered templates, 11 read points swept in 5 files;
+  26 registered requirement sites, 27 names in 26 files swept`；locale split 4,658 / 59 / 7 / 1,459 / 23。
+- 冲突面 **+0**：`unit-tests.yml` 不在分叉点树里（`git cat-file -e 2744a976b:.github/workflows/unit-tests.yml`
+  报 `exists on disk, but not in '2744a976b'`），新用例文件是 untracked ⇒ 两枚落点都是 fork 自有，
+  棘轮不动、不需要 `--write-baseline`。
+- `tests/unit/hub/test_process_isolation.py` 本机单跑 = **1 failed / 16 passed / 2 skipped**，failed 是已登记的
+  mac-only `:643`（`sandbox-exec` 拦掉 `libssl.3.dylib`）。**⇒ 本机只能证"没新增回归"，
+  bwrap 那两条转绿这件事只有 CI 能读。**
+- lint：新文件 `flake8` **0 条**、`black --line-length=79 --check` 判"unchanged"（不给自己加新债；
+  判据 162/173 的"照旧不排刀"指的是不追既有债）。`pylint` 该文件 **2 条 `C0116`**（用例函数无 docstring，
+  参数写在模块 docstring 里）—— 与相邻两枚同族守卫文件已有的 4 条同一消息码，
+  所以整树 pylint 是 +2 而非新增一类；按既有惯例不为此改形状。
+- 全量 unit（本机，验证 venv）：**2 failed / 17,868 passed / 24 skipped / 4 xfailed，3,098.50 s**。
+  通过数对得上：刀 131 树 17,863 + 刀 131-6 新增 3 + 本刀守卫 2 = **17,868**。
+  这 2 枚红的构成 = 已登记的 mac-only `:643`，加上 `test_pool_skill_lifecycle.py::test_working_dir_is_isolated`
+  —— 后者是**我自己的测量污染**，不是树的缺陷：命令带了 `--basetemp=/tmp/k132_basetemp`，而那枚用例
+  （`:561`）断言 `pool_dir.resolve().is_relative_to(Path(tempfile.gettempdir()).resolve())`，本机
+  `tempfile.gettempdir()` = `/var/folders/7m/…/T`，`--basetemp` 指到 `/private/tmp/…` 必然不相对；
+  去掉该旗标单跑 = 3 次全过。判据：跑带自校验夹具的套件时不要换 `--basetemp`。
+  51 分钟的墙钟同理虚高 —— 我把隔离文件单跑和 L1 那五枚目录与全量套件并发跑了，不是套件变慢
+  （同一棵树刀 131 本机全量曾读 984 s；CI 的 suite 步在 run 38556878592 是 915.88 s）。
+
+**未验证**：`actionlint` 本机跑不起来 —— pre-commit 建那枚 Go 环境时
+`proxy.golang.org` 全部 `dial tcp ... i/o timeout`。所以这枚 YAML 只过了 `yaml.safe_load`
+（守卫用例本身就是解析器），格式与表达式层要靠 CI 的 `Pre-commit Checks` 读。
+
+**判据 278**：一条用例在 CI 恒红时，先分清红在**测试**还是红在**那条腿的环境**，判据是两把对拍：
+拿同枝的上游 workflow 的 step 表对拍（上游有这一步、我们没有 ⇒ 环境缺口），再拿"这枚测试文件我们改过没有"
+对拍（`git diff <分叉点> -- <文件>` 空 ⇒ 不是 fork 造的）。**两把都对上才补环境** —— 只查第一把会把
+fork 自己的真缺陷也解释成环境问题。
+
+**本刀没造新待裁**。一条相关事实记在这里备查：`coverage` 那枝同样缺 bwrap，但它的命令带 `|| true`
+且 job 有 `continue-on-error: true`，所以那 2 枚红从不显示成 job 红 —— 这是"unit 那步仍是 informational"
+那条老待裁的同一族，本刀不扩面。
+
