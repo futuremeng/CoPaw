@@ -64,6 +64,23 @@ jobs:
         with:
           fetch-depth: 0
 
+      # tests/unit/hub/test_process_isolation.py runs a real sandboxed child
+      # and the provisioner raises instead of skipping when bwrap is absent
+      # ("Local isolation requires bubblewrap (bwrap) on Linux").  Upstream's
+      # Tests workflow installs this dependency; without it the two
+      # test_linux_runtime_filesystem_is_shared_and_persistent cases are red in
+      # every leg of this one.
+      - name: Install Linux isolation dependency
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y bubblewrap
+          if sysctl kernel.apparmor_restrict_unprivileged_userns \
+            >/dev/null 2>&1; then
+            sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+          fi
+
       - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v5
         with:
