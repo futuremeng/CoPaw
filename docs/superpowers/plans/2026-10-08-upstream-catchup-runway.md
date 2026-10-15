@@ -4962,13 +4962,38 @@ ERROR: qwenpaw has an invalid wheel, .dist-info directory
   —— 后者是**我自己的测量污染**，不是树的缺陷：命令带了 `--basetemp=/tmp/k132_basetemp`，而那枚用例
   （`:561`）断言 `pool_dir.resolve().is_relative_to(Path(tempfile.gettempdir()).resolve())`，本机
   `tempfile.gettempdir()` = `/var/folders/7m/…/T`，`--basetemp` 指到 `/private/tmp/…` 必然不相对；
-  去掉该旗标单跑 = 3 次全过。判据：跑带自校验夹具的套件时不要换 `--basetemp`。
+  两把都复现过：带旗标 1 failed（`:561` 那条断言）、去掉旗标单跑 passed。判据：跑带 basetemp 自校验
+  夹具的套件时不要换 `--basetemp`。
   51 分钟的墙钟同理虚高 —— 我把隔离文件单跑和 L1 那五枚目录与全量套件并发跑了，不是套件变慢
   （同一棵树刀 131 本机全量曾读 984 s；CI 的 suite 步在 run 38556878592 是 915.88 s）。
 
-**未验证**：`actionlint` 本机跑不起来 —— pre-commit 建那枚 Go 环境时
-`proxy.golang.org` 全部 `dial tcp ... i/o timeout`。所以这枚 YAML 只过了 `yaml.safe_load`
-（守卫用例本身就是解析器），格式与表达式层要靠 CI 的 `Pre-commit Checks` 读。
+**曾未验证、现已由 CI 读掉**：`actionlint` 本机跑不起来 —— pre-commit 建那枚 Go 环境时
+`proxy.golang.org` 全部 `dial tcp ... i/o timeout`，所以写文档时这枚 YAML 只过了 `yaml.safe_load`
+（守卫用例本身就是解析器）。CI 的 `Pre-commit Checks 38768155904` 跑的是
+`pre-commit run --all-files`（覆盖这枚工作流），其 `Lint GitHub Actions workflow files` 一行
+**Passed** ⇒ 格式与表达式层已由 CI 证过。该 job 整体仍 failure，红在既有那一族
+（`Add trailing commas` / `mypy` / `black` / `flake8` / `pylint` = 账册里的既有债，本刀未扩面）。
+
+**CI 实测（run `38768155922`，fork `Unit Tests`，整体 success）**：
+
+| 读数 | py3.11 枝 | py3.13 枝 |
+| --- | --- | --- |
+| step 3 `Install Linux isolation dependency` | **success** | **success** |
+| 三道门禁（namespace / P1 / release channel） | success（py3.13 枝按 `if` 设计 skipped） | skipped |
+| `Run all unit tests` | **0 failed / 15,851 passed / 23 skipped / 4 xfailed in 925.64 s** | **0 failed / 15,851 passed / 23 skipped / 4 xfailed in 761.34 s** |
+| `Run L1 hard gate tests`（must pass） | **1,339 passed / 1 skipped in 9.77 s** | success |
+| `collected` | **15,873 items / 5 skipped**（刀 131-6 时 15,871 ⇒ +2 就是本刀守卫） | 同 |
+
+对拍刀 131-6 那次同枝：`2 failed, 15,847 passed` ⇒ **15,847 + 2 枚转绿 + 2 枚新守卫 = 15,851，红 2→0**，
+即 `test_linux_runtime_filesystem_is_shared_and_persistent[/data/member]` 与 `[/workspace]` 都过了。
+`Coverage Report` job 亦 success（它仍缺那步、失败被 `|| true` 吞掉，属"unit 那步仍是 informational"老待裁同族）。
+
+**同批上游 `Tests 38768155886`（在我们 main 上跑全量 unit，含 channels）**：`Unit Tests - py3.11` 与
+`- py3.13` 两枝都 **success、0 failed / 17,870 passed / 24 skipped / 4 xfailed**（1,186.57 s / 895.42 s），
+`Run Hub Local runtime E2E` 各 1 passed；余下红 = `Contract Tests` py3.11/py3.13 + `Integrated p0/p2` +
+`Test Summary`（刀 130 已归因的三条继承缺陷同一形状，`Integrated p1` success）。
+**17,870 与本机 17,868 的差 = 本机那两枚红**（1 枚 mac-only 在 Linux 过、1 枚是 `--basetemp` 污染）⇒ 两边数字对得上。
+`CodeQL 38768155875` success、`NPM Format 38768155960` failure（`console format check` 老族）。
 
 **判据 278**：一条用例在 CI 恒红时，先分清红在**测试**还是红在**那条腿的环境**，判据是两把对拍：
 拿同枝的上游 workflow 的 step 表对拍（上游有这一步、我们没有 ⇒ 环境缺口），再拿"这枚测试文件我们改过没有"
