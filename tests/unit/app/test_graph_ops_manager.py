@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 
 import json
+import threading
 import time
 from pathlib import Path
 from types import SimpleNamespace
@@ -1398,3 +1399,84 @@ def test_enrichment_policy_prunes_low_confidence_edges(tmp_path):
     assert result.metrics["pruned_low_confidence_edges"] == 1
     assert result.metrics["edge_count"] == 1
     assert "ENRICHMENT_PRUNED_LOW_CONFIDENCE_EDGES" in result.warnings
+
+
+def _patch_write_text_with_open_window(monkeypatch, entered, release):
+    """Make the store's own write observable mid-flight.
+
+    ``Path.write_text`` truncates before it writes; the patched version pauses
+    in that window so a reader running concurrently is guaranteed to hit the
+    half-written file instead of racing the scheduler.
+    """
+    real_write_text = Path.write_text
+
+    def windowed_write_text(self, data, *args, **kwargs):
+        with open(self, "w", encoding="utf-8"):
+            pass
+        entered.set()
+        if not release.wait(5.0):
+            raise AssertionError("reader never released the write window")
+        return real_write_text(self, data, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "write_text", windowed_write_text)
+
+
+def test_memify_status_stays_readable_while_a_patch_is_in_flight(
+    tmp_path,
+    monkeypatch,
+):
+    graph_ops = GraphOpsManager(tmp_path)
+    graph_ops._save_memify_jobs(
+        {"job-1": {"job_id": "job-1", "status": "pending", "progress": 0}},
+    )
+
+    entered = threading.Event()
+    release = threading.Event()
+    _patch_write_text_with_open_window(monkeypatch, entered, release)
+
+    writer = threading.Thread(
+        target=graph_ops._patch_memify_job,
+        args=("job-1", {"status": "running", "progress": 40}),
+    )
+    writer.start()
+    try:
+        assert entered.wait(5.0), "no memify job write happened"
+        # GET /knowledge/memify/jobs/{id} reads through this exact call.
+        assert graph_ops.get_memify_status("job-1") is not None
+    finally:
+        release.set()
+        writer.join(5.0)
+
+    jobs = json.loads(graph_ops.memify_jobs_path.read_text(encoding="utf-8"))
+    assert jobs["job-1"]["progress"] == 40
+
+
+def test_quality_loop_status_stays_readable_while_a_patch_is_in_flight(
+    tmp_path,
+    monkeypatch,
+):
+    graph_ops = GraphOpsManager(tmp_path)
+    graph_ops._save_quality_loop_jobs(
+        {"job-1": {"job_id": "job-1", "status": "pending", "progress": 0}},
+    )
+
+    entered = threading.Event()
+    release = threading.Event()
+    _patch_write_text_with_open_window(monkeypatch, entered, release)
+
+    writer = threading.Thread(
+        target=graph_ops._patch_quality_loop_job,
+        args=("job-1", {"status": "running", "progress": 40}),
+    )
+    writer.start()
+    try:
+        assert entered.wait(5.0), "no quality-loop job write happened"
+        assert graph_ops.get_quality_loop_status("job-1") is not None
+    finally:
+        release.set()
+        writer.join(5.0)
+
+    jobs = json.loads(
+        graph_ops.quality_loop_jobs_path.read_text(encoding="utf-8"),
+    )
+    assert jobs["job-1"]["progress"] == 40

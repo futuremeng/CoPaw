@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import math
+import os
 import re
 import threading
 import uuid
@@ -1132,11 +1133,7 @@ Agent gate review is mandatory before automatic continuation.
         return {str(k): v for k, v in payload.items() if isinstance(v, dict)}
 
     def _save_quality_loop_jobs(self, jobs: dict[str, dict[str, Any]]) -> None:
-        self.knowledge_root.mkdir(parents=True, exist_ok=True)
-        self.quality_loop_jobs_path.write_text(
-            json.dumps(jobs, ensure_ascii=False, indent=2),
-            encoding="utf-8",
-        )
+        self._atomic_write_json(self.quality_loop_jobs_path, jobs)
 
     def _resolve_query_graph_path(
         self,
@@ -2283,9 +2280,23 @@ Agent gate review is mandatory before automatic continuation.
             if isinstance(value, dict)
         }
 
-    def _save_memify_jobs(self, jobs: dict[str, dict[str, Any]]) -> None:
-        self.knowledge_root.mkdir(parents=True, exist_ok=True)
-        self.memify_jobs_path.write_text(
-            json.dumps(jobs, ensure_ascii=False, indent=2),
+    @staticmethod
+    def _atomic_write_json(path: Path, payload: dict[str, Any]) -> None:
+        """Publish a job store so readers never see it half-written.
+
+        The status endpoints read these files from request threads while a job
+        worker patches progress from its own thread. ``write_text`` truncates
+        before it writes, and ``_load_*`` turns the resulting decode error
+        into an empty mapping, so an in-place rewrite can answer
+        ``MEMIFY_JOB_NOT_FOUND`` for a job that is still running.
+        """
+        path.parent.mkdir(parents=True, exist_ok=True)
+        temp_path = path.with_name(f"{path.name}.tmp")
+        temp_path.write_text(
+            json.dumps(payload, ensure_ascii=False, indent=2),
             encoding="utf-8",
         )
+        os.replace(temp_path, path)
+
+    def _save_memify_jobs(self, jobs: dict[str, dict[str, Any]]) -> None:
+        self._atomic_write_json(self.memify_jobs_path, jobs)

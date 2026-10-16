@@ -14,8 +14,11 @@ legs of this workflow's suite step report **0 failed / 15,851 passed /
 Reading back every failure the tolerated step has ever swallowed on this fork:
 run ``38538655054`` = 3 (two ``bubblewrap`` cases plus one extras literal),
 run ``38556878592`` = 2 (the same two).  All three were deterministic, all
-three were ours, and knife 130 plus knife 132 closed them -- so no flake has
-ever been observed in this leg.
+three were ours, and knife 130 plus knife 132 closed them.  The first gated
+run (``38837359507``) then caught a nondeterministic one --
+``test_get_memify_job_status_success`` on the py3.13 leg -- which knife 134
+root-caused to a torn read of the memify job store and fixed.  That is what
+this step is for.
 
 The guard below is a bound, not a copy of today's YAML: it forbids both ways
 this step can be neutralised -- the ``continue-on-error`` key and a shell-level
