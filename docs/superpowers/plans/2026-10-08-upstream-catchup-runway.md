@@ -5004,3 +5004,167 @@ fork 自己的真缺陷也解释成环境问题。
 且 job 有 `continue-on-error: true`，所以那 2 枚红从不显示成 job 红 —— 这是"unit 那步仍是 informational"
 那条老待裁的同一族，本刀不扩面。
 
+### 8.62 刀 133：把 fork unit 那步从 informational 换成 must-pass —— 结清 §8.61 记下的那条老待裁（判据 279）
+
+**来历**：`unit-tests.yml` 的 `Run all unit tests` 那步从写下来就一直带
+`continue-on-error: true`，step 名还写着 "pre-existing failures tolerated"。
+§8.60/§8.61 两次登记它"本刀不扩面"；刀 132 之后 CI run `38768155922` 实测两枝都
+**0 failed / 15,851 passed** ⇒ 那行旗标描述的是已经不成立的树。用户裁"继续" ⇒ 本刀落这一步。
+
+**判据（为什么现在可以换）**：容忍开关的价值只在"它吞掉的那一集合是已知且已归因"的时候成立。
+那一集合本册读回过两次：run `38538655054` 吞 3 枚（两条 `bubblewrap` + 一条 extras 字面量）、
+run `38556878592` 吞 2 枚（同两条），全部确定性、全部 ours，刀 130 与刀 132 逐一结清。
+集合清空 + 当前树实测 0 failed ⇒ 旗标从"记录事实"变成"关掉信号"，必须换。
+
+**改动**（一笔提交 `c92ffccd8`，两枚 fork 自有文件，+68 −2）：
+
+- `.github/workflows/unit-tests.yml`：step 名
+  `Run all unit tests (informational — pre-existing failures tolerated)` → `Run all unit tests (must pass)`，
+  删 `continue-on-error: true`，上面留四行注释引 run `38768155922`（`:121-124`）。
+- `tests/unit/scripts/test_unit_tests_workflow_suite_step_must_pass.py`（新，63 行）：按判据 273 取**下界** ——
+  同时禁掉两种把该步中和的机制（`continue-on-error` 键、`run` 里对 pytest 的 `|| true`），
+  并且 `_suite_steps()` 在"没有任何一步跑全量 unit"时直接 `assert steps` 红，
+  所以改名退休不了守卫，改回 `|| true` 也退休不了。
+- 先红实测：改 YAML 前那枚用例 `1 failed in 1.48s`，逐字
+  `cannot redden its job (continue-on-error=True, '|| true' in run=False); a suite this size is only a gate if its failures are visible`；
+  改后 `1 passed`。
+
+**本刀没动的容忍标记**（`:108` 那条 `git fetch ... || true` 是 best-effort 取上游 ref，不是 pytest；
+`coverage` job 的 `continue-on-error: true` 在 `:160` 与 `:191`、`|| true` 在 `:187`）——
+那是"coverage 那枝仍是 informational"的同一族，本刀不扩面（读数见 §8.63 末）。
+
+**读数**：本刀守卫 1 passed。三道门禁、P1、`tests/unit/scripts` 与 lint 的成串读数在下面 §8.63
+统一取（两刀都落在 `2744a976b` 树外的文件上，刀 134 的树是刀 133 的树加一笔，所以一格都没动）；
+本刀单独记的是：守卫文件 `flake8` **0 条**、`black --line-length=79` unchanged、
+`pylint` 只有 1 条 `C0116`（该树已有的消息码），以及 `unit-tests.yml` 不在分叉点树里
+（`git cat-file -e 2744a976b:.github/workflows/unit-tests.yml` 报 FORK-OWNED ⇒ 冲突面 +0，棘轮不动）。
+
+**CI 实测（run `38837359507`，commit `c92ffccd8`，整体 failure）**：
+
+| 读数 | py3.11 枝 | py3.13 枝 |
+| --- | --- | --- |
+| `Run all unit tests (must pass)` | **0 failed / 15,852 passed / 23 skipped / 4 xfailed in 933.70 s** | **1 failed / 15,851 passed in 911.47 s** |
+| 红的用例 | — | `tests/unit/app/routers/test_knowledge.py::test_get_memify_job_status_success`（`:2815` `assert 404 == 200`） |
+| 其余 step（隔离依赖 / 三道门禁 / Fail loudly / L1） | 全 success | 全 success |
+
+**这一枚红就是这条门禁的用途证明**，而且它落在 CI 的时间正是那步变 must-pass 的第一次运行：
+`continue-on-error` 还在的时候，同样的失败只会写进日志，job 报 success。
+
+**当场决定：没有把旗标加回去。** 按判据 278 先两把对拍 ——
+① 同批在我们 main 上跑上游 `Tests` 的 run `38837359534`，其
+`Unit Tests - py3.11 - ubuntu-latest` 与 `- py3.13 - ubuntu-latest` 两枝都 **success**（不是环境缺口）；
+② `test_knowledge.py`、`graph_ops.py`、`test_graph_ops_manager.py` 三枚都不在分叉点树里（`git cat-file -e 2744a976b:<file>` 全 FORK-OWNED）
+⇒ 不是 fork 从上游继承的，也不是腿的问题，是 fork 自己的真缺陷 ⇒ 转刀 134（§8.63）。
+
+**判据 279**：`continue-on-error` 之类的容忍开关只在"它吞掉的集合可读且已归因"时合法；
+集合清空之后它就不再描述这棵树，而是把后续所有失败（包括只在 CI 才暴露的竞态）降级成日志。
+换回硬门禁的判据是两把读数（历史被吞失败逐枚归因完毕 + 当前树 CI 实测 0 failed），不是"感觉稳了"；
+换之后第一次运行就抓到红，应当按真缺陷根因，**不许**把旗标加回去。
+
+**本刀造的待裁 0 条**；`coverage` 那枝的 `|| true` + `continue-on-error` 仍在（§8.63 有它现在的读数）。
+
+
+### 8.63 刀 134：memify / quality-loop 两本 job 存储改原子发布 —— 刀 133 门禁抓到的竞态（判据 280–281）
+
+**来历**：§8.62 表里 py3.13 那枚红。
+
+**根因（读码，四把，不是猜）**：
+
+1. `src/qwenpaw/knowledge/graph_ops.py` 的两本 job 存储是文件背书的字典
+   （`.knowledge/memify-jobs.json`、`.knowledge/quality-loop-jobs.json`），
+   写侧 `_save_memify_jobs` / `_save_quality_loop_jobs` 都用 `path.write_text(json.dumps(...))` —— **先截断再写**。
+2. `run_memify`（`:1812-1881`）注册后交给 worker 线程，worker 每推进一次进度就
+   `_patch_memify_job` → 整本重写；而 `get_memify_status` 由请求线程走 `_load_memify_jobs` 读同一文件。
+   **写侧持 `_jobs_lock`，读侧一把锁都不持** ⇒ 截断窗口对读侧完全暴露。
+3. `_load_memify_jobs` 把任何 `Exception` 吞成 `{}` ⇒ 窗口里的半截 JSON 等价于"存储是空的"，
+   端点 `src/qwenpaw/app/routers/knowledge.py:2351-2380` 于是对一枚**还在跑**的 job 回
+   `404 MEMIFY_JOB_NOT_FOUND`。
+4. 用例 `tests/unit/app/routers/test_knowledge.py:2786-2831` 注册后轮询状态，撞上窗口即 `assert 404 == 200`。
+
+quality-loop 那本同形（`:1075-1132`：`_save_quality_loop_jobs` 也是 `write_text`，
+`_load_quality_loop_jobs` 也吞 `Exception`，也有 patch-in-flight 的 worker）⇒ **同一缺陷的第二枚落点，一起修**。
+
+**改动**（一笔提交 `7066c9464`，三枚文件，+107 −11）：
+
+- `src/qwenpaw/knowledge/graph_ops.py`：`import os` + 新静态方法
+  `_atomic_write_json(path, payload)`（`path.parent.mkdir(parents=True, exist_ok=True)` →
+  同名 `.tmp` 写 → `os.replace` 发布），两枚 saver 各改为一行调用；
+  方法 docstring 说清为什么必须原子（读侧不持锁 + `_load_*` 把 decode error 洗成空映射）。
+  丢掉的 `self.knowledge_root.mkdir(...)` 已在新方法里按 `path.parent` 补回，行为等价。
+- `tests/unit/app/test_graph_ops_manager.py`（+82）：`import threading` + 助手
+  `_patch_write_text_with_open_window(monkeypatch, entered, release)` —— 把 `Path.write_text` 换成
+  "先真的截断文件、再卡在 `threading.Event` 上等读侧放行"，所以竞态窗口是**确定性撑开的**，
+  不靠调度器运气；读侧若没进窗口，5 s 超时并 `raise AssertionError("reader never released the write window")`。
+  两枚用例分别钉 memify（`_patch_memify_job` / `get_memify_status`）与
+  quality-loop（`_patch_quality_loop_job` / `get_quality_loop_status`）。
+- 同笔更正刀 133 守卫的 docstring（见下面"自我批评"）。
+
+**先红实测**：改生产码前，新两枚对 `3518f9f9e` 的树读 **`2 failed, 22 deselected in 0.88s`**，
+逐字 `AssertionError: assert None is not None`（写窗口内 `get_memify_status` 返回 None）；
+改后该文件 `24 passed in 24.49s`。
+
+**自我批评（一条已写下、随即被证旧的断言）**：刀 133 守卫的 docstring 写着"这条腿上从未观测到 CI flake"。
+那句话在写下时是真的（判据是当时读回的 3 枚被吞失败都已归因），但它把**当天读数**当成了**界限**。
+本册记下的"被那条 step 吞掉的失败"只有两把读数 —— run `38538655054` 吞 3 枚、run `38556878592` 吞 2 枚，
+全部确定性；`38837359507` 是本册记录的**第一枚非确定性红**（而那枚用例
+`test_get_memify_job_status_success` 早在 `8848fc74f`（2026-03-17）就进了树，
+所以它之前不红并非"没这枚用例"，只是没撞上窗口）。`7066c9464` 里 docstring 改为记录这件事
+（那 3 枚确定性红由刀 130 + 刀 132 结清，门禁上线后第一次运行抓到第一枚非确定性红，
+"That is what this step is for."），提交信息里也点明了这处更正。
+
+**读数**（本机，刀 134 树）：
+
+- `tests/unit/app/test_graph_ops_manager.py` **24 passed**；knowledge 相邻四路 **253 passed in 31.92 s**；
+  刀 133 守卫 **1 passed**；`tests/unit/scripts` **194 passed in 44.48 s**。
+- 三道门禁现读与基线**逐字相同**：P1 `--check --target-ref working` rc=0 = **123 文件 / +11,094 −544**、
+  命名 0 pure / 8 touched / 36 行、行为 +11,058 / −508、mechanical 1；namespace `result: PASSED`；
+  release channel `R1-R8 over 6 channel files; 10 registered templates, 11 read points swept in 5 files;
+  26 registered requirement sites, 27 names in 26 files swept`；locale split 4,658 / 59 / 7 / 1,459 / 23。
+- 冲突面 **+0**：四枚落点（`unit-tests.yml`、刀 133 守卫、`graph_ops.py`、`test_graph_ops_manager.py`）
+  加上被引用的 `test_knowledge.py` 都不在 `2744a976b` 树里（`git cat-file -e` 逐枚 FORK-OWNED）⇒ 棘轮不动，
+  不需要 `--write-baseline`。
+- lint：两枚在册外旧文件的 E501 现读 `graph_ops.py` 4 条 + `test_graph_ops_manager.py` 4 条，
+  与 `3518f9f9e` 上同一对文件的 8 条**逐字相同**（只有行号 ±1/±3 平移）⇒ **净 +0**；
+  守卫文件 0 条；三枚文件 `black --line-length=79` 全 unchanged；
+  `pylint` 在这两枚文件 C0116 22→**24**、W0212 6→**10**（都是该树已有的两类消息码，无新码）⇒
+  按判据 162/173 照旧不追。
+- 本机全量 unit（CI 同口径：`tests/unit` 减 `tests/unit/channels`）：
+  **1 failed / 15,853 passed / 23 skipped / 4 xfailed** —— 15,853 + 1 = **15,854**，与 CI 两枝通过数逐字对齐；
+  唯一的红是已登记的 mac-only `test_process_isolation.py::test_macos_sandbox_cli_can_reach_only_its_runtime`。
+  墙钟 2,062.91 s 不与 CI 对拍（跑的时候有 `gh` 轮询并发）。
+
+**CI 实测（run `38841002802`，commit `7066c9464`，整体 success）**：
+
+| 读数 | py3.11 枝 | py3.13 枝 |
+| --- | --- | --- |
+| step 表（隔离依赖 / 三道门禁 / `Run all unit tests (must pass)` / Fail loudly / L1 must pass） | 全 success | 全 success |
+| `Run all unit tests (must pass)` | **0 failed / 15,854 passed / 23 skipped / 4 xfailed in 736.65 s** | **0 failed / 15,854 passed in 913.74 s** |
+| `Run L1 hard gate tests (must pass)` | **1,339 passed / 1 skipped in 7.61 s** | **1,339 passed / 1 skipped in 9.81 s** |
+| `collected` | **15,876 tests collected in 11.23 s**（刀 133 时 15,874、刀 132 时 15,873 ⇒ 两刀共 +3） | **15,876 tests collected in 15.59 s** |
+
+对拍刀 133 那次同枝：`1 failed / 15,851 passed` ⇒ 加本刀两枚 = **15,853 + 1 = 15,854，红 1→0**。
+**fork 的 unit 侧从此是一条真门禁**：整棵 `tests/unit`（除 channels）在 must-pass 契约下两枝全绿。
+
+**同批读数**：`CodeQL 38841002840` success；`Pre-commit Checks 38841002646` 整体 failure 但
+`Lint GitHub Actions workflow files.....Passed`（本刀 YAML 的格式/表达式层由 CI 证过；`actionlint` 本机仍跑不起来，
+判据同 §8.61）；`NPM Format 38841002728` failure（`console format check` 老族）；
+上游 `Tests 38841002742` failure，其 unit 两枝 success 且 **17,873 passed / 0 failed**
+（1,125.21 s / 1,144.61 s，含 channels 的全选择），`Integrated p0` `1 failed / 146 passed`、
+`p1` `1,409 passed / 3 xpassed`、`p2` `1 failed / 334 passed / 2 skipped`，
+加上 `Contract Tests` 两枝与 `Test Summary`（刀 130 归因的三条继承缺陷同一形状，本刀未扩面）。
+
+**仍未裁的那族，现在有读数**：同一 run 的 `Coverage Report` job 吞掉的失败是
+**`2 failed / 15,852 passed / 23 skipped / 4 xfailed in 1,353.71 s`** —— 日志里逐字是
+`test_linux_runtime_filesystem_is_shared_and_persistent[/workspace]` 与 `[/data/member]`
+（`ProcessIsolationError: Local isolation requires bubblewrap (bwrap) on Linux.`），
+正是刀 132 已在 unit 两枝结清的同两条
+（coverage 那枝没补 `Install Linux isolation dependency`，命令带 `|| true`（`:187`）、
+job 带 `continue-on-error: true`（`:160`、`:191`））。要不要把 coverage 那枝也摘出来，本刀不裁、不改。
+
+**判据 280**：文件背书的共享存储，若写侧是"整本重写"而读侧不持锁，`write_text` 的截断窗口就是可读窗口；
+`_load_*` 吞 `Exception` 会把半截状态洗成"这条记录不存在"，于是竞态表现成 404 而不是 500。
+修法用"临时文件 + `os.replace`"而不是给读侧加锁（加锁要改所有读点，漏一处等于没改）。
+测这类竞态必须**确定性撑开窗口**（monkeypatch `write_text` 卡在事件上等读侧放行），重复跑碰运气不算证据。
+
+**判据 281**：守卫文档里的"从未观测到 X"是把当天读数当界限 —— 界限只能写成被禁的机制（判据 273 那条），
+历史事实要带测量日期与 run id。273 管断言强度，281 管叙述强度，成对使用。
