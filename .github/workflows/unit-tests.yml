@@ -118,8 +118,11 @@ jobs:
         if: matrix.python-version == '3.11'
         run: python scripts/check_release_channel_consistency.py
 
-      - name: Run all unit tests (informational — pre-existing failures tolerated)
-        continue-on-error: true
+      # Measured in CI on 2026-10-15 (run 38768155922): both legs report
+      # 0 failed / 15,851 passed after knife 132 closed the last swallowed
+      # failure, so the tolerance flag no longer describes this tree and a
+      # failure here is a regression.
+      - name: Run all unit tests (must pass)
         run: |
           pytest tests/unit \
             --ignore=tests/unit/channels \
